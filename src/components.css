@@ -1,0 +1,879 @@
+/* --- COMPONENTES ESPECÍFICOS DE ASTRYD SOPHIA --- */
+
+/* ==========================================
+   1. BARRA DE HERRAMIENTAS SUPERIOR (HEADER)
+   ========================================== */
+
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  background: rgba(4, 6, 10, 0.4);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  font-size: 1.6rem;
+  filter: drop-shadow(0 0 6px var(--accent-cyan));
+  animation: pulse-glow 2.5s infinite alternate;
+}
+
+.logo-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, var(--text-bright) 30%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(102, 252, 241, 0.08);
+  border: 1px solid rgba(102, 252, 241, 0.2);
+  color: var(--accent-cyan);
+}
+
+/* Controles de Simulación */
+.simulation-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.btn-ctrl {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition-fast);
+}
+
+.btn-ctrl:hover {
+  color: var(--text-bright);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-ctrl.active {
+  color: var(--accent-cyan);
+  background: rgba(102, 252, 241, 0.08);
+  border-color: rgba(102, 252, 241, 0.2);
+  text-shadow: 0 0 8px rgba(102, 252, 241, 0.4);
+}
+
+.btn-run {
+  background: linear-gradient(135deg, hsl(145, 80%, 38%) 0%, hsl(145, 85%, 48%) 100%);
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: 
+    0 4px 12px rgba(46, 213, 115, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  border: 1px solid rgba(46, 213, 115, 0.2);
+}
+
+.btn-run:hover {
+  background: linear-gradient(135deg, hsl(145, 80%, 42%) 0%, hsl(145, 85%, 52%) 100%);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 20px rgba(46, 213, 115, 0.4),
+    0 0 12px rgba(46, 213, 115, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-run:active {
+  transform: translateY(1px);
+}
+
+/* Animación respiración suave en botón de simular cuando está activo */
+.btn-run:not(:disabled) {
+  animation: breath-glow-success 3s infinite alternate;
+}
+
+@keyframes breath-glow-success {
+  0% {
+    box-shadow: 
+      0 4px 12px rgba(46, 213, 115, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+  100% {
+    box-shadow: 
+      0 4px 18px rgba(46, 213, 115, 0.45),
+      0 0 14px rgba(46, 213, 115, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+}
+
+.btn-stop {
+  background: linear-gradient(135deg, hsl(355, 80%, 40%) 0%, hsl(355, 80%, 50%) 100%);
+  color: white;
+  border-radius: 8px;
+  box-shadow: 
+    0 4px 12px rgba(255, 71, 87, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  border: 1px solid rgba(255, 71, 87, 0.1);
+}
+
+.btn-stop:not(:disabled) {
+  background: linear-gradient(135deg, hsl(355, 80%, 45%) 0%, hsl(355, 80%, 55%) 100%);
+  box-shadow: 
+    0 4px 16px rgba(255, 71, 87, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 71, 87, 0.3);
+  animation: breath-glow-danger 2s infinite alternate;
+}
+
+.btn-stop:not(:disabled):hover {
+  background: linear-gradient(135deg, hsl(355, 80%, 50%) 0%, hsl(355, 80%, 60%) 100%);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 22px rgba(255, 71, 87, 0.5),
+    0 0 14px rgba(255, 71, 87, 0.25);
+}
+
+.btn-stop:disabled {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@keyframes breath-glow-danger {
+  0% {
+    box-shadow: 
+      0 4px 12px rgba(255, 71, 87, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  100% {
+    box-shadow: 
+      0 4px 20px rgba(255, 71, 87, 0.45),
+      0 0 12px rgba(255, 71, 87, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+}
+
+.btn-icon {
+  font-size: 0.9rem;
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 14px;
+  border-radius: 30px;
+  border: 1px solid var(--border-color);
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  transition: var(--transition-smooth);
+}
+
+.status-indicator.active {
+  background-color: var(--success);
+  box-shadow: 0 0 10px var(--success);
+}
+
+.status-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+
+/* ==========================================
+   2. BIBLIOTECA DE COMPONENTES (PANEL IZQUIERDO)
+   ========================================== */
+
+.components-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.component-card {
+  background: linear-gradient(135deg, rgba(20, 26, 42, 0.45) 0%, rgba(13, 17, 28, 0.45) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: grab;
+  user-select: none;
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.component-card:hover {
+  border-color: rgba(102, 252, 241, 0.25);
+  box-shadow: 
+    0 8px 24px -8px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(102, 252, 241, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px) scale(1.02);
+  background: linear-gradient(135deg, rgba(25, 33, 54, 0.65) 0%, rgba(16, 22, 36, 0.65) 100%);
+}
+
+.component-card:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.comp-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-muted);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.comp-icon-box svg {
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), stroke-width 0.3s ease;
+}
+
+.component-card:hover .comp-icon-box {
+  background: rgba(102, 252, 241, 0.08);
+  border-color: rgba(102, 252, 241, 0.3);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(102, 252, 241, 0.15);
+}
+
+.component-card:hover .comp-icon-box svg {
+  transform: rotate(5deg) scale(1.08);
+  stroke-width: 3px;
+}
+
+.comp-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.comp-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.comp-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+
+/* ==========================================
+   3. CONTROLES DEL LIENZO FLOTANTES
+   ========================================== */
+
+.canvas-controls-floating {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.btn-floating {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-glass);
+  backdrop-filter: blur(8px);
+  color: var(--text-main);
+  font-size: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  transition: var(--transition-smooth);
+}
+
+.btn-floating:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--border-glow);
+  transform: translateY(-1px);
+}
+
+.btn-floating:active {
+  transform: translateY(1px) scale(0.95);
+}
+
+/* Panel flotante de ayuda del lienzo */
+.canvas-help-tip {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(5, 7, 12, 0.75);
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  z-index: 10;
+  pointer-events: none;
+}
+
+
+/* ==========================================
+   4. EDITOR DE PROPIEDADES (PANEL DERECHO)
+   ========================================== */
+
+.properties-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.property-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.property-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.property-input-wrapper {
+  display: flex;
+  gap: 6px;
+}
+
+.prop-input {
+  flex-grow: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-bright);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  transition: var(--transition-fast);
+}
+
+.prop-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(102, 252, 241, 0.2);
+}
+
+.btn-adj {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-adj:hover {
+  background: rgba(102, 252, 241, 0.08);
+  color: var(--accent-cyan);
+  border-color: rgba(102, 252, 241, 0.3);
+}
+
+/* Sliders Premium */
+.prop-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+  margin: 10px 0;
+}
+
+.prop-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.prop-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 14px var(--accent-cyan);
+}
+
+.btn-apply {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+  color: hsl(224, 25%, 4%);
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  box-shadow: 
+    0 4px 14px rgba(36, 200, 219, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  margin-top: 10px;
+}
+
+.btn-apply:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 20px rgba(36, 200, 219, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-apply:active {
+  transform: translateY(0px);
+}
+
+
+/* ==========================================
+   5. DOCK INFERIOR (OSCILOSCOPIO Y CONSOLA)
+   ========================================== */
+
+.osc-container {
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.osc-viewport {
+  flex-grow: 1;
+  background: rgba(3, 4, 7, 0.8);
+  position: relative;
+  overflow: hidden;
+}
+
+.osc-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.osc-grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-top: 1px solid transparent;
+  background: 
+    linear-gradient(rgba(102, 252, 241, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 252, 241, 0.015) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: center;
+}
+
+/* Panel flotante de controles del osciloscopio */
+.osc-panel-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  background: rgba(5, 8, 14, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px;
+  border-radius: 8px;
+  z-index: 5;
+  backdrop-filter: blur(8px);
+}
+
+.btn-osc-mini {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-osc-mini:hover {
+  color: var(--text-bright);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-osc-mini.active {
+  color: var(--accent-cyan);
+  background: rgba(102, 252, 241, 0.08);
+  border-color: rgba(102, 252, 241, 0.2);
+  text-shadow: 0 0 6px rgba(102, 252, 241, 0.3);
+}
+
+/* Terminal de logs */
+.console-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.console-output {
+  flex-grow: 1;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 14px 18px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Barra de scroll estilizada premium */
+.console-output::-webkit-scrollbar,
+.panel-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.console-output::-webkit-scrollbar-track,
+.panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.console-output::-webkit-scrollbar-thumb,
+.panel-body::-webkit-scrollbar-thumb {
+  background: rgba(102, 252, 241, 0.15);
+  border-radius: 3px;
+}
+
+.console-output::-webkit-scrollbar-thumb:hover,
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 252, 241, 0.35);
+}
+
+.log-line {
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+.log-line.system-msg {
+  color: var(--text-muted);
+}
+
+.log-line.send {
+  color: var(--accent-blue);
+}
+
+.log-line.receive {
+  color: var(--accent-cyan);
+  text-shadow: 0 0 4px rgba(102, 252, 241, 0.25);
+}
+
+.log-line.error {
+  color: var(--danger);
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(255, 71, 87, 0.2);
+}
+
+.btn-clear-console {
+  background: transparent;
+  border: none;
+  color: var(--accent-cyan);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-console:hover {
+  opacity: 1;
+  text-shadow: 0 0 4px rgba(102, 252, 241, 0.4);
+}
+
+
+/* ==========================================
+   6. MODALES FLOTANTES (CONFIGURACIÓN)
+   ========================================== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 4, 7, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-box {
+  width: 90%;
+  max-width: 480px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow-premium);
+  overflow: hidden;
+  transform: scale(0.9) translate3d(0, 20px, 0);
+  transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.modal-overlay.open .modal-box {
+  transform: scale(1) translate3d(0, 0, 0);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.15);
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-cancel {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.btn-cancel:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-bright);
+}
+
+.btn-save {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+  border: none;
+  color: hsl(224, 25%, 4%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(36, 200, 219, 0.2);
+  transition: var(--transition-fast);
+}
+
+.btn-save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(36, 200, 219, 0.4);
+}
+
+
+/* ==========================================
+   7. BARRA DE ESTADO (FOOTER)
+   ========================================== */
+
+.main-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  background: rgba(4, 6, 10, 0.5);
+  border-top: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.footer-info-group {
+  display: flex;
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.info-bullet.green {
+  background: var(--success);
+}
+
+
+/* ==========================================
+   8. ANIMACIONES Y KEYFRAMES
+   ========================================== */
+
+@keyframes pulse-glow {
+  0% {
+    filter: drop-shadow(0 0 3px var(--accent-cyan));
+    transform: scale(1);
+  }
+  100% {
+    filter: drop-shadow(0 0 10px var(--accent-cyan));
+    transform: scale(1.08);
+  }
+}
+
+/* ==========================================
+   9. FASE 8: CONTROLES DE ONDA Y PROPIEDADES AVANZADAS
+   ========================================== */
+
+#wave-properties-container {
+  border-top: 1px dashed rgba(102, 252, 241, 0.2) !important;
+  background: rgba(102, 252, 241, 0.02);
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 12px rgba(102, 252, 241, 0.02);
+  animation: slide-down-fade 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+@keyframes slide-down-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#prop-wave-type {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2366fcf1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 36px !important;
+  border: 1px solid rgba(102, 252, 241, 0.15) !important;
+  color: var(--accent-cyan) !important;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: rgba(6, 8, 14, 0.6) !important;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+#prop-wave-type:hover {
+  border-color: rgba(102, 252, 241, 0.4) !important;
+  box-shadow: 0 0 8px rgba(102, 252, 241, 0.1);
+  background-color: rgba(6, 8, 14, 0.85) !important;
+}
+
+#prop-wave-type:focus {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 12px rgba(102, 252, 241, 0.25) !important;
+  outline: none;
+}
+
+#prop-wave-type option {
+  background: hsl(224, 25%, 8%);
+  color: var(--text-main);
+  padding: 10px;
+}
+
+/* Estilos para los campos de onda dinámicos */
+#wave-properties-container .property-group {
+  margin-bottom: 2px;
+}
+
+#wave-properties-container .prop-input {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background-color: rgba(0, 0, 0, 0.45);
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#wave-properties-container .prop-input:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+#wave-properties-container .prop-input:focus {
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+  background-color: rgba(0, 0, 0, 0.75);
+}
+
+/* Destacar cuando se selecciona una onda activa */
+#wave-properties-container .property-label {
+  color: var(--text-muted);
+  transition: color 0.3s ease;
+}
+
+#wave-properties-container .property-group:focus-within .property-label {
+  color: var(--accent-cyan);
+}
+

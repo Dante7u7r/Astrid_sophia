@@ -1,0 +1,247 @@
+@import './components.css';
+
+/* --- SISTEMA DE DISEÑO PREMIUM ASTRYD SOPHIA --- */
+
+:root {
+  /* Paleta de colores HSL Premium */
+  --bg-primary: hsl(224, 25%, 8%);
+  --bg-secondary: hsl(224, 25%, 12%);
+  --bg-glass: rgba(10, 14, 23, 0.7);
+  --bg-card: rgba(20, 26, 42, 0.45);
+  
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(102, 252, 241, 0.15);
+  
+  --accent-cyan: hsl(174, 97%, 69%);
+  --accent-blue: hsl(210, 100%, 56%);
+  --accent-purple: hsl(270, 89%, 65%);
+  
+  --text-main: hsl(210, 17%, 82%);
+  --text-muted: hsl(210, 10%, 55%);
+  --text-bright: hsl(0, 0%, 100%);
+  
+  --success: hsl(145, 80%, 45%);
+  --danger: hsl(355, 80%, 55%);
+  --warning: hsl(45, 100%, 55%);
+  
+  /* Fuentes */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* Layout y Dimensiones */
+  --left-panel-width: 280px;
+  --right-panel-width: 320px;
+  --osc-panel-height: 220px;
+  
+  /* Sombras y transiciones */
+  --shadow-premium: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+  --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --transition-fast: all 0.15s ease-out;
+}
+
+/* --- RESET & LAYOUT BASE --- */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 10% 20%, hsla(253, 16%, 7%, 1) 0%, transparent 60%), 
+    radial-gradient(circle at 90% 10%, hsla(210, 38%, 11%, 1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 80%, hsla(174, 40%, 6%, 0.12) 0%, transparent 70%),
+    radial-gradient(circle at 80% 90%, hsla(270, 89%, 65%, 0.03) 0%, transparent 40%);
+  background-size: 200% 200%;
+  animation: wave-bg 25s ease infinite alternate;
+  background-attachment: fixed;
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes wave-bg {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+.app-container {
+  width: 98vw;
+  max-width: 1550px;
+  height: 96vh;
+  min-height: 700px;
+  display: grid;
+  grid-template-rows: 64px 1fr 32px;
+  background: linear-gradient(135deg, rgba(10, 14, 23, 0.75) 0%, rgba(6, 9, 15, 0.8) 100%);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  box-shadow: 
+    var(--shadow-premium),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 40px rgba(102, 252, 241, 0.03);
+  overflow: hidden;
+}
+
+/* --- ESTRUCTURA GENERAL DEL DASHBOARD (CSS GRID) --- */
+
+.dashboard {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  overflow: hidden;
+  position: relative;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Paneles Laterales (Sidebars) */
+.sidebar-panel {
+  height: 100%;
+  background: rgba(8, 11, 18, 0.4);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+}
+
+.sidebar-left {
+  width: var(--left-panel-width);
+}
+
+.sidebar-right {
+  width: var(--right-panel-width);
+  border-right: none;
+  border-left: 1px solid var(--border-color);
+}
+
+/* Clases de colapsado (Cero desplazamientos bruscos) */
+.sidebar-left.collapsed {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-right.collapsed {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Área Central Principal */
+.workspace-center {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Lienzo de Simulación */
+.canvas-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-color: rgba(3, 4, 7, 0.4);
+  overflow: hidden;
+}
+
+#circuit-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Panel Inferior (Osciloscopio / Logs) */
+.bottom-dock {
+  height: var(--osc-panel-height);
+  background: rgba(6, 8, 14, 0.6);
+  border-top: 1px solid var(--border-color);
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+}
+
+.bottom-dock.collapsed {
+  height: 0;
+  border-top: 1px solid transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Utilidades de Diseño Comunes */
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid var(--border-color);
+}
+
+.panel-header {
+  height: 48px;
+  min-height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h2, .panel-header h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+
+.panel-body {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* --- BOTONES PREMIUM DE EXPORTACIÓN (FASE 7) --- */
+#export-csv-btn, #export-svg-btn {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#export-csv-btn:hover {
+  color: var(--accent-cyan) !important;
+  background: rgba(102, 252, 241, 0.08) !important;
+  border-color: rgba(102, 252, 241, 0.25) !important;
+  box-shadow: 0 0 10px rgba(102, 252, 241, 0.2);
+  transform: translateY(-1px);
+}
+
+#export-svg-btn:hover {
+  color: var(--accent-purple) !important;
+  background: rgba(168, 85, 247, 0.08) !important;
+  border-color: rgba(168, 85, 247, 0.25) !important;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+  transform: translateY(-1px);
+}
+
+#export-csv-btn:active, #export-svg-btn:active {
+  transform: translateY(1px);
+}
