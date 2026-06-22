@@ -2,7 +2,7 @@
 
 > Simulador de circuitos electrónicos de grado industrial.  
 > **Stack:** Tauri + Rust (backend MNA) + TypeScript/Canvas (frontend)  
-> **Última actualización:** 26 de mayo de 2026
+> **Última actualización:** 21 de junio de 2026
 
 ---
 
@@ -35,8 +35,15 @@
 | **23** | **Evaluador .measure** — DELAY, RISETIME, FALLTIME, PEAK, AVG, RMS, PP | ✅ | `test_measure_propagation_delay` |
 | **24** | **Líneas de Transmisión RLCG** — Cascada Pi segmentada | ✅ | `test_tline_expansion_segments`, `test_tline_lossy_expansion` |
 | **25** | **Deriva Térmica** — Varshni, Is(T), Vth(T), β(T), TC1/TC2 | ✅ | `test_thermal_is_pn_scaling`, `test_thermal_resistance_tc1`, `test_thermal_mosfet_vth_drift`, `test_thermal_mosfet_beta_degradation`, `test_diode_thermal_voltage_shift` |
+| **26** | **Análisis de Sensibilidad Paramétrica** — ∂V/∂R, ∂V/∂C, Peor caso | ✅ | `test_dc_sensitivity_voltage_divider` |
+| **27** | **Simulación de Envolvente (PSS)** — Shooting Method régimen permanente | ✅ | `test_pss_shooting_method_simple_rc` |
+| **28** | **Modelos BSIM3v3 / BSIM4** — Fugas de compuerta, canal corto, DIBL | ✅ | `test_bsim4_nmos_gate_leakage`, `test_bsim4_pmos_short_channel_saturation` |
+| **29** | **Análisis de Estabilidad (Polos y Ceros)** — Margen de fase y polos | ✅ | `test_stability_analysis_rc_pole`, `test_stability_zeros_extraction` |
+| **30** | **Co-simulación Digital/Analógica Avanzada** — Retardos configurables y lógica ideal | ✅ | `test_logic_gate_configurable_delays`, `test_logic_gate_delay_parsing` |
+| **31** | **Exportación Profesional** — Exportación a Touchstone, HDF5 y PDF | ✅ | `main.ts` |
+| **32** | **GPU Acceleration (WebGPU)** — Schur complement en WebGPU | ✅ | `test_gpu_schur_solver` |
 
-**Total: 24 tests unitarios pasando al 100%**
+**Total: 85 tests unitarios pasando al 100%**
 
 ---
 
@@ -87,38 +94,22 @@ Astrid_sophia/
 | `expand_transmission_line` | 24 | Expansión de línea RLCG |
 | `solve_dc_thermal` | 25 | DC con temperatura |
 | `get_performance_telemetry` | 20 | Métricas del sistema |
+---
+
+## 📦 Migración de Características Legacy (Electron -> Tauri)
+
+| Fase | Descripción | Estado |
+|------|-------------|--------|
+| A.1 | Modularización de la UI (settings, telemetry, oscilloscope panels) | ✅ |
+| A.2 | Actuadores Interactivos (lámpara, relé, zumbador + sintetizador de audio) | ✅ |
+| A.3 | Integración de Emuladores de MCU (8051/AVR cycle-accurate en UI) | ✅ |
+| A.4 | Navegador de Librerías y Gestor de Pestañas (buscador + workspace tabs) | ✅ |
 
 ---
 
-## 🔮 Próximas Fases Sugeridas (No implementadas)
+## 🔮 Próximas Fases Sugeridas
 
-### Fase 26: Análisis de Sensibilidad Paramétrica
-- Derivadas parciales ∂V/∂R, ∂V/∂C sobre el punto de operación
-- Análisis de peor caso (worst-case) automático
-
-### Fase 27: Simulación de Envolvente (Shooting Method)
-- Extracción de régimen permanente periódico sin transitorio largo
-- Ideal para circuitos osciladores y PLLs
-
-### Fase 28: Modelos BSIM3v3 / BSIM4
-- Reemplazo del modelo Level 1 por modelos compactos industriales
-- Efectos de canal corto, DIBL, velocity saturation
-
-### Fase 29: Análisis de Estabilidad (Polos y Ceros)
-- Extracción de polos/ceros de la función de transferencia
-- Diagramas de Nyquist y márgenes de fase/ganancia
-
-### Fase 30: Co-simulación Digital/Analógica
-- Modelado de puertas lógicas ideales con retardos
-- Interfaz A/D y D/A con umbrales configurables
-
-### Fase 31: Exportación Profesional
-- Exportación de resultados a CSV, HDF5, Touchstone (.s2p)
-- Generación automática de reportes PDF con gráficos
-
-### Fase 32: GPU Acceleration (WebGPU/CUDA)
-- Paralelización de la factorización LU para matrices grandes
-- Aceleración de Monte Carlo masivo (>10,000 iteraciones)
+Todas las fases del roadmap principal han sido completadas con éxito.
 
 ---
 
@@ -152,4 +143,4 @@ npm run tauri dev
 ---
 
 > **Nota:** Este archivo se actualiza con cada bloque de fases completado.  
-> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-25 completas`
+> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-32 completas`

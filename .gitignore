@@ -31,3 +31,8 @@ ARGON_PRECISION.xml
 *.njsproj
 *.sln
 *.sw?
+
+# OpenCode environment
+.opencode/node_modules/
+.opencode/package-lock.json
+.opencode/bun.lock

@@ -218,15 +218,15 @@ body {
   padding: 16px;
 }
 
-/* --- BOTONES PREMIUM DE EXPORTACIÓN (FASE 7) --- */
-#export-csv-btn, #export-svg-btn {
+/* --- BOTONES PREMIUM DE EXPORTACIÓN (FASE 7/31) --- */
+#export-csv-btn, #export-svg-btn, #export-s2p-btn, #export-h5-btn, #export-pdf-btn {
   transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-#export-csv-btn:hover {
+#export-csv-btn:hover, #export-h5-btn:hover {
   color: var(--accent-cyan) !important;
   background: rgba(102, 252, 241, 0.08) !important;
   border-color: rgba(102, 252, 241, 0.25) !important;
@@ -234,7 +234,7 @@ body {
   transform: translateY(-1px);
 }
 
-#export-svg-btn:hover {
+#export-svg-btn:hover, #export-pdf-btn:hover {
   color: var(--accent-purple) !important;
   background: rgba(168, 85, 247, 0.08) !important;
   border-color: rgba(168, 85, 247, 0.25) !important;
@@ -242,6 +242,229 @@ body {
   transform: translateY(-1px);
 }
 
-#export-csv-btn:active, #export-svg-btn:active {
+#export-s2p-btn:hover {
+  color: var(--accent-blue) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+  transform: translateY(-1px);
+}
+
+#export-csv-btn:active, #export-svg-btn:active, #export-s2p-btn:active, #export-h5-btn:active, #export-pdf-btn:active {
   transform: translateY(1px);
 }
+
+/* ==========================================
+   10. BUSCADOR Y CATEGORÍAS (FASE 4)
+   ========================================== */
+.search-box {
+  margin-bottom: 16px;
+  position: relative;
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px 10px 14px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-bright);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: inset 0 1px 0 rgba(0,0,0,0.2);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 
+    0 0 12px rgba(102, 252, 241, 0.15),
+    inset 0 1px 0 rgba(0,0,0,0.2);
+}
+
+.components-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.category-group {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding-bottom: 10px;
+}
+
+.category-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.category-header:hover {
+  color: var(--accent-cyan);
+}
+
+.category-header .category-arrow {
+  font-size: 0.65rem;
+  transition: transform 0.25s ease;
+  transform: rotate(-90deg); /* Apunta a la derecha cuando cerrado */
+}
+
+.category-header.active {
+  color: var(--text-bright);
+}
+
+.category-header.active .category-arrow {
+  transform: rotate(0deg); /* Apunta abajo cuando abierto */
+}
+
+.category-content {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.category-content.open {
+  display: flex;
+}
+
+/* ==========================================
+   11. WORKSPACE TABS BAR (FASE 4)
+   ========================================== */
+.tabs-bar {
+  display: flex;
+  height: 38px;
+  min-height: 38px;
+  background: rgba(5, 7, 12, 0.5);
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  overflow: hidden;
+}
+
+.tabs-container {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.tabs-container::-webkit-scrollbar {
+  display: none; /* Safari/Chrome */
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border-right: 1px solid var(--border-color);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+}
+
+.tab-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-main);
+}
+
+.tab-item.active {
+  background: rgba(10, 14, 23, 0.35);
+  color: var(--accent-cyan);
+  text-shadow: 0 0 6px rgba(102, 252, 241, 0.25);
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+  box-shadow: 0 -1px 6px rgba(102, 252, 241, 0.4);
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.tab-close:hover {
+  background: rgba(255, 71, 87, 0.15);
+  color: var(--danger);
+}
+
+.tab-unsaved {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+  margin-left: 2px;
+}
+
+.btn-add-tab {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  font-weight: 300;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-tab:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--accent-cyan);
+}
+
+.btn-add-tab:active {
+  transform: scale(0.95);
+}
+

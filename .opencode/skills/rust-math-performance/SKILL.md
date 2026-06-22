@@ -1,3 +1,8 @@
+---
+name: rust-math-performance
+description: Use when writing Rust numerical code, matrix solvers, parallelization with rayon, or memory optimization in computation kernels
+---
+
 # Skill: Rust Math Performance
 
 ## 1. Context and Objective

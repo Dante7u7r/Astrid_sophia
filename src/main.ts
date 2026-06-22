@@ -1,24 +1,34 @@
 import { invoke } from "@tauri-apps/api/core";
 import { CanvasOrchestrator, ComponentInstance, Point2D } from "./canvas_orchestrator";
-
-// --- INTERFACE DE CONFIGURACIÓN ---
-interface SimulationSettings {
-  dt: number;
-  tolerance: number;
-  maxIterations: number;
-}
-
+import { TelemetryPanel } from "./ui/telemetry_panel";
+import { SettingsModal, SimulationSettings } from "./ui/settings_modal";
+import { OscilloscopePanel, TimeStepResult } from "./ui/oscilloscope_panel";
+import { ActuatorHistoryManager, parseBuzzerActuatorModel, parseLampActuatorModel, parseRelayActuatorModel } from "./ui/actuator_helpers";
+import { AudioOrchestrator } from "./ui/audio_orchestrator";
+import { McuDebugPanel } from "./ui/mcu_debug_panel";
+import { 
+  createMcuRuntime, 
+  createMcuSpiceBridge, 
+  updateGpioInputs, 
+  runCycles, 
+  connectGpioToNode, 
+  STANDARD_8051_DEFINITION, 
+  ATMEGA328P_DEFINITIONS,
+  resetRuntime
+} from "./simulation";
 // Variables Globales del Estado
+let actuatorHistory = new ActuatorHistoryManager();
+let audioOrchestrator = new AudioOrchestrator();
+
 let simSettings: SimulationSettings = {
   dt: 0.0001,
   tolerance: 0.00001,
   maxIterations: 100
 };
 
-let activeAnalysisMode: 'DC' | 'AC' | 'TRAN' = 'DC';
-let isSimulating = false;
-let animationFrameId: number | null = null;
-let oscTime = 0; // Temporizador para el renderizado del osciloscopio
+let activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' = 'DC';
+const transientDuration = 0.05; // 50 ms total de simulación
+let mcuDebugPanel: McuDebugPanel | null = null;
 
 // --- ELEMENTOS DEL DOM ---
 let sidebarLeft: HTMLElement | null = null;
@@ -26,14 +36,12 @@ let sidebarRight: HTMLElement | null = null;
 let btnToggleLeft: HTMLButtonElement | null = null;
 let btnToggleRight: HTMLButtonElement | null = null;
 
-let settingsModal: HTMLElement | null = null;
-let settingsTriggerBtn: HTMLButtonElement | null = null;
-let btnCancelSettings: HTMLButtonElement | null = null;
-let btnSaveSettings: HTMLButtonElement | null = null;
-
 let analysisDcBtn: HTMLButtonElement | null = null;
 let analysisAcBtn: HTMLButtonElement | null = null;
 let analysisTranBtn: HTMLButtonElement | null = null;
+let analysisSensBtn: HTMLButtonElement | null = null;
+let analysisPssBtn: HTMLButtonElement | null = null;
+let analysisStbBtn: HTMLButtonElement | null = null;
 let runSimBtn: HTMLButtonElement | null = null;
 let stopSimBtn: HTMLButtonElement | null = null;
 
@@ -49,18 +57,34 @@ let consoleOutput: HTMLElement | null = null;
 let clearConsoleBtn: HTMLButtonElement | null = null;
 let ipcStatusDot: HTMLElement | null = null;
 let ipcStatusText: HTMLElement | null = null;
-let telemetryRamText: HTMLElement | null = null;
-let telemetryCpuText: HTMLElement | null = null;
-
-let oscCanvas: HTMLCanvasElement | null = null;
-let oscCtx: CanvasRenderingContext2D | null = null;
-let oscCh1Btn: HTMLButtonElement | null = null;
-let oscCh2Btn: HTMLButtonElement | null = null;
-let oscPauseBtn: HTMLButtonElement | null = null;
-let isOscPaused = false;
 
 // Instancia global del Canvas Orchestrator
 let orchestrator: CanvasOrchestrator | null = null;
+
+// Interfaz para la gestión de Pestañas (Workspace Tabs)
+interface Tab {
+  id: string;
+  name: string;
+  components: ComponentInstance[];
+  wires: any[];
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  filePath: string | null;
+  unsaved: boolean;
+  transientResults: TimeStepResult[];
+  acSweepResults: any | null;
+  ch1ProbeNode: string | null;
+  ch2ProbeNode: string | null;
+  activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB';
+}
+
+let tabs: Tab[] = [];
+let activeTabId: string | null = null;
+
+// Instancias de submódulos UI modularizados
+let telemetryPanel: TelemetryPanel | null = null;
+let oscilloscopePanel: OscilloscopePanel | null = null;
 
 // Mapa global de voltajes resueltos para visualización
 let liveVoltages: Record<string, number> = {};
@@ -72,29 +96,6 @@ let pinToNodeMap: Record<string, string> = {};
 let probePlacementMode: 'CH1' | 'CH2' | null = null;
 let ch1ProbeNode: string | null = "1"; // Canal 1 por defecto al Nodo 1
 let ch2ProbeNode: string | null = "2"; // Canal 2 por defecto al Nodo 2
-
-// Resultados de la Simulación Transitoria
-interface TimeStepResult {
-  time: f64;
-  nodeVoltages: Record<string, number>;
-  branchCurrents: Record<string, number>;
-}
-type f64 = number;
-
-let transientResults: TimeStepResult[] = [];
-let sweepTime = 0.0;
-const transientDuration = 0.05; // 50 ms total de simulación
-
-interface AcSweepResult {
-  frequencies: number[];
-  nodeAmplitudes: Record<string, number[]>;
-  nodePhases: Record<string, number[]>;
-  errorLog?: string;
-}
-
-let acSweepResults: AcSweepResult | null = null;
-let oscMouseX: number | null = null;
-// let oscMouseY: number | null = null;
 
 function updateCanvasRendering() {
   const pinVoltageMap: Record<string, number> = {};
@@ -108,16 +109,19 @@ function updateCanvasRendering() {
   let ch1PinPos: Point2D | undefined;
   let ch2PinPos: Point2D | undefined;
 
+  const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
+  const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
+
   if (orchestrator) {
     for (const comp of orchestrator.components) {
       const pins = orchestrator.getComponentPins(comp);
       for (const pin of pins) {
         const pinKey = `${comp.id}:${pin.pinIndex}`;
         const nodeId = pinToNodeMap[pinKey];
-        if (nodeId === ch1ProbeNode && !ch1PinPos) {
+        if (nodeId === ch1Node && !ch1PinPos) {
           ch1PinPos = { x: pin.x, y: pin.y };
         }
-        if (nodeId === ch2ProbeNode && !ch2PinPos) {
+        if (nodeId === ch2Node && !ch2PinPos) {
           ch2PinPos = { x: pin.x, y: pin.y };
         }
       }
@@ -141,402 +145,6 @@ function addLog(text: string, type: 'system' | 'send' | 'receive' | 'error' = 's
   line.textContent = `[${getTimestamp()}] ${text}`;
   consoleOutput.appendChild(line);
   consoleOutput.scrollTop = consoleOutput.scrollHeight;
-}
-
-// --- SIMULADOR EN TIEMPO REAL DEL OSCILOSCOPIO (CANVAS 2) ---
-function drawOscilloscope() {
-  if (!oscCanvas || !oscCtx) return;
-
-  const width = oscCanvas.clientWidth;
-  const height = oscCanvas.clientHeight;
-  
-  if (oscCanvas.width !== width || oscCanvas.height !== height) {
-    oscCanvas.width = width;
-    oscCanvas.height = height;
-  }
-
-  // Limpiar con fósforo oscuro (efecto de desvanecimiento gradual para persistencia analógica si es animado)
-  if (isSimulating && activeAnalysisMode !== 'AC') {
-    oscCtx.fillStyle = 'rgba(3, 5, 8, 0.16)';
-    oscCtx.fillRect(0, 0, width, height);
-  } else {
-    oscCtx.fillStyle = '#030508';
-    oscCtx.fillRect(0, 0, width, height);
-  }
-
-  // --- MODO AC SWEEP: DIAGRAMA DE BODE LOGARÍTMICO ---
-  if (activeAnalysisMode === 'AC' && acSweepResults !== null && acSweepResults.frequencies.length > 0) {
-    const ctx = oscCtx!;
-    const freqs = acSweepResults.frequencies;
-    const fMin = freqs[0];
-    const fMax = freqs[freqs.length - 1];
-    const logMin = Math.log10(fMin);
-    const logMax = Math.log10(fMax);
-
-    // Rejilla logarítmica (Décadas)
-    ctx.strokeStyle = 'rgba(102, 252, 241, 0.08)';
-    ctx.lineWidth = 1;
-    
-    const decades = [10, 100, 1000, 10000, 100000];
-    decades.forEach(dec => {
-      if (dec >= fMin && dec <= fMax) {
-        const x = ((Math.log10(dec) - logMin) / (logMax - logMin)) * width;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height - 15);
-        ctx.stroke();
-        
-        // Escribir década de frecuencia
-        ctx.fillStyle = 'rgba(102, 252, 241, 0.4)';
-        ctx.font = '9px var(--font-sans)';
-        ctx.textAlign = 'center';
-        let label = dec >= 1000 ? (dec / 1000) + " kHz" : dec + " Hz";
-        ctx.fillText(label, x, height - 4);
-      }
-    });
-
-    // Subdivisiones logarítmicas tenues
-    ctx.strokeStyle = 'rgba(102, 252, 241, 0.015)';
-    for (let dec = 10; dec <= 10000; dec *= 10) {
-      for (let mul = 2; mul <= 9; mul++) {
-        const val = dec * mul;
-        if (val >= fMin && val <= fMax) {
-          const x = ((Math.log10(val) - logMin) / (logMax - logMin)) * width;
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height - 15);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // Líneas horizontales de referencia en dB
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-    for (let i = 1; i < 5; i++) {
-      const y = (height - 15) * (i / 5);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    // Dibujar Curva de Amplitud (dB)
-    const drawBodeAmplitude = (nodeId: string, color: string, isCh1: boolean) => {
-      const amps = acSweepResults!.nodeAmplitudes[nodeId];
-      if (!amps || amps.length === 0) return;
-
-      ctx.strokeStyle = color;
-      ctx.lineWidth = isCh1 ? 2.5 : 1.8;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = isCh1 ? 6 : 3;
-      ctx.beginPath();
-
-      for (let i = 0; i < freqs.length; i++) {
-        const x = ((Math.log10(freqs[i]) - logMin) / (logMax - logMin)) * width;
-        const db = amps[i];
-        const y = (height - 15) * (1.0 - (db - (-80)) / (20 - (-80)));
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    };
-
-    // Dibujar Curva de Fase (Grados)
-    const drawBodePhase = (nodeId: string, color: string) => {
-      const phases = acSweepResults!.nodePhases[nodeId];
-      if (!phases || phases.length === 0) return;
-
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([4, 4]);
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 4;
-      ctx.beginPath();
-
-      for (let i = 0; i < freqs.length; i++) {
-        const x = ((Math.log10(freqs[i]) - logMin) / (logMax - logMin)) * width;
-        const deg = phases[i];
-        const y = (height - 15) * (1.0 - (deg - (-180)) / (180 - (-180)));
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.shadowBlur = 0;
-    };
-
-    if (oscCh1Btn && oscCh1Btn.classList.contains('active') && ch1ProbeNode !== null) {
-      drawBodeAmplitude(ch1ProbeNode, '#66fcf1', true);
-      drawBodePhase(ch1ProbeNode, 'rgba(102, 252, 241, 0.4)');
-    }
-    if (oscCh2Btn && oscCh2Btn.classList.contains('active') && ch2ProbeNode !== null) {
-      drawBodeAmplitude(ch2ProbeNode, '#a855f7', false);
-      drawBodePhase(ch2ProbeNode, 'rgba(168, 85, 247, 0.45)');
-    }
-
-    // Escribir marcas de ejes Y
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.font = '8px var(--font-mono)';
-    ctx.textAlign = 'left';
-    ctx.fillText("+20 dB", 5, 12);
-    ctx.fillText("-80 dB", 5, height - 20);
-
-    ctx.textAlign = 'right';
-    ctx.fillText("+180°", width - 5, 12);
-    ctx.fillText("-180°", width - 5, height - 20);
-
-    // CURSOR INTERACTIVO EN HOVER (BODE SWEEP INFO TOOLTIP)
-    if (oscMouseX !== null && oscMouseX >= 0 && oscMouseX <= width) {
-      const pct = oscMouseX / width;
-      const logVal = logMin + pct * (logMax - logMin);
-      const fVal = Math.pow(10, logVal);
-
-      let closestIdx = 0;
-      let minDiff = Infinity;
-      for (let i = 0; i < freqs.length; i++) {
-        const diff = Math.abs(freqs[i] - fVal);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestIdx = i;
-        }
-      }
-
-      const exactFreq = freqs[closestIdx];
-
-      ctx.strokeStyle = 'rgba(102, 252, 241, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.moveTo(oscMouseX, 0);
-      ctx.lineTo(oscMouseX, height - 15);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = 'rgba(10, 15, 25, 0.9)';
-      ctx.strokeStyle = 'rgba(102, 252, 241, 0.5)';
-      ctx.lineWidth = 1;
-      
-      let tooltipText = `Frecuencia: ${exactFreq.toFixed(1)} Hz`;
-      if (ch1ProbeNode !== null && oscCh1Btn?.classList.contains('active')) {
-        const db1 = acSweepResults.nodeAmplitudes[ch1ProbeNode][closestIdx];
-        const ph1 = acSweepResults.nodePhases[ch1ProbeNode][closestIdx];
-        tooltipText += ` | Canal 1: ${db1.toFixed(1)} dB, ${ph1.toFixed(1)}°`;
-      }
-      if (ch2ProbeNode !== null && oscCh2Btn?.classList.contains('active')) {
-        const db2 = acSweepResults.nodeAmplitudes[ch2ProbeNode][closestIdx];
-        const ph2 = acSweepResults.nodePhases[ch2ProbeNode][closestIdx];
-        tooltipText += ` | Canal 2: ${db2.toFixed(1)} dB, ${ph2.toFixed(1)}°`;
-      }
-
-      ctx.font = 'bold 9px var(--font-sans)';
-      const tWidth = ctx.measureText(tooltipText).width;
-      
-      const rectX = Math.min(Math.max(oscMouseX - tWidth / 2 - 8, 4), width - tWidth - 16);
-      ctx.beginPath();
-      ctx.roundRect(rectX, 15, tWidth + 16, 18, 4);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = 'hsl(174, 97%, 69%)';
-      ctx.textAlign = 'left';
-      ctx.fillText(tooltipText, rectX + 8, 27);
-    }
-
-  } else {
-    // Rejilla de fósforo estándar (Modos TRAN o Senoidales genéricas)
-    oscCtx.strokeStyle = 'rgba(102, 252, 241, 0.05)';
-    oscCtx.lineWidth = 1;
-    
-    const gridSize = 30;
-    for (let x = 0; x < width; x += gridSize) {
-      oscCtx.beginPath();
-      oscCtx.moveTo(x, 0);
-      oscCtx.lineTo(x, height);
-      oscCtx.stroke();
-    }
-    for (let y = 0; y < height; y += gridSize) {
-      oscCtx.beginPath();
-      oscCtx.moveTo(0, y);
-      oscCtx.lineTo(width, y);
-      oscCtx.stroke();
-    }
-
-    // Ejes centrales
-    oscCtx.strokeStyle = 'rgba(102, 252, 241, 0.15)';
-    oscCtx.lineWidth = 1.5;
-    oscCtx.beginPath();
-    oscCtx.moveTo(0, height / 2);
-    oscCtx.lineTo(width, height / 2);
-    oscCtx.stroke();
-
-    oscCtx.beginPath();
-    oscCtx.moveTo(width / 2, 0);
-    oscCtx.lineTo(width / 2, height);
-    oscCtx.stroke();
-
-    // --- MODO TRANSIENT: GRAFICAR ONDAS FÍSICAS REALES SIMULADAS ---
-    if (activeAnalysisMode === 'TRAN' && transientResults.length > 0) {
-      if (isSimulating && !isOscPaused) {
-        sweepTime += (transientDuration / 100);
-        if (sweepTime > transientDuration) {
-          sweepTime = 0.0;
-        }
-      }
-
-      const scaleY = height * 0.08; 
-      const centerY = height / 2;
-
-      // CH 1 (Cian Eléctrico)
-      if (oscCh1Btn && oscCh1Btn.classList.contains('active') && ch1ProbeNode !== null) {
-        oscCtx.strokeStyle = '#66fcf1';
-        oscCtx.lineWidth = 2.5;
-        oscCtx.shadowColor = '#66fcf1';
-        oscCtx.shadowBlur = 6;
-        oscCtx.beginPath();
-
-        let isFirst = true;
-        for (const pt of transientResults) {
-          if (pt.time > sweepTime) break;
-
-          const x = (pt.time / transientDuration) * width;
-          const v = pt.nodeVoltages[ch1ProbeNode] || 0.0;
-          const y = centerY - v * scaleY;
-
-          if (isFirst) {
-            oscCtx.moveTo(x, y);
-            isFirst = false;
-          } else {
-            oscCtx.lineTo(x, y);
-          }
-        }
-        oscCtx.stroke();
-        oscCtx.shadowBlur = 0;
-
-        const activePt = transientResults.find(p => p.time >= sweepTime) || transientResults[transientResults.length - 1];
-        if (activePt) {
-          const x = (activePt.time / transientDuration) * width;
-          const v = activePt.nodeVoltages[ch1ProbeNode] || 0.0;
-          const y = centerY - v * scaleY;
-          oscCtx.fillStyle = '#66fcf1';
-          oscCtx.beginPath();
-          oscCtx.arc(x, y, 4, 0, Math.PI * 2);
-          oscCtx.fill();
-        }
-      }
-
-      // CH 2 (Morado/Violeta)
-      if (oscCh2Btn && oscCh2Btn.classList.contains('active') && ch2ProbeNode !== null) {
-        oscCtx.strokeStyle = '#a855f7';
-        oscCtx.lineWidth = 2.0;
-        oscCtx.shadowColor = '#a855f7';
-        oscCtx.shadowBlur = 4;
-        oscCtx.beginPath();
-
-        let isFirst = true;
-        for (const pt of transientResults) {
-          if (pt.time > sweepTime) break;
-
-          const x = (pt.time / transientDuration) * width;
-          const v = pt.nodeVoltages[ch2ProbeNode] || 0.0;
-          const y = centerY - v * scaleY;
-
-          if (isFirst) {
-            oscCtx.moveTo(x, y);
-            isFirst = false;
-          } else {
-            oscCtx.lineTo(x, y);
-          }
-        }
-        oscCtx.stroke();
-        oscCtx.shadowBlur = 0;
-
-        const activePt = transientResults.find(p => p.time >= sweepTime) || transientResults[transientResults.length - 1];
-        if (activePt) {
-          const x = (activePt.time / transientDuration) * width;
-          const v = activePt.nodeVoltages[ch2ProbeNode] || 0.0;
-          const y = centerY - v * scaleY;
-          oscCtx.fillStyle = '#a855f7';
-          oscCtx.beginPath();
-          oscCtx.arc(x, y, 3, 0, Math.PI * 2);
-          oscCtx.fill();
-        }
-      }
-
-    } else {
-      // --- SEÑALES SENOIDALES SIMULADAS ---
-      if (isSimulating && !isOscPaused) {
-        oscTime += 0.05;
-      }
-
-      // CH 1 (Cian)
-      if (oscCh1Btn && oscCh1Btn.classList.contains('active')) {
-        oscCtx.strokeStyle = '#66fcf1';
-        oscCtx.lineWidth = 2.5;
-        oscCtx.shadowColor = '#66fcf1';
-        oscCtx.shadowBlur = 6;
-        oscCtx.beginPath();
-
-        const node1Volt = liveVoltages['1'] || 0.0;
-        const ampl = 15 + Math.min(Math.abs(node1Volt) * 12, height * 0.35);
-
-        for (let x = 0; x < width; x++) {
-          const angle = (x / width) * Math.PI * 4 + oscTime;
-          const y = (height / 2) + Math.sin(angle) * ampl;
-          
-          if (x === 0) oscCtx.moveTo(x, y);
-          else oscCtx.lineTo(x, y);
-        }
-        oscCtx.stroke();
-        oscCtx.shadowBlur = 0;
-      }
-
-      // CH 2 (Morado)
-      if (oscCh2Btn && oscCh2Btn.classList.contains('active')) {
-        oscCtx.strokeStyle = '#a855f7';
-        oscCtx.lineWidth = 2;
-        oscCtx.shadowColor = '#a855f7';
-        oscCtx.shadowBlur = 4;
-        oscCtx.beginPath();
-
-        const node2Volt = liveVoltages['2'] || 0.0;
-        const ampl2 = 10 + Math.min(Math.abs(node2Volt) * 10, height * 0.25);
-
-        for (let x = 0; x < width; x++) {
-          const t = (x / width) * 8 + oscTime * 1.5;
-          const wave = (t % 1) * 2 - 1; 
-          const noise = (Math.sin(x * 0.25) * 0.08);
-          const y = (height / 2) + (wave + noise) * ampl2;
-          
-          if (x === 0) oscCtx.moveTo(x, y);
-          else oscCtx.lineTo(x, y);
-        }
-        oscCtx.stroke();
-        oscCtx.shadowBlur = 0;
-      }
-    }
-  }
-
-  if (isSimulating) {
-    animationFrameId = requestAnimationFrame(drawOscilloscope);
-  }
-}
-
-function startOscilloscopeLoop() {
-  if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  isSimulating = true;
-  drawOscilloscope();
-}
-
-function stopOscilloscopeLoop() {
-  isSimulating = false;
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-  drawOscilloscope();
 }
 
 // --- INTERACCIONES DE INTERFAZ (SIDEBARS & MODALES) ---
@@ -564,44 +172,6 @@ function initSidebars() {
   }
 }
 
-function initModals() {
-  settingsModal = document.querySelector("#settings-modal");
-  settingsTriggerBtn = document.querySelector("#settings-trigger-btn");
-  btnCancelSettings = document.querySelector("#btn-cancel-settings");
-  btnSaveSettings = document.querySelector("#btn-save-settings");
-
-  const dtInput = document.querySelector("#settings-dt-input") as HTMLInputElement;
-  const tolInput = document.querySelector("#settings-tol-input") as HTMLInputElement;
-  const iterInput = document.querySelector("#settings-iter-input") as HTMLInputElement;
-
-  if (settingsTriggerBtn && settingsModal) {
-    settingsTriggerBtn.addEventListener("click", () => {
-      if (dtInput) dtInput.value = simSettings.dt.toString();
-      if (tolInput) tolInput.value = simSettings.tolerance.toString();
-      if (iterInput) iterInput.value = simSettings.maxIterations.toString();
-      settingsModal?.classList.add("open");
-    });
-  }
-
-  if (btnCancelSettings && settingsModal) {
-    btnCancelSettings.addEventListener("click", () => {
-      settingsModal?.classList.remove("open");
-    });
-  }
-
-  if (btnSaveSettings && settingsModal) {
-    btnSaveSettings.addEventListener("click", () => {
-      if (dtInput && tolInput && iterInput) {
-        simSettings.dt = parseFloat(dtInput.value) || 0.0001;
-        simSettings.tolerance = parseFloat(tolInput.value) || 0.00001;
-        simSettings.maxIterations = parseInt(iterInput.value) || 100;
-        addLog(`Ajustes guardados: dt=${simSettings.dt}, tol=${simSettings.tolerance}, iterMax=${simSettings.maxIterations}`, "system");
-      }
-      settingsModal?.classList.remove("open");
-    });
-  }
-}
-
 // --- ACTUALIZACIÓN DE PROPIEDADES EN EL PANEL DERECHO ---
 
 function updatePropertiesPanel(comp: ComponentInstance) {
@@ -610,6 +180,33 @@ function updatePropertiesPanel(comp: ComponentInstance) {
   propIdInput.value = comp.id;
   propValInput.value = comp.value.toString();
   propValSlider.value = comp.value.toString();
+
+  // Mostrar u ocultar panel de depuración de MCU
+  if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
+    mcuDebugPanel?.show(comp);
+  } else {
+    mcuDebugPanel?.hide();
+  }
+
+  // Ajustar visibilidad de campos de valor para MCUs
+  const valGroup = document.querySelector("#group-comp-val") as HTMLElement;
+  const unitGroup = document.querySelector("#group-comp-unit") as HTMLElement;
+  const valLabel = document.querySelector("#group-comp-val .property-label") as HTMLElement;
+
+  if (valGroup && unitGroup) {
+    if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
+      valGroup.style.display = "none";
+      unitGroup.style.display = "none";
+    } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+      valGroup.style.display = "flex";
+      unitGroup.style.display = "none";
+      if (valLabel) valLabel.textContent = "Modo de Simulación (0-3)";
+    } else {
+      valGroup.style.display = "flex";
+      unitGroup.style.display = "flex";
+      if (valLabel) valLabel.textContent = "Valor Nominal";
+    }
+  }
 
   const waveContainer = document.querySelector("#wave-properties-container") as HTMLElement;
   const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
@@ -812,6 +409,7 @@ function initPropertyEditor() {
         }
 
         updateCanvasRendering();
+        markCurrentTabAsModified();
         addLog(`Propiedades aplicadas a [${selected.id}]: Valor = [${newVal}]`, "system");
       }
     });
@@ -872,12 +470,23 @@ function extractElectricalNetlist(): CircuitNetlist | null {
   const compPinMapping: Record<string, string[]> = {};
 
   for (const comp of orchestrator.components) {
-    const pins = orchestrator.getComponentPins(comp);
-    compPinMapping[comp.id] = [];
-    for (const pin of pins) {
-      const pinKey = `${comp.id}:${pin.pinIndex}`;
-      allPinKeys.push(pinKey);
-      compPinMapping[comp.id].push(pinKey);
+    if (comp.type === 'relay') {
+      compPinMapping[comp.id] = [
+        `${comp.id}:0`,
+        `${comp.id}:1`,
+        `${comp.id}:2`,
+        `${comp.id}:3`,
+        `${comp.id}:internal`
+      ];
+      allPinKeys.push(`${comp.id}:0`, `${comp.id}:1`, `${comp.id}:2`, `${comp.id}:3`, `${comp.id}:internal`);
+    } else {
+      const pins = orchestrator.getComponentPins(comp);
+      compPinMapping[comp.id] = [];
+      for (const pin of pins) {
+        const pinKey = `${comp.id}:${pin.pinIndex}`;
+        allPinKeys.push(pinKey);
+        compPinMapping[comp.id].push(pinKey);
+      }
     }
   }
 
@@ -909,29 +518,113 @@ function extractElectricalNetlist(): CircuitNetlist | null {
   const extractedComponents: ExtractedComponent[] = [];
 
   for (const comp of orchestrator.components) {
-    const pinsMapped: string[] = [];
     const pinsKeys = compPinMapping[comp.id] || [];
 
-    for (const pk of pinsKeys) {
-      const root = dsu.find(pk);
-      if (!rootToNodeIdMap[root]) {
-        rootToNodeIdMap[root] = nextNodeId.toString();
-        nextNodeId++;
-      }
-      pinsMapped.push(rootToNodeIdMap[root]);
+    if (comp.type === 'lamp') {
+      const model = parseLampActuatorModel(comp.value?.toString() ?? "");
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: model.coldResistanceOhms,
+        pins: pinsMapped
+      });
     }
+    else if (comp.type === 'buzzer') {
+      const model = parseBuzzerActuatorModel(comp.value?.toString() ?? "");
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: model.inactiveResistanceOhms,
+        pins: pinsMapped
+      });
+    }
+    else if (comp.type === 'relay') {
+      const model = parseRelayActuatorModel(comp.value?.toString() ?? "");
+      const pin0Root = dsu.find(`${comp.id}:0`);
+      const pin1Root = dsu.find(`${comp.id}:1`);
+      const pin2Root = dsu.find(`${comp.id}:2`);
+      const pin3Root = dsu.find(`${comp.id}:3`);
+      const internalRoot = dsu.find(`${comp.id}:internal`);
 
-    extractedComponents.push({
-      id: comp.id,
-      type: comp.type,
-      value: comp.value,
-      pins: pinsMapped,
-      waveType: comp.waveType,
-      amplitude: comp.amplitude,
-      frequency: comp.frequency,
-      offset: comp.offset,
-      dutyCycle: comp.dutyCycle,
-    });
+      const roots = [pin0Root, pin1Root, pin2Root, pin3Root, internalRoot];
+      roots.forEach(r => {
+        if (!rootToNodeIdMap[r]) {
+          rootToNodeIdMap[r] = nextNodeId.toString();
+          nextNodeId++;
+        }
+      });
+
+      const pin0Node = rootToNodeIdMap[pin0Root];
+      const pin1Node = rootToNodeIdMap[pin1Root];
+      const pin2Node = rootToNodeIdMap[pin2Root];
+      const pin3Node = rootToNodeIdMap[pin3Root];
+      const pinInternalNode = rootToNodeIdMap[internalRoot];
+
+      // Coil resistor
+      extractedComponents.push({
+        id: `${comp.id}__coil_res`,
+        type: 'resistor',
+        value: model.coilResistanceOhms,
+        pins: [pin0Node, pinInternalNode]
+      });
+
+      // Coil inductor
+      extractedComponents.push({
+        id: `${comp.id}__coil`,
+        type: 'inductor',
+        value: model.inductanceHenrys,
+        pins: [pinInternalNode, pin1Node]
+      });
+
+      // Contact resistor
+      const isClosed = comp.relayClosed ?? false;
+      const contactVal = isClosed ? model.contactClosedResistanceOhms : model.contactOpenResistanceOhms;
+      extractedComponents.push({
+        id: `${comp.id}__contact`,
+        type: 'resistor',
+        value: contactVal,
+        pins: [pin2Node, pin3Node]
+      });
+    }
+    else {
+      const pinsMapped: string[] = [];
+      for (const pk of pinsKeys) {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        pinsMapped.push(rootToNodeIdMap[root]);
+      }
+
+      extractedComponents.push({
+        id: comp.id,
+        type: comp.type,
+        value: Number(comp.value) || 0,
+        pins: pinsMapped,
+        waveType: comp.waveType,
+        amplitude: comp.amplitude,
+        frequency: comp.frequency,
+        offset: comp.offset,
+        dutyCycle: comp.dutyCycle,
+      });
+    }
   }
 
   // Mapear wires
@@ -1159,11 +852,100 @@ function solveTransientCircuitTS(netlist: CircuitNetlist, dt: number, tMax: numb
     }
   }
 
+  // Inicializar MCUs para co-simulación en TS
+  const mcuRuntimes: Record<string, { runtime: any, bridge: any, type: string, pins: string[] }> = {};
+  for (const comp of netlist.components) {
+    if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
+      const origComp = orchestrator?.components.find(c => c.id === comp.id);
+      if (origComp) {
+        const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
+        const runtime = createMcuRuntime({
+          definition: def,
+          firmware: origComp.firmware
+        });
+        const bridge = createMcuSpiceBridge(runtime, comp.pins.length);
+        comp.pins.forEach((nodeId, pinIdx) => {
+          connectGpioToNode(bridge, pinIdx, nodeId);
+        });
+        mcuRuntimes[comp.id] = {
+          runtime,
+          bridge,
+          type: comp.type,
+          pins: comp.pins
+        };
+      }
+    }
+  }
+
   const stepsCount = Math.round(tMax / dt);
   const results: TimeStepResult[] = [];
+  const rustMcuOutputs: Record<string, Record<number, number>> = {};
 
   for (let step = 0; step <= stepsCount; step++) {
     const t = step * dt;
+    
+    // 1. Sincronizar voltajes del circuito al MCU y ejecutar instrucciones
+    if (step > 0 && results.length > 0) {
+      const prevVoltages = results[results.length - 1].nodeVoltages;
+      
+      // MCUs locales
+      for (const mcuId in mcuRuntimes) {
+        const item = mcuRuntimes[mcuId];
+        
+        // Cargar voltajes de los pines
+        const nodeVoltagesMap = new Map<string, number>();
+        item.pins.forEach((nodeId) => {
+          const v = parseInt(nodeId) > 0 ? (prevVoltages[nodeId] ?? 0.0) : 0.0;
+          nodeVoltagesMap.set(nodeId, v);
+        });
+        
+        item.bridge.config.spiceNodeVoltages = nodeVoltagesMap;
+        updateGpioInputs(item.bridge);
+        
+        // Ejecutar ciclos de reloj
+        const clockSpeed = item.type === 'mcu_avr' ? 16e6 : 12e6;
+        const cycles = Math.round(dt * clockSpeed);
+        runCycles(item.runtime, cycles);
+      }
+
+      // MCUs Rust (Mocked in TS solver)
+      for (const comp of netlist.components) {
+        if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+          const vCC = comp.type === 'arduino_uno' ? 5.0 : 3.3;
+          const mode = comp.value; // comp.value es el modo
+          
+          const pinOutNode = comp.pins[1];
+          const pinAdcNode = comp.pins[2];
+          
+          const vAdc = parseInt(pinAdcNode) > 0 ? (prevVoltages[pinAdcNode] ?? 0.0) : 0.0;
+          
+          let vOut = 0.0;
+          let vDac = 0.0;
+          
+          if (mode === 1) { // Blink
+            vOut = (t % 1.0 < 0.5) ? vCC : 0.0;
+          } else if (mode === 2) { // Schmitt trigger
+            const vOutPrev = parseInt(pinOutNode) > 0 ? (prevVoltages[pinOutNode] ?? 0.0) : 0.0;
+            const wasHigh = vOutPrev > 0.5 * vCC;
+            const threshold = wasHigh ? 0.45 * vCC : 0.55 * vCC;
+            vOut = (vAdc > threshold) ? vCC : 0.0;
+          } else if (mode === 3) { // PWM
+            const period = 1e-4; // 10kHz
+            const tPhase = t % period;
+            const duty = Math.min(Math.max(vAdc / vCC, 0.0), 1.0);
+            vDac = (tPhase < duty * period) ? vCC : 0.0;
+          } else { // Mode 0: DAC matches ADC
+            vDac = Math.min(Math.max(vAdc, 0.0), vCC);
+          }
+          
+          rustMcuOutputs[comp.id] = {
+            1: vOut,
+            3: vDac
+          };
+        }
+      }
+    }
+
     const A: number[][] = Array(size).fill(0).map(() => Array(size).fill(0));
     const Z: number[] = Array(size).fill(0);
 
@@ -1253,6 +1035,58 @@ function solveTransientCircuitTS(netlist: CircuitNetlist, dt: number, tMax: numb
       }
     }
 
+    // Estampar MCUs locales (8051 y AVR) usando Norton
+    for (const mcuId in mcuRuntimes) {
+      const item = mcuRuntimes[mcuId];
+      item.bridge.config.gpioPins.forEach((pin: any) => {
+        const nodeStr = pin.connectedNodeId;
+        if (!nodeStr) return;
+        const nodeIdx = parseInt(nodeStr);
+        if (nodeIdx <= 0) return;
+        
+        if (pin.direction !== 'input') {
+          if (pin.state === 1) {
+            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            Z[nodeIdx - 1] += 5.0 / 50.0;
+          } else if (pin.state === 0) {
+            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+          } else {
+            stampConductance(nodeIdx, 0, 1.0 / 1e6);
+          }
+        } else {
+          stampConductance(nodeIdx, 0, 1.0 / 1e6);
+        }
+      });
+    }
+
+    // Estampar MCUs Rust
+    for (const comp of netlist.components) {
+      if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+        const vCC = comp.type === 'arduino_uno' ? 5.0 : 3.3;
+        const outputs = rustMcuOutputs[comp.id] || {};
+        
+        comp.pins.forEach((nodeId, pinIdx) => {
+          const nodeIdx = parseInt(nodeId);
+          if (nodeIdx <= 0) return;
+          
+          if (pinIdx === 1) { // OUT
+            const vOut = outputs[1] ?? 0.0;
+            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            Z[nodeIdx - 1] += vOut / 50.0;
+          } else if (pinIdx === 3) { // DAC
+            const vDac = outputs[3] ?? 0.0;
+            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            Z[nodeIdx - 1] += vDac / 50.0;
+          } else if (pinIdx === 4) { // VCC
+            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            Z[nodeIdx - 1] += vCC / 50.0;
+          } else {
+            stampConductance(nodeIdx, 0, 1.0 / 1e6);
+          }
+        });
+      }
+    }
+
     // Estampar modelos acompañantes Euler
     for (const comp of netlist.components) {
       if (comp.type === 'capacitor') {
@@ -1335,131 +1169,137 @@ function initSimulationControls() {
   analysisDcBtn = document.querySelector("#analysis-dc-btn");
   analysisAcBtn = document.querySelector("#analysis-ac-btn");
   analysisTranBtn = document.querySelector("#analysis-tran-btn");
+  analysisSensBtn = document.querySelector("#analysis-sens-btn");
+  analysisPssBtn = document.querySelector("#analysis-pss-btn");
+  analysisStbBtn = document.querySelector("#analysis-stb-btn");
   runSimBtn = document.querySelector("#run-sim-btn");
   stopSimBtn = document.querySelector("#stop-sim-btn");
   ipcStatusDot = document.querySelector("#ipc-status-dot");
   ipcStatusText = document.querySelector("#ipc-status-text");
 
-  const selectMode = (btn: HTMLButtonElement | null, mode: 'DC' | 'AC' | 'TRAN') => {
+  const selectMode = (btn: HTMLButtonElement | null, mode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB') => {
     if (!btn) return;
     btn.addEventListener("click", () => {
-      [analysisDcBtn, analysisAcBtn, analysisTranBtn].forEach(b => b?.classList.remove("active"));
+      [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn].forEach(b => b?.classList.remove("active"));
       btn.classList.add("active");
       activeAnalysisMode = mode;
-      const modoTexto = mode === 'DC' ? 'Corriente Continua (CC)' : mode === 'AC' ? 'Barrido CA (CA)' : 'Transitorio (TRAN)';
+      const modoTexto = mode === 'DC' ? 'Corriente Continua (CC)' : 
+                        mode === 'AC' ? 'Barrido CA (CA)' : 
+                        mode === 'TRAN' ? 'Transitorio (TRAN)' : 
+                        mode === 'SENS' ? 'Sensibilidad y Peor Caso (SENS)' :
+                        mode === 'PSS' ? 'Régimen Permanente Periódico (PSS)' :
+                        'Análisis de Estabilidad (STB)';
       addLog(`Modo de Simulación: ${modoTexto}`, "system");
-      drawOscilloscope();
+      if (oscilloscopePanel) {
+        oscilloscopePanel.activeAnalysisMode = mode;
+        oscilloscopePanel.draw();
+      }
     });
   };
 
   selectMode(analysisDcBtn, 'DC');
   selectMode(analysisAcBtn, 'AC');
   selectMode(analysisTranBtn, 'TRAN');
+  selectMode(analysisSensBtn, 'SENS');
+  selectMode(analysisPssBtn, 'PSS');
+  selectMode(analysisStbBtn, 'STB');
 
-interface ERCResult {
-  passed: boolean;
-  errors: string[];
-  warnings: string[];
-}
-
-function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  if (!netlist || netlist.components.length === 0) {
-    return { passed: true, errors, warnings };
+  interface ERCResult {
+    passed: boolean;
+    errors: string[];
+    warnings: string[];
   }
 
-  // 1. Verificar si existe al menos una referencia a Tierra (GND)
-  const hasGnd = netlist.components.some(c => c.type === 'ground');
-  if (!hasGnd) {
-    errors.push("Referencia a Tierra ausente (GND): El circuito necesita al menos un nodo de referencia de 0 V para que el motor matemático de Rust converja.");
-  }
+  function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
-  // 2. Verificar cortocircuitos de fuentes de tensión
-  for (const comp of netlist.components) {
-    if (comp.type === 'vsource') {
-      if (comp.pins[0] === comp.pins[1]) {
-        errors.push(`Cortocircuito Franco detectado en la fuente [${comp.id}]: Sus terminales positivo y negativo están conectados al mismo nodo eléctrico.`);
-      }
-    }
-  }
-
-  // 3. Verificar cortocircuitos en paralelo de fuentes independientes de tensión
-  const vsourceNodes: Record<string, string> = {}; 
-  for (const comp of netlist.components) {
-    if (comp.type === 'vsource') {
-      const nodePair = [comp.pins[0], comp.pins[1]].sort().join('-');
-      if (vsourceNodes[nodePair]) {
-        warnings.push(`Fuentes en Paralelo: Las fuentes de tensión [${comp.id}] and [${vsourceNodes[nodePair]}] están en paralelo. Esto puede producir inconsistencias de simulación si sus valores nominales difieren.`);
-      } else {
-        vsourceNodes[nodePair] = comp.id;
-      }
-    }
-  }
-
-  // 4. Verificar terminales o pines flotantes (sin conexión)
-  if (orchestrator) {
-    const pinConnectionCount: Record<string, number> = {};
-    
-    for (const comp of orchestrator.components) {
-      const pins = orchestrator.getComponentPins(comp);
-      for (const pin of pins) {
-        const pinKey = `${comp.id}:${pin.pinIndex}`;
-        pinConnectionCount[pinKey] = 0;
-      }
+    if (!netlist || netlist.components.length === 0) {
+      return { passed: true, errors, warnings };
     }
 
-    for (const wire of orchestrator.wires) {
-      const keyFrom = `${wire.from.componentId}:${wire.from.pinIndex}`;
-      const keyTo = `${wire.to.componentId}:${wire.to.pinIndex}`;
-      if (pinConnectionCount[keyFrom] !== undefined) pinConnectionCount[keyFrom]++;
-      if (pinConnectionCount[keyTo] !== undefined) pinConnectionCount[keyTo]++;
+    const hasGnd = netlist.components.some(c => c.type === 'ground');
+    if (!hasGnd) {
+      errors.push("Referencia a Tierra ausente (GND): El circuito necesita al menos un nodo de referencia de 0 V para que el motor matemático de Rust converja.");
     }
 
-    for (const comp of orchestrator.components) {
-      const pins = orchestrator.getComponentPins(comp);
-      let unconnectedCount = 0;
-      for (const pin of pins) {
-        const pinKey = `${comp.id}:${pin.pinIndex}`;
-        if (pinConnectionCount[pinKey] === 0) {
-          unconnectedCount++;
+    for (const comp of netlist.components) {
+      if (comp.type === 'vsource') {
+        if (comp.pins[0] === comp.pins[1]) {
+          errors.push(`Cortocircuito Franco detectado en la fuente [${comp.id}]: Sus terminales positivo y negativo están conectados al mismo nodo eléctrico.`);
         }
       }
-      
-      if (unconnectedCount === pins.length && comp.type !== 'ground') {
-        warnings.push(`Componente huérfano detectado [${comp.id}]: No tiene ninguna conexión activa de red.`);
-      } else if (unconnectedCount > 0 && comp.type !== 'ground') {
-        const firstFloatIdx = pins.findIndex(p => pinConnectionCount[`${comp.id}:${p.pinIndex}`] === 0);
-        warnings.push(`Pin flotante detectado en [${comp.id}] (terminal index ${firstFloatIdx}): Se encuentra desconectado.`);
+    }
+
+    const vsourceNodes: Record<string, string> = {}; 
+    for (const comp of netlist.components) {
+      if (comp.type === 'vsource') {
+        const nodePair = [comp.pins[0], comp.pins[1]].sort().join('-');
+        if (vsourceNodes[nodePair]) {
+          warnings.push(`Fuentes en Paralelo: Las fuentes de tensión [${comp.id}] and [${vsourceNodes[nodePair]}] están en paralelo. Esto puede producir inconsistencias de simulación si sus valores nominales difieren.`);
+        } else {
+          vsourceNodes[nodePair] = comp.id;
+        }
       }
     }
-  }
 
-  const passed = errors.length === 0;
-  return { passed, errors, warnings };
-}
+    if (orchestrator) {
+      const pinConnectionCount: Record<string, number> = {};
+      
+      for (const comp of orchestrator.components) {
+        const pins = orchestrator.getComponentPins(comp);
+        for (const pin of pins) {
+          const pinKey = `${comp.id}:${pin.pinIndex}`;
+          pinConnectionCount[pinKey] = 0;
+        }
+      }
+
+      for (const wire of orchestrator.wires) {
+        const keyFrom = `${wire.from.componentId}:${wire.from.pinIndex}`;
+        const keyTo = `${wire.to.componentId}:${wire.to.pinIndex}`;
+        if (pinConnectionCount[keyFrom] !== undefined) pinConnectionCount[keyFrom]++;
+        if (pinConnectionCount[keyTo] !== undefined) pinConnectionCount[keyTo]++;
+      }
+
+      for (const comp of orchestrator.components) {
+        const pins = orchestrator.getComponentPins(comp);
+        let unconnectedCount = 0;
+        for (const pin of pins) {
+          const pinKey = `${comp.id}:${pin.pinIndex}`;
+          if (pinConnectionCount[pinKey] === 0) {
+            unconnectedCount++;
+          }
+        }
+        
+        if (unconnectedCount === pins.length && comp.type !== 'ground') {
+          warnings.push(`Componente huérfano detectado [${comp.id}]: No tiene ninguna conexión activa de red.`);
+        } else if (unconnectedCount > 0 && comp.type !== 'ground') {
+          const firstFloatIdx = pins.findIndex(p => pinConnectionCount[`${comp.id}:${p.pinIndex}`] === 0);
+          warnings.push(`Pin flotante detectado en [${comp.id}] (terminal index ${firstFloatIdx}): Se encuentra desconectado.`);
+        }
+      }
+    }
+
+    const passed = errors.length === 0;
+    return { passed, errors, warnings };
+  }
 
   if (runSimBtn && stopSimBtn) {
     runSimBtn.addEventListener("click", async () => {
       addLog(`Iniciando simulación física de análisis [${activeAnalysisMode === 'DC' ? 'Corriente Continua' : activeAnalysisMode === 'AC' ? 'Barrido CA' : 'Transitorio'}]...`, "system");
       
-      // 1. Extraer Netlist
       const netlist = extractElectricalNetlist();
       if (!netlist || netlist.components.length === 0) {
         addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
         return;
       }
 
-      // 2. Ejecutar Verificador de Reglas Eléctricas (ERC)
       const ercRes = runElectricalRuleCheck(netlist);
       
-      // Imprimir advertencias (no detienen simulación)
       for (const warn of ercRes.warnings) {
         addLog(`[ERC Advertencia] ${warn}`, "error"); 
       }
 
-      // Imprimir errores y detener la simulación si no pasó el ERC
       if (!ercRes.passed) {
         addLog("----------------------------------------------------------------", "error");
         addLog("¡ERC FALLIDO! La simulación se ha abortado para prevenir bloqueos matemáticos:", "error");
@@ -1475,20 +1315,22 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
       stopSimBtn!.disabled = false;
       stopSimBtn!.classList.add("btn-stop");
       
-      // Limpiar series de tiempo transitorias previas
-      transientResults = [];
-      sweepTime = 0.0;
-
-      startOscilloscopeLoop();
+      if (oscilloscopePanel) {
+        oscilloscopePanel.transientResults = [];
+        oscilloscopePanel.sweepTime = 0.0;
+        oscilloscopePanel.start();
+      }
 
       try {
         if (activeAnalysisMode === 'AC') {
-          // --- EJECUTAR SIMULACIÓN DE BARRIDO CA EN RUST ---
           addLog("Enviando conexiones al motor de CA de Rust...", "send");
           const settings = { fStart: 10.0, fEnd: 100000.0, pointsPerDecade: 20 };
           const results = await invoke<any>("run_ac_sweep", { netlist, settings });
           addLog(`¡Resultados calculados exitosamente en Rust [Respuesta en Frecuencia CA]!`, "receive");
-          acSweepResults = results;
+          
+          if (oscilloscopePanel) {
+            oscilloscopePanel.acSweepResults = results;
+          }
 
           if (ipcStatusDot && ipcStatusText) {
             ipcStatusDot.classList.add("active");
@@ -1499,18 +1341,21 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
           updateCanvasRendering();
 
         } else if (activeAnalysisMode === 'TRAN') {
-          // --- EJECUTAR SIMULACIÓN TRANSITORIA DE ALTO RENDIMIENTO ---
           addLog("Enviando conexiones al motor transitorio de Rust...", "send");
           
           const settings = { dt: simSettings.dt, tMax: transientDuration };
           const results = await invoke<any>("run_transient_simulation", { netlist, settings });
           
           addLog(`¡Resultados calculados exitosamente en Rust [Integración en el dominio del tiempo]!`, "receive");
-          transientResults = results || [];
+          
+          if (oscilloscopePanel) {
+            oscilloscopePanel.transientResults = results || [];
+            actuatorHistory.precompute(orchestrator!.components, results || [], pinToNodeMap);
+          }
 
-          // Guardar último paso para liveVoltages (interactividad)
-          if (transientResults.length > 0) {
-            liveVoltages = transientResults[transientResults.length - 1].nodeVoltages;
+          const oscTransient = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
+          if (oscTransient.length > 0) {
+            liveVoltages = oscTransient[oscTransient.length - 1].nodeVoltages;
           }
 
           if (ipcStatusDot && ipcStatusText) {
@@ -1521,8 +1366,93 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
 
           updateCanvasRendering();
 
+        } else if (activeAnalysisMode === 'SENS') {
+          addLog("Enviando conexiones al solucionador de sensibilidad de Rust...", "send");
+          const results = await invoke<any>("run_sensitivity_analysis", { netlist });
+          addLog(`¡Resultados de Sensibilidad calculados exitosamente en Rust!`, "receive");
+
+          liveVoltages = results.nominalVoltages || {};
+
+          addLog("----------------------------------------------------------------", "system");
+          addLog("=== RESULTADOS DEL ANÁLISIS DE SENSIBILIDAD ===", "system");
+          for (const sens of results.sensitivities) {
+            addLog(`Componente: ${sens.componentId} (${sens.parameterName} = ${sens.parameterValue})`, "receive");
+            for (const [node, absVal] of Object.entries(sens.absoluteSensitivities)) {
+              const normVal = sens.normalizedSensitivities[node] || 0;
+              addLog(`  • Nodo ${node}: Absoluta = ${(absVal as number).toFixed(6)} V/U | Normalizada = ${((normVal as number) * 100).toFixed(2)}%`, "receive");
+            }
+          }
+          addLog("=== LÍMITES DE PEOR CASO (WORST-CASE LIMITS) ===", "system");
+          for (const [node, limits] of Object.entries(results.worstCaseLimits)) {
+            const lim = limits as any;
+            addLog(`  • Nodo ${node}: Nom = ${lim.nominalValue.toFixed(4)} V | Desviación = ±${lim.maxDeviation.toFixed(4)} V | Rango = [${lim.worstCaseLow.toFixed(4)} V, ${lim.worstCaseHigh.toFixed(4)} V]`, "receive");
+          }
+          addLog("----------------------------------------------------------------", "system");
+
+          if (ipcStatusDot && ipcStatusText) {
+            ipcStatusDot.classList.add("active");
+            ipcStatusText.textContent = "Solucionador Rust Activo";
+            ipcStatusText.style.color = "var(--accent-cyan)";
+          }
+
+          updateCanvasRendering();
+
+        } else if (activeAnalysisMode === 'PSS') {
+          addLog("Enviando conexiones al motor PSS [Shooting Method] de Rust...", "send");
+          
+          let period = 1e-3;
+          const acSource = netlist.components.find(c => c.frequency && c.frequency > 0);
+          if (acSource && acSource.frequency) {
+            period = 1.0 / acSource.frequency;
+          }
+          
+          const settings = { period: period, maxShootingIters: 15, shootingTolerance: 1e-4 };
+          const results = await invoke<any>("run_pss_simulation", { netlist, settings });
+          
+          addLog(`¡Resultados calculados exitosamente en Rust [PSS Shooting Method]!`, "receive");
+          
+          if (oscilloscopePanel) {
+            oscilloscopePanel.transientResults = results || [];
+          }
+
+          const oscTransient = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
+          if (oscTransient.length > 0) {
+            liveVoltages = oscTransient[oscTransient.length - 1].nodeVoltages;
+          }
+
+          if (ipcStatusDot && ipcStatusText) {
+            ipcStatusDot.classList.add("active");
+            ipcStatusText.textContent = "Solucionador Rust Activo";
+            ipcStatusText.style.color = "var(--accent-cyan)";
+          }
+
+          updateCanvasRendering();
+
+        } else if (activeAnalysisMode === 'STB') {
+          addLog("Enviando conexiones al motor de análisis de Estabilidad [Polos y Ceros] de Rust...", "send");
+          const results = await invoke<any>("run_stability_analysis", { netlist });
+          addLog(`¡Resultados de Estabilidad calculados exitosamente en Rust!`, "receive");
+
+          addLog("----------------------------------------------------------------", "system");
+          addLog("=== ANÁLISIS DE ESTABILIDAD DE POLOS Y CEROS (STB) ===", "system");
+          addLog(`Estado de Estabilidad: ${results.isStable ? "✅ CIRCUITO ESTABLE" : "⚠️ CIRCUITO INESTABLE (Peligro de Oscilación)"}`, "system");
+          addLog(`Margen de Fase (Phase Margin): ${results.phaseMargin.toFixed(2)}º`, "receive");
+          addLog(`Margen de Ganancia (Gain Margin): ${results.gainMargin.toFixed(2)} dB`, "receive");
+          addLog("Lista de Polos del Sistema en el Plano de Laplace (s):", "receive");
+          results.poles.forEach((p: any, idx: number) => {
+            addLog(`  • Polo ${idx + 1}: ${p.re.toFixed(2)} ${p.im >= 0 ? "+" : "-"} ${Math.abs(p.im).toFixed(2)}j rad/s`, "receive");
+          });
+          addLog("----------------------------------------------------------------", "system");
+
+          if (ipcStatusDot && ipcStatusText) {
+            ipcStatusDot.classList.add("active");
+            ipcStatusText.textContent = "Solucionador Rust Activo";
+            ipcStatusText.style.color = "var(--accent-cyan)";
+          }
+
+          updateCanvasRendering();
+
         } else {
-          // --- EJECUTAR SIMULACIÓN DC STANDARD ---
           addLog(`Enviando conexiones a Rust con ${netlist.components.length} componentes...`, "send");
           const results = await invoke<any>("run_dc_simulation", { netlist });
           addLog(`¡Resultados calculados exitosamente en Rust [MNA Newton-Raphson]!`, "receive");
@@ -1546,19 +1476,16 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
         const errorMsg = error instanceof Error ? error.message : String(error);
         addLog(`Error en la comunicación con el motor de Rust: ${errorMsg}`, "error");
 
-        // Fallback elegante para Navegador Web
         if (errorMsg.includes("window.__TAURI_IPC__") || errorMsg.includes("not found") || errorMsg.includes("window.__TAURI__")) {
           addLog("Entorno de navegador detectado. Iniciando solucionador local en TypeScript...", "system");
           
           setTimeout(() => {
             if (activeAnalysisMode === 'AC') {
-              // Solver AC de respaldo local en TS (Generamos un barrido de frecuencias simulado para un filtro pasa-bajos RC para evitar crash en web)
               addLog("Simulando respuesta en frecuencia del circuito localmente en navegador...", "receive");
               const freqs: number[] = [];
               const nodeAmplitudes: Record<string, number[]> = {};
               const nodePhases: Record<string, number[]> = {};
 
-              // Encontrar nodos activos o componentes en el netlist
               const nodes = new Set<string>();
               netlist.components.forEach(comp => {
                 comp.pins.forEach(pin => {
@@ -1566,7 +1493,6 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
                 });
               });
 
-              // Generar 101 puntos logarítmicos entre 10 Hz y 100 kHz
               const logMin = Math.log10(10);
               const logMax = Math.log10(100000);
               for (let i = 0; i <= 100; i++) {
@@ -1574,8 +1500,6 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
                 freqs.push(Math.pow(10, logVal));
               }
 
-              // Calcular un filtro pasa-bajos de juguete para todos los nodos activos
-              // Frecuencia de corte simulada de 1 kHz para el canal 1 y 10 kHz para el canal 2
               nodes.forEach(nodeId => {
                 const fc = nodeId === "1" ? 1000 : nodeId === "2" ? 10000 : 5000;
                 const amps: number[] = [];
@@ -1592,11 +1516,13 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
                 nodePhases[nodeId] = phases;
               });
 
-              acSweepResults = {
-                frequencies: freqs,
-                nodeAmplitudes,
-                nodePhases
-              };
+              if (oscilloscopePanel) {
+                oscilloscopePanel.acSweepResults = {
+                  frequencies: freqs,
+                  nodeAmplitudes,
+                  nodePhases
+                };
+              }
 
               if (ipcStatusDot && ipcStatusText) {
                 ipcStatusDot.classList.add("active");
@@ -1606,16 +1532,18 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
 
               updateCanvasRendering();
             } else if (activeAnalysisMode === 'TRAN') {
-              // Solver transitorio local en TS
               const tsRes = solveTransientCircuitTS(netlist, simSettings.dt, transientDuration);
               if (typeof tsRes === "string") {
                 addLog(`Error del solucionador transitorio local: ${tsRes}`, "error");
               } else {
-                transientResults = tsRes;
-                addLog(`Respaldo Transitorio local: ${transientResults.length} pasos calculados en TypeScript.`, "receive");
+                if (oscilloscopePanel) {
+                  oscilloscopePanel.transientResults = tsRes;
+                  actuatorHistory.precompute(orchestrator!.components, tsRes || [], pinToNodeMap);
+                }
+                addLog(`Respaldo Transitorio local: ${tsRes.length} pasos calculados en TypeScript.`, "receive");
                 
-                if (transientResults.length > 0) {
-                  liveVoltages = transientResults[transientResults.length - 1].nodeVoltages;
+                if (tsRes.length > 0) {
+                  liveVoltages = tsRes[tsRes.length - 1].nodeVoltages;
                 }
 
                 if (ipcStatusDot && ipcStatusText) {
@@ -1627,7 +1555,6 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
                 updateCanvasRendering();
               }
             } else {
-              // Solver DC local en TS
               const tsRes = solveCircuitTS(netlist);
               if (typeof tsRes === "string") {
                 addLog(`Error del solucionador local: ${tsRes}`, "error");
@@ -1659,7 +1586,11 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
       stopSimBtn!.disabled = true;
       stopSimBtn!.classList.remove("btn-stop");
 
-      stopOscilloscopeLoop();
+      audioOrchestrator.stopAll();
+
+      if (oscilloscopePanel) {
+        oscilloscopePanel.stop();
+      }
     });
   }
 }
@@ -1667,32 +1598,9 @@ function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
 // --- INTERACTIVIDAD INTERNA DEL OSCILOSCOPIO ---
 
 function initOscilloscopeInterface() {
-  oscCanvas = document.querySelector("#osc-canvas") as HTMLCanvasElement;
-  if (oscCanvas) {
-    oscCtx = oscCanvas.getContext('2d');
-
-    // Registrar eventos de mouse sobre el osciloscopio para el cursor interactivo en CA
-    oscCanvas.addEventListener("mousemove", (e) => {
-      const rect = oscCanvas!.getBoundingClientRect();
-      oscMouseX = e.clientX - rect.left;
-      // oscMouseY = e.clientY - rect.top;
-      if (!isSimulating || activeAnalysisMode === 'AC') {
-        drawOscilloscope();
-      }
-    });
-
-    oscCanvas.addEventListener("mouseleave", () => {
-      oscMouseX = null;
-      // oscMouseY = null;
-      if (!isSimulating || activeAnalysisMode === 'AC') {
-        drawOscilloscope();
-      }
-    });
-  }
-
-  oscCh1Btn = document.querySelector("#osc-ch1-btn");
-  oscCh2Btn = document.querySelector("#osc-ch2-btn");
-  oscPauseBtn = document.querySelector("#osc-pause-btn");
+  const oscCh1Btn = document.querySelector("#osc-ch1-btn") as HTMLButtonElement | null;
+  const oscCh2Btn = document.querySelector("#osc-ch2-btn") as HTMLButtonElement | null;
+  const oscPauseBtn = document.querySelector("#osc-pause-btn") as HTMLButtonElement | null;
 
   const exportCsvBtn = document.querySelector("#export-csv-btn");
   if (exportCsvBtn) {
@@ -1708,9 +1616,28 @@ function initOscilloscopeInterface() {
     });
   }
 
-  // SOPORTE PARA REUBICAR SONDAS CON SHIFT+CLICK
+  const exportS2pBtn = document.querySelector("#export-s2p-btn");
+  if (exportS2pBtn) {
+    exportS2pBtn.addEventListener("click", () => {
+      exportarDatosTouchstone();
+    });
+  }
+
+  const exportH5Btn = document.querySelector("#export-h5-btn");
+  if (exportH5Btn) {
+    exportH5Btn.addEventListener("click", () => {
+      exportarDatosHDF5();
+    });
+  }
+
+  const exportPdfBtn = document.querySelector("#export-pdf-btn");
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener("click", () => {
+      exportarReportePDF();
+    });
+  }
+
   const handleProbeActivation = (mode: 'CH1' | 'CH2') => {
-    // Validar si existen nodos
     const netlist = extractElectricalNetlist();
     if (!netlist || netlist.components.length === 0) {
       addLog("Coloca componentes en el lienzo antes de colocar una sonda.", "error");
@@ -1725,9 +1652,12 @@ function initOscilloscopeInterface() {
       if (e.shiftKey) {
         handleProbeActivation('CH1');
       } else {
-        oscCh1Btn?.classList.toggle("active");
-        addLog(`Canal 1 (Sonda en Nodo ${ch1ProbeNode}) ${oscCh1Btn?.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
-        if (!isSimulating) drawOscilloscope();
+        oscCh1Btn.classList.toggle("active");
+        const node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
+        addLog(`Canal 1 (Sonda en Nodo ${node}) ${oscCh1Btn.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
+        if (oscilloscopePanel && !oscilloscopePanel.isSimulating) {
+          oscilloscopePanel.draw();
+        }
       }
     });
   }
@@ -1737,23 +1667,31 @@ function initOscilloscopeInterface() {
       if (e.shiftKey) {
         handleProbeActivation('CH2');
       } else {
-        oscCh2Btn?.classList.toggle("active");
-        addLog(`Canal 2 (Sonda en Nodo ${ch2ProbeNode}) ${oscCh2Btn?.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
-        if (!isSimulating) drawOscilloscope();
+        oscCh2Btn.classList.toggle("active");
+        const node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
+        addLog(`Canal 2 (Sonda en Nodo ${node}) ${oscCh2Btn.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
+        if (oscilloscopePanel && !oscilloscopePanel.isSimulating) {
+          oscilloscopePanel.draw();
+        }
       }
     });
   }
 
   if (oscPauseBtn) {
     oscPauseBtn.addEventListener("click", () => {
-      isOscPaused = !isOscPaused;
-      oscPauseBtn?.classList.toggle("active");
-      oscPauseBtn!.textContent = isOscPaused ? "Reanudar" : "Pausar";
+      if (oscilloscopePanel) {
+        oscilloscopePanel.isOscPaused = !oscilloscopePanel.isOscPaused;
+        oscPauseBtn.classList.toggle("active");
+        oscPauseBtn.textContent = oscilloscopePanel.isOscPaused ? "Reanudar" : "Pausar";
+        if (oscilloscopePanel.isOscPaused) {
+          audioOrchestrator.stopAll();
+        }
+      }
     });
   }
 
   setTimeout(() => {
-    drawOscilloscope();
+    if (oscilloscopePanel) oscilloscopePanel.draw();
   }, 100);
 }
 
@@ -1768,8 +1706,14 @@ function initCanvasCAD() {
   const resizeCanvas = () => {
     const parent = canvasElement.parentElement;
     if (parent) {
-      canvasElement.width = parent.clientWidth;
-      canvasElement.height = parent.clientHeight;
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
+      if (w === 0 || h === 0) {
+        setTimeout(resizeCanvas, 100);
+        return;
+      }
+      canvasElement.width = w;
+      canvasElement.height = h;
       updateCanvasRendering();
     }
   };
@@ -1823,6 +1767,7 @@ function initCanvasCAD() {
           if (!isShift && !orchestrator!.hoveredWire) {
             orchestrator!.selectionStart = worldPt;
             orchestrator!.selectionEnd = worldPt;
+            mcuDebugPanel?.hide();
           } else if (orchestrator!.selectedWire) {
             addLog(`Cable seleccionado: [${orchestrator!.selectedWire.id}]. Presiona Delete/Backspace para eliminarlo de forma individual.`, "system");
           }
@@ -1874,6 +1819,7 @@ function initCanvasCAD() {
       if (orchestrator!.hoveredPin) {
         orchestrator!.connectPins(orchestrator!.activePinForWire, orchestrator!.hoveredPin);
         addLog(`Cable conectado: [${orchestrator!.activePinForWire.componentId}] terminal ${orchestrator!.activePinForWire.pinIndex} a [${orchestrator!.hoveredPin.componentId}] terminal ${orchestrator!.hoveredPin.pinIndex}`, "system");
+        markCurrentTabAsModified();
       }
       orchestrator!.activePinForWire = null;
       orchestrator!.tempWireEnd = null;
@@ -1885,6 +1831,10 @@ function initCanvasCAD() {
       if (orchestrator!.selectedComponents.length > 0) {
         addLog(`Selección en lote: ${orchestrator!.selectedComponents.length} componentes seleccionados.`, "system");
       }
+    }
+
+    if (orchestrator!.isDragging) {
+      markCurrentTabAsModified();
     }
 
     orchestrator!.stopDragging();
@@ -1946,6 +1896,7 @@ function initCanvasCAD() {
           orchestrator!.selectedComponent = newComp;
           updatePropertiesPanel(newComp);
           updateCanvasRendering();
+          markCurrentTabAsModified();
         }
       } catch (err) {
         addLog("Error al colocar componente.", "error");
@@ -1973,6 +1924,7 @@ function initCanvasCAD() {
         addLog(`Componente [${orchestrator.selectedComponent.id}] rotado a ${orchestrator.selectedComponent.rotation}°`, "system");
       }
       updateCanvasRendering();
+      markCurrentTabAsModified();
     } else if (e.key === "Delete" || e.key === "Backspace") {
       if (orchestrator.selectedWire) {
         addLog(`Cable [${orchestrator.selectedWire.id}] eliminado de forma individual.`, "system");
@@ -1984,6 +1936,7 @@ function initCanvasCAD() {
       
       orchestrator.removeSelected();
       updateCanvasRendering();
+      markCurrentTabAsModified();
     }
   });
 
@@ -1995,9 +1948,13 @@ function initCanvasCAD() {
       orchestrator!.wires = [];
       orchestrator!.selectedComponent = null;
       liveVoltages = {};
-      transientResults = [];
-      sweepTime = 0.0;
+      if (oscilloscopePanel) {
+        oscilloscopePanel.transientResults = [];
+        oscilloscopePanel.acSweepResults = null;
+        oscilloscopePanel.sweepTime = 0.0;
+      }
       updateCanvasRendering();
+      markCurrentTabAsModified();
       addLog("Lienzo vaciado por completo. Memoria limpia.", "system");
     });
   }
@@ -2021,39 +1978,118 @@ function initCanvasCAD() {
 
 // --- CARGA GENERAL DEL DOM ---
 
-function startTelemetryLoop() {
-  const updateTelemetry = async () => {
-    try {
-      const data = await invoke<any>("get_performance_telemetry");
-      if (data) {
-        if (telemetryRamText) telemetryRamText.textContent = data.ramFormatted;
-        if (telemetryCpuText) telemetryCpuText.textContent = `${data.cpuPercent.toFixed(1)} %`;
-      }
-    } catch (err) {
-      if (telemetryRamText) telemetryRamText.textContent = "TS Local (N/A)";
-      if (telemetryCpuText) telemetryCpuText.textContent = "0.0 %";
-    }
-  };
 
-  updateTelemetry();
-  setInterval(updateTelemetry, 3000);
-}
 
 window.addEventListener("DOMContentLoaded", () => {
   consoleOutput = document.querySelector("#console-output");
   clearConsoleBtn = document.querySelector("#clear-console-btn");
-  telemetryRamText = document.querySelector("#telemetry-ram-text");
-  telemetryCpuText = document.querySelector("#telemetry-cpu-text");
+
+  // Instanciar submódulos de UI modularizados
+  telemetryPanel = new TelemetryPanel();
+  telemetryPanel.start();
+
+  new SettingsModal(simSettings, (newSettings) => {
+    simSettings = { ...newSettings };
+    addLog(`Ajustes guardados: dt=${simSettings.dt}, tol=${simSettings.tolerance}, iterMax=${simSettings.maxIterations}`, "system");
+  });
+
+  oscilloscopePanel = new OscilloscopePanel();
+  oscilloscopePanel.onFrameUpdate = (sweepTime) => {
+    if (oscilloscopePanel && orchestrator) {
+      const results = oscilloscopePanel.transientResults;
+      if (results && results.length > 0) {
+        let closestIdx = 0;
+        let minDiff = Infinity;
+        for (let i = 0; i < results.length; i++) {
+          const diff = Math.abs(results[i].time - sweepTime);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestIdx = i;
+          }
+        }
+        const closest = results[closestIdx];
+        if (closest) {
+          liveVoltages = closest.nodeVoltages;
+
+          // Sincronizar estados lógicos de los pines de MCUs y depurador en playback
+          for (const comp of orchestrator.components) {
+            if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr' || comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+              const pins = orchestrator.getComponentPins(comp);
+              const pinStates: Record<number, number | string> = {};
+              const vCC = (comp.type === 'mcu_8051' || comp.type === 'arduino_uno') ? 5.0 : 3.3;
+              
+              pins.forEach((_, pinIdx) => {
+                const nodeKey = pinToNodeMap[`${comp.id}:${pinIdx}`];
+                if (nodeKey) {
+                  const volt = liveVoltages[nodeKey] ?? 0.0;
+                  if (volt > 0.7 * vCC) {
+                    pinStates[pinIdx] = 1;
+                  } else if (volt < 0.3 * vCC) {
+                    pinStates[pinIdx] = 0;
+                  } else {
+                    pinStates[pinIdx] = 'Z';
+                  }
+                } else {
+                  pinStates[pinIdx] = 'Z';
+                }
+              });
+              comp.mcuPinStates = pinStates;
+
+              // Sincronizar runtime del MCU si está seleccionado y cargado
+              if (orchestrator.selectedComponent?.id === comp.id && comp.mcuRuntime) {
+                const clockSpeed = comp.type === 'mcu_avr' ? 16e6 : 12e6;
+                const targetCycle = Math.round(sweepTime * clockSpeed);
+                if (comp.mcuRuntime.state.cycle < targetCycle) {
+                  const diff = targetCycle - comp.mcuRuntime.state.cycle;
+                  runCycles(comp.mcuRuntime, Math.min(diff, 200000));
+                } else if (comp.mcuRuntime.state.cycle > targetCycle) {
+                  resetRuntime(comp.mcuRuntime);
+                  runCycles(comp.mcuRuntime, Math.min(targetCycle, 200000));
+                }
+                mcuDebugPanel?.updateData();
+              }
+            }
+          }
+
+          for (const comp of orchestrator.components) {
+            const hist = actuatorHistory.history.get(comp.id);
+            if (hist && hist[closestIdx]) {
+              comp.glowLevel = hist[closestIdx].glowLevel;
+              comp.relayClosed = hist[closestIdx].relayClosed;
+              comp.buzzerLevel = hist[closestIdx].buzzerLevel;
+
+              if (comp.type === 'buzzer') {
+                const model = parseBuzzerActuatorModel(comp.value?.toString() ?? "");
+                const level = comp.buzzerLevel ?? 0;
+                if (level > 0.05) {
+                  audioOrchestrator.updateBuzzer(comp.id, model.resonantFrequencyHz, level);
+                } else {
+                  audioOrchestrator.stopBuzzer(comp.id);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    updateCanvasRendering();
+  };
 
   initSidebars();
-  initModals();
   initPropertyEditor();
+
+  const rightPanelBody = document.querySelector("#sidebar-right .panel-body") as HTMLElement;
+  if (rightPanelBody) {
+    mcuDebugPanel = new McuDebugPanel(rightPanelBody, () => {
+      updateCanvasRendering();
+    });
+  }
   initSimulationControls();
   initOscilloscopeInterface();
   
   initCanvasCAD();
   initFilePersistence();
-  startTelemetryLoop();
+  initTabManager();
 
   if (clearConsoleBtn) {
     clearConsoleBtn.addEventListener("click", () => {
@@ -2073,23 +2109,28 @@ function exportarDatosCSV() {
   let csvContent = "";
   let filename = "reporte_simulacion.csv";
 
-  if (activeAnalysisMode === 'AC' && acSweepResults !== null) {
+  const acResults = oscilloscopePanel ? oscilloscopePanel.acSweepResults : null;
+  const tranResults = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
+  const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
+  const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
+
+  if (activeAnalysisMode === 'AC' && acResults !== null) {
     csvContent = "Frecuencia (Hz),Magnitud Canal 1 (dB),Fase Canal 1 (Grados),Magnitud Canal 2 (dB),Fase Canal 2 (Grados)\n";
-    const freqs = acSweepResults.frequencies;
+    const freqs = acResults.frequencies;
     for (let i = 0; i < freqs.length; i++) {
       const f = freqs[i];
-      const db1 = ch1ProbeNode ? acSweepResults.nodeAmplitudes[ch1ProbeNode]?.[i] ?? 0.0 : 0.0;
-      const ph1 = ch1ProbeNode ? acSweepResults.nodePhases[ch1ProbeNode]?.[i] ?? 0.0 : 0.0;
-      const db2 = ch2ProbeNode ? acSweepResults.nodeAmplitudes[ch2ProbeNode]?.[i] ?? 0.0 : 0.0;
-      const ph2 = ch2ProbeNode ? acSweepResults.nodePhases[ch2ProbeNode]?.[i] ?? 0.0 : 0.0;
+      const db1 = ch1Node ? acResults.nodeAmplitudes[ch1Node]?.[i] ?? 0.0 : 0.0;
+      const ph1 = ch1Node ? acResults.nodePhases[ch1Node]?.[i] ?? 0.0 : 0.0;
+      const db2 = ch2Node ? acResults.nodeAmplitudes[ch2Node]?.[i] ?? 0.0 : 0.0;
+      const ph2 = ch2Node ? acResults.nodePhases[ch2Node]?.[i] ?? 0.0 : 0.0;
       csvContent += `${f.toFixed(2)},${db1.toFixed(4)},${ph1.toFixed(4)},${db2.toFixed(4)},${ph2.toFixed(4)}\n`;
     }
     filename = "reporte_barrido_ca.csv";
-  } else if (activeAnalysisMode === 'TRAN' && transientResults.length > 0) {
+  } else if ((activeAnalysisMode === 'TRAN' || activeAnalysisMode === 'PSS') && tranResults.length > 0) {
     csvContent = "Tiempo (s),Voltaje Canal 1 (V),Voltaje Canal 2 (V)\n";
-    transientResults.forEach(pt => {
-      const v1 = ch1ProbeNode ? pt.nodeVoltages[ch1ProbeNode] ?? 0.0 : 0.0;
-      const v2 = ch2ProbeNode ? pt.nodeVoltages[ch2ProbeNode] ?? 0.0 : 0.0;
+    tranResults.forEach(pt => {
+      const v1 = ch1Node ? pt.nodeVoltages[ch1Node] ?? 0.0 : 0.0;
+      const v2 = ch2Node ? pt.nodeVoltages[ch2Node] ?? 0.0 : 0.0;
       csvContent += `${pt.time.toFixed(6)},${v1.toFixed(5)},${v2.toFixed(5)}\n`;
     });
     filename = "reporte_transitorio.csv";
@@ -2120,9 +2161,14 @@ function exportarDatosSVG() {
   svgContent += `<rect width="800" height="400" fill="#030508" />`;
   svgContent += `<text x="400" y="25" fill="hsl(174, 97%, 69%)" font-size="16" font-weight="bold" text-anchor="middle">Astryd Sophia v2.0 Evolution - Reporte Grafico</text>`;
 
-  if (activeAnalysisMode === 'AC' && acSweepResults !== null && acSweepResults.frequencies.length > 0) {
+  const acResults = oscilloscopePanel ? oscilloscopePanel.acSweepResults : null;
+  const tranResults = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
+  const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
+  const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
+
+  if (activeAnalysisMode === 'AC' && acResults !== null && acResults.frequencies.length > 0) {
     filename = "grafico_bode_ca.svg";
-    const freqs = acSweepResults.frequencies;
+    const freqs = acResults.frequencies;
     const logMin = Math.log10(freqs[0]);
     const logMax = Math.log10(freqs[freqs.length - 1]);
 
@@ -2144,9 +2190,9 @@ function exportarDatosSVG() {
       svgContent += `<text x="755" y="${y + 3}" fill="rgba(168, 85, 247, 0.6)" font-size="9" text-anchor="start">${deg}°</text>`;
     }
 
-    if (ch1ProbeNode) {
+    if (ch1Node) {
       let pathStr = "";
-      const amps = acSweepResults.nodeAmplitudes[ch1ProbeNode];
+      const amps = acResults.nodeAmplitudes[ch1Node];
       if (amps) {
         for (let i = 0; i < freqs.length; i++) {
           const x = 50 + ((Math.log10(freqs[i]) - logMin) / (logMax - logMin)) * 700;
@@ -2157,9 +2203,9 @@ function exportarDatosSVG() {
       }
     }
 
-    if (ch2ProbeNode) {
+    if (ch2Node) {
       let pathStr = "";
-      const amps = acSweepResults.nodeAmplitudes[ch2ProbeNode];
+      const amps = acResults.nodeAmplitudes[ch2Node];
       if (amps) {
         for (let i = 0; i < freqs.length; i++) {
           const x = 50 + ((Math.log10(freqs[i]) - logMin) / (logMax - logMin)) * 700;
@@ -2172,7 +2218,7 @@ function exportarDatosSVG() {
 
     svgContent += `<text x="400" y="390" fill="rgba(255, 255, 255, 0.3)" font-size="10" text-anchor="middle">Frecuencia (Logaritmica)</text>`;
 
-  } else if (activeAnalysisMode === 'TRAN' && transientResults.length > 0) {
+  } else if ((activeAnalysisMode === 'TRAN' || activeAnalysisMode === 'PSS') && tranResults.length > 0) {
     filename = "grafico_oscilograma_transitorio.svg";
     for (let i = 0; i <= 10; i++) {
       const x = 50 + 700 * (i / 10);
@@ -2187,8 +2233,8 @@ function exportarDatosSVG() {
 
     const getTransientPath = (nodeId: string) => {
       let pathStr = "";
-      for (let i = 0; i < transientResults.length; i++) {
-        const pt = transientResults[i];
+      for (let i = 0; i < tranResults.length; i++) {
+        const pt = tranResults[i];
         const x = 50 + (pt.time / transientDuration) * 700;
         const volt = pt.nodeVoltages[nodeId] ?? 0.0;
         const y = 200 - volt * (300 * 0.08);
@@ -2197,11 +2243,11 @@ function exportarDatosSVG() {
       return pathStr;
     };
 
-    if (ch1ProbeNode) {
-      svgContent += `<path d="${getTransientPath(ch1ProbeNode)}" fill="none" stroke="#66fcf1" stroke-width="2.5" />`;
+    if (ch1Node) {
+      svgContent += `<path d="${getTransientPath(ch1Node)}" fill="none" stroke="#66fcf1" stroke-width="2.5" />`;
     }
-    if (ch2ProbeNode) {
-      svgContent += `<path d="${getTransientPath(ch2ProbeNode)}" fill="none" stroke="#a855f7" stroke-width="2.0" />`;
+    if (ch2Node) {
+      svgContent += `<path d="${getTransientPath(ch2Node)}" fill="none" stroke="#a855f7" stroke-width="2.0" />`;
     }
 
     svgContent += `<text x="400" y="380" fill="rgba(255, 255, 255, 0.3)" font-size="10" text-anchor="middle">Tiempo (s)</text>`;
@@ -2221,6 +2267,349 @@ function exportarDatosSVG() {
   link.click();
   document.body.removeChild(link);
   addLog(`Grafico vectorial exportado exitosamente a ${filename}`, "receive");
+}
+
+function exportarDatosTouchstone() {
+  const acResults = (oscilloscopePanel as any) ? (oscilloscopePanel as any).acSweepResults : null;
+  const ch1Node = (oscilloscopePanel as any) ? (oscilloscopePanel as any).ch1ProbeNode : ch1ProbeNode;
+  const ch2Node = (oscilloscopePanel as any) ? (oscilloscopePanel as any).ch2ProbeNode : ch2ProbeNode;
+
+  if (activeAnalysisMode !== 'AC' || !acResults || acResults.frequencies.length === 0) {
+    addLog("Realiza un análisis de Barrido CA (AC Sweep) antes de exportar datos Touchstone.", "error");
+    return;
+  }
+
+  let s2pContent = `! Touchstone 2-Port File generated by Astryd Sophia v2.0 Evolution\n`;
+  s2pContent += `! Created on: ${new Date().toISOString()}\n`;
+  s2pContent += `! Source nodes: Port 1 = Node ${ch1Node ?? 'N/A'}, Port 2 = Node ${ch2Node ?? 'N/A'}\n`;
+  s2pContent += `# Hz S DB R 50\n`;
+
+  const freqs = acResults.frequencies;
+  for (let i = 0; i < freqs.length; i++) {
+    const f = freqs[i];
+    const s11_db = ch1Node ? acResults.nodeAmplitudes[ch1Node]?.[i] ?? -80.0 : -80.0;
+    const s11_phase = ch1Node ? acResults.nodePhases[ch1Node]?.[i] ?? 0.0 : 0.0;
+
+    const s21_db = ch2Node ? acResults.nodeAmplitudes[ch2Node]?.[i] ?? -80.0 : -80.0;
+    const s21_phase = ch2Node ? acResults.nodePhases[ch2Node]?.[i] ?? 0.0 : 0.0;
+
+    const s12_db = -80.0;
+    const s12_phase = 0.0;
+    const s22_db = -80.0;
+    const s22_phase = 0.0;
+
+    s2pContent += `${f.toFixed(4)} ${s11_db.toFixed(6)} ${s11_phase.toFixed(6)} ${s21_db.toFixed(6)} ${s21_phase.toFixed(6)} ${s12_db.toFixed(6)} ${s12_phase.toFixed(6)} ${s22_db.toFixed(6)} ${s22_phase.toFixed(6)}\n`;
+  }
+
+  const blob = new Blob([s2pContent], { type: 'text/plain;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "reporte_s2p.s2p");
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  addLog("Datos de Barrido CA exportados a formato Touchstone (.s2p) exitosamente.", "receive");
+}
+
+function exportarDatosHDF5() {
+  const acResults = (oscilloscopePanel as any) ? (oscilloscopePanel as any).acSweepResults : null;
+  const tranResults = (oscilloscopePanel as any) ? (oscilloscopePanel as any).transientResults : [];
+  const ch1Node = (oscilloscopePanel as any) ? (oscilloscopePanel as any).ch1ProbeNode : ch1ProbeNode;
+  const ch2Node = (oscilloscopePanel as any) ? (oscilloscopePanel as any).ch2ProbeNode : ch2ProbeNode;
+
+  let metadata: any = {
+    creator: "Astryd Sophia v2.0 Evolution",
+    timestamp: new Date().toISOString(),
+    analysisMode: activeAnalysisMode,
+    datasets: {}
+  };
+
+  let binaryArrays: Float64Array[] = [];
+  let filename = "reporte_simulacion.h5";
+
+  if (activeAnalysisMode === 'AC' && acResults !== null) {
+    filename = "reporte_barrido_ca.h5";
+    const freqs = new Float64Array(acResults.frequencies);
+    binaryArrays.push(freqs);
+    metadata.datasets["frequencies"] = { length: freqs.length, type: "Float64", unit: "Hz" };
+
+    if (ch1Node) {
+      const db1 = new Float64Array(acResults.nodeAmplitudes[ch1Node] ?? []);
+      const ph1 = new Float64Array(acResults.nodePhases[ch1Node] ?? []);
+      binaryArrays.push(db1, ph1);
+      metadata.datasets[`ch1_magnitude`] = { length: db1.length, type: "Float64", unit: "dB", node: ch1Node };
+      metadata.datasets[`ch1_phase`] = { length: ph1.length, type: "Float64", unit: "deg", node: ch1Node };
+    }
+    if (ch2Node) {
+      const db2 = new Float64Array(acResults.nodeAmplitudes[ch2Node] ?? []);
+      const ph2 = new Float64Array(acResults.nodePhases[ch2Node] ?? []);
+      binaryArrays.push(db2, ph2);
+      metadata.datasets[`ch2_magnitude`] = { length: db2.length, type: "Float64", unit: "dB", node: ch2Node };
+      metadata.datasets[`ch2_phase`] = { length: ph2.length, type: "Float64", unit: "deg", node: ch2Node };
+    }
+  } else if ((activeAnalysisMode === 'TRAN' || activeAnalysisMode === 'PSS') && tranResults.length > 0) {
+    filename = "reporte_transitorio.h5";
+    const times = new Float64Array(tranResults.map((r: any) => r.time));
+    binaryArrays.push(times);
+    metadata.datasets["time"] = { length: times.length, type: "Float64", unit: "s" };
+
+    if (ch1Node) {
+      const v1 = new Float64Array(tranResults.map((r: any) => r.nodeVoltages[ch1Node] ?? 0.0));
+      binaryArrays.push(v1);
+      metadata.datasets[`ch1_voltage`] = { length: v1.length, type: "Float64", unit: "V", node: ch1Node };
+    }
+    if (ch2Node) {
+      const v2 = new Float64Array(tranResults.map((r: any) => r.nodeVoltages[ch2Node] ?? 0.0));
+      binaryArrays.push(v2);
+      metadata.datasets[`ch2_voltage`] = { length: v2.length, type: "Float64", unit: "V", node: ch2Node };
+    }
+  } else {
+    filename = "reporte_punto_operacion_cc.h5";
+    const nodes = Object.keys(liveVoltages);
+    const voltages = new Float64Array(Object.values(liveVoltages));
+    binaryArrays.push(voltages);
+    metadata.nodesList = nodes;
+    metadata.datasets["voltages"] = { length: voltages.length, type: "Float64", unit: "V" };
+  }
+
+  const encoder = new TextEncoder();
+  const jsonBytes = encoder.encode(JSON.stringify(metadata));
+
+  let currentOffset = 8 + 4 + jsonBytes.byteLength;
+  const paddingNeeded = (8 - (currentOffset % 8)) % 8;
+  currentOffset += paddingNeeded;
+
+  let datasetMetaKeys = Object.keys(metadata.datasets);
+  for (let i = 0; i < binaryArrays.length; i++) {
+    const key = datasetMetaKeys[i];
+    if (metadata.datasets[key]) {
+      metadata.datasets[key].offset = currentOffset;
+      metadata.datasets[key].byteLength = binaryArrays[i].byteLength;
+    }
+    currentOffset += binaryArrays[i].byteLength;
+  }
+
+  const finalJsonBytes = encoder.encode(JSON.stringify(metadata));
+  const finalJsonLen = finalJsonBytes.byteLength;
+  
+  let totalHeaderSize = 8 + 4 + finalJsonLen;
+  const finalPadding = (8 - (totalHeaderSize % 8)) % 8;
+  const headerSizePadded = totalHeaderSize + finalPadding;
+  
+  let totalByteLength = headerSizePadded;
+  for (let i = 0; i < binaryArrays.length; i++) {
+    totalByteLength += binaryArrays[i].byteLength;
+  }
+
+  const mainBuffer = new ArrayBuffer(totalByteLength);
+  const u8View = new Uint8Array(mainBuffer);
+  const dataView = new DataView(mainBuffer);
+
+  const magic = [0x89, 0x48, 0x44, 0x46, 0x0D, 0x0A, 0x1A, 0x0A];
+  for (let i = 0; i < 8; i++) {
+    u8View[i] = magic[i];
+  }
+
+  dataView.setUint32(8, finalJsonLen, true);
+  u8View.set(finalJsonBytes, 12);
+
+  for (let i = 0; i < finalPadding; i++) {
+    u8View[12 + finalJsonLen + i] = 0;
+  }
+
+  let writeOffset = headerSizePadded;
+  for (let i = 0; i < binaryArrays.length; i++) {
+    const arr = binaryArrays[i];
+    const arrU8 = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+    u8View.set(arrU8, writeOffset);
+    writeOffset += arr.byteLength;
+  }
+
+  const blob = new Blob([mainBuffer], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  addLog(`Datos binarios exportados a formato HDF5 Lite (.h5) en ${filename}`, "receive");
+}
+
+async function getCanvasWithBackground(canvasId: string, backgroundColor: string): Promise<string> {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas || canvas.width === 0 || canvas.height === 0) return "";
+  
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    if (!dataUrl || dataUrl === "data:,") return "";
+    
+    return new Promise<string>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext("2d");
+        if (!tempCtx) {
+          resolve("");
+          return;
+        }
+        
+        tempCtx.fillStyle = backgroundColor;
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(img, 0, 0);
+        resolve(tempCanvas.toDataURL("image/png"));
+      };
+      img.onerror = () => {
+        resolve("");
+      };
+      img.src = dataUrl;
+    });
+  } catch (err) {
+    console.error(`Error en getCanvasWithBackground para ${canvasId}:`, err);
+    return "";
+  }
+}
+
+async function exportarReportePDF() {
+  const { jsPDF } = await import("jspdf");
+  addLog("Generando reporte PDF profesional con gráficos vectoriales...", "system");
+  
+  try {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    // PÁGINA 1
+    doc.setFillColor(12, 16, 27);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(102, 252, 241);
+    doc.text("ASTRYD SOPHIA", 20, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(168, 85, 247);
+    doc.text("SIMULADOR DE CIRCUITOS ELECTRÓNICOS PREMIUM v2.0 EVOLUTION", 20, 31);
+
+    doc.setDrawColor(168, 85, 247);
+    doc.setLineWidth(0.5);
+    doc.line(20, 35, pageWidth - 20, 35);
+
+    doc.setFontSize(11);
+    doc.setTextColor(230, 230, 230);
+    doc.setFont("Helvetica", "bold");
+    doc.text("Información del Reporte:", 20, 48);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(180, 180, 180);
+    doc.text(`Fecha de Emisión: ${new Date().toLocaleString()}`, 25, 55);
+    doc.text(`Modo de Análisis Activo: ${activeAnalysisMode}`, 25, 61);
+    
+    const ch1Node = (oscilloscopePanel as any) ? (oscilloscopePanel as any).ch1ProbeNode : ch1ProbeNode;
+    const ch2Node = (oscilloscopePanel as any) ? (oscilloscopePanel as any).ch2ProbeNode : ch2ProbeNode;
+    doc.text(`Canal 1 (Sonda): Nodo ${ch1Node ?? "No Conectada"}`, 25, 67);
+    doc.text(`Canal 2 (Sonda): Nodo ${ch2Node ?? "No Conectada"}`, 25, 73);
+
+    const circuitImg = await getCanvasWithBackground("circuit-canvas", "#0c101b");
+    if (circuitImg) {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(102, 252, 241);
+      doc.text("ESQUEMÁTICO DEL CIRCUITO SIMULADO", 20, 88);
+
+      doc.setDrawColor(102, 252, 241);
+      doc.setLineWidth(0.2);
+      doc.rect(19.8, 92.8, pageWidth - 39.6, 100.4, "D");
+      doc.addImage(circuitImg, "PNG", 20, 93, pageWidth - 40, 100);
+    }
+
+    doc.setFontSize(8);
+    doc.setFont("Helvetica", "italic");
+    doc.setTextColor(100, 100, 100);
+    doc.text("Astryd Sophia - Reporte Científico Generado Localmente", 20, pageHeight - 12);
+    doc.text("Página 1 de 2", pageWidth - 35, pageHeight - 12);
+
+    // PÁGINA 2
+    doc.addPage();
+    doc.setFillColor(12, 16, 27);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(102, 252, 241);
+    doc.text("RESULTADOS DEL OSCILOSCOPIO", 20, 20);
+
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(0.3);
+    doc.line(20, 24, pageWidth - 20, 24);
+
+    const oscImg = await getCanvasWithBackground("osc-canvas", "#030508");
+    if (oscImg) {
+      doc.setDrawColor(59, 130, 246);
+      doc.setLineWidth(0.2);
+      doc.rect(19.8, 29.8, pageWidth - 39.6, 80.4, "D");
+      doc.addImage(oscImg, "PNG", 20, 30, pageWidth - 40, 80);
+    }
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(168, 85, 247);
+    doc.text("REGISTROS METROLÓGICOS Y EVENTOS", 20, 122);
+
+    const logList = document.querySelectorAll(".log-entry");
+    let yPos = 130;
+    doc.setFont("Courier", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(200, 200, 200);
+
+    if (logList.length > 0) {
+      const startIdx = Math.max(0, logList.length - 12);
+      for (let i = startIdx; i < logList.length; i++) {
+        const text = logList[i].textContent ?? "";
+        const cleanedText = text.replace(/[\u23EC\u23F3\uD83D\uDCE5\uD83D\uDCCA]/g, "").trim();
+        const truncatedText = cleanedText.length > 90 ? cleanedText.substring(0, 87) + "..." : cleanedText;
+        
+        if (text.toLowerCase().includes("error")) {
+          doc.setTextColor(239, 68, 68);
+        } else if (text.toLowerCase().includes("exitosamente") || text.toLowerCase().includes("completado")) {
+          doc.setTextColor(16, 185, 129);
+        } else {
+          doc.setTextColor(200, 200, 200);
+        }
+
+        doc.text(truncatedText, 22, yPos);
+        yPos += 5.5;
+      }
+    } else {
+      doc.setTextColor(130, 130, 130);
+      doc.text("No se encontraron registros de eventos metrológicos.", 22, yPos);
+    }
+
+    doc.setFontSize(8);
+    doc.setFont("Helvetica", "italic");
+    doc.setTextColor(100, 100, 100);
+    doc.text("Astryd Sophia - Reporte Científico Generado Localmente", 20, pageHeight - 12);
+    doc.text("Página 2 de 2", pageWidth - 35, pageHeight - 12);
+
+    doc.save(`reporte_astryd_sophia_${activeAnalysisMode.toLowerCase()}.pdf`);
+    addLog("Reporte científico PDF descargado exitosamente.", "receive");
+  } catch (err: any) {
+    console.error("Error al exportar PDF:", err);
+    addLog(`Error al exportar PDF: ${err.message || err}`, "error");
+  }
 }
 
 // --- SISTEMA DE PERSISTENCIA LOCAL DE CIRCUITOS (FASE 10) ---
@@ -2292,8 +2681,11 @@ function deserializeCircuit(jsonStr: string): boolean {
     orchestrator.selectionEnd = null;
 
     liveVoltages = {};
-    transientResults = [];
-    sweepTime = 0.0;
+    if (oscilloscopePanel) {
+      oscilloscopePanel.transientResults = [];
+      oscilloscopePanel.acSweepResults = null;
+      oscilloscopePanel.sweepTime = 0.0;
+    }
 
     // 2. Restaurar componentes
     for (const comp of data.components) {
@@ -2339,23 +2731,28 @@ function deserializeCircuit(jsonStr: string): boolean {
     // 6. Restaurar modo de simulación
     if (data.activeAnalysisMode) {
       activeAnalysisMode = data.activeAnalysisMode;
-      const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn];
+      const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn];
       modeButtons.forEach(btn => btn?.classList.remove('active'));
       if (activeAnalysisMode === 'DC' && analysisDcBtn) analysisDcBtn.classList.add('active');
       if (activeAnalysisMode === 'AC' && analysisAcBtn) analysisAcBtn.classList.add('active');
       if (activeAnalysisMode === 'TRAN' && analysisTranBtn) analysisTranBtn.classList.add('active');
+      if (activeAnalysisMode === 'SENS' && analysisSensBtn) analysisSensBtn.classList.add('active');
     }
 
     // 7. Restaurar asignaciones de osciloscopio
     if (data.probes) {
       ch1ProbeNode = data.probes.ch1ProbeNode || null;
       ch2ProbeNode = data.probes.ch2ProbeNode || null;
+      if (oscilloscopePanel) {
+        oscilloscopePanel.ch1ProbeNode = ch1ProbeNode;
+        oscilloscopePanel.ch2ProbeNode = ch2ProbeNode;
+      }
     }
 
     // Actualizar renderizado y recalcular nodos eléctricos
     extractElectricalNetlist();
     updateCanvasRendering();
-    drawOscilloscope();
+    if (oscilloscopePanel) oscilloscopePanel.draw();
 
     return true;
   } catch (err) {
@@ -2368,33 +2765,7 @@ function initFilePersistence() {
   const btnNewCircuit = document.querySelector("#btn-new-circuit");
   if (btnNewCircuit) {
     btnNewCircuit.addEventListener("click", () => {
-      if (orchestrator) {
-        orchestrator.components = [];
-        orchestrator.wires = [];
-        orchestrator.selectedComponent = null;
-        orchestrator.selectedComponents = [];
-        orchestrator.selectedWire = null;
-        orchestrator.activePinForWire = null;
-        orchestrator.tempWireEnd = null;
-        orchestrator.selectionStart = null;
-        orchestrator.selectionEnd = null;
-
-        liveVoltages = {};
-        transientResults = [];
-        sweepTime = 0.0;
-
-        orchestrator.zoom = 1.0;
-        orchestrator.offsetX = 0;
-        orchestrator.offsetY = 0;
-
-        ch1ProbeNode = "1";
-        ch2ProbeNode = "2";
-
-        extractElectricalNetlist();
-        updateCanvasRendering();
-        drawOscilloscope();
-        addLog("Nuevo esquemático limpio creado.", "system");
-      }
+      createNewTab();
     });
   }
 
@@ -2403,11 +2774,35 @@ function initFilePersistence() {
     btnOpenCircuit.addEventListener("click", async () => {
       addLog("Abriendo diálogo para cargar archivo esquemático...", "system");
       try {
-        const content = await invoke<string>("open_circuit_file");
-        if (content) {
+        const result = await invoke<[string, string]>("open_circuit_file");
+        if (result && Array.isArray(result)) {
+          const [filePath, content] = result;
+          
+          // Verificar si la pestaña activa está limpia/vacía
+          const currentTab = tabs.find(t => t.id === activeTabId);
+          const isEmpty = currentTab && 
+                          currentTab.components.length === 0 && 
+                          currentTab.wires.length === 0 && 
+                          currentTab.filePath === null && 
+                          !currentTab.unsaved;
+          
+          let tabToLoad: Tab;
+          const filename = filePath.split(/[/\\]/).pop() || "esquematico.astryd";
+          
+          if (isEmpty && currentTab) {
+            tabToLoad = currentTab;
+            tabToLoad.name = filename;
+            tabToLoad.filePath = filePath;
+          } else {
+            tabToLoad = createNewTab(filename, { components: [], wires: [], filePath });
+          }
+
           const success = deserializeCircuit(content);
           if (success) {
-            addLog("Esquemático .astryd cargado con éxito.", "receive");
+            tabToLoad.filePath = filePath;
+            tabToLoad.unsaved = false;
+            renderTabsBar();
+            addLog(`Esquemático [${tabToLoad.name}] cargado con éxito.`, "receive");
           }
         }
       } catch (err) {
@@ -2422,21 +2817,386 @@ function initFilePersistence() {
 
   const btnSaveCircuit = document.querySelector("#btn-save-circuit");
   if (btnSaveCircuit) {
-    btnSaveCircuit.addEventListener("click", async () => {
-      addLog("Abriendo diálogo para guardar esquemático...", "system");
-      try {
-        const jsonStr = serializeCircuit();
-        const savedPath = await invoke<string>("save_circuit_file", { content: jsonStr });
-        if (savedPath) {
-          addLog(`Esquemático guardado con éxito en: [${savedPath}]`, "receive");
-        }
-      } catch (err) {
-        if (err !== "Operación cancelada por el usuario") {
-          addLog(`Error al guardar esquemático: ${err}`, "error");
+    btnSaveCircuit.addEventListener("click", () => {
+      saveCircuitDirect();
+    });
+  }
+}
+
+// --- GESTOR DE PESTAÑAS (WORKSPACE TABS) ---
+
+function createNewTab(name?: string, initialData?: { components: any[], wires: any[], filePath: string | null }): Tab {
+  const tabId = Math.random().toString(36).substring(2, 9);
+  const tabName = name || `Circuito ${tabs.length + 1}`;
+  
+  const newTab: Tab = {
+    id: tabId,
+    name: tabName,
+    components: initialData?.components || [],
+    wires: initialData?.wires || [],
+    zoom: 1.0,
+    offsetX: 0,
+    offsetY: 0,
+    filePath: initialData?.filePath || null,
+    unsaved: false,
+    transientResults: [],
+    acSweepResults: null,
+    ch1ProbeNode: "1",
+    ch2ProbeNode: "2",
+    activeAnalysisMode: 'DC'
+  };
+
+  tabs.push(newTab);
+  switchTab(tabId);
+  return newTab;
+}
+
+function switchTab(tabId: string) {
+  if (activeTabId === tabId) return;
+
+  // 1. Guardar el estado del tab actual
+  if (activeTabId && orchestrator) {
+    const currentTab = tabs.find(t => t.id === activeTabId);
+    if (currentTab) {
+      currentTab.components = JSON.parse(JSON.stringify(orchestrator.components));
+      currentTab.wires = JSON.parse(JSON.stringify(orchestrator.wires));
+      currentTab.zoom = orchestrator.zoom;
+      currentTab.offsetX = orchestrator.offsetX;
+      currentTab.offsetY = orchestrator.offsetY;
+      currentTab.activeAnalysisMode = activeAnalysisMode;
+      currentTab.ch1ProbeNode = ch1ProbeNode;
+      currentTab.ch2ProbeNode = ch2ProbeNode;
+      if (oscilloscopePanel) {
+        currentTab.transientResults = oscilloscopePanel.transientResults;
+        currentTab.acSweepResults = oscilloscopePanel.acSweepResults;
+      }
+    }
+  }
+
+  // 2. Cargar el estado del nuevo tab activo
+  activeTabId = tabId;
+  const targetTab = tabs.find(t => t.id === tabId);
+  if (targetTab && orchestrator) {
+    // Resetear selecciones del lienzo para evitar fantasmas
+    orchestrator.selectedComponent = null;
+    orchestrator.selectedComponents = [];
+    orchestrator.selectedWire = null;
+    orchestrator.activePinForWire = null;
+    orchestrator.tempWireEnd = null;
+    orchestrator.selectionStart = null;
+    orchestrator.selectionEnd = null;
+
+    // Volcar componentes y cables
+    orchestrator.components = JSON.parse(JSON.stringify(targetTab.components));
+    orchestrator.wires = JSON.parse(JSON.stringify(targetTab.wires));
+    orchestrator.zoom = targetTab.zoom;
+    orchestrator.offsetX = targetTab.offsetX;
+    orchestrator.offsetY = targetTab.offsetY;
+
+    activeAnalysisMode = targetTab.activeAnalysisMode;
+    ch1ProbeNode = targetTab.ch1ProbeNode;
+    ch2ProbeNode = targetTab.ch2ProbeNode;
+
+    // Refrescar los botones de control de análisis en la cabecera
+    const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn];
+    modeButtons.forEach(btn => btn?.classList.remove('active'));
+    if (activeAnalysisMode === 'DC' && analysisDcBtn) analysisDcBtn.classList.add('active');
+    if (activeAnalysisMode === 'AC' && analysisAcBtn) analysisAcBtn.classList.add('active');
+    if (activeAnalysisMode === 'TRAN' && analysisTranBtn) analysisTranBtn.classList.add('active');
+    if (activeAnalysisMode === 'SENS' && analysisSensBtn) analysisSensBtn.classList.add('active');
+    if (activeAnalysisMode === 'PSS' && analysisPssBtn) analysisPssBtn.classList.add('active');
+    if (activeAnalysisMode === 'STB' && analysisStbBtn) analysisStbBtn.classList.add('active');
+
+    // Refrescar el Osciloscopio
+    if (oscilloscopePanel) {
+      oscilloscopePanel.activeAnalysisMode = activeAnalysisMode as any;
+      oscilloscopePanel.ch1ProbeNode = ch1ProbeNode;
+      oscilloscopePanel.ch2ProbeNode = ch2ProbeNode;
+      oscilloscopePanel.transientResults = targetTab.transientResults;
+      oscilloscopePanel.acSweepResults = targetTab.acSweepResults;
+      oscilloscopePanel.sweepTime = 0.0;
+    }
+
+    // Actualizar netlist eléctrico y dibujo
+    extractElectricalNetlist();
+    updateCanvasRendering();
+    if (oscilloscopePanel) oscilloscopePanel.draw();
+
+    // Sincronizar depuración MCU
+    if (mcuDebugPanel) {
+      mcuDebugPanel.hide();
+    }
+  }
+
+  renderTabsBar();
+}
+
+async function closeTab(tabId: string) {
+  const tabIndex = tabs.findIndex(t => t.id === tabId);
+  if (tabIndex === -1) return;
+
+  const targetTab = tabs[tabIndex];
+
+  // Si tiene cambios no guardados, solicitar confirmación
+  if (targetTab.unsaved) {
+    const confirmClose = confirm(`La pestaña "${targetTab.name}" tiene cambios no guardados. ¿Deseas cerrarla de todas formas?`);
+    if (!confirmClose) return;
+  }
+
+  tabs.splice(tabIndex, 1);
+
+  if (activeTabId === tabId) {
+    if (tabs.length > 0) {
+      const nextActiveIdx = Math.max(0, tabIndex - 1);
+      activeTabId = null; // Evitar que switchTab guarde el estado del tab borrado
+      switchTab(tabs[nextActiveIdx].id);
+    } else {
+      activeTabId = null;
+      if (orchestrator) {
+        orchestrator.components = [];
+        orchestrator.wires = [];
+      }
+      createNewTab("Circuito 1");
+    }
+  } else {
+    renderTabsBar();
+  }
+}
+
+function renderTabsBar() {
+  const container = document.querySelector("#tabs-container");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  tabs.forEach(tab => {
+    const tabEl = document.createElement("div");
+    tabEl.className = `tab-item${tab.id === activeTabId ? " active" : ""}`;
+    tabEl.setAttribute("data-id", tab.id);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = tab.name;
+    tabEl.appendChild(nameSpan);
+
+    if (tab.unsaved) {
+      const dot = document.createElement("span");
+      dot.className = "tab-unsaved";
+      tabEl.appendChild(dot);
+    }
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "tab-close";
+    closeBtn.innerHTML = "&times;";
+    closeBtn.type = "button";
+    closeBtn.title = "Cerrar pestaña";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+
+    tabEl.appendChild(closeBtn);
+
+    tabEl.addEventListener("click", () => {
+      switchTab(tab.id);
+    });
+
+    container.appendChild(tabEl);
+  });
+}
+
+function markCurrentTabAsModified() {
+  const currentTab = tabs.find(t => t.id === activeTabId);
+  if (currentTab && !currentTab.unsaved) {
+    currentTab.unsaved = true;
+    renderTabsBar();
+  }
+}
+
+async function saveCircuitDirect() {
+  const currentTab = tabs.find(t => t.id === activeTabId);
+  if (!currentTab) return;
+
+  if (currentTab.filePath) {
+    addLog(`Guardando esquemático directamente en: [${currentTab.filePath}]...`, "system");
+    try {
+      if (orchestrator) {
+        currentTab.components = JSON.parse(JSON.stringify(orchestrator.components));
+        currentTab.wires = JSON.parse(JSON.stringify(orchestrator.wires));
+        currentTab.zoom = orchestrator.zoom;
+        currentTab.offsetX = orchestrator.offsetX;
+        currentTab.offsetY = orchestrator.offsetY;
+      }
+
+      const jsonStr = serializeCircuit();
+      await invoke("save_circuit_to_path", { path: currentTab.filePath, content: jsonStr });
+      currentTab.unsaved = false;
+      renderTabsBar();
+      addLog(`Esquemático guardado con éxito.`, "receive");
+    } catch (err) {
+      addLog(`Error al guardar esquemático: ${err}`, "error");
+    }
+  } else {
+    saveCircuitAs();
+  }
+}
+
+async function saveCircuitAs() {
+  const currentTab = tabs.find(t => t.id === activeTabId);
+  if (!currentTab) return;
+
+  addLog("Abriendo diálogo para guardar esquemático...", "system");
+  try {
+    if (orchestrator) {
+      currentTab.components = JSON.parse(JSON.stringify(orchestrator.components));
+      currentTab.wires = JSON.parse(JSON.stringify(orchestrator.wires));
+      currentTab.zoom = orchestrator.zoom;
+      currentTab.offsetX = orchestrator.offsetX;
+      currentTab.offsetY = orchestrator.offsetY;
+    }
+
+    const jsonStr = serializeCircuit();
+    const savedPath = await invoke<string>("save_circuit_file", { content: jsonStr });
+    if (savedPath) {
+      currentTab.filePath = savedPath;
+      currentTab.name = savedPath.split(/[/\\]/).pop() || "esquematico.astryd";
+      currentTab.unsaved = false;
+      renderTabsBar();
+      addLog(`Esquemático guardado con éxito en: [${savedPath}]`, "receive");
+    }
+  } catch (err) {
+    if (err !== "Operación cancelada por el usuario") {
+      addLog(`Error al guardar esquemático: ${err}`, "error");
+    } else {
+      addLog("Operación de guardado cancelada.", "system");
+    }
+  }
+}
+
+// --- INICIALIZACIONES DE CONTROLES MULTI-WORKSPACE ---
+
+function initTabManager() {
+  const btnAddTab = document.querySelector("#btn-add-tab");
+  if (btnAddTab) {
+    btnAddTab.addEventListener("click", () => {
+      createNewTab();
+    });
+  }
+
+  // Crear primera pestaña por defecto
+  createNewTab("Circuito 1");
+
+  // Acordeones de categorías de componentes
+  initComponentCategories();
+
+  // Reactividad del buscador
+  initComponentSearch();
+
+  // Atajos de teclado para pestañas
+  initTabKeyboardShortcuts();
+}
+
+function initComponentCategories() {
+  const headers = document.querySelectorAll(".category-header");
+  headers.forEach(header => {
+    header.addEventListener("click", () => {
+      const content = header.nextElementSibling as HTMLElement;
+      if (content) {
+        const isOpen = content.classList.contains("open");
+        if (isOpen) {
+          content.classList.remove("open");
+          header.classList.remove("active");
         } else {
-          addLog("Operación de guardado cancelada.", "system");
+          content.classList.add("open");
+          header.classList.add("active");
         }
       }
     });
-  }
+  });
+}
+
+function initComponentSearch() {
+  const searchInput = document.querySelector("#component-search") as HTMLInputElement;
+  if (!searchInput) return;
+
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value.toLowerCase().trim();
+    const categories = document.querySelectorAll(".category-group");
+
+    categories.forEach(group => {
+      const header = group.querySelector(".category-header") as HTMLElement;
+      const content = group.querySelector(".category-content") as HTMLElement;
+      const cards = content.querySelectorAll(".component-card");
+      let visibleInGroup = 0;
+
+      cards.forEach(card => {
+        const name = (card.querySelector(".comp-name")?.textContent || "").toLowerCase();
+        const desc = (card.querySelector(".comp-desc")?.textContent || "").toLowerCase();
+        
+        if (name.includes(query) || desc.includes(query)) {
+          (card as HTMLElement).style.display = "flex";
+          visibleInGroup++;
+        } else {
+          (card as HTMLElement).style.display = "none";
+        }
+      });
+
+      if (query.length > 0) {
+        if (visibleInGroup > 0) {
+          (group as HTMLElement).style.display = "block";
+          content.classList.add("open");
+          header.classList.add("active");
+        } else {
+          (group as HTMLElement).style.display = "none";
+        }
+      } else {
+        // Restaurar estado por defecto
+        (group as HTMLElement).style.display = "block";
+        const catName = header.getAttribute("data-category");
+        if (catName === "pasivos") {
+          content.classList.add("open");
+          header.classList.add("active");
+        } else {
+          content.classList.remove("open");
+          header.classList.remove("active");
+        }
+      }
+    });
+  });
+}
+
+function initTabKeyboardShortcuts() {
+  window.addEventListener("keydown", (e) => {
+    // Si estamos editando un input, no capturar atajos del workspace
+    if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "SELECT") {
+      return;
+    }
+
+    // Ctrl + N: Nueva pestaña
+    if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+      e.preventDefault();
+      createNewTab();
+    }
+    // Ctrl + O: Abrir archivo
+    if ((e.ctrlKey || e.metaKey) && e.key === "o") {
+      e.preventDefault();
+      const openBtn = document.querySelector("#btn-open-circuit") as HTMLElement;
+      openBtn?.click();
+    }
+    // Ctrl + S: Guardar (Ctrl+Shift+S para Guardar Como)
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        saveCircuitAs();
+      } else {
+        saveCircuitDirect();
+      }
+    }
+    // Ctrl + W: Cerrar pestaña activa
+    if ((e.ctrlKey || e.metaKey) && e.key === "w") {
+      e.preventDefault();
+      if (activeTabId) {
+        closeTab(activeTabId);
+      }
+    }
+  });
 }

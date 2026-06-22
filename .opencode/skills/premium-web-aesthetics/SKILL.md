@@ -1,3 +1,8 @@
+---
+name: premium-web-aesthetics
+description: Use when styling UI with CSS, implementing glassmorphism, dark-mode design systems, animations, or responsive grid layouts
+---
+
 # Skill: Premium Web Aesthetics
 
 ## 1. Context and Objective

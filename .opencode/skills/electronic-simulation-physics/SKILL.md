@@ -1,3 +1,8 @@
+---
+name: electronic-simulation-physics
+description: Use when solving circuit equations, MNA formulation, Newton-Raphson, transient integration, or any SPICE-level simulation math
+---
+
 # Skill: Electronic Simulation Physics
 
 ## 1. Context and Objective

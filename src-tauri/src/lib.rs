@@ -1,6 +1,13 @@
 mod solver;
 mod telemetry;
 mod parser;
+mod topology;
+mod sparse_csc;
+mod symbolic;
+mod krylov;
+pub mod dual3;
+pub mod sparse_parallel;
+mod gpu_solver;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -84,11 +91,33 @@ async fn expand_transmission_line(
 }
 
 #[tauri::command]
+async fn run_sensitivity_analysis(
+    netlist: solver::CircuitNetlist,
+) -> Result<solver::SensitivityResult, String> {
+    solver::solve_dc_sensitivity(&netlist)
+}
+
+#[tauri::command]
 async fn solve_dc_thermal(
     netlist: solver::CircuitNetlist,
     temp_k: f64,
 ) -> Result<solver::SimulationResult, String> {
     solver::solve_dc_circuit_thermal(&netlist, temp_k)
+}
+
+#[tauri::command]
+async fn run_pss_simulation(
+    netlist: solver::CircuitNetlist,
+    settings: solver::PssSettings,
+) -> Result<Vec<solver::TimeStepResult>, String> {
+    solver::solve_pss(&netlist, &settings)
+}
+
+#[tauri::command]
+async fn run_stability_analysis(
+    netlist: solver::CircuitNetlist,
+) -> Result<solver::PoleZeroResult, String> {
+    solver::run_stability_analysis(&netlist)
 }
 
 #[tauri::command]
@@ -118,7 +147,17 @@ async fn save_circuit_file(content: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn open_circuit_file() -> Result<String, String> {
+async fn save_circuit_to_path(path: String, content: String) -> Result<(), String> {
+    use std::fs::File;
+    use std::io::Write;
+
+    let mut file = File::create(&path).map_err(|e| e.to_string())?;
+    file.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_circuit_file() -> Result<(String, String), String> {
     use std::fs::read_to_string;
 
     let file_path = rfd::AsyncFileDialog::new()
@@ -130,7 +169,7 @@ async fn open_circuit_file() -> Result<String, String> {
     if let Some(file_handle) = file_path {
         let path = file_handle.path();
         let content = read_to_string(path).map_err(|e| e.to_string())?;
-        Ok(content)
+        Ok((path.to_string_lossy().to_string(), content))
     } else {
         Err("Operación cancelada por el usuario".to_string())
     }
@@ -153,8 +192,12 @@ pub fn run() {
             evaluate_measures,
             expand_transmission_line,
             solve_dc_thermal,
+            run_sensitivity_analysis,
+            run_pss_simulation,
+            run_stability_analysis,
             get_performance_telemetry,
             save_circuit_file,
+            save_circuit_to_path,
             open_circuit_file
         ])
         .run(tauri::generate_context!())

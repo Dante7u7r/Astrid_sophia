@@ -1,3 +1,8 @@
+---
+name: tauri-ipc-bridge
+description: Use when working with Tauri IPC, TypeScript-Rust communication, event streaming, or serialization between frontend and backend
+---
+
 # Skill: Tauri IPC Bridge
 
 ## 1. Context and Objective

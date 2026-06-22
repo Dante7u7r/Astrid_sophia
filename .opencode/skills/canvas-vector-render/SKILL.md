@@ -1,3 +1,8 @@
+---
+name: canvas-vector-render
+description: Use when working with Canvas 2D rendering, vector graphics, viewport transforms, or interactive grid-based UI schematics
+---
+
 # Skill: Canvas Vector Render
 
 ## 1. Context and Objective

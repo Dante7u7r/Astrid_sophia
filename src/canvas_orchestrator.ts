@@ -12,8 +12,8 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp';
-  value: number;
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico';
+  value: number | string;
   x: number;
   y: number;
   rotation: number; // 0, 90, 180, 270 degrees
@@ -23,6 +23,17 @@ export interface ComponentInstance {
   frequency?: number;
   offset?: number;
   dutyCycle?: number;
+  glowLevel?: number;
+  relayClosed?: boolean;
+  buzzerLevel?: number;
+  
+  // MCU properties
+  firmwareHex?: string; // HEX content
+  firmware?: Uint8Array; // compiled binary
+  mcuClockSpeed?: number;
+  mcuRuntime?: any;
+  mcuBridge?: any;
+  mcuPinStates?: Record<number, number | string>; // logical states (0, 1, 'X', 'Z')
 }
 
 export interface PinInstance {
@@ -141,6 +152,56 @@ export class CanvasOrchestrator {
       pins.push({ componentId: comp.id, pinIndex: 2, x: ptVplus.x, y: ptVplus.y });
       pins.push({ componentId: comp.id, pinIndex: 3, x: ptVminus.x, y: ptVminus.y });
       pins.push({ componentId: comp.id, pinIndex: 4, x: ptOut.x, y: ptOut.y });
+    } else if (comp.type === 'relay') {
+      // Relay has 4 pins: coil-a (-40, -20), coil-b (-40, 20), common (40, -20), no (40, 20)
+      const ptCoilA = getRotatedOffset(-40, -20);
+      const ptCoilB = getRotatedOffset(-40, 20);
+      const ptCommon = getRotatedOffset(40, -20);
+      const ptNo = getRotatedOffset(40, 20);
+      pins.push({ componentId: comp.id, pinIndex: 0, x: ptCoilA.x, y: ptCoilA.y });
+      pins.push({ componentId: comp.id, pinIndex: 1, x: ptCoilB.x, y: ptCoilB.y });
+      pins.push({ componentId: comp.id, pinIndex: 2, x: ptCommon.x, y: ptCommon.y });
+      pins.push({ componentId: comp.id, pinIndex: 3, x: ptNo.x, y: ptNo.y });
+    } else if (comp.type === 'mcu_8051') {
+      // DIP-40 Package
+      // Pins 1-20 on the left side, y: -200 to 180 (step 20)
+      for (let i = 0; i < 20; i++) {
+        const pt = getRotatedOffset(-60, -200 + i * 20);
+        pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
+      }
+      // Pins 21-40 on the right side, y: 180 to -200 (step -20)
+      for (let i = 0; i < 20; i++) {
+        const pt = getRotatedOffset(60, 180 - i * 20);
+        pins.push({ componentId: comp.id, pinIndex: 20 + i, x: pt.x, y: pt.y });
+      }
+    } else if (comp.type === 'mcu_avr') {
+      // DIP-28 Package (ATmega328P)
+      // Pins 1-14 on the left side, y: -140 to 120 (step 20)
+      for (let i = 0; i < 14; i++) {
+        const pt = getRotatedOffset(-60, -140 + i * 20);
+        pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
+      }
+      // Pins 15-28 on the right side, y: 120 to -140 (step -20)
+      for (let i = 0; i < 14; i++) {
+        const pt = getRotatedOffset(60, 120 - i * 20);
+        pins.push({ componentId: comp.id, pinIndex: 14 + i, x: pt.x, y: pt.y });
+      }
+    } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+      // Symmetrical 6-pin layout
+      // Left side: Pin 0 (IN), Pin 2 (ADC), Pin 4 (VCC)
+      // Right side: Pin 1 (OUT), Pin 3 (DAC), Pin 5 (GND)
+      const pt0 = getRotatedOffset(-40, -40);
+      const pt1 = getRotatedOffset(40, -40);
+      const pt2 = getRotatedOffset(-40, 0);
+      const pt3 = getRotatedOffset(40, 0);
+      const pt4 = getRotatedOffset(-40, 40);
+      const pt5 = getRotatedOffset(40, 40);
+      pins.push({ componentId: comp.id, pinIndex: 0, x: pt0.x, y: pt0.y });
+      pins.push({ componentId: comp.id, pinIndex: 1, x: pt1.x, y: pt1.y });
+      pins.push({ componentId: comp.id, pinIndex: 2, x: pt2.x, y: pt2.y });
+      pins.push({ componentId: comp.id, pinIndex: 3, x: pt3.x, y: pt3.y });
+      pins.push({ componentId: comp.id, pinIndex: 4, x: pt4.x, y: pt4.y });
+      pins.push({ componentId: comp.id, pinIndex: 5, x: pt5.x, y: pt5.y });
     } else {
       // Other 2-pin components
       const pt1 = getRotatedOffset(-40, 0);
@@ -335,7 +396,7 @@ export class CanvasOrchestrator {
     }
 
     // 1. Draw Leads
-    if (comp.type !== 'ground' && comp.type !== 'nmos' && comp.type !== 'pmos' && comp.type !== 'npn' && comp.type !== 'pnp' && comp.type !== 'opamp') {
+    if (comp.type !== 'ground' && comp.type !== 'nmos' && comp.type !== 'pmos' && comp.type !== 'npn' && comp.type !== 'pnp' && comp.type !== 'opamp' && comp.type !== 'relay' && comp.type !== 'mcu_8051' && comp.type !== 'mcu_avr' && comp.type !== 'arduino_uno' && comp.type !== 'esp32' && comp.type !== 'raspberry_pi_pico') {
       this.ctx.beginPath();
       this.ctx.moveTo(-40, 0);
       this.ctx.lineTo(-20, 0);
@@ -610,31 +671,404 @@ export class CanvasOrchestrator {
 
         this.ctx.stroke();
         break;
+
+      case 'lamp': {
+        const glow = comp.glowLevel ?? 0;
+        if (glow > 0.05) {
+          const grad = this.ctx.createRadialGradient(0, 0, 2, 0, 0, 24);
+          grad.addColorStop(0, `rgba(255, 180, 0, ${glow * 0.45})`);
+          grad.addColorStop(0.5, `rgba(255, 180, 0, ${glow * 0.15})`);
+          grad.addColorStop(1, 'rgba(255, 180, 0, 0)');
+          this.ctx.save();
+          this.ctx.fillStyle = grad;
+          this.ctx.beginPath();
+          this.ctx.arc(0, 0, 24, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.restore();
+        }
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-11, -11);
+        this.ctx.lineTo(11, 11);
+        this.ctx.moveTo(11, -11);
+        this.ctx.lineTo(-11, 11);
+        if (glow > 0.05) {
+          this.ctx.save();
+          this.ctx.strokeStyle = `rgba(255, 230, 150, ${0.4 + glow * 0.6})`;
+          this.ctx.shadowColor = "rgba(255, 180, 0, 0.9)";
+          this.ctx.shadowBlur = 10 * glow;
+          this.ctx.lineWidth = 2.5;
+          this.ctx.stroke();
+          this.ctx.restore();
+        } else {
+          this.ctx.stroke();
+        }
+        break;
+      }
+
+      case 'relay': {
+        const closed = comp.relayClosed ?? false;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-40, -20);
+        this.ctx.lineTo(-20, -20);
+        this.ctx.moveTo(-40, 20);
+        this.ctx.lineTo(-20, 20);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(40, -20);
+        this.ctx.lineTo(20, -20);
+        this.ctx.moveTo(40, 20);
+        this.ctx.lineTo(20, 20);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.rect(-20, -20, 10, 40);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-15, -20);
+        this.ctx.lineTo(-15, 20);
+        this.ctx.stroke();
+        this.ctx.save();
+        this.ctx.setLineDash([3, 2]);
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        this.ctx.beginPath();
+        this.ctx.moveTo(-10, 0);
+        this.ctx.lineTo(10, 0);
+        this.ctx.stroke();
+        this.ctx.restore();
+        this.ctx.beginPath();
+        this.ctx.arc(20, -20, 2, 0, Math.PI * 2);
+        this.ctx.arc(20, 20, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        if (closed) {
+          this.ctx.moveTo(20, -20);
+          this.ctx.lineTo(20, 20);
+          this.ctx.save();
+          this.ctx.strokeStyle = "hsl(174, 97%, 69%)";
+          this.ctx.shadowColor = "hsl(174, 97%, 69%)";
+          this.ctx.shadowBlur = 6;
+          this.ctx.lineWidth = 2.0;
+          this.ctx.stroke();
+          this.ctx.restore();
+        } else {
+          this.ctx.moveTo(20, -20);
+          this.ctx.lineTo(10, 10);
+          this.ctx.stroke();
+        }
+        break;
+      }
+
+      case 'buzzer': {
+        const level = comp.buzzerLevel ?? 0;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-12, -16);
+        this.ctx.lineTo(-12, 16);
+        this.ctx.lineTo(12, 18);
+        this.ctx.lineTo(12, -18);
+        this.ctx.closePath();
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(-20, 0);
+        this.ctx.lineTo(-12, 0);
+        this.ctx.stroke();
+        if (level > 0.05) {
+          this.ctx.save();
+          this.ctx.strokeStyle = `rgba(102, 252, 241, ${level * 0.8})`;
+          this.ctx.shadowColor = "hsl(174, 97%, 69%)";
+          this.ctx.shadowBlur = 4 * level;
+          const wavePhase = (Date.now() / 150) % 3;
+          for (let i = 0; i < 3; i++) {
+            const r = 20 + i * 8 + wavePhase;
+            this.ctx.beginPath();
+            this.ctx.arc(4, 0, r, -Math.PI / 4, Math.PI / 4, false);
+            this.ctx.stroke();
+          }
+          this.ctx.restore();
+        }
+        break;
+      }
+
+      case 'mcu_8051': {
+        const pins8051 = [
+          "P1.0", "P1.1", "P1.2", "P1.3", "P1.4", "P1.5", "P1.6", "P1.7",
+          "RST", "P3.0/RxD", "P3.1/TxD", "P3.2/Int0", "P3.3/Int1", "P3.4/T0", "P3.5/T1", "P3.6/WR", "P3.7/RD",
+          "XTAL2", "XTAL1", "GND",
+          "P2.0", "P2.1", "P2.2", "P2.3", "P2.4", "P2.5", "P2.6", "P2.7",
+          "PSEN", "ALE", "EA", "P0.7", "P0.6", "P0.5", "P0.4", "P0.3", "P0.2", "P0.1", "P0.0", "VCC"
+        ];
+        // Body
+        this.ctx.fillStyle = "rgba(10, 15, 30, 0.85)";
+        this.ctx.fillRect(-50, -220, 100, 420);
+        this.ctx.strokeRect(-50, -220, 100, 420);
+        
+        // Notch
+        this.ctx.beginPath();
+        this.ctx.arc(0, -220, 12, 0, Math.PI, false);
+        this.ctx.stroke();
+
+        // Label
+        this.ctx.fillStyle = color;
+        this.ctx.font = "bold 13px var(--font-sans)";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText("Intel 8051", 0, -40);
+        this.ctx.font = "8px var(--font-mono)";
+        this.ctx.fillStyle = "var(--text-muted)";
+        this.ctx.fillText("MCS-51 ARCH", 0, -25);
+
+        // Pins
+        const states = comp.mcuPinStates || {};
+        for (let i = 0; i < 40; i++) {
+          let x_body = 0;
+          let x_tip = 0;
+          let y = 0;
+          let isLeft = i < 20;
+          let label = pins8051[i];
+          
+          if (isLeft) {
+            x_body = -50;
+            x_tip = -60;
+            y = -200 + i * 20;
+          } else {
+            x_body = 50;
+            x_tip = 60;
+            y = 180 - (i - 20) * 20;
+          }
+
+          // Lead line
+          this.ctx.beginPath();
+          this.ctx.moveTo(x_body, y);
+          this.ctx.lineTo(x_tip, y);
+          this.ctx.stroke();
+
+          // State dot
+          const pinVal = states[i];
+          this.ctx.fillStyle = pinVal === 1 || pinVal === "1" ? "hsl(355, 80%, 55%)" : pinVal === 0 || pinVal === "0" ? "hsl(174, 97%, 69%)" : "rgba(255,255,255,0.25)";
+          this.ctx.beginPath();
+          this.ctx.arc(x_tip, y, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Labels
+          this.ctx.font = "7px var(--font-mono)";
+          this.ctx.fillStyle = "var(--text-muted)";
+          if (isLeft) {
+            this.ctx.textAlign = "left";
+            this.ctx.fillText(label, -44, y + 2.5);
+            this.ctx.textAlign = "right";
+            this.ctx.fillText((i + 1).toString(), -52, y - 2);
+          } else {
+            this.ctx.textAlign = "right";
+            this.ctx.fillText(label, 44, y + 2.5);
+            this.ctx.textAlign = "left";
+            this.ctx.fillText((i + 1).toString(), 52, y - 2);
+          }
+        }
+        break;
+      }
+
+      case 'mcu_avr': {
+        const pinsAvr = [
+          "PC6/RST", "PD0/RXD", "PD1/TXD", "PD2/INT0", "PD3/INT1", "PD4/T0", "VCC",
+          "GND", "PB6/XT1", "PB7/XT2", "PD5/T1", "PD6/AIN0", "PD7/AIN1", "PB0/CLKO",
+          "PB1/OC1A", "PB2/OC1B", "PB3/MOSI", "PB4/MISO", "PB5/SCK", "AVCC", "AREF",
+          "GND", "PC5/SCL", "PC4/SDA", "PC3/ADC3", "PC2/ADC2", "PC1/ADC1", "PC0/ADC0"
+        ];
+        // Body
+        this.ctx.fillStyle = "rgba(10, 15, 30, 0.85)";
+        this.ctx.fillRect(-50, -160, 100, 300);
+        this.ctx.strokeRect(-50, -160, 100, 300);
+        
+        // Notch
+        this.ctx.beginPath();
+        this.ctx.arc(0, -160, 12, 0, Math.PI, false);
+        this.ctx.stroke();
+
+        // Label
+        this.ctx.fillStyle = color;
+        this.ctx.font = "bold 12px var(--font-sans)";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText("ATmega328P", 0, -30);
+        this.ctx.font = "8px var(--font-mono)";
+        this.ctx.fillStyle = "var(--text-muted)";
+        this.ctx.fillText("AVR 8-BIT MCU", 0, -15);
+
+        // Pins
+        const states = comp.mcuPinStates || {};
+        for (let i = 0; i < 28; i++) {
+          let x_body = 0;
+          let x_tip = 0;
+          let y = 0;
+          let isLeft = i < 14;
+          let label = pinsAvr[i];
+          
+          if (isLeft) {
+            x_body = -50;
+            x_tip = -60;
+            y = -140 + i * 20;
+          } else {
+            x_body = 50;
+            x_tip = 60;
+            y = 120 - (i - 14) * 20;
+          }
+
+          // Lead line
+          this.ctx.beginPath();
+          this.ctx.moveTo(x_body, y);
+          this.ctx.lineTo(x_tip, y);
+          this.ctx.stroke();
+
+          // State dot
+          const pinVal = states[i];
+          this.ctx.fillStyle = pinVal === 1 || pinVal === "1" ? "hsl(355, 80%, 55%)" : pinVal === 0 || pinVal === "0" ? "hsl(174, 97%, 69%)" : "rgba(255,255,255,0.25)";
+          this.ctx.beginPath();
+          this.ctx.arc(x_tip, y, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Labels
+          this.ctx.font = "7px var(--font-mono)";
+          this.ctx.fillStyle = "var(--text-muted)";
+          if (isLeft) {
+            this.ctx.textAlign = "left";
+            this.ctx.fillText(label, -44, y + 2.5);
+            this.ctx.textAlign = "right";
+            this.ctx.fillText((i + 1).toString(), -52, y - 2);
+          } else {
+            this.ctx.textAlign = "right";
+            this.ctx.fillText(label, 44, y + 2.5);
+            this.ctx.textAlign = "left";
+            this.ctx.fillText((i + 1).toString(), 52, y - 2);
+          }
+        }
+        break;
+      }
+
+      case 'arduino_uno':
+      case 'esp32':
+      case 'raspberry_pi_pico': {
+        const boardLabels = [
+          "IN (GP0)", "OUT (GP1)",
+          "ADC (A0)", "DAC (D0)",
+          "VCC",      "GND"
+        ];
+        // PCB Body
+        const pcbColor = comp.type === 'arduino_uno' ? "rgba(0, 100, 150, 0.85)" : comp.type === 'esp32' ? "rgba(40, 45, 55, 0.85)" : "rgba(0, 120, 60, 0.85)";
+        this.ctx.fillStyle = pcbColor;
+        this.ctx.fillRect(-30, -60, 60, 120);
+        
+        this.ctx.save();
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        this.ctx.strokeRect(-30, -60, 60, 120);
+        this.ctx.restore();
+
+        // Title
+        this.ctx.fillStyle = "white";
+        this.ctx.font = "bold 8px var(--font-sans)";
+        this.ctx.textAlign = "center";
+        const name = comp.type === 'arduino_uno' ? "ARDUINO" : comp.type === 'esp32' ? "ESP32" : "RPI PICO";
+        this.ctx.fillText(name, 0, -25);
+        this.ctx.font = "6px var(--font-mono)";
+        this.ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        this.ctx.fillText("MIXED SIGNAL", 0, -15);
+
+        // Draw microcontroller chip model in the middle
+        this.ctx.fillStyle = "#111";
+        this.ctx.fillRect(-12, 0, 24, 24);
+        this.ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        this.ctx.strokeRect(-12, 0, 24, 24);
+
+        // Pins
+        const states = comp.mcuPinStates || {};
+        const coords = [
+          { x: -30, y: -40, isLeft: true },
+          { x: 30, y: -40, isLeft: false },
+          { x: -30, y: 0, isLeft: true },
+          { x: 30, y: 0, isLeft: false },
+          { x: -30, y: 40, isLeft: true },
+          { x: 30, y: 40, isLeft: false }
+        ];
+
+        for (let i = 0; i < 6; i++) {
+          const c = coords[i];
+          const x_body = c.x;
+          const x_tip = c.isLeft ? -40 : 40;
+          const y = c.y;
+          const label = boardLabels[i];
+
+          // Lead line
+          this.ctx.beginPath();
+          this.ctx.moveTo(x_body, y);
+          this.ctx.lineTo(x_tip, y);
+          this.ctx.stroke();
+
+          // State dot
+          const pinVal = states[i];
+          this.ctx.fillStyle = pinVal === 1 || pinVal === "1" ? "hsl(355, 80%, 55%)" : pinVal === 0 || pinVal === "0" ? "hsl(174, 97%, 69%)" : "rgba(255,255,255,0.25)";
+          this.ctx.beginPath();
+          this.ctx.arc(x_tip, y, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Text labels
+          this.ctx.font = "6px var(--font-mono)";
+          this.ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+          if (c.isLeft) {
+            this.ctx.textAlign = "left";
+            this.ctx.fillText(label, -26, y + 2.5);
+          } else {
+            this.ctx.textAlign = "right";
+            this.ctx.fillText(label, 26, y + 2.5);
+          }
+        }
+        break;
+      }
     }
 
     // 3. Draw text value and label
     this.ctx.shadowBlur = 0;
     this.ctx.rotate(-(comp.rotation * Math.PI) / 180); // Un-rotate text so it stays horizontal
 
+    let idY = -24;
+    let valY = 32;
+    if (comp.type === 'ground') {
+      idY = 24;
+    } else if (comp.type === 'mcu_8051') {
+      idY = -230;
+      valY = 215;
+    } else if (comp.type === 'mcu_avr') {
+      idY = -170;
+      valY = 155;
+    } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+      idY = -70;
+      valY = 75;
+    }
+
     this.ctx.fillStyle = isSelected ? "hsl(270, 89%, 80%)" : "hsl(210, 17%, 85%)";
     this.ctx.font = "bold 11px var(--font-sans)";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(comp.id, 0, comp.type === 'ground' ? 24 : -24);
+    this.ctx.fillText(comp.id, 0, idY);
 
     if (comp.type !== 'ground') {
       this.ctx.fillStyle = "var(--text-muted)";
       this.ctx.font = "9px var(--font-mono)";
-      let formattedVal = comp.value.toString();
+      let formattedVal = comp.value ? comp.value.toString() : "";
       if (comp.type === 'resistor') {
-        formattedVal = comp.value >= 1000 ? (comp.value / 1000) + " kΩ" : comp.value + " Ω";
+        const numericVal = Number(comp.value);
+        formattedVal = numericVal >= 1000 ? (numericVal / 1000) + " kΩ" : numericVal + " Ω";
       } else if (comp.type === 'capacitor') {
-        formattedVal = comp.value < 1e-6 ? (comp.value * 1e9) + " nF" : (comp.value * 1e6) + " µF";
+        const numericVal = Number(comp.value);
+        formattedVal = numericVal < 1e-6 ? (numericVal * 1e9) + " nF" : (numericVal * 1e6) + " µF";
       } else if (comp.type === 'inductor') {
-        formattedVal = comp.value < 1e-3 ? (comp.value * 1e6) + " µH" : (comp.value * 1e3) + " mH";
+        const numericVal = Number(comp.value);
+        formattedVal = numericVal < 1e-3 ? (numericVal * 1e6) + " µH" : (numericVal * 1e3) + " mH";
       } else if (comp.type === 'vsource') {
         formattedVal = comp.value + " V";
+      } else if (comp.type === 'lamp' || comp.type === 'relay' || comp.type === 'buzzer') {
+        formattedVal = comp.value.toString().split(';')[0].trim();
+      } else if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr' || comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
+        formattedVal = comp.firmwareHex ? "Firmware cargado" : "Sin firmware";
       }
-      this.ctx.fillText(formattedVal, 0, 32);
+      this.ctx.fillText(formattedVal, 0, valY);
     }
 
     this.ctx.restore();
@@ -814,6 +1248,9 @@ export class CanvasOrchestrator {
       case 'pnp': prefix = "Q"; break;
       case 'vsource': prefix = "V"; break;
       case 'ground': prefix = "GND"; break;
+      case 'lamp': prefix = "LP"; break;
+      case 'relay': prefix = "RY"; break;
+      case 'buzzer': prefix = "BZ"; break;
     }
     const id = prefix === "GND" ? `GND${count}` : `${prefix}${count}`;
 

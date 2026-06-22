@@ -32,6 +32,15 @@
           <button id="analysis-tran-btn" class="btn-ctrl" type="button">
             <span class="btn-icon">⏱️</span> Transitorio
           </button>
+          <button id="analysis-sens-btn" class="btn-ctrl" type="button">
+            <span class="btn-icon">🔍</span> Sensibilidad
+          </button>
+          <button id="analysis-pss-btn" class="btn-ctrl" type="button">
+            <span class="btn-icon">🔄</span> PSS
+          </button>
+          <button id="analysis-stb-btn" class="btn-ctrl" type="button">
+            <span class="btn-icon">⚖️</span> Estabilidad
+          </button>
           <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
           <button id="run-sim-btn" class="btn-ctrl btn-run" type="button">
             <span class="btn-icon">▶</span> Simular
@@ -61,177 +70,341 @@
             <button id="btn-toggle-left" class="btn-text-only" type="button">◀ Colapsar</button>
           </div>
           <div class="panel-body" id="left-panel-body">
-            <div class="components-list" id="toolbox-list">
-              <!-- Resistor -->
-              <div class="component-card" draggable="true" id="comp-resistor" data-type="resistor" data-default="1000">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
-                  </svg>
+            <div class="search-box">
+              <input type="text" id="component-search" class="search-input" placeholder="🔍 Buscar componentes..." />
+            </div>
+
+            <div class="components-categories" id="components-categories">
+              <!-- Categoria: Pasivos -->
+              <div class="category-group">
+                <div class="category-header active" data-category="pasivos">
+                  <span>Pasivos</span>
+                  <span class="category-arrow">▼</span>
                 </div>
-                <div class="comp-details">
-                  <span class="comp-name">Resistencia</span>
-                  <span class="comp-desc">Resistencia Pasiva (Ω)</span>
-                </div>
-              </div>
-              <!-- Capacitor -->
-              <div class="component-card" draggable="true" id="comp-capacitor" data-type="capacitor" data-default="0.000001">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 4 20 L 15 20" />
-                    <path d="M 25 20 L 36 20" />
-                    <path d="M 15 8 L 15 32" />
-                    <path d="M 25 8 L 25 32" />
-                  </svg>
-                </div>
-                <div class="comp-details">
-                  <span class="comp-name">Condensador</span>
-                  <span class="comp-desc">Almacén de Carga (F)</span>
-                </div>
-              </div>
-              <!-- Inductor -->
-              <div class="component-card" draggable="true" id="comp-inductor" data-type="inductor" data-default="0.001">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 4 20 C 4 10, 12 10, 12 20 C 12 10, 20 10, 20 20 C 20 10, 28 10, 28 20 C 28 10, 36 10, 36 20" />
-                  </svg>
-                </div>
-                <div class="comp-details">
-                  <span class="comp-name">Bobina</span>
-                  <span class="comp-desc">Bobina Magnética (H)</span>
-                </div>
-              </div>
-              <!-- Diodo -->
-              <div class="component-card" draggable="true" id="comp-diode" data-type="diode" data-default="0">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M 4 20 L 14 20" />
-                    <path d="M 26 20 L 36 20" />
-                    <path d="M 14 10 L 26 20 L 14 30 Z" fill="currentColor" fill-opacity="0.15" />
-                    <path d="M 26 10 L 26 30" />
-                  </svg>
-                </div>
-                <div class="comp-details">
-                  <span class="comp-name">Diodo PN</span>
-                  <span class="comp-desc">Rectificador No Lineal</span>
-                </div>
-              </div>
-              <!-- MOSFET NMOS -->
-              <div class="component-card" draggable="true" id="comp-nmos" data-type="nmos" data-default="1.5">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 23 10 L 23 30" />
-                    <path d="M 15 12 L 15 28" />
-                    <path d="M 15 20 L 4 20" />
-                    <path d="M 23 12 L 29 12 L 29 4" />
-                    <path d="M 23 28 L 29 28 L 29 36" />
-                    <path d="M 23 28 L 26 25" />
-                    <path d="M 23 28 L 26 31" />
-                  </svg>
-                </div>
-                <div class="comp-details">
-                  <span class="comp-name">MOSFET NMOS</span>
-                  <span class="comp-desc">Semiconductor Activo Canal N</span>
-                </div>
-              </div>
-              <!-- MOSFET PMOS -->
-              <div class="component-card" draggable="true" id="comp-pmos" data-type="pmos" data-default="-1.5">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 23 10 L 23 30" />
-                    <path d="M 17 12 L 17 28" />
-                    <path d="M 13 20 L 4 20" />
-                    <circle cx="15" cy="20" r="2" />
-                    <path d="M 23 12 L 29 12 L 29 4" />
-                    <path d="M 23 28 L 29 28 L 29 36" />
-                    <path d="M 23 12 L 26 15" />
-                    <path d="M 23 12 L 26 9" />
-                  </svg>
-                </div>
-                <div class="comp-details">
-                  <span class="comp-name">MOSFET PMOS</span>
-                  <span class="comp-desc">Semiconductor Activo Canal P</span>
+                <div class="category-content open" id="cat-pasivos">
+                  <!-- Resistor -->
+                  <div class="component-card" draggable="true" id="comp-resistor" data-type="resistor" data-default="1000">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Resistencia</span>
+                      <span class="comp-desc">Resistencia Pasiva (Ω)</span>
+                    </div>
+                  </div>
+                  <!-- Capacitor -->
+                  <div class="component-card" draggable="true" id="comp-capacitor" data-type="capacitor" data-default="0.000001">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 20 L 15 20" />
+                        <path d="M 25 20 L 36 20" />
+                        <path d="M 15 8 L 15 32" />
+                        <path d="M 25 8 L 25 32" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Condensador</span>
+                      <span class="comp-desc">Almacén de Carga (F)</span>
+                    </div>
+                  </div>
+                  <!-- Inductor -->
+                  <div class="component-card" draggable="true" id="comp-inductor" data-type="inductor" data-default="0.001">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 20 C 4 10, 12 10, 12 20 C 12 10, 20 10, 20 20 C 20 10, 28 10, 28 20 C 28 10, 36 10, 36 20" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Bobina</span>
+                      <span class="comp-desc">Bobina Magnética (H)</span>
+                    </div>
+                  </div>
+                  <!-- GND -->
+                  <div class="component-card" draggable="true" id="comp-ground" data-type="ground" data-default="0">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 20 6 L 20 20" />
+                        <path d="M 8 20 L 32 20" />
+                        <path d="M 13 27 L 27 27" />
+                        <path d="M 18 34 L 22 34" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Tierra (GND)</span>
+                      <span class="comp-desc">Referencia Eléctrica (0V)</span>
+                    </div>
+                  </div>
+                  <!-- VSource -->
+                  <div class="component-card" draggable="true" id="comp-vsource" data-type="vsource" data-default="5">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="20" cy="20" r="14" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 10 20 L 18 20" />
+                        <path d="M 14 16 L 14 24" />
+                        <path d="M 22 20 L 30 20" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Fuente de Tensión</span>
+                      <span class="comp-desc">Voltaje CC/CA (V)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <!-- Transistor BJT NPN -->
-              <div class="component-card" draggable="true" id="comp-npn" data-type="npn" data-default="100">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 14 10 L 14 30" />
-                    <path d="M 14 20 L 4 20" />
-                    <path d="M 14 14 L 28 6 L 28 4" />
-                    <path d="M 14 26 L 28 34 L 28 36" />
-                    <path d="M 28 34 L 21 34" />
-                    <path d="M 28 34 L 26 27" />
-                  </svg>
+
+              <!-- Categoria: Semiconductores -->
+              <div class="category-group">
+                <div class="category-header" data-category="semiconductores">
+                  <span>Semiconductores</span>
+                  <span class="category-arrow">▲</span>
                 </div>
-                <div class="comp-details">
-                  <span class="comp-name">Transistor NPN</span>
-                  <span class="comp-desc">Transistor Bipolar BJT (NPN)</span>
+                <div class="category-content" id="cat-semiconductores">
+                  <!-- Diodo -->
+                  <div class="component-card" draggable="true" id="comp-diode" data-type="diode" data-default="0">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M 4 20 L 14 20" />
+                        <path d="M 26 20 L 36 20" />
+                        <path d="M 14 10 L 26 20 L 14 30 Z" fill="currentColor" fill-opacity="0.15" />
+                        <path d="M 26 10 L 26 30" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Diodo PN</span>
+                      <span class="comp-desc">Rectificador No Lineal</span>
+                    </div>
+                  </div>
+                  <!-- MOSFET NMOS -->
+                  <div class="component-card" draggable="true" id="comp-nmos" data-type="nmos" data-default="1.5">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 23 10 L 23 30" />
+                        <path d="M 15 12 L 15 28" />
+                        <path d="M 15 20 L 4 20" />
+                        <path d="M 23 12 L 29 12 L 29 4" />
+                        <path d="M 23 28 L 29 28 L 29 36" />
+                        <path d="M 23 28 L 26 25" />
+                        <path d="M 23 28 L 26 31" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">MOSFET NMOS</span>
+                      <span class="comp-desc">Canal N Activo</span>
+                    </div>
+                  </div>
+                  <!-- MOSFET PMOS -->
+                  <div class="component-card" draggable="true" id="comp-pmos" data-type="pmos" data-default="-1.5">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 23 10 L 23 30" />
+                        <path d="M 17 12 L 17 28" />
+                        <path d="M 13 20 L 4 20" />
+                        <circle cx="15" cy="20" r="2" />
+                        <path d="M 23 12 L 29 12 L 29 4" />
+                        <path d="M 23 28 L 29 28 L 29 36" />
+                        <path d="M 23 12 L 26 15" />
+                        <path d="M 23 12 L 26 9" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">MOSFET PMOS</span>
+                      <span class="comp-desc">Canal P Activo</span>
+                    </div>
+                  </div>
+                  <!-- Transistor BJT NPN -->
+                  <div class="component-card" draggable="true" id="comp-npn" data-type="npn" data-default="100">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 14 10 L 14 30" />
+                        <path d="M 14 20 L 4 20" />
+                        <path d="M 14 14 L 28 6 L 28 4" />
+                        <path d="M 14 26 L 28 34 L 28 36" />
+                        <path d="M 28 34 L 21 34" />
+                        <path d="M 28 34 L 26 27" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Transistor NPN</span>
+                      <span class="comp-desc">Transistor BJT (NPN)</span>
+                    </div>
+                  </div>
+                  <!-- Transistor BJT PNP -->
+                  <div class="component-card" draggable="true" id="comp-pnp" data-type="pnp" data-default="100">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 14 10 L 14 30" />
+                        <path d="M 14 20 L 4 20" />
+                        <path d="M 14 14 L 28 6 L 28 4" />
+                        <path d="M 14 26 L 28 34 L 28 36" />
+                        <path d="M 14 26 L 21 23" />
+                        <path d="M 14 26 L 17 31" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Transistor PNP</span>
+                      <span class="comp-desc">Transistor BJT (PNP)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <!-- Transistor BJT PNP -->
-              <div class="component-card" draggable="true" id="comp-pnp" data-type="pnp" data-default="100">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 14 10 L 14 30" />
-                    <path d="M 14 20 L 4 20" />
-                    <path d="M 14 14 L 28 6 L 28 4" />
-                    <path d="M 14 26 L 28 34 L 28 36" />
-                    <path d="M 14 26 L 21 23" />
-                    <path d="M 14 26 L 17 31" />
-                  </svg>
+
+              <!-- Categoria: Analógicos -->
+              <div class="category-group">
+                <div class="category-header" data-category="analogicos">
+                  <span>Analógicos</span>
+                  <span class="category-arrow">▲</span>
                 </div>
-                <div class="comp-details">
-                  <span class="comp-name">Transistor PNP</span>
-                  <span class="comp-desc">Transistor Bipolar BJT (PNP)</span>
-                </div>
-              </div>
-              <!-- Amplificador Operacional (Op-Amp) -->
-              <div class="component-card" draggable="true" id="comp-opamp" data-type="opamp" data-default="0">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 12 10 L 12 30 L 28 20 Z" fill="currentColor" fill-opacity="0.15" />
-                    <path d="M 4 15 L 12 15" />
-                    <path d="M 4 25 L 12 25" />
-                    <path d="M 28 20 L 36 20" />
-                    <path d="M 20 14 L 20 4" />
-                    <path d="M 20 26 L 20 36" />
-                  </svg>
-                </div>
-                <div class="comp-details">
-                  <span class="comp-name">Amplificador Operacional</span>
-                  <span class="comp-desc">Op-Amp de 5 Terminales</span>
+                <div class="category-content" id="cat-analogicos">
+                  <!-- Amplificador Operacional (Op-Amp) -->
+                  <div class="component-card" draggable="true" id="comp-opamp" data-type="opamp" data-default="0">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 12 10 L 12 30 L 28 20 Z" fill="currentColor" fill-opacity="0.15" />
+                        <path d="M 4 15 L 12 15" />
+                        <path d="M 4 25 L 12 25" />
+                        <path d="M 28 20 L 36 20" />
+                        <path d="M 20 14 L 20 4" />
+                        <path d="M 20 26 L 20 36" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Op-Amp</span>
+                      <span class="comp-desc">Amplificador Operacional</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <!-- VSource -->
-              <div class="component-card" draggable="true" id="comp-vsource" data-type="vsource" data-default="5">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="20" cy="20" r="14" fill="currentColor" fill-opacity="0.1" />
-                    <path d="M 10 20 L 18 20" />
-                    <path d="M 14 16 L 14 24" />
-                    <path d="M 22 20 L 30 20" />
-                  </svg>
+
+              <!-- Categoria: Actuadores -->
+              <div class="category-group">
+                <div class="category-header" data-category="actuadores">
+                  <span>Actuadores</span>
+                  <span class="category-arrow">▲</span>
                 </div>
-                <div class="comp-details">
-                  <span class="comp-name">Fuente de Tensión</span>
-                  <span class="comp-desc">Voltaje CC/CA (V)</span>
+                <div class="category-content" id="cat-actuadores">
+                  <!-- Lámpara -->
+                  <div class="component-card" draggable="true" id="comp-lamp" data-type="lamp" data-default="12">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <circle cx="20" cy="20" r="12" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 11.5 11.5 L 28.5 28.5" />
+                        <path d="M 28.5 11.5 L 11.5 28.5" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Lámpara</span>
+                      <span class="comp-desc">Luz Incandescente (Animado)</span>
+                    </div>
+                  </div>
+                  <!-- Relé -->
+                  <div class="component-card" draggable="true" id="comp-relay" data-type="relay" data-default="5">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <rect x="8" y="12" width="12" height="16" rx="2" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 8 16 L 20 24" />
+                        <path d="M 28 12 L 28 18" />
+                        <path d="M 28 28 L 28 22" />
+                        <path d="M 28 18 L 34 20" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Relé</span>
+                      <span class="comp-desc">Interruptor Magnético</span>
+                    </div>
+                  </div>
+                  <!-- Zumbador -->
+                  <div class="component-card" draggable="true" id="comp-buzzer" data-type="buzzer" data-default="5">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 10 12 H 18 L 28 6 V 34 L 18 28 H 10 Z" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 32 15 C 34 17, 34 23, 32 25" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Zumbador</span>
+                      <span class="comp-desc">Aviso Sonoro (Audio API)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <!-- GND -->
-              <div class="component-card" draggable="true" id="comp-ground" data-type="ground" data-default="0">
-                <div class="comp-icon-box">
-                  <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M 20 6 L 20 20" />
-                    <path d="M 8 20 L 32 20" />
-                    <path d="M 13 27 L 27 27" />
-                    <path d="M 18 34 L 22 34" />
-                  </svg>
+
+              <!-- Categoria: Digitales y MCUs -->
+              <div class="category-group">
+                <div class="category-header" data-category="digitales-mcus">
+                  <span>Digitales y MCUs</span>
+                  <span class="category-arrow">▲</span>
                 </div>
-                <div class="comp-details">
-                  <span class="comp-name">Tierra (GND)</span>
-                  <span class="comp-desc">Referencia Eléctrica (0V)</span>
+                <div class="category-content" id="cat-digitales-mcus">
+                  <!-- Intel 8051 -->
+                  <div class="component-card" draggable="true" id="comp-mcu-8051" data-type="mcu_8051" data-default="12000000">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="8" y="12" width="24" height="16" rx="2" fill="currentColor" fill-opacity="0.15" />
+                        <path d="M 10 8 L 10 12 M 14 8 L 14 12 M 18 8 L 18 12 M 22 8 L 22 12 M 26 8 L 26 12 M 30 8 L 30 12" />
+                        <path d="M 10 28 L 10 32 M 14 28 L 14 32 M 18 28 L 18 32 M 22 28 L 22 32 M 26 28 L 26 32 M 30 28 L 30 32" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Intel 8051</span>
+                      <span class="comp-desc">Mapeado Cycle-Accurate</span>
+                    </div>
+                  </div>
+                  <!-- AVR ATmega328P -->
+                  <div class="component-card" draggable="true" id="comp-mcu-avr" data-type="mcu_avr" data-default="16000000">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="10" y="10" width="20" height="20" rx="3" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 6 13 L 10 13 M 6 20 L 10 20 M 6 27 L 10 27" />
+                        <path d="M 30 13 L 34 13 M 30 20 L 34 20 M 30 27 L 34 27" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">ATmega328P</span>
+                      <span class="comp-desc">Micro AVR (DIP-28)</span>
+                    </div>
+                  </div>
+                  <!-- Arduino Uno -->
+                  <div class="component-card" draggable="true" id="comp-arduino-uno" data-type="arduino_uno" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="6" y="8" width="28" height="24" rx="2" fill="currentColor" fill-opacity="0.1" />
+                        <circle cx="12" cy="14" r="2" />
+                        <path d="M 12 24 H 28" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Arduino Uno</span>
+                      <span class="comp-desc">Placa Mixta (Rust)</span>
+                    </div>
+                  </div>
+                  <!-- ESP32 -->
+                  <div class="component-card" draggable="true" id="comp-esp32" data-type="esp32" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="8" y="8" width="24" height="24" rx="2" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 14 14 H 26 V 26 H 14 Z" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">ESP32 SoC</span>
+                      <span class="comp-desc">Placa Mixta (Rust)</span>
+                    </div>
+                  </div>
+                  <!-- RPI Pico -->
+                  <div class="component-card" draggable="true" id="comp-rpi-pico" data-type="raspberry_pi_pico" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="12" y="6" width="16" height="28" rx="2" fill="currentColor" fill-opacity="0.1" />
+                        <circle cx="20" cy="14" r="2" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">RPI Pico</span>
+                      <span class="comp-desc">Placa Mixta (Rust)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -240,6 +413,14 @@
 
         <!-- AREA CENTRAL: CANVA INTERACTIVO Y DOCK INFERIOR -->
         <div class="workspace-center" id="workspace-center">
+          <!-- BARRA DE PESTAÑAS (TAB MANAGER) -->
+          <div class="tabs-bar" id="tabs-bar">
+            <div class="tabs-container" id="tabs-container">
+              <!-- Renderizado dinámico de pestañas -->
+            </div>
+            <button id="btn-add-tab" class="btn-add-tab" title="Nueva Pestaña" type="button">+</button>
+          </div>
+
           <!-- LIENZO DE CIRCUITO -->
           <section class="canvas-viewport" id="canvas-viewport">
             <div class="canvas-controls-floating" id="canvas-floater-menu">
@@ -268,8 +449,11 @@
                   <button id="osc-ch2-btn" class="btn-osc-mini" type="button">Canal 2</button>
                   <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
                   <div style="width: 1px; height: 14px; background: var(--border-color); margin: 0 4px;"></div>
-                  <button id="export-csv-btn" class="btn-osc-mini" type="button">📥 Exportar CSV</button>
-                  <button id="export-svg-btn" class="btn-osc-mini" type="button">📊 Exportar SVG</button>
+                  <button id="export-csv-btn" class="btn-osc-mini" type="button">📥 CSV</button>
+                  <button id="export-svg-btn" class="btn-osc-mini" type="button">📊 SVG</button>
+                  <button id="export-s2p-btn" class="btn-osc-mini" type="button" title="Touchstone 2-Port Parameters">📈 s2p</button>
+                  <button id="export-h5-btn" class="btn-osc-mini" type="button" title="Datos Binarios HDF5 Lite">📦 HDF5</button>
+                  <button id="export-pdf-btn" class="btn-osc-mini" type="button" title="Reporte PDF con Gráficos">📋 PDF</button>
                 </div>
               </div>
               <div class="osc-viewport" id="osc-viewport">
