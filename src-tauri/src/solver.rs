@@ -1252,8 +1252,12 @@ fn solve_newton_raphson_core(
                 // Estampar conductancias de canal gds entre Drain y Source
                 macro_rules! stamp_conductance {
                     ($r:expr, $c:expr, $g:expr) => {
-                        if $r > 0 && $c > 0 {
-                            matrix_a.add_element($r - 1, $c - 1, $g);
+                        {
+                            let r_val = $r;
+                            let c_val = $c;
+                            if r_val > 0 && c_val > 0 {
+                                matrix_a.add_element(r_val - 1, c_val - 1, $g);
+                            }
                         }
                     };
                 }
@@ -1344,8 +1348,12 @@ fn solve_newton_raphson_core(
 
                 macro_rules! stamp_conductance {
                     ($r:expr, $c:expr, $g:expr) => {
-                        if $r > 0 && $c > 0 {
-                            matrix_a.add_element($r - 1, $c - 1, $g);
+                        {
+                            let r_val = $r;
+                            let c_val = $c;
+                            if r_val > 0 && c_val > 0 {
+                                matrix_a.add_element(r_val - 1, c_val - 1, $g);
+                            }
                         }
                     };
                 }
@@ -1582,8 +1590,8 @@ fn solve_newton_raphson_core(
                 let ieq = ids_final - gm_final * vgs_raw - gds_final * vds_raw;
 
                 // Estampar gds usando acceso directo a la matriz (evita conflicto de borrow)
-                if node_drain > 0 && node_drain > 0 { matrix_a.add_element(node_drain - 1, node_drain - 1, gds_final); }
-                if node_source > 0 && node_source > 0 { matrix_a.add_element(node_source - 1, node_source - 1, gds_final); }
+                if node_drain > 0 { matrix_a.add_element(node_drain - 1, node_drain - 1, gds_final); }
+                if node_source > 0 { matrix_a.add_element(node_source - 1, node_source - 1, gds_final); }
                 if node_drain > 0 && node_source > 0 { matrix_a.add_element(node_drain - 1, node_source - 1, -gds_final); }
                 if node_source > 0 && node_drain > 0 { matrix_a.add_element(node_source - 1, node_drain - 1, -gds_final); }
 
@@ -1607,8 +1615,8 @@ fn solve_newton_raphson_core(
                 let gg_gs = (gate_is / vt) * exp_gs;
                 let ieq_gs = igs - gg_gs * (v_gate - v_source);
 
-                if node_gate > 0 && node_gate > 0 { matrix_a.add_element(node_gate - 1, node_gate - 1, gg_gs); }
-                if node_source > 0 && node_source > 0 { matrix_a.add_element(node_source - 1, node_source - 1, gg_gs); }
+                if node_gate > 0 { matrix_a.add_element(node_gate - 1, node_gate - 1, gg_gs); }
+                if node_source > 0 { matrix_a.add_element(node_source - 1, node_source - 1, gg_gs); }
                 if node_gate > 0 && node_source > 0 { matrix_a.add_element(node_gate - 1, node_source - 1, -gg_gs); }
                 if node_source > 0 && node_gate > 0 { matrix_a.add_element(node_source - 1, node_gate - 1, -gg_gs); }
                 if node_gate > 0 { vector_z[node_gate - 1] -= ieq_gs; }
@@ -1619,8 +1627,8 @@ fn solve_newton_raphson_core(
                 let gg_gd = (gate_is / vt) * exp_gd;
                 let ieq_gd = igd - gg_gd * (v_gate - v_drain);
 
-                if node_gate > 0 && node_gate > 0 { matrix_a.add_element(node_gate - 1, node_gate - 1, gg_gd); }
-                if node_drain > 0 && node_drain > 0 { matrix_a.add_element(node_drain - 1, node_drain - 1, gg_gd); }
+                if node_gate > 0 { matrix_a.add_element(node_gate - 1, node_gate - 1, gg_gd); }
+                if node_drain > 0 { matrix_a.add_element(node_drain - 1, node_drain - 1, gg_gd); }
                 if node_gate > 0 && node_drain > 0 { matrix_a.add_element(node_gate - 1, node_drain - 1, -gg_gd); }
                 if node_drain > 0 && node_gate > 0 { matrix_a.add_element(node_drain - 1, node_gate - 1, -gg_gd); }
                 if node_gate > 0 { vector_z[node_gate - 1] -= ieq_gd; }
@@ -1901,7 +1909,7 @@ fn solve_newton_raphson_core(
                     if pin_gnd > 0 && pin_adc > 0 {
                         matrix_a.add_element(pin_gnd - 1, pin_adc - 1, g_transfer);
                     }
-                    if pin_gnd > 0 && pin_gnd > 0 {
+                    if pin_gnd > 0 {
                         matrix_a.add_element(pin_gnd - 1, pin_gnd - 1, -g_transfer);
                     }
 
@@ -5576,7 +5584,6 @@ pub fn solve_ac_sweep(netlist: &CircuitNetlist, settings: &AcSweepSettings) -> R
                     }
                 }
                 "npn" | "pnp" => {
-                    let is_npn = comp.comp_type == "npn";
                     let node_base = comp.pins[0].parse::<usize>().unwrap();
                     let node_collector = comp.pins[1].parse::<usize>().unwrap();
                     let node_emitter = comp.pins[2].parse::<usize>().unwrap();
@@ -5593,38 +5600,20 @@ pub fn solve_ac_sweep(netlist: &CircuitNetlist, settings: &AcSweepSettings) -> R
                     let g_be_b = gbe / Complex::new(beta_f + 1.0, 0.0);
                     let g_bc_b = gbc / Complex::new(beta_r + 1.0, 0.0);
 
-                    if is_npn {
-                        stamp_conductance(&mut matrix_a, node_base, node_base, g_be_b + g_bc_b);
-                        stamp_conductance(&mut matrix_a, node_base, node_emitter, -g_be_b);
-                        stamp_conductance(&mut matrix_a, node_base, node_collector, -g_bc_b);
+                    stamp_conductance(&mut matrix_a, node_base, node_base, g_be_b + g_bc_b);
+                    stamp_conductance(&mut matrix_a, node_base, node_emitter, -g_be_b);
+                    stamp_conductance(&mut matrix_a, node_base, node_collector, -g_bc_b);
 
-                        if node_collector > 0 {
-                            if node_base > 0 { matrix_a.add_element(node_collector - 1, node_base - 1, alpha_f * gbe - gbc); }
-                            if node_emitter > 0 { matrix_a.add_element(node_collector - 1, node_emitter - 1, -alpha_f * gbe); }
-                            matrix_a.add_element(node_collector - 1, node_collector - 1, gbc);
-                        }
+                    if node_collector > 0 {
+                        if node_base > 0 { matrix_a.add_element(node_collector - 1, node_base - 1, alpha_f * gbe - gbc); }
+                        if node_emitter > 0 { matrix_a.add_element(node_collector - 1, node_emitter - 1, -alpha_f * gbe); }
+                        matrix_a.add_element(node_collector - 1, node_collector - 1, gbc);
+                    }
 
-                        if node_emitter > 0 {
-                            if node_base > 0 { matrix_a.add_element(node_emitter - 1, node_base - 1, -(gbe - alpha_r * gbc)); }
-                            matrix_a.add_element(node_emitter - 1, node_emitter - 1, gbe);
-                            if node_collector > 0 { matrix_a.add_element(node_emitter - 1, node_collector - 1, -alpha_r * gbc); }
-                        }
-                    } else {
-                        stamp_conductance(&mut matrix_a, node_base, node_base, g_be_b + g_bc_b);
-                        stamp_conductance(&mut matrix_a, node_base, node_emitter, -g_be_b);
-                        stamp_conductance(&mut matrix_a, node_base, node_collector, -g_bc_b);
-
-                        if node_collector > 0 {
-                            if node_base > 0 { matrix_a.add_element(node_collector - 1, node_base - 1, alpha_f * gbe - gbc); }
-                            if node_emitter > 0 { matrix_a.add_element(node_collector - 1, node_emitter - 1, -alpha_f * gbe); }
-                            matrix_a.add_element(node_collector - 1, node_collector - 1, gbc);
-                        }
-
-                        if node_emitter > 0 {
-                            if node_base > 0 { matrix_a.add_element(node_emitter - 1, node_base - 1, -(gbe - alpha_r * gbc)); }
-                            matrix_a.add_element(node_emitter - 1, node_emitter - 1, gbe);
-                            if node_collector > 0 { matrix_a.add_element(node_emitter - 1, node_collector - 1, -alpha_r * gbc); }
-                        }
+                    if node_emitter > 0 {
+                        if node_base > 0 { matrix_a.add_element(node_emitter - 1, node_base - 1, -(gbe - alpha_r * gbc)); }
+                        matrix_a.add_element(node_emitter - 1, node_emitter - 1, gbe);
+                        if node_collector > 0 { matrix_a.add_element(node_emitter - 1, node_collector - 1, -alpha_r * gbc); }
                     }
                 }
                 "opamp" => {
@@ -7489,38 +7478,20 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
                 }
             };
 
-            if is_npn {
-                stamp_conductance(node_base, node_base, g_be_b + g_bc_b);
-                stamp_conductance(node_base, node_emitter, -g_be_b);
-                stamp_conductance(node_base, node_collector, -g_bc_b);
+            stamp_conductance(node_base, node_base, g_be_b + g_bc_b);
+            stamp_conductance(node_base, node_emitter, -g_be_b);
+            stamp_conductance(node_base, node_collector, -g_bc_b);
 
-                if node_collector > 0 {
-                    if node_base > 0 { j_matrix[(node_collector - 1, node_base - 1)] += alpha_f * gbe - gbc; }
-                    if node_emitter > 0 { j_matrix[(node_collector - 1, node_emitter - 1)] -= alpha_f * gbe; }
-                    j_matrix[(node_collector - 1, node_collector - 1)] += gbc;
-                }
+            if node_collector > 0 {
+                if node_base > 0 { j_matrix[(node_collector - 1, node_base - 1)] += alpha_f * gbe - gbc; }
+                if node_emitter > 0 { j_matrix[(node_collector - 1, node_emitter - 1)] -= alpha_f * gbe; }
+                j_matrix[(node_collector - 1, node_collector - 1)] += gbc;
+            }
 
-                if node_emitter > 0 {
-                    if node_base > 0 { j_matrix[(node_emitter - 1, node_base - 1)] -= gbe - alpha_r * gbc; }
-                    j_matrix[(node_emitter - 1, node_emitter - 1)] += gbe;
-                    if node_collector > 0 { j_matrix[(node_emitter - 1, node_collector - 1)] -= alpha_r * gbc; }
-                }
-            } else {
-                stamp_conductance(node_base, node_base, g_be_b + g_bc_b);
-                stamp_conductance(node_base, node_emitter, -g_be_b);
-                stamp_conductance(node_base, node_collector, -g_bc_b);
-
-                if node_collector > 0 {
-                    if node_base > 0 { j_matrix[(node_collector - 1, node_base - 1)] += alpha_f * gbe - gbc; }
-                    if node_emitter > 0 { j_matrix[(node_collector - 1, node_emitter - 1)] -= alpha_f * gbe; }
-                    j_matrix[(node_collector - 1, node_collector - 1)] += gbc;
-                }
-
-                if node_emitter > 0 {
-                    if node_base > 0 { j_matrix[(node_emitter - 1, node_base - 1)] -= gbe - alpha_r * gbc; }
-                    j_matrix[(node_emitter - 1, node_emitter - 1)] += gbe;
-                    if node_collector > 0 { j_matrix[(node_emitter - 1, node_collector - 1)] -= alpha_r * gbc; }
-                }
+            if node_emitter > 0 {
+                if node_base > 0 { j_matrix[(node_emitter - 1, node_base - 1)] -= gbe - alpha_r * gbc; }
+                j_matrix[(node_emitter - 1, node_emitter - 1)] += gbe;
+                if node_collector > 0 { j_matrix[(node_emitter - 1, node_collector - 1)] -= alpha_r * gbc; }
             }
         } else if comp.comp_type == "njf" || comp.comp_type == "pjf" {
             let is_njf = comp.comp_type == "njf";
