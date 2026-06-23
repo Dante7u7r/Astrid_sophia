@@ -2218,9 +2218,11 @@ fn solve_homotopy_core(
                     let gm_val = if vgs <= vth { 0.0 }
                         else if vds < vgs - vth { 2.0 * beta * vds }
                         else { 2.0 * beta * (vgs - vth) };
-                    let gds_val = if vgs <= vth { 0.0 }
-                        else if vds < vgs - vth { 2.0 * beta * ((vgs - vth) - vds) }
-                        else { 0.0 };
+                    let gds_val = if vgs > vth && vds < vgs - vth {
+                        2.0 * beta * ((vgs - vth) - vds)
+                    } else {
+                        0.0
+                    };
                     (ids_val, gm_val, gds_val)
                 };
 
