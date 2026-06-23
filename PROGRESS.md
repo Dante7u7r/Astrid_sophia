@@ -42,8 +42,11 @@
 | **30** | **Co-simulación Digital/Analógica Avanzada** — Retardos configurables y lógica ideal | ✅ | `test_logic_gate_configurable_delays`, `test_logic_gate_delay_parsing` |
 | **31** | **Exportación Profesional** — Exportación a Touchstone, HDF5 y PDF | ✅ | `main.ts` |
 | **32** | **GPU Acceleration (WebGPU)** — Schur complement en WebGPU | ✅ | `test_gpu_schur_solver` |
+| **33** | **Integración Trapezoidal (TRAP)** — Regla TRAP 2.º orden y LTE de 3.ª derivada | ✅ | `test_trap_integration_lc_resonance` |
+| **34** | **Newton-Raphson Amortiguado** — Backtracking Line Search y residuo KCL real | ✅ | `test_diode_circuit`, `test_bjt_amplifier` |
+| **35** | **Pseudo-Transient Analysis (PTA)** — Bucle adaptativo DC ficticio amortiguado | ✅ | `test_pta_robust_convergence` |
 
-**Total: 85 tests unitarios pasando al 100%**
+**Total: 87 tests unitarios pasando al 100%**
 
 ---
 
@@ -143,4 +146,4 @@ npm run tauri dev
 ---
 
 > **Nota:** Este archivo se actualiza con cada bloque de fases completado.  
-> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-32 completas`
+> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-35 completas`

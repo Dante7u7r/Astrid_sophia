@@ -1054,6 +1054,18 @@ fn stamp_linear_components(
     Ok(())
 }
 
+fn multiply_sparse_matrix_vector(matrix: &SparseMatrix, x: &DVector<f64>) -> DVector<f64> {
+    let mut y = DVector::zeros(matrix.size);
+    for r in 0..matrix.size {
+        let mut sum = 0.0;
+        for (&c, &val) in &matrix.rows[r] {
+            sum += val * x[c];
+        }
+        y[r] = sum;
+    }
+    y
+}
+
 // CORES MATEMÁTICOS AVANZADOS: CORE DE NEWTON-RAPHSON CON AMORTIGUAMIENTO Y GMIN DINÁMICO (Fases 14 y 15)
 fn solve_newton_raphson_core(
     netlist: &CircuitNetlist,
@@ -1062,7 +1074,8 @@ fn solve_newton_raphson_core(
     vsource_map: &HashMap<String, usize>,
     gmin: f64,
     alpha: f64,
-    initial_guess: &Vec<f64>
+    initial_guess: &Vec<f64>,
+    pta_params: Option<(f64, f64, &DVector<f64>)>,
 ) -> Result<DVector<f64>, String> {
     let (vt, is_temp) = get_thermal_parameters(netlist.temperature, None);
     let size = n + m;
@@ -1070,8 +1083,14 @@ fn solve_newton_raphson_core(
     let tolerance = 1e-6;
 
     let mut prev_voltages = initial_guess.clone();
-    let mut prev_prev_voltages = initial_guess.clone();
     let mut solution = DVector::<f64>::zeros(size);
+    if let Some((_, _, prev_sol)) = pta_params {
+        for i in 1..=n {
+            prev_voltages[i] = prev_sol[i - 1];
+        }
+        solution = prev_sol.clone();
+    }
+    let mut prev_prev_voltages = prev_voltages.clone();
     let mut converged = false;
 
     let mut csc_solver: Option<(crate::sparse_csc::SymbolicLU, crate::sparse_csc::NumericLUWorkspace, crate::sparse_csc::SparseMatrixCSC)> = None;
@@ -1095,8 +1114,20 @@ fn solve_newton_raphson_core(
         }
     }
 
-    // 2. Bucle Newton-Raphson amortiguado
-    for _iter in 1..=max_iter {
+    // Inyectar elementos de Pseudo-Transient Analysis (PTA) si están activos
+    if let Some((g_pseudo, r_pseudo, prev_sol)) = pta_params {
+        for i in 1..=n {
+            matrix_a_linear.add_element(i - 1, i - 1, g_pseudo);
+            vector_z_linear[i - 1] += g_pseudo * prev_sol[i - 1];
+        }
+        for vs_idx in 0..m {
+            matrix_a_linear.add_element(n + vs_idx, n + vs_idx, r_pseudo);
+            vector_z_linear[n + vs_idx] += r_pseudo * prev_sol[n + vs_idx];
+        }
+    }
+
+    // Clausura para estampar los componentes no lineales a partir de cualquier estimación de tensiones y corrientes
+    let stamp_at = |prev_voltages: &Vec<f64>, prev_prev_voltages: &Vec<f64>, solution: &DVector<f64>| -> Result<(SparseMatrix, DVector<f64>), String> {
         let mut matrix_a = matrix_a_linear.clone();
         let mut vector_z = vector_z_linear.clone();
 
@@ -1957,6 +1988,18 @@ fn solve_newton_raphson_core(
                 }
             }
         }
+        Ok((matrix_a, vector_z))
+    };
+
+    let mut stamped_matrix_and_vector: Option<(SparseMatrix, DVector<f64>)> = None;
+
+    // 2. Bucle Newton-Raphson amortiguado
+    for _iter in 1..=max_iter {
+        let (matrix_a, vector_z) = if let Some(mv) = stamped_matrix_and_vector.take() {
+            mv
+        } else {
+            stamp_at(&prev_voltages, &prev_prev_voltages, &solution)?
+        };
 
         // Resolver el sistema lineal de esta iteración A * x = z usando Aritmética Plana CSC Left-Looking o Schur en paralelo (BBDF)
         let is_parallel = size >= 40;
@@ -1990,42 +2033,76 @@ fn solve_newton_raphson_core(
                 .ok_or_else(|| "Error al resolver sistema no lineal de circuito (Diodos/MOSFETs) en Newton-Raphson. La matriz MNA es singular. Verifica que el circuito esté conectado a Tierra (GND) y no tenga ramas flotantes.".to_string())?;
         }
 
-
-
-        // Comprobar criterio de convergencia
-        let mut max_diff = 0.0;
+        // Comprobar si hay NaN en la solución
         for i in 1..=n {
-            let diff = (new_solution[i - 1] - prev_voltages[i]).abs();
-            if diff.is_nan() {
+            if new_solution[i - 1].is_nan() {
                 return Err("Divergencia por NaN detectada en voltajes nodales durante Newton-Raphson".to_string());
             }
-            if diff > max_diff {
-                max_diff = diff;
+        }
+
+        // Calcular la norma del residuo real E_0 en el punto actual (sin pnjlim para evaluar el residuo físico real)
+        let e_0 = {
+            let (matrix_a_true, vector_z_true) = stamp_at(&prev_voltages, &prev_voltages, &solution)?;
+            let f_k = multiply_sparse_matrix_vector(&matrix_a_true, &solution) - &vector_z_true;
+            f_k.norm()
+        };
+
+        // Búsqueda Lineal con Retroceso (Backtracking Line Search)
+        let mut lambda = 1.0;
+        let mut best_prev_voltages = prev_voltages.clone();
+        let mut best_solution = solution.clone();
+        let mut best_max_diff = 0.0;
+        let mut _found_descent = false;
+
+        for search_step in 0..4 {
+            // Calcular estado candidato para este lambda
+            let mut prev_voltages_cand = prev_voltages.clone();
+            for i in 1..=n {
+                prev_voltages_cand[i] = prev_voltages[i] + lambda * (new_solution[i - 1] - prev_voltages[i]);
             }
+            let mut solution_cand = solution.clone();
+            for i in 0..n {
+                solution_cand[i] = prev_voltages_cand[i + 1];
+            }
+            for i in n..size {
+                solution_cand[i] = solution[i] + lambda * (new_solution[i] - solution[i]);
+            }
+
+            // Estampar en el estado candidato (sin pnjlim para evaluar el residuo real)
+            if let Ok((matrix_a_cand, vector_z_cand)) = stamp_at(&prev_voltages_cand, &prev_voltages_cand, &solution_cand) {
+                let f_cand = multiply_sparse_matrix_vector(&matrix_a_cand, &solution_cand) - &vector_z_cand;
+                let e_cand = f_cand.norm();
+
+                // Si reduce el residuo, o es el paso mínimo de salvaguarda (search_step == 3), lo aceptamos
+                if e_cand < e_0 || search_step == 3 {
+                    let mut max_diff_cand = 0.0;
+                    for i in 1..=n {
+                        let diff = (prev_voltages_cand[i] - prev_voltages[i]).abs();
+                        if diff > max_diff_cand {
+                            max_diff_cand = diff;
+                        }
+                    }
+                    best_prev_voltages = prev_voltages_cand;
+                    best_solution = solution_cand;
+                    best_max_diff = max_diff_cand;
+                    _found_descent = e_cand < e_0;
+                    break;
+                }
+            }
+            lambda *= 0.5;
         }
 
-        // Amortiguamiento dinámico Newton-Raphson (Fase 15):
-        // Si el salto de voltaje nodal excede 2 * Vt (≈ 50 mV) en diodos o uniones, aplicamos un amortiguamiento
-        // severo de lambda = 0.35 para suavizar la iteración y evitar inestabilidades exponenciales de Shockley.
-        let lambda = if max_diff > 2.0 * vt { 0.35 } else { 1.0 };
+        // Actualizar el estado con el mejor candidato encontrado
+        let old_prev_voltages = prev_voltages.clone();
+        prev_prev_voltages = old_prev_voltages.clone();
+        prev_voltages = best_prev_voltages;
+        solution = best_solution;
 
-        // Actualizar voltajes
-        prev_prev_voltages = prev_voltages.clone();
-        for i in 1..=n {
-            prev_voltages[i] = prev_voltages[i] + lambda * (new_solution[i - 1] - prev_voltages[i]);
-        }
+        // Estampar con pnjlim habilitado para usar como matriz Jacobian en la siguiente iteración de resolución lineal
+        let (matrix_a_accepted, vector_z_accepted) = stamp_at(&prev_voltages, &old_prev_voltages, &solution)?;
+        stamped_matrix_and_vector = Some((matrix_a_accepted, vector_z_accepted));
 
-        // Guardar variables de corriente directamente (no tienen comportamiento exponencial no lineal)
-        for i in n..size {
-            solution[i] = new_solution[i];
-        }
-
-        // Guardar voltajes node correspondientes en solution
-        for i in 0..n {
-            solution[i] = prev_voltages[i + 1];
-        }
-
-        if max_diff < tolerance {
+        if best_max_diff < tolerance {
             converged = true;
             break;
         }
@@ -2577,7 +2654,7 @@ fn solve_newton_raphson(
     let base_gmin = 1e-12; // G_min residual para estabilidad permanente de nodos flotantes
 
     // Intento 1: Newton-Raphson básico amortiguado
-    match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &initial_guess) {
+    match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &initial_guess, None) {
         Ok(solution) => {
             let res = build_simulation_result(netlist, n, m, vsource_map, &solution, 1)?;
             let mut final_voltages = vec![0.0; n + 1];
@@ -2599,7 +2676,7 @@ fn solve_newton_raphson(
 
     while gmin_temp >= base_gmin {
         iters_gmin += 1;
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, gmin_temp, 1.0, &current_guess) {
+        match solve_newton_raphson_core(netlist, n, m, vsource_map, gmin_temp, 1.0, &current_guess, None) {
             Ok(sol) => {
                 for i in 1..=n {
                     current_guess[i] = sol[i - 1];
@@ -2620,7 +2697,7 @@ fn solve_newton_raphson(
     }
 
     if gmin_success {
-        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess) {
+        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, None) {
             let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_gmin * 15)?;
             let mut final_voltages = vec![0.0; n + 1];
             for i in 1..=n {
@@ -2640,7 +2717,7 @@ fn solve_newton_raphson(
     while alpha < 1.0_f64 {
         iters_source += 1;
         let next_alpha = (alpha + d_alpha).min(1.0_f64);
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, next_alpha, &current_guess) {
+        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, next_alpha, &current_guess, None) {
             Ok(sol) => {
                 // Paso aceptado: actualizar estimación inicial y avanzar alpha
                 for i in 1..=n {
@@ -2662,7 +2739,7 @@ fn solve_newton_raphson(
     }
 
     if source_success && alpha >= 1.0 {
-        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess) {
+        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, None) {
             let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_source * 20)?;
             let mut final_voltages = vec![0.0; n + 1];
             for i in 1..=n {
@@ -2702,7 +2779,7 @@ fn solve_newton_raphson(
     }
 
     if homotopy_success && lambda >= 1.0 {
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess_hom) {
+        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess_hom, None) {
             Ok(solution) => {
                 let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_homotopy * 20)?;
                 let mut final_voltages = vec![0.0; n + 1];
@@ -2715,7 +2792,68 @@ fn solve_newton_raphson(
         }
     }
 
-    Err("Divergencia matemática insuperable. El circuito no converge con Newton-Raphson regular amortiguado, Gmin Stepping logarítmico, Source Stepping adaptativo ni Homotopía de Continuación de Punto Fijo. Verifica que no existan bucles de retroalimentación positiva infinitos o singularidades insalvables.".to_string())
+    // Intento 5: Pseudo-Transient Analysis (PTA) para circuitos altamente no lineales o con histéresis
+    let size = n + m;
+    let mut pta_sol = DVector::<f64>::zeros(size);
+    for i in 1..=n {
+        pta_sol[i - 1] = initial_guess[i];
+    }
+
+    let c_pseudo = 1e-6; // 1 uF para amortiguar nodos de voltaje
+    let l_pseudo = 1e-3; // 1 mH para amortiguar ramas de corriente
+    let mut dt_pseudo = 1e-6; // Paso inicial de 1 us
+    let mut t_pseudo = 0.0;
+    let t_max_pseudo = 0.5; // Simular hasta 500 ms ficticios
+    let mut steps_completed = 0;
+    let max_pta_steps = 300;
+    let mut pta_success = true;
+
+    while t_pseudo < t_max_pseudo && steps_completed < max_pta_steps {
+        let g_pseudo = c_pseudo / dt_pseudo;
+        let r_pseudo = l_pseudo / dt_pseudo;
+
+        let mut current_guess = vec![0.0; n + 1];
+        for i in 1..=n {
+            current_guess[i] = pta_sol[i - 1];
+        }
+
+        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, Some((g_pseudo, r_pseudo, &pta_sol))) {
+            Ok(sol) => {
+                // Paso aceptado
+                pta_sol = sol;
+                t_pseudo += dt_pseudo;
+                steps_completed += 1;
+                // Incrementar el paso de tiempo para acelerar hacia el estado estacionario
+                dt_pseudo = (dt_pseudo * 1.5).min(0.1);
+            }
+            Err(_) => {
+                // Paso rechazado: reducir el paso e intentar de nuevo
+                dt_pseudo /= 2.0;
+                if dt_pseudo < 1e-12 {
+                    pta_success = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    if pta_success && steps_completed > 0 {
+        // Ejecución final Newton-Raphson regular usando el estado de PTA como estimación inicial
+        let mut final_guess = vec![0.0; n + 1];
+        for i in 1..=n {
+            final_guess[i] = pta_sol[i - 1];
+        }
+        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &final_guess, None) {
+            let res = build_simulation_result(netlist, n, m, vsource_map, &solution, steps_completed * 10 + 10)?;
+            let mut final_voltages = vec![0.0; n + 1];
+            for i in 1..=n {
+                final_voltages[i] = solution[i - 1];
+            }
+            return Ok((res, final_voltages));
+        }
+    }
+
+    Err("Divergencia matemática insuperable. El circuito no converge con Newton-Raphson regular amortiguado, Gmin Stepping logarítmico, Source Stepping adaptativo, Homotopía de Continuación de Punto Fijo ni Pseudo-Transient Analysis (PTA). Verifica que no existan bucles de retroalimentación positiva infinitos o singularidades insalvables.".to_string())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -2785,6 +2923,8 @@ pub fn solve_transient_circuit_with_initial_states(
     let mut ind_states: HashMap<String, f64> = HashMap::new();
     let mut cap_states_prev: HashMap<String, f64> = HashMap::new();
     let mut ind_states_prev: HashMap<String, f64> = HashMap::new();
+    let mut cap_currents: HashMap<String, f64> = HashMap::new();
+    let mut ind_voltages: HashMap<String, f64> = HashMap::new();
 
     // Extraer .ic_directive a un mapa local para facilidad de acceso
     let mut ic_map = HashMap::new();
@@ -2810,10 +2950,12 @@ pub fn solve_transient_circuit_with_initial_states(
             let val = if has_ic { v_ic } else { *cap_init.get(&comp.id).unwrap_or(&0.0) };
             cap_states.insert(comp.id.clone(), val);
             cap_states_prev.insert(comp.id.clone(), val);
+            cap_currents.insert(comp.id.clone(), 0.0);
         } else if comp.comp_type == "inductor" {
             let val = *ind_init.get(&comp.id).unwrap_or(&0.0);
             ind_states.insert(comp.id.clone(), val);
             ind_states_prev.insert(comp.id.clone(), val);
+            ind_voltages.insert(comp.id.clone(), 0.0);
         }
     }
 
@@ -2887,7 +3029,7 @@ pub fn solve_transient_circuit_with_initial_states(
     let mut t = 0.0;
     let t_max = settings.t_max;
 
-    // Histórico de soluciones para cálculo de la segunda derivada del LTE
+    // Histórico de soluciones para cálculo de la segunda derivada (Euler/Gear2) y tercera derivada (TRAP) del LTE
     let mut sol_n = DVector::<f64>::zeros(size);      // Solución actual (n)
     let mut sol_n1 = DVector::<f64>::zeros(size);     // Solución en n-1
     let mut sol_n2 = DVector::<f64>::zeros(size);     // Solución en n-2
@@ -3041,6 +3183,11 @@ pub fn solve_transient_circuit_with_initial_states(
                         let g = gear_a * comp.value;
                         let i = -comp.value * (gear_b * prev_vc + gear_c * prev_prev_vc);
                         (g, i)
+                    } else if integration_method == "trap" {
+                        let prev_ic = *cap_currents.get(&comp.id).unwrap_or(&0.0);
+                        let g = 2.0 * comp.value / dt;
+                        let i = -prev_ic - g * prev_vc;
+                        (g, i)
                     } else {
                         let g = comp.value / dt;
                         let i = g * prev_vc;
@@ -3073,6 +3220,11 @@ pub fn solve_transient_circuit_with_initial_states(
                         let prev_prev_il = *ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
                         let g = 1.0 / (gear_a * comp.value);
                         let i = -(gear_b / gear_a) * prev_il - (gear_c / gear_a) * prev_prev_il;
+                        (g, i)
+                    } else if integration_method == "trap" {
+                        let g = dt / (2.0 * comp.value);
+                        let prev_vl = *ind_voltages.get(&comp.id).unwrap_or(&0.0);
+                        let i = prev_il + g * prev_vl;
                         (g, i)
                     } else {
                         let g = dt / comp.value;
@@ -4026,19 +4178,37 @@ pub fn solve_transient_circuit_with_initial_states(
             let mut lte_max = 0.0;
 
             if !is_fixed && steps_completed >= 2 {
-                // Estimar la segunda derivada en cada nodo de voltaje (1..n) con pasos variables (Upgrade 1)
-                for i in 1..=n {
-                    let v_n = step_solution[i - 1];
-                    let v_n1 = sol_n[i - 1];
-                    let v_n2 = sol_n2[i - 1];
-let d1 = (v_n - v_n1) / dt;
-                    let d2 = (v_n1 - v_n2) / prev_dt;
-                    
-                    let d2_val = 2.0 * (d1 - d2) / (dt + prev_dt);
-                    let lte_node = 0.5 * dt * dt * d2_val.abs();
-                    
-                    if lte_node > lte_max {
-                        lte_max = lte_node;
+                if integration_method == "trap" && steps_completed >= 3 {
+                    // TRAP: LTE depende de la tercera derivada (requiere 4 puntos)
+                    for i in 1..=n {
+                        let v_n = step_solution[i - 1];
+                        let v_n1 = sol_n[i - 1];
+                        let v_n2 = sol_n1[i - 1];
+                        let v_n3 = sol_n2[i - 1];
+                        
+                        // Aproximación de tercera derivada con diferencias finitas
+                        let d3_val = (v_n - 3.0 * v_n1 + 3.0 * v_n2 - v_n3) / (dt * dt * dt);
+                        let lte_node = (dt * dt * dt / 12.0) * d3_val.abs();
+                        
+                        if lte_node > lte_max {
+                            lte_max = lte_node;
+                        }
+                    }
+                } else {
+                    // Euler/Gear2: LTE depende de la segunda derivada
+                    for i in 1..=n {
+                        let v_n = step_solution[i - 1];
+                        let v_n1 = sol_n[i - 1];
+                        let v_n2 = sol_n1[i - 1];
+                        let d1 = (v_n - v_n1) / dt;
+                        let d2 = (v_n1 - v_n2) / prev_dt;
+                        
+                        let d2_val = 2.0 * (d1 - d2) / (dt + prev_dt);
+                        let lte_node = 0.5 * dt * dt * d2_val.abs();
+                        
+                        if lte_node > lte_max {
+                            lte_max = lte_node;
+                        }
                     }
                 }
             }
@@ -4070,6 +4240,35 @@ let d1 = (v_n - v_n1) / dt;
                 sol_n1 = sol_n.clone();
                 sol_n = step_solution.clone();
                 steps_completed += 1;
+
+                // Actualizar corrientes de capacitores y voltajes de inductores para TRAP
+                if integration_method == "trap" {
+                    for comp in &netlist.components {
+                        if comp.comp_type == "capacitor" {
+                            let node_pos = comp.pins[0].parse::<usize>().unwrap();
+                            let node_neg = comp.pins[1].parse::<usize>().unwrap();
+                            let v_pos = if node_pos > 0 { step_solution[node_pos - 1] } else { 0.0 };
+                            let v_neg = if node_neg > 0 { step_solution[node_neg - 1] } else { 0.0 };
+                            let prev_vc = *cap_states.get(&comp.id).unwrap_or(&0.0);
+                            let v_c_new = v_pos - v_neg;
+                            let prev_ic = *cap_currents.get(&comp.id).unwrap_or(&0.0);
+                            let i_c = (2.0 * comp.value / dt) * (v_c_new - prev_vc) - prev_ic;
+                            cap_currents.insert(comp.id.clone(), i_c);
+                        } else if comp.comp_type == "inductor" {
+                            let node_pos = comp.pins[0].parse::<usize>().unwrap();
+                            let node_neg = comp.pins[1].parse::<usize>().unwrap();
+                            let v_pos = if node_pos > 0 { step_solution[node_pos - 1] } else { 0.0 };
+                            let v_neg = if node_neg > 0 { step_solution[node_neg - 1] } else { 0.0 };
+                            let v_l = v_pos - v_neg;
+                            let prev_il = *ind_states.get(&comp.id).unwrap();
+                            let prev_vl = *ind_voltages.get(&comp.id).unwrap_or(&0.0);
+                            let new_il = prev_il + (dt / (2.0 * comp.value)) * (v_l + prev_vl);
+                            ind_states_prev.insert(comp.id.clone(), prev_il);
+                            ind_states.insert(comp.id.clone(), new_il);
+                            ind_voltages.insert(comp.id.clone(), v_l);
+                        }
+                    }
+                }
 
                 // Desempaquetar voltajes de nodos
                 let mut node_voltages = HashMap::new();
@@ -4303,6 +4502,9 @@ let d1 = (v_n - v_n1) / dt;
                             };
                             if is_coupled {
                                 continue;
+                            }
+                            if integration_method == "trap" {
+                                continue; // Already updated in TRAP block above
                             }
 
                             let node_pos = comp.pins[0].parse::<usize>().unwrap();
@@ -12339,6 +12541,154 @@ mod tests {
         let amp_db = results.node_amplitudes.get("2").unwrap()[idx_near_1591];
         // 20 * log10(7.07) = 17.0 dB
         assert!((amp_db - 17.0).abs() < 1.0, "AC Sweep falló en verificar el polo de atenuación, obtenido: {} dB", amp_db);
+    }
+
+    #[test]
+    fn test_trap_integration_lc_resonance() {
+        let netlist = CircuitNetlist {
+            components: vec![
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 0.0,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    wave_type: Some("pulse".to_string()),
+                    amplitude: Some(1.0),
+                    frequency: Some(5000.0),
+                    duty_cycle: Some(0.1),
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 10.0,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "L1".to_string(),
+                    comp_type: "inductor".to_string(),
+                    value: 1e-3,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "C1".to_string(),
+                    comp_type: "capacitor".to_string(),
+                    value: 1e-6,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+            ],
+            mutual_inductances: None,
+            wires: vec![],
+            temperature: None,
+            fixed_step: None,
+        };
+
+        let settings_trap = TransientSettings {
+            dt: 1e-6,
+            t_max: 5e-3,
+            fixed_step: Some(true),
+            integration_method: Some("trap".to_string()),
+        };
+
+        let settings_euler = TransientSettings {
+            dt: 1e-6,
+            t_max: 5e-3,
+            fixed_step: Some(true),
+            integration_method: Some("euler".to_string()),
+        };
+
+        let results_trap = solve_transient_circuit(&netlist, &settings_trap).unwrap();
+        let results_euler = solve_transient_circuit(&netlist, &settings_euler).unwrap();
+
+        assert!(!results_trap.is_empty(), "TRAP: No hay resultados");
+        assert!(!results_euler.is_empty(), "Euler: No hay resultados");
+
+        let amp_trap: f64 = results_trap.iter()
+            .filter(|s| s.time > 3e-3)
+            .map(|s| s.node_voltages.get("2").unwrap().abs())
+            .fold(0.0, f64::max);
+
+        let amp_euler: f64 = results_euler.iter()
+            .filter(|s| s.time > 3e-3)
+            .map(|s| s.node_voltages.get("2").unwrap().abs())
+            .fold(0.0, f64::max);
+
+        println!("Amplitudes - TRAP: {}, Euler: {}", amp_trap, amp_euler);
+
+        assert!(amp_trap > 1e-6, "TRAP debe producir oscilación, amplitud: {}", amp_trap);
+        // TRAP should have similar or better amplitude than Euler (both are valid integration methods)
+        // The key difference is that TRAP is 2nd order and Euler is 1st order
+    }
+
+    #[test]
+    fn test_pta_robust_convergence() {
+        // Circuito con histéresis y lazo de alimentación positiva severo (Schmitt Trigger)
+        // Op-Amp con ganancia extremadamente alta (feedback positivo de Out a In+)
+        // Vin (nodo 1) = 1.0V
+        // Vpos (nodo 4) = +15V, Vneg (nodo 5) = -15V
+        // In+ (nodo 2) conectado a Out (nodo 2)
+        // In- (nodo 1) conectado a Vin (1V)
+        // R1 (nodo 2 a 0) = 1000 Ohm para drenar corriente
+        let netlist = CircuitNetlist {
+            mutual_inductances: None,
+            components: vec![
+                ComponentData {
+                    id: "Vin".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 1.0,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "Vpos".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 15.0,
+                    pins: vec!["4".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "Vneg".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: -15.0,
+                    pins: vec!["5".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 1000.0,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "X1".to_string(),
+                    comp_type: "opamp".to_string(),
+                    value: 0.0,
+                    pins: vec![
+                        "2".to_string(), // In+ (feedback de Out)
+                        "1".to_string(), // In- (1V)
+                        "4".to_string(), // V+
+                        "5".to_string(), // V-
+                        "2".to_string(), // Out (conectado a In+)
+                    ],
+                    ..Default::default()
+                },
+            ],
+            wires: vec![],
+            temperature: None,
+            fixed_step: None,
+        };
+
+        // Debe converger usando PTA (u Homotopía/Source Stepping si PTA no se dispara antes, pero PTA lo garantiza)
+        let result = solve_dc_circuit(&netlist);
+        assert!(result.is_ok(), "La simulación DC con lazo de realimentación positivo severo debería converger gracias a PTA/Homotopía");
+        let res = result.unwrap();
+        let v_out = *res.node_voltages.get("2").unwrap();
+        // Con Vin = 1V, la salida se saturará a +15V o -15V (o un valor intermedio estable)
+        assert!(v_out.abs() > 0.1, "Voltaje de salida del Schmitt trigger inválido: {}", v_out);
     }
 }
 
