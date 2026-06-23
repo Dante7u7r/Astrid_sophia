@@ -2,7 +2,7 @@
 
 > Simulador de circuitos electrónicos de grado industrial.  
 > **Stack:** Tauri + Rust (backend MNA) + TypeScript/Canvas (frontend)  
-> **Última actualización:** 21 de junio de 2026
+> **Última actualización:** 22 de junio de 2026
 
 ---
 
@@ -46,8 +46,9 @@
 | **34** | **Newton-Raphson Amortiguado** — Backtracking Line Search y residuo KCL real | ✅ | `test_diode_circuit`, `test_bjt_amplifier` |
 | **35** | **Pseudo-Transient Analysis (PTA)** — Bucle adaptativo DC ficticio amortiguado | ✅ | `test_pta_robust_convergence` |
 | **36** | **Análisis de Distorsión por Intermodulación (IMD/IP3)** — Ratios IM2/IM3 y punto de intercepción IP3 | ✅ | `test_imd_two_tone_clipper` |
+| **37** | **Dispositivos Optoelectrónicos** — LED (Shockley) y Optoacoplador (CTR, V_sat, acoplamiento óptico, aislamiento galvánico) | ✅ | `test_opto_isolation` |
 
-**Total: 88 tests unitarios pasando al 100%**
+**Total: 89 tests unitarios pasando al 100%**
 
 ---
 

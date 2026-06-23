@@ -840,6 +840,16 @@ fn flatten_subcircuit(
             'v' | 'i' => (2, false, false),
             'e' | 'g' => (4, false, false), // VCVS, VCCS
             'f' | 'h' => (2, false, false), // CCCS, CCVS
+            'o' => {
+                // Optoacoplador (4 pines) vs Opamp (5 pines).
+                // Híbrido: primero mirar el modelo .model; si no hay modelo, fallback por tokens.len().
+                let model_name = tokens.last().unwrap();
+                if let Some(m) = models.get(model_name) {
+                    if m.model_type == "opto" { (4, false, false) } else { (5, false, false) }
+                } else {
+                    (if tokens.len() >= 7 { 5 } else { 4 }, false, false)
+                }
+            }
             'y' => {
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
@@ -919,7 +929,15 @@ fn flatten_subcircuit(
             // Componente estándar
             let actual_pins_count = if is_gate {
                 num_pins
-            } else if first_char == 'o' || tokens.len() >= 7 {
+            } else if first_char == 'o' {
+                // Optoacoplador (4 pines) vs Opamp (5 pines) — distinción por modelo o tokens
+                let model_name = tokens.last().unwrap();
+                if let Some(m) = models.get(model_name) {
+                    if m.model_type == "opto" { 4 } else { 5 }
+                } else {
+                    if tokens.len() >= 7 { 5 } else { 4 }
+                }
+            } else if tokens.len() >= 7 {
                 5
             } else {
                 num_pins
@@ -952,7 +970,11 @@ fn flatten_subcircuit(
                     'r' => "resistor".to_string(),
                     'c' => "capacitor".to_string(),
                     'l' => "inductor".to_string(),
-                    'd' => "diode".to_string(),
+                    'd' => {
+                        if let Some(m) = models.get(value_or_model) {
+                            if m.model_type == "led" { "led".to_string() } else { "diode".to_string() }
+                        } else { "diode".to_string() }
+                    },
                     'q' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
@@ -981,6 +1003,15 @@ fn flatten_subcircuit(
                     'g' => "vccs".to_string(),
                     'f' => "cccs".to_string(),
                     'h' => "ccvs".to_string(),
+                    'o' => {
+                        if let Some(m) = models.get(value_or_model) {
+                            if m.model_type == "opto" { "opto".to_string() } else { "opamp".to_string() }
+                        } else if tokens.len() == 6 {
+                            "opto".to_string()
+                        } else {
+                            "opamp".to_string()
+                        }
+                    },
                     _ => "opamp".to_string(),
                 }
             };
@@ -1049,7 +1080,7 @@ fn flatten_subcircuit(
                         }
                     }
                 }
-                if comp.comp_type == "diode" || comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" || comp.comp_type == "verilog_a" {
+                if comp.comp_type == "diode" || comp.comp_type == "led" || comp.comp_type == "opto" || comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" || comp.comp_type == "verilog_a" {
                     // Inyectar el valor por defecto o del modelo
                     if let Some(m) = models.get(value_or_model) {
                         // Para transistores, guardamos el beta o valor de modulación en .value
@@ -1060,7 +1091,7 @@ fn flatten_subcircuit(
                         } else {
                             comp.value = 1.0;
                         }
-                        if comp.comp_type == "diode" {
+                        if comp.comp_type == "diode" || comp.comp_type == "led" {
                             comp.diode_is = get_evaluated_model_param(m, "is", &param_env);
                             comp.diode_rs = get_evaluated_model_param(m, "rs", &param_env);
                             comp.diode_n = get_evaluated_model_param(m, "n", &param_env);
@@ -1070,6 +1101,15 @@ fn flatten_subcircuit(
                             comp.diode_m = get_evaluated_model_param(m, "m", &param_env);
                             comp.diode_bv = get_evaluated_model_param(m, "bv", &param_env);
                             comp.diode_ibv = get_evaluated_model_param(m, "ibv", &param_env);
+                        } else if comp.comp_type == "opto" {
+                            // Parámetros del optoacoplador: CTR, Is, N, Vsat
+                            comp.opto_ctr  = get_evaluated_model_param(m, "ctr",  &param_env);
+                            comp.opto_is   = get_evaluated_model_param(m, "is",   &param_env);
+                            comp.opto_n    = get_evaluated_model_param(m, "n",    &param_env);
+                            comp.opto_vsat = get_evaluated_model_param(m, "vsat", &param_env);
+                            // El LED interno usa diode_is/diode_n como fallback en el solver
+                            comp.diode_is = comp.opto_is;
+                            comp.diode_n  = comp.opto_n;
                         } else if comp.comp_type == "npn" || comp.comp_type == "pnp" {
                             comp.bjt_is = get_evaluated_model_param(m, "is", &param_env);
                             comp.bjt_bf = get_evaluated_model_param(m, "bf", &param_env);
@@ -1346,6 +1386,15 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             'v' | 'i' => (2, false, false),
             'e' | 'g' => (4, false, false), // VCVS, VCCS
             'f' | 'h' => (2, false, false), // CCCS, CCVS
+            'o' => {
+                // Optoacoplador (4 pines) vs Opamp (5 pines).
+                let model_name = tokens.last().unwrap();
+                if let Some(m) = models.get(model_name) {
+                    if m.model_type == "opto" { (4, false, false) } else { (5, false, false) }
+                } else {
+                    (if tokens.len() >= 7 { 5 } else { 4 }, false, false)
+                }
+            }
             'y' => {
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
@@ -1418,7 +1467,15 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         } else {
             let pins_count = if is_gate {
                 num_pins
-            } else if first_char == 'o' || tokens.len() >= 7 {
+            } else if first_char == 'o' {
+                // Optoacoplador (4 pines) vs Opamp (5 pines) — distinción por modelo o tokens
+                let model_name = tokens.last().unwrap();
+                if let Some(m) = models.get(model_name) {
+                    if m.model_type == "opto" { 4 } else { 5 }
+                } else {
+                    if tokens.len() >= 7 { 5 } else { 4 }
+                }
+            } else if tokens.len() >= 7 {
                 5
             } else {
                 num_pins
@@ -1447,7 +1504,11 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                     'r' => "resistor".to_string(),
                     'c' => "capacitor".to_string(),
                     'l' => "inductor".to_string(),
-                    'd' => "diode".to_string(),
+                    'd' => {
+                        if let Some(m) = models.get(value_or_model) {
+                            if m.model_type == "led" { "led".to_string() } else { "diode".to_string() }
+                        } else { "diode".to_string() }
+                    },
                     'q' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
@@ -1476,6 +1537,15 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                     'g' => "vccs".to_string(),
                     'f' => "cccs".to_string(),
                     'h' => "ccvs".to_string(),
+                    'o' => {
+                        if let Some(m) = models.get(value_or_model) {
+                            if m.model_type == "opto" { "opto".to_string() } else { "opamp".to_string() }
+                        } else if tokens.len() == 6 {
+                            "opto".to_string()
+                        } else {
+                            "opamp".to_string()
+                        }
+                    },
                     _ => "opamp".to_string(),
                 }
             };
@@ -1542,7 +1612,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 }
                 if !expr_success {
                     // Modelo
-                    if comp.comp_type == "diode" || comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" || comp.comp_type == "verilog_a" {
+                    if comp.comp_type == "diode" || comp.comp_type == "led" || comp.comp_type == "opto" || comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" || comp.comp_type == "verilog_a" {
                         if let Some(m) = models.get(value_or_model) {
                             if let Some(bf) = get_evaluated_model_param(m, "bf", &global_params) {
                                 comp.value = bf;
@@ -1551,7 +1621,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                             } else {
                                 comp.value = 1.0;
                             }
-                            if comp.comp_type == "diode" {
+                            if comp.comp_type == "diode" || comp.comp_type == "led" {
                                 comp.diode_is = get_evaluated_model_param(m, "is", &global_params);
                                 comp.diode_rs = get_evaluated_model_param(m, "rs", &global_params);
                                 comp.diode_n = get_evaluated_model_param(m, "n", &global_params);
@@ -1561,6 +1631,13 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                 comp.diode_m = get_evaluated_model_param(m, "m", &global_params);
                                 comp.diode_bv = get_evaluated_model_param(m, "bv", &global_params);
                                 comp.diode_ibv = get_evaluated_model_param(m, "ibv", &global_params);
+                            } else if comp.comp_type == "opto" {
+                                comp.opto_ctr  = get_evaluated_model_param(m, "ctr",  &global_params);
+                                comp.opto_is   = get_evaluated_model_param(m, "is",   &global_params);
+                                comp.opto_n    = get_evaluated_model_param(m, "n",    &global_params);
+                                comp.opto_vsat = get_evaluated_model_param(m, "vsat", &global_params);
+                                comp.diode_is = comp.opto_is;
+                                comp.diode_n  = comp.opto_n;
                             } else if comp.comp_type == "npn" || comp.comp_type == "pnp" {
                                 comp.bjt_is = get_evaluated_model_param(m, "is", &global_params);
                                 comp.bjt_bf = get_evaluated_model_param(m, "bf", &global_params);

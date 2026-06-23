@@ -50,6 +50,15 @@ pub struct ComponentData {
     pub diode_bv: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diode_ibv: Option<f64>,
+    // Parámetros del optoacoplador (componente de 4 pines: A, K, C, E)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opto_ctr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opto_is: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opto_n: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opto_vsat: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bjt_is: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -180,6 +189,14 @@ const DIODE_CTH: f64 = 0.002;      // Diodo: 2 mJ/°C
 const BJT_CTH: f64 = 0.005;        // BJT: 5 mJ/°C
 const MOS_CTH: f64 = 0.010;        // MOSFET: 10 mJ/°C
 
+// Constantes de Self-Heating para optoacopladores (encapsulado DIP-4)
+const OPTO_RTH_JA: f64 = 200.0;    // Opto DIP-4: 200 °C/W
+const OPTO_CTH: f64 = 1e-4;        // Opto DIP-4: 100 µJ/°C
+
+// Parámetros por defecto del optoacoplador (lado receptor fototransistor)
+const OPTO_DEFAULT_CTR: f64 = 0.5;   // Current Transfer Ratio: 50%
+const OPTO_DEFAULT_VSAT: f64 = 0.2;  // Tensión de saturación suave del transistor (V)
+
 // Coeficientes de temperatura para MOSFETs (SPICE Level 1 / Level 3)
 const MOS_VTH_TC: f64 = -2.3e-3;   // dVth/dT = -2.3 mV/°C (Vth disminuye con T)
 const MOS_MOBILITY_EXPO: f64 = -1.5; // μ(T) = μ₀ * (T/T₀)^(-1.5) (movilidad baja con T)
@@ -299,6 +316,24 @@ fn solve_diode_junction_voltage(v_ext: f64, temp: Option<f64>, comp: &ComponentD
     // Conductancia efectiva externa
     let geq_eff = gd_ideal / (1.0 + gd_ideal * rs);
     (vd_j, id_ideal, geq_eff)
+}
+
+// Helper para el lado receptor (fototransistor) del optoacoplador.
+// Devuelve (I_ce, g_md, g_o, I_ce_eq) donde:
+//   I_ce    = CTR * I_d(V_d) * tanh(V_ce / V_sat)
+//   g_md    = dI_ce/dV_d  = CTR * g_d(V_d) * tanh(V_ce / V_sat)
+//   g_o     = dI_ce/dV_ce = CTR * I_d(V_d) * (1 - tanh^2) / V_sat
+//   I_ce_eq = I_ce - g_md * V_d - g_o * V_ce   (fuente equivalente para MNA)
+// Protección contra V_sat == 0 mediante floor en 1e-6 V.
+fn evaluate_opto_receiver(vd: f64, gd_led: f64, id_led: f64, v_ce: f64, comp: &ComponentData) -> (f64, f64, f64, f64) {
+    let ctr = comp.opto_ctr.unwrap_or(OPTO_DEFAULT_CTR);
+    let vsat = comp.opto_vsat.unwrap_or(OPTO_DEFAULT_VSAT).max(1e-6);
+    let t_vce = (v_ce / vsat).tanh();
+    let i_ce = ctr * id_led * t_vce;
+    let g_md = ctr * gd_led * t_vce;
+    let g_o = ctr * id_led * (1.0 - t_vce * t_vce) / vsat;
+    let i_ce_eq = i_ce - g_md * vd - g_o * v_ce;
+    (i_ce, g_md, g_o, i_ce_eq)
 }
 
 fn get_jfet_capacitances(vgs: f64, vgd: f64, comp: &ComponentData) -> (f64, f64) {
@@ -802,7 +837,7 @@ pub fn solve_dc_circuit_with_guess(
     }
 
     // Comprobar si el circuito tiene componentes no lineales (Diodos, MOSFETs, BJTs, Op-Amps, B-Sources)
-    let has_nonlinear = netlist.components.iter().any(|c| c.comp_type == "diode" || c.comp_type == "nmos" || c.comp_type == "pmos" || c.comp_type == "npn" || c.comp_type == "pnp" || c.comp_type == "opamp" || c.comp_type == "bsim3nmos" || c.comp_type == "bsim3pmos" || c.comp_type == "bsim4nmos" || c.comp_type == "bsim4pmos" || c.comp_type == "verilog_a" || c.comp_type.ends_with("_gate") || c.comp_type == "arduino_uno" || c.comp_type == "esp32" || c.comp_type == "raspberry_pi_pico" || c.comp_type == "bvoltage" || c.comp_type == "bcurrent");
+    let has_nonlinear = netlist.components.iter().any(|c| c.comp_type == "diode" || c.comp_type == "led" || c.comp_type == "opto" || c.comp_type == "nmos" || c.comp_type == "pmos" || c.comp_type == "npn" || c.comp_type == "pnp" || c.comp_type == "opamp" || c.comp_type == "bsim3nmos" || c.comp_type == "bsim3pmos" || c.comp_type == "bsim4nmos" || c.comp_type == "bsim4pmos" || c.comp_type == "verilog_a" || c.comp_type.ends_with("_gate") || c.comp_type == "arduino_uno" || c.comp_type == "esp32" || c.comp_type == "raspberry_pi_pico" || c.comp_type == "bvoltage" || c.comp_type == "bcurrent");
 
     // Si tiene componentes no lineales, ejecutamos el Solver iterativo Newton-Raphson
     if has_nonlinear {
@@ -1133,7 +1168,7 @@ fn solve_newton_raphson_core(
 
         // Estampar cada componente no lineal usando aproximación lineal de primer orden de Taylor
         for comp in &netlist.components {
-            if comp.comp_type == "diode" {
+            if comp.comp_type == "diode" || comp.comp_type == "led" {
                 let node_anode = comp.pins[0].parse::<usize>().unwrap();
                 let node_cathode = comp.pins[1].parse::<usize>().unwrap();
 
@@ -1175,6 +1210,53 @@ fn solve_newton_raphson_core(
                 if node_cathode > 0 {
                     vector_z[node_cathode - 1] += ieq;
                 }
+            } else if comp.comp_type == "opto" {
+                if comp.pins.len() < 4 { continue; }
+                let node_a = comp.pins[0].parse::<usize>().unwrap();
+                let node_k = comp.pins[1].parse::<usize>().unwrap();
+                let node_c = comp.pins[2].parse::<usize>().unwrap();
+                let node_e = comp.pins[3].parse::<usize>().unwrap();
+
+                let v_a = if node_a > 0 { prev_voltages[node_a] } else { 0.0 };
+                let v_k = if node_k > 0 { prev_voltages[node_k] } else { 0.0 };
+                let v_c = if node_c > 0 { prev_voltages[node_c] } else { 0.0 };
+                let v_e = if node_e > 0 { prev_voltages[node_e] } else { 0.0 };
+
+                // Lado emisor (LED interno) con damping pnjlim
+                let vd_new = v_a - v_k;
+                let vd_old = (if node_a > 0 { prev_prev_voltages[node_a] } else { 0.0 })
+                           - (if node_k > 0 { prev_prev_voltages[node_k] } else { 0.0 });
+                let vd = pnjlim(vd_new, vd_old, vt, 0.6);
+                let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
+                let ieq_led = id_led - gd_led * vd;
+
+                // Lado receptor (fototransistor)
+                let v_ce = v_c - v_e;
+                let (_i_ce, g_md, g_o, i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+
+                let mut stamp = |r: usize, c: usize, g: f64| {
+                    if r > 0 && c > 0 { matrix_a.add_element(r - 1, c - 1, g); }
+                };
+
+                // Estampar lado LED (igual que un diodo)
+                stamp(node_a, node_a,  gd_led);
+                stamp(node_k, node_k,  gd_led);
+                stamp(node_a, node_k, -gd_led);
+                stamp(node_k, node_a, -gd_led);
+                if node_a > 0 { vector_z[node_a - 1] -= ieq_led; }
+                if node_k > 0 { vector_z[node_k - 1] += ieq_led; }
+
+                // Estampar lado receptor (fototransistor): fuente VCCS no lineal
+                stamp(node_c, node_a,  g_md);
+                stamp(node_c, node_k, -g_md);
+                stamp(node_c, node_c,  g_o);
+                stamp(node_c, node_e, -g_o);
+                stamp(node_e, node_a, -g_md);
+                stamp(node_e, node_k,  g_md);
+                stamp(node_e, node_c, -g_o);
+                stamp(node_e, node_e,  g_o);
+                if node_c > 0 { vector_z[node_c - 1] -= i_ce_eq; }
+                if node_e > 0 { vector_z[node_e - 1] += i_ce_eq; }
             } else if comp.comp_type == "verilog_a" {
                 let node_drain = comp.pins[0].parse::<usize>().unwrap();
                 let node_gate = comp.pins[1].parse::<usize>().unwrap();
@@ -2164,7 +2246,7 @@ fn solve_homotopy_core(
 
         // Estampar componentes no lineales
         for comp in &netlist.components {
-            if comp.comp_type == "diode" {
+            if comp.comp_type == "diode" || comp.comp_type == "led" {
                 let node_anode = comp.pins[0].parse::<usize>().unwrap();
                 let node_cathode = comp.pins[1].parse::<usize>().unwrap();
                 let v_anode = if node_anode > 0 { prev_voltages[node_anode] } else { 0.0 };
@@ -2189,6 +2271,49 @@ fn solve_homotopy_core(
 
                 if node_anode > 0 { vector_z[node_anode - 1] -= ieq; }
                 if node_cathode > 0 { vector_z[node_cathode - 1] += ieq; }
+            } else if comp.comp_type == "opto" {
+                if comp.pins.len() < 4 { continue; }
+                let node_a = comp.pins[0].parse::<usize>().unwrap();
+                let node_k = comp.pins[1].parse::<usize>().unwrap();
+                let node_c = comp.pins[2].parse::<usize>().unwrap();
+                let node_e = comp.pins[3].parse::<usize>().unwrap();
+
+                let v_a = if node_a > 0 { prev_voltages[node_a] } else { 0.0 };
+                let v_k = if node_k > 0 { prev_voltages[node_k] } else { 0.0 };
+                let v_c = if node_c > 0 { prev_voltages[node_c] } else { 0.0 };
+                let v_e = if node_e > 0 { prev_voltages[node_e] } else { 0.0 };
+
+                let vd_new = v_a - v_k;
+                let vd_old = (if node_a > 0 { prev_prev_voltages[node_a] } else { 0.0 })
+                           - (if node_k > 0 { prev_prev_voltages[node_k] } else { 0.0 });
+                let vd = pnjlim(vd_new, vd_old, vt, 0.6);
+                let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
+                let ieq_led = id_led - gd_led * vd;
+
+                let v_ce = v_c - v_e;
+                let (_i_ce, g_md, g_o, i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+
+                let mut stamp = |r: usize, c: usize, g: f64| {
+                    if r > 0 && c > 0 { matrix_a.add_element(r - 1, c - 1, g); }
+                };
+
+                stamp(node_a, node_a,  gd_led);
+                stamp(node_k, node_k,  gd_led);
+                stamp(node_a, node_k, -gd_led);
+                stamp(node_k, node_a, -gd_led);
+                if node_a > 0 { vector_z[node_a - 1] -= ieq_led; }
+                if node_k > 0 { vector_z[node_k - 1] += ieq_led; }
+
+                stamp(node_c, node_a,  g_md);
+                stamp(node_c, node_k, -g_md);
+                stamp(node_c, node_c,  g_o);
+                stamp(node_c, node_e, -g_o);
+                stamp(node_e, node_a, -g_md);
+                stamp(node_e, node_k,  g_md);
+                stamp(node_e, node_c, -g_o);
+                stamp(node_e, node_e,  g_o);
+                if node_c > 0 { vector_z[node_c - 1] -= i_ce_eq; }
+                if node_e > 0 { vector_z[node_e - 1] += i_ce_eq; }
             } else if comp.comp_type == "nmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim4nmos" {
                 let node_gate = comp.pins[0].parse::<usize>().unwrap();
                 let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -2962,7 +3087,7 @@ pub fn solve_transient_circuit_with_initial_states(
     }
 
     let has_nonlinear = netlist.components.iter().any(|c| {
-        c.comp_type == "diode" || c.comp_type == "nmos" || c.comp_type == "pmos" ||
+        c.comp_type == "diode" || c.comp_type == "led" || c.comp_type == "opto" || c.comp_type == "nmos" || c.comp_type == "pmos" ||
         c.comp_type == "npn" || c.comp_type == "pnp" || c.comp_type == "opamp" ||
         c.comp_type == "bsim3nmos" || c.comp_type == "bsim3pmos" || c.comp_type == "bsim4nmos" || c.comp_type == "bsim4pmos" || c.comp_type.ends_with("_gate") ||
         c.comp_type == "arduino_uno" || c.comp_type == "esp32" || c.comp_type == "raspberry_pi_pico" ||
@@ -2983,12 +3108,13 @@ pub fn solve_transient_circuit_with_initial_states(
         }
     }
 
-    // Temperaturas de unión para self-heating de dispositivos discretos (Diodos, BJTs, MOSFETs)
+    // Temperaturas de unión para self-heating de dispositivos discretos (Diodos, BJTs, MOSFETs, Optos)
     let mut device_tjunc: HashMap<String, f64> = HashMap::new();
     for comp in &netlist.components {
-        if comp.comp_type == "diode" || comp.comp_type == "nmos" || comp.comp_type == "pmos" ||
+        if comp.comp_type == "diode" || comp.comp_type == "led" || comp.comp_type == "nmos" || comp.comp_type == "pmos" ||
            comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim3pmos" ||
-           comp.comp_type == "bsim4nmos" || comp.comp_type == "bsim4pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" {
+           comp.comp_type == "bsim4nmos" || comp.comp_type == "bsim4pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" ||
+           comp.comp_type == "opto" {
             device_tjunc.insert(comp.id.clone(), t_amb);
         }
     }
@@ -3378,7 +3504,7 @@ pub fn solve_transient_circuit_with_initial_states(
                 let mut vector_z_iter = vector_z.clone();
 
                 for comp in &netlist.components {
-                    if comp.comp_type == "diode" {
+                    if comp.comp_type == "diode" || comp.comp_type == "led" {
                         let node_anode = comp.pins[0].parse::<usize>().unwrap();
                         let node_cathode = comp.pins[1].parse::<usize>().unwrap();
 
@@ -3433,6 +3559,55 @@ pub fn solve_transient_circuit_with_initial_states(
 
                         if node_anode > 0 { vector_z_iter[node_anode - 1] -= ieq - i_eq_cd; }
                         if node_cathode > 0 { vector_z_iter[node_cathode - 1] += ieq - i_eq_cd; }
+                    } else if comp.comp_type == "opto" {
+                        if comp.pins.len() < 4 { continue; }
+                        let node_a = comp.pins[0].parse::<usize>().unwrap();
+                        let node_k = comp.pins[1].parse::<usize>().unwrap();
+                        let node_c = comp.pins[2].parse::<usize>().unwrap();
+                        let node_e = comp.pins[3].parse::<usize>().unwrap();
+
+                        // Self-Heating: el opto comparte un único nodo térmico (DIP-4)
+                        let tj_o = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
+                        let (vt_o, _is_o) = get_thermal_parameters_junction(tj_o, comp.opto_is);
+
+                        let v_a = if node_a > 0 { prev_v[node_a] } else { 0.0 };
+                        let v_k = if node_k > 0 { prev_v[node_k] } else { 0.0 };
+                        let v_c = if node_c > 0 { prev_v[node_c] } else { 0.0 };
+                        let v_e = if node_e > 0 { prev_v[node_e] } else { 0.0 };
+
+                        let vd_new = v_a - v_k;
+                        let vd_old = (if node_a > 0 { prev_prev_v[node_a] } else { 0.0 })
+                                   - (if node_k > 0 { prev_prev_v[node_k] } else { 0.0 });
+                        let vd = pnjlim(vd_new, vd_old, vt_o, 0.6);
+                        let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, Some(tj_o), comp);
+                        let ieq_led = id_led - gd_led * vd;
+
+                        let v_ce = v_c - v_e;
+                        let (_i_ce, g_md, g_o, i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+
+                        let mut stamp = |r: usize, c: usize, g: f64| {
+                            if r > 0 && c > 0 { matrix_a_iter[(r - 1, c - 1)] += g; }
+                        };
+
+                        // Lado LED
+                        stamp(node_a, node_a,  gd_led);
+                        stamp(node_k, node_k,  gd_led);
+                        stamp(node_a, node_k, -gd_led);
+                        stamp(node_k, node_a, -gd_led);
+                        if node_a > 0 { vector_z_iter[node_a - 1] -= ieq_led; }
+                        if node_k > 0 { vector_z_iter[node_k - 1] += ieq_led; }
+
+                        // Lado receptor
+                        stamp(node_c, node_a,  g_md);
+                        stamp(node_c, node_k, -g_md);
+                        stamp(node_c, node_c,  g_o);
+                        stamp(node_c, node_e, -g_o);
+                        stamp(node_e, node_a, -g_md);
+                        stamp(node_e, node_k,  g_md);
+                        stamp(node_e, node_c, -g_o);
+                        stamp(node_e, node_e,  g_o);
+                        if node_c > 0 { vector_z_iter[node_c - 1] -= i_ce_eq; }
+                        if node_e > 0 { vector_z_iter[node_e - 1] += i_ce_eq; }
                     } else if comp.comp_type == "nmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim4nmos" {
                         let node_gate = comp.pins[0].parse::<usize>().unwrap();
                         let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -4732,7 +4907,8 @@ pub fn solve_transient_circuit_with_initial_states(
                 // SELF-HEATING: Actualizar temperaturas de unión de dispositivos discretos
                 for comp in &netlist.components {
                     let (rth, cth) = match comp.comp_type.as_str() {
-                        "diode" => (DIODE_RTH_JA, DIODE_CTH),
+                        "diode" | "led" => (DIODE_RTH_JA, DIODE_CTH),
+                        "opto" => (OPTO_RTH_JA, OPTO_CTH),
                         "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => (MOS_RTH_JA, MOS_CTH),
                         "npn" | "pnp" => (BJT_RTH_JA, BJT_CTH),
                         _ => continue,
@@ -4740,7 +4916,7 @@ pub fn solve_transient_circuit_with_initial_states(
 
                     // Calcular potencia disipada P = sum(V_terminal * I_terminal)
                     let p_diss = match comp.comp_type.as_str() {
-                        "diode" => {
+                        "diode" | "led" => {
                             let na = comp.pins[0].parse::<usize>().unwrap_or(0);
                             let nc = comp.pins[1].parse::<usize>().unwrap_or(0);
                             let va = if na > 0 { step_solution[na - 1] } else { 0.0 };
@@ -4749,6 +4925,26 @@ pub fn solve_transient_circuit_with_initial_states(
                             let tj = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
                             let (_, id, _) = solve_diode_junction_voltage(vd, Some(tj), comp);
                             (vd * id).abs()
+                        }
+                        "opto" => {
+                            if comp.pins.len() < 4 { continue; }
+                            let na = comp.pins[0].parse::<usize>().unwrap_or(0);
+                            let nk = comp.pins[1].parse::<usize>().unwrap_or(0);
+                            let nc = comp.pins[2].parse::<usize>().unwrap_or(0);
+                            let ne = comp.pins[3].parse::<usize>().unwrap_or(0);
+                            let va = if na > 0 { step_solution[na - 1] } else { 0.0 };
+                            let vk = if nk > 0 { step_solution[nk - 1] } else { 0.0 };
+                            let vc = if nc > 0 { step_solution[nc - 1] } else { 0.0 };
+                            let ve = if ne > 0 { step_solution[ne - 1] } else { 0.0 };
+                            let vd = va - vk;
+                            let v_ce = vc - ve;
+                            let tj = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
+                            let (_, id_led, _) = solve_diode_junction_voltage(vd, Some(tj), comp);
+                            let ctr = comp.opto_ctr.unwrap_or(OPTO_DEFAULT_CTR);
+                            let vsat = comp.opto_vsat.unwrap_or(OPTO_DEFAULT_VSAT).max(1e-6);
+                            let i_ce = ctr * id_led * (v_ce / vsat).tanh();
+                            // Potencia total: LED + fototransistor
+                            (vd * id_led).abs() + (v_ce * i_ce).abs()
                         }
                         "nmos" | "bsim3nmos" | "bsim4nmos" => {
                             let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
@@ -5104,7 +5300,7 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
                         g_mat[(j, i)] -= g_val;
                     }
                 }
-                "diode" => {
+                "diode" | "led" => {
                     let n1 = comp.pins[0].parse::<usize>().unwrap();
                     let n2 = comp.pins[1].parse::<usize>().unwrap();
                     
@@ -5130,6 +5326,68 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
                         let j = *node_to_idx.get(&n2).unwrap();
                         g_mat[(i, j)] -= gd;
                         g_mat[(j, i)] -= gd;
+                    }
+                }
+                "opto" => {
+                    if comp.pins.len() < 4 { continue; }
+                    let n_a = comp.pins[0].parse::<usize>().unwrap();
+                    let n_k = comp.pins[1].parse::<usize>().unwrap();
+                    let n_c = comp.pins[2].parse::<usize>().unwrap();
+                    let n_e = comp.pins[3].parse::<usize>().unwrap();
+
+                    // Recuperar punto de operación del opto
+                    let v_a = if n_a > 0 { *op_result.node_voltages.get(&n_a.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                    let v_k = if n_k > 0 { *op_result.node_voltages.get(&n_k.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                    let v_c = if n_c > 0 { *op_result.node_voltages.get(&n_c.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                    let v_e = if n_e > 0 { *op_result.node_voltages.get(&n_e.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                    let vd = v_a - v_k;
+                    let v_ce = v_c - v_e;
+                    let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
+                    let (_i_ce, g_md, g_o, _i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+
+                    // Estampar lado LED (conductancia del diodo)
+                    let idx_a = n_a > 0 && dynamic_nodes.contains(&n_a);
+                    let idx_k = n_k > 0 && dynamic_nodes.contains(&n_k);
+                    if idx_a {
+                        let i = *node_to_idx.get(&n_a).unwrap();
+                        g_mat[(i, i)] += gd_led;
+                    }
+                    if idx_k {
+                        let j = *node_to_idx.get(&n_k).unwrap();
+                        g_mat[(j, j)] += gd_led;
+                    }
+                    if idx_a && idx_k {
+                        let i = *node_to_idx.get(&n_a).unwrap();
+                        let j = *node_to_idx.get(&n_k).unwrap();
+                        g_mat[(i, j)] -= gd_led;
+                        g_mat[(j, i)] -= gd_led;
+                    }
+
+                    // Estampar lado receptor (g_md mutua y g_o de salida)
+                    let idx_c = n_c > 0 && dynamic_nodes.contains(&n_c);
+                    let idx_e = n_e > 0 && dynamic_nodes.contains(&n_e);
+                    let stamp_g = |r: usize, c: usize, g: f64, g_mat: &mut DMatrix<f64>| {
+                        if r > 0 && c > 0 {
+                            let ir = *node_to_idx.get(&r).unwrap();
+                            let ic = *node_to_idx.get(&c).unwrap();
+                            g_mat[(ir, ic)] += g;
+                        }
+                    };
+                    // g_o entre C y E
+                    if idx_c { stamp_g(n_c, n_c, g_o, &mut g_mat); }
+                    if idx_e { stamp_g(n_e, n_e, g_o, &mut g_mat); }
+                    if idx_c && idx_e {
+                        stamp_g(n_c, n_e, -g_o, &mut g_mat);
+                        stamp_g(n_e, n_c, -g_o, &mut g_mat);
+                    }
+                    // g_md entre C y A/K, y entre E y A/K
+                    if idx_c {
+                        stamp_g(n_c, n_a,  g_md, &mut g_mat);
+                        stamp_g(n_c, n_k, -g_md, &mut g_mat);
+                    }
+                    if idx_e {
+                        stamp_g(n_e, n_a, -g_md, &mut g_mat);
+                        stamp_g(n_e, n_k,  g_md, &mut g_mat);
                     }
                 }
                 "nmos" | "bsim3nmos" => {
@@ -5481,18 +5739,20 @@ pub fn solve_ac_sweep(netlist: &CircuitNetlist, settings: &AcSweepSettings) -> R
     let mut pmos_parameters = HashMap::new();
     let mut bjt_parameters = HashMap::new();
     let mut opamp_gm = HashMap::new();
+    let mut opto_parameters: HashMap<String, (f64, f64)> = HashMap::new(); // (g_md, g_o)
 
-    let has_diodes = netlist.components.iter().any(|c| c.comp_type == "diode");
+    let has_diodes = netlist.components.iter().any(|c| c.comp_type == "diode" || c.comp_type == "led");
+    let has_optos = netlist.components.iter().any(|c| c.comp_type == "opto");
     let has_nmos = netlist.components.iter().any(|c| c.comp_type == "nmos" || c.comp_type == "bsim3nmos" || c.comp_type == "bsim4nmos");
     let has_pmos = netlist.components.iter().any(|c| c.comp_type == "pmos" || c.comp_type == "bsim3pmos" || c.comp_type == "bsim4pmos");
     let has_npn = netlist.components.iter().any(|c| c.comp_type == "npn");
     let has_pnp = netlist.components.iter().any(|c| c.comp_type == "pnp");
     let has_opamps = netlist.components.iter().any(|c| c.comp_type == "opamp");
-    if has_diodes || has_nmos || has_pmos || has_npn || has_pnp || has_opamps {
+    if has_diodes || has_optos || has_nmos || has_pmos || has_npn || has_pnp || has_opamps {
         let (op_result, _) = solve_dc_circuit_with_guess(netlist, settings.op_guess.as_ref())?;
 
         for comp in &netlist.components {
-            if comp.comp_type == "diode" {
+            if comp.comp_type == "diode" || comp.comp_type == "led" {
                 let node_anode = comp.pins[0].parse::<usize>().unwrap();
                 let node_cathode = comp.pins[1].parse::<usize>().unwrap();
                 let v_anode = if node_anode > 0 { *op_result.node_voltages.get(&node_anode.to_string()).unwrap_or(&0.0) } else { 0.0 };
@@ -5501,6 +5761,24 @@ pub fn solve_ac_sweep(netlist: &CircuitNetlist, settings: &AcSweepSettings) -> R
                 let exp_factor = (vd / (DIODE_N * vt)).exp();
                 let gd = (is_temp / (DIODE_N * vt)) * exp_factor;
                 diode_conductances.insert(comp.id.clone(), gd);
+            } else if comp.comp_type == "opto" {
+                if comp.pins.len() < 4 { continue; }
+                let n_a = comp.pins[0].parse::<usize>().unwrap();
+                let n_k = comp.pins[1].parse::<usize>().unwrap();
+                let n_c = comp.pins[2].parse::<usize>().unwrap();
+                let n_e = comp.pins[3].parse::<usize>().unwrap();
+                let v_a = if n_a > 0 { *op_result.node_voltages.get(&n_a.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                let v_k = if n_k > 0 { *op_result.node_voltages.get(&n_k.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                let v_c = if n_c > 0 { *op_result.node_voltages.get(&n_c.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                let v_e = if n_e > 0 { *op_result.node_voltages.get(&n_e.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                let vd = v_a - v_k;
+                let v_ce = v_c - v_e;
+                let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
+                let (_i_ce, g_md, g_o, _i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+                // Lado LED se estampa como diodo estándar
+                diode_conductances.insert(comp.id.clone(), gd_led);
+                // Lado receptor se guarda aparte
+                opto_parameters.insert(comp.id.clone(), (g_md, g_o));
             } else if comp.comp_type == "nmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim4nmos" {
                 let node_gate = comp.pins[0].parse::<usize>().unwrap();
                 let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -5721,7 +5999,7 @@ pub fn solve_ac_sweep(netlist: &CircuitNetlist, settings: &AcSweepSettings) -> R
                     stamp_conductance(&mut matrix_a, node_a, node_b, -g);
                     stamp_conductance(&mut matrix_a, node_b, node_a, -g);
                 }
-                "diode" => {
+                "diode" | "led" => {
                     let node_anode = comp.pins[0].parse::<usize>().unwrap();
                     let node_cathode = comp.pins[1].parse::<usize>().unwrap();
                     let gd = *diode_conductances.get(&comp.id).unwrap_or(&1e-9);
@@ -5730,6 +6008,34 @@ pub fn solve_ac_sweep(netlist: &CircuitNetlist, settings: &AcSweepSettings) -> R
                     stamp_conductance(&mut matrix_a, node_cathode, node_cathode, g);
                     stamp_conductance(&mut matrix_a, node_anode, node_cathode, -g);
                     stamp_conductance(&mut matrix_a, node_cathode, node_anode, -g);
+                }
+                "opto" => {
+                    if comp.pins.len() < 4 { continue; }
+                    let node_a = comp.pins[0].parse::<usize>().unwrap();
+                    let node_k = comp.pins[1].parse::<usize>().unwrap();
+                    let node_c = comp.pins[2].parse::<usize>().unwrap();
+                    let node_e = comp.pins[3].parse::<usize>().unwrap();
+
+                    // Lado LED: conductancia del diodo
+                    let gd_led = *diode_conductances.get(&comp.id).unwrap_or(&1e-9);
+                    let g_led = Complex::new(gd_led, 0.0);
+                    stamp_conductance(&mut matrix_a, node_a, node_a,  g_led);
+                    stamp_conductance(&mut matrix_a, node_k, node_k,  g_led);
+                    stamp_conductance(&mut matrix_a, node_a, node_k, -g_led);
+                    stamp_conductance(&mut matrix_a, node_k, node_a, -g_led);
+
+                    // Lado receptor: g_md mutua y g_o de salida
+                    let (g_md_val, g_o_val) = *opto_parameters.get(&comp.id).unwrap_or(&(0.0, 1e-9));
+                    let g_md = Complex::new(g_md_val, 0.0);
+                    let g_o  = Complex::new(g_o_val,  0.0);
+                    stamp_conductance(&mut matrix_a, node_c, node_a,  g_md);
+                    stamp_conductance(&mut matrix_a, node_c, node_k, -g_md);
+                    stamp_conductance(&mut matrix_a, node_c, node_c,  g_o);
+                    stamp_conductance(&mut matrix_a, node_c, node_e, -g_o);
+                    stamp_conductance(&mut matrix_a, node_e, node_a, -g_md);
+                    stamp_conductance(&mut matrix_a, node_e, node_k,  g_md);
+                    stamp_conductance(&mut matrix_a, node_e, node_c, -g_o);
+                    stamp_conductance(&mut matrix_a, node_e, node_e,  g_o);
                 }
                 "nmos" | "bsim3nmos" | "bsim4nmos" => {
                     let node_gate = comp.pins[0].parse::<usize>().unwrap();
@@ -6102,9 +6408,11 @@ pub fn solve_noise_sweep(netlist: &CircuitNetlist, settings: &NoiseSweepSettings
     let mut bjt_parameters = HashMap::new();  // (gbe, gbc, ib, ic)
     let mut jfet_parameters = HashMap::new(); // (gm, gds, ids)
     let mut opamp_gm = HashMap::new();
+    let mut opto_parameters: HashMap<String, (f64, f64)> = HashMap::new(); // (g_md, g_o)
+    let mut opto_currents: HashMap<String, (f64, f64)> = HashMap::new();   // (i_led, i_ce)
 
     for comp in &netlist.components {
-        if comp.comp_type == "diode" {
+        if comp.comp_type == "diode" || comp.comp_type == "led" {
             let node_anode = comp.pins[0].parse::<usize>().unwrap();
             let node_cathode = comp.pins[1].parse::<usize>().unwrap();
             let v_anode = if node_anode > 0 { *op_result.node_voltages.get(&node_anode.to_string()).unwrap_or(&0.0) } else { 0.0 };
@@ -6113,6 +6421,24 @@ pub fn solve_noise_sweep(netlist: &CircuitNetlist, settings: &NoiseSweepSettings
             let (_, id, gd) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
             diode_conductances.insert(comp.id.clone(), gd);
             diode_currents.insert(comp.id.clone(), id);
+        } else if comp.comp_type == "opto" {
+            if comp.pins.len() < 4 { continue; }
+            let n_a = comp.pins[0].parse::<usize>().unwrap();
+            let n_k = comp.pins[1].parse::<usize>().unwrap();
+            let n_c = comp.pins[2].parse::<usize>().unwrap();
+            let n_e = comp.pins[3].parse::<usize>().unwrap();
+            let v_a = if n_a > 0 { *op_result.node_voltages.get(&n_a.to_string()).unwrap_or(&0.0) } else { 0.0 };
+            let v_k = if n_k > 0 { *op_result.node_voltages.get(&n_k.to_string()).unwrap_or(&0.0) } else { 0.0 };
+            let v_c = if n_c > 0 { *op_result.node_voltages.get(&n_c.to_string()).unwrap_or(&0.0) } else { 0.0 };
+            let v_e = if n_e > 0 { *op_result.node_voltages.get(&n_e.to_string()).unwrap_or(&0.0) } else { 0.0 };
+            let vd = v_a - v_k;
+            let v_ce = v_c - v_e;
+            let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
+            let (i_ce, g_md, g_o, _i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+            diode_conductances.insert(comp.id.clone(), gd_led);
+            diode_currents.insert(comp.id.clone(), id_led);
+            opto_parameters.insert(comp.id.clone(), (g_md, g_o));
+            opto_currents.insert(comp.id.clone(), (id_led, i_ce));
         } else if comp.comp_type == "nmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim4nmos" {
             let node_gate = comp.pins[0].parse::<usize>().unwrap();
             let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -6418,7 +6744,7 @@ pub fn solve_noise_sweep(netlist: &CircuitNetlist, settings: &NoiseSweepSettings
                     stamp_conductance(&mut matrix_a, node_a, node_b, -g);
                     stamp_conductance(&mut matrix_a, node_b, node_a, -g);
                 }
-                "diode" => {
+                "diode" | "led" => {
                     let node_anode = comp.pins[0].parse::<usize>().unwrap();
                     let node_cathode = comp.pins[1].parse::<usize>().unwrap();
                     let gd = *diode_conductances.get(&comp.id).unwrap_or(&1e-9);
@@ -6427,6 +6753,34 @@ pub fn solve_noise_sweep(netlist: &CircuitNetlist, settings: &NoiseSweepSettings
                     stamp_conductance(&mut matrix_a, node_cathode, node_cathode, g);
                     stamp_conductance(&mut matrix_a, node_anode, node_cathode, -g);
                     stamp_conductance(&mut matrix_a, node_cathode, node_anode, -g);
+                }
+                "opto" => {
+                    if comp.pins.len() < 4 { continue; }
+                    let node_a = comp.pins[0].parse::<usize>().unwrap();
+                    let node_k = comp.pins[1].parse::<usize>().unwrap();
+                    let node_c = comp.pins[2].parse::<usize>().unwrap();
+                    let node_e = comp.pins[3].parse::<usize>().unwrap();
+
+                    // Lado LED
+                    let gd_led = *diode_conductances.get(&comp.id).unwrap_or(&1e-9);
+                    let g_led = Complex::new(gd_led, 0.0);
+                    stamp_conductance(&mut matrix_a, node_a, node_a,  g_led);
+                    stamp_conductance(&mut matrix_a, node_k, node_k,  g_led);
+                    stamp_conductance(&mut matrix_a, node_a, node_k, -g_led);
+                    stamp_conductance(&mut matrix_a, node_k, node_a, -g_led);
+
+                    // Lado receptor (g_md mutua + g_o de salida)
+                    let (g_md_val, g_o_val) = *opto_parameters.get(&comp.id).unwrap_or(&(0.0, 1e-9));
+                    let g_md = Complex::new(g_md_val, 0.0);
+                    let g_o  = Complex::new(g_o_val,  0.0);
+                    stamp_conductance(&mut matrix_a, node_c, node_a,  g_md);
+                    stamp_conductance(&mut matrix_a, node_c, node_k, -g_md);
+                    stamp_conductance(&mut matrix_a, node_c, node_c,  g_o);
+                    stamp_conductance(&mut matrix_a, node_c, node_e, -g_o);
+                    stamp_conductance(&mut matrix_a, node_e, node_a, -g_md);
+                    stamp_conductance(&mut matrix_a, node_e, node_k,  g_md);
+                    stamp_conductance(&mut matrix_a, node_e, node_c, -g_o);
+                    stamp_conductance(&mut matrix_a, node_e, node_e,  g_o);
                 }
                 "nmos" | "bsim3nmos" | "bsim4nmos" | "pmos" | "bsim3pmos" | "bsim4pmos" => {
                     let is_nmos = comp.comp_type == "nmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim4nmos";
@@ -6648,12 +7002,48 @@ pub fn solve_noise_sweep(netlist: &CircuitNetlist, settings: &NoiseSweepSettings
                     let s_val = 4.0 * PHYS_KB * PHYS_T / comp.value;
                     (n_a, n_b, s_val)
                 }
-                "diode" => {
+                "diode" | "led" => {
                     let n_a = comp.pins[0].parse::<usize>().unwrap();
                     let n_b = comp.pins[1].parse::<usize>().unwrap();
                     let id = *diode_currents.get(&comp.id).unwrap_or(&0.0);
                     let s_val = 2.0 * PHYS_Q * id.abs() + (1e-14 * id.abs()) / f_val;
                     (n_a, n_b, s_val)
+                }
+                "opto" => {
+                    // Ruido shot del LED interno (A-K) + ruido shot del fototransistor (C-E)
+                    if comp.pins.len() < 4 { (0, 0, 0.0) } else {
+                        let n_a = comp.pins[0].parse::<usize>().unwrap();
+                        let n_k = comp.pins[1].parse::<usize>().unwrap();
+                        let n_c = comp.pins[2].parse::<usize>().unwrap();
+                        let n_e = comp.pins[3].parse::<usize>().unwrap();
+                        let (i_led, i_ce) = *opto_currents.get(&comp.id).unwrap_or(&(0.0, 0.0));
+
+                        // Ruido shot del LED (A-K): S = 2*q*|I_led| + flicker 1/f
+                        let s_led = 2.0 * PHYS_Q * i_led.abs() + (1e-14 * i_led.abs()) / f_val;
+                        if s_led > 0.0 && (n_a > 0 || n_k > 0) {
+                            let mut z_led = DVector::<Complex<f64>>::zeros(size);
+                            if n_a > 0 { z_led[n_a - 1] += Complex::new(1.0, 0.0); }
+                            if n_k > 0 { z_led[n_k - 1] -= Complex::new(1.0, 0.0); }
+                            let v_led_tf = symbolic.solve_complex(workspace, &z_led).unwrap_or_else(|| DVector::zeros(size));
+                            let v_out_led = (if n_out > 0 { v_led_tf[n_out - 1] } else { Complex::new(0.0, 0.0) }) -
+                                            (if n_ref > 0 { v_led_tf[n_ref - 1] } else { Complex::new(0.0, 0.0) });
+                            total_output_noise_sq += s_led * v_out_led.norm_sqr();
+                        }
+
+                        // Ruido shot del fototransistor (C-E): S = 2*q*|I_ce|
+                        let s_ce = 2.0 * PHYS_Q * i_ce.abs();
+                        if s_ce > 0.0 && (n_c > 0 || n_e > 0) {
+                            let mut z_ce = DVector::<Complex<f64>>::zeros(size);
+                            if n_c > 0 { z_ce[n_c - 1] += Complex::new(1.0, 0.0); }
+                            if n_e > 0 { z_ce[n_e - 1] -= Complex::new(1.0, 0.0); }
+                            let v_ce_tf = symbolic.solve_complex(workspace, &z_ce).unwrap_or_else(|| DVector::zeros(size));
+                            let v_out_ce = (if n_out > 0 { v_ce_tf[n_out - 1] } else { Complex::new(0.0, 0.0) }) -
+                                           (if n_ref > 0 { v_ce_tf[n_ref - 1] } else { Complex::new(0.0, 0.0) });
+                            total_output_noise_sq += s_ce * v_out_ce.norm_sqr();
+                        }
+
+                        (0, 0, 0.0)
+                    }
                 }
                 "nmos" | "bsim3nmos" | "bsim4nmos" | "pmos" | "bsim3pmos" | "bsim4pmos" => {
                     let is_nmos = comp.comp_type == "nmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim4nmos";
@@ -7558,12 +7948,16 @@ pub fn apply_thermal_drift(netlist: &CircuitNetlist, temp_k: f64) -> CircuitNetl
                 let tc1 = 50e-6;
                 comp.value = comp.value * (1.0 + tc1 * (temp_k - t0));
             }
-            "diode" => {
+            "diode" | "led" => {
                 // El campo `value` de diodos a menudo es nominal; pero internamente
                 // la corriente Is se escala en el solver. Aquí ajustamos un factor
                 // de escala que el solver DC puede usar directamente.
                 // Nota: el solver usa DIODE_IS global, así que aquí no modificamos
                 // comp.value. El escalamiento real se aplica en solve_dc_circuit_thermal.
+            }
+            "opto" => {
+                // El opto sigue la misma lógica del diodo: Is se escala en el solver
+                // mediante get_thermal_parameters, no se modifica comp.value aquí.
             }
             "nmos" | "pmos" => {
                 // Vth se almacena en comp.value para MOSFETs
@@ -7666,7 +8060,7 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
 
     // Estampar componentes no lineales en j_matrix usando prev_voltages
     for comp in &netlist.components {
-        if comp.comp_type == "diode" {
+        if comp.comp_type == "diode" || comp.comp_type == "led" {
             let node_anode = comp.pins[0].parse::<usize>().unwrap();
             let node_cathode = comp.pins[1].parse::<usize>().unwrap();
             let v_anode = if node_anode > 0 { prev_voltages[node_anode] } else { 0.0 };
@@ -7683,6 +8077,38 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             stamp_conductance(node_cathode, node_cathode, geq);
             stamp_conductance(node_anode, node_cathode, -geq);
             stamp_conductance(node_cathode, node_anode, -geq);
+        } else if comp.comp_type == "opto" {
+            if comp.pins.len() < 4 { continue; }
+            let node_a = comp.pins[0].parse::<usize>().unwrap();
+            let node_k = comp.pins[1].parse::<usize>().unwrap();
+            let node_c = comp.pins[2].parse::<usize>().unwrap();
+            let node_e = comp.pins[3].parse::<usize>().unwrap();
+            let v_a = if node_a > 0 { prev_voltages[node_a] } else { 0.0 };
+            let v_k = if node_k > 0 { prev_voltages[node_k] } else { 0.0 };
+            let v_c = if node_c > 0 { prev_voltages[node_c] } else { 0.0 };
+            let v_e = if node_e > 0 { prev_voltages[node_e] } else { 0.0 };
+            let vd = v_a - v_k;
+            let v_ce = v_c - v_e;
+            let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
+            let (_i_ce, g_md, g_o, _i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+
+            let mut stamp = |r: usize, c: usize, g: f64| {
+                if r > 0 && c > 0 { j_matrix[(r - 1, c - 1)] += g; }
+            };
+            // Lado LED
+            stamp(node_a, node_a,  gd_led);
+            stamp(node_k, node_k,  gd_led);
+            stamp(node_a, node_k, -gd_led);
+            stamp(node_k, node_a, -gd_led);
+            // Lado receptor
+            stamp(node_c, node_a,  g_md);
+            stamp(node_c, node_k, -g_md);
+            stamp(node_c, node_c,  g_o);
+            stamp(node_c, node_e, -g_o);
+            stamp(node_e, node_a, -g_md);
+            stamp(node_e, node_k,  g_md);
+            stamp(node_e, node_c, -g_o);
+            stamp(node_e, node_e,  g_o);
         } else if comp.comp_type == "nmos" {
             let node_gate = comp.pins[0].parse::<usize>().unwrap();
             let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -12864,6 +13290,162 @@ mod tests {
         assert!(imd_res.imd_ratio_percent > 0.1 && imd_res.imd_ratio_percent < 25.0, "IMD fuera de rango: {}%", imd_res.imd_ratio_percent);
         // IP3 extrapolado debe ser estable y mayor que la potencia fundamental
         assert!(imd_res.ip3_out_dbv > imd_res.fundamental_power_dbv, "IP3 de salida ({}) debe ser mayor que la fundamental ({})", imd_res.ip3_out_dbv, imd_res.fundamental_power_dbv);
+    }
+
+    #[test]
+    fn test_opto_isolation() {
+        // Test de aislamiento galvánico del optoacoplador:
+        //   Lado emisor:  V1 (5V) -> R1 (1k) -> LED (A-K)
+        //   Lado receptor: V2 (5V) -> Rc (10k) -> Colector -> Emisor -> GND
+        //   CTR = 0.5, V_sat = 0.2, Is = 1e-12, N = 1
+        // Se espera:
+        //   - Con V1 = 5V: I_led ~ (5 - 0.7)/1k ~ 4.3 mA, V_C cae por I_ce = CTR*I_led
+        //   - Aislamiento: nodos del lado LED (2) NO conectados eléctricamente al receptor (3)
+        //   - I_ce == CTR * I_led (transferencia óptica, no inyección galvánica)
+        let netlist = CircuitNetlist {
+            mutual_inductances: None,
+            components: vec![
+                // Lado emisor: V1=5V, R1=1k, LED A-K
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 5.0,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 1000.0,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                // Lado receptor: V2=5V, Rc=10k, colector-emisor del opto
+                ComponentData {
+                    id: "V2".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 5.0,
+                    pins: vec!["4".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "Rc".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 10000.0,
+                    pins: vec!["4".to_string(), "3".to_string()],
+                    ..Default::default()
+                },
+                // Optoacoplador: A=2, K=0, C=3, E=0
+                ComponentData {
+                    id: "O1".to_string(),
+                    comp_type: "opto".to_string(),
+                    value: 0.0,
+                    pins: vec![
+                        "2".to_string(), // anode
+                        "0".to_string(), // cathode
+                        "3".to_string(), // collector
+                        "0".to_string(), // emitter
+                    ],
+                    opto_ctr: Some(0.5),
+                    opto_is: Some(1e-12),
+                    opto_n: Some(1.0),
+                    opto_vsat: Some(0.2),
+                    ..Default::default()
+                },
+            ],
+            wires: vec![],
+            temperature: None,
+            fixed_step: None,
+        };
+
+        let result = solve_dc_circuit(&netlist).unwrap();
+
+        // Voltaje del ánodo del LED (nodo 2): debe rondar 0.6-0.8V (caída del LED)
+        let v_anode = *result.node_voltages.get("2").unwrap();
+        assert!(v_anode > 0.5 && v_anode < 0.9,
+                "Voltaje del ánodo del LED (nodo 2) fuera de rango esperado [0.5, 0.9] V, obtenido: {}", v_anode);
+
+        // Voltaje del colector (nodo 3): debe caer de 5V según I_ce = CTR * I_led
+        // I_led ~ (5 - v_anode)/1k, I_ce = 0.5 * I_led, V_C = 5 - 10k * I_ce
+        // Aprox: I_led ~ 4.3 mA, I_ce ~ 2.15 mA, V_C ~ 5 - 21.5 ~ -16.5 V
+        // Pero V_ce se satura suavemente en ~0.2V vía tanh, así que V_C cae pero se limita.
+        let v_collector = *result.node_voltages.get("3").unwrap();
+        // El colector debe estar por debajo de V2=5V (hay corriente circulando)
+        assert!(v_collector < 4.9,
+                "Voltaje del colector (nodo 3) debe caer de 5V indicando que el fototransistor conduce, obtenido: {}", v_collector);
+
+        // Aislamiento galvánico: verificar que no hay corriente directa del nodo LED (2) al receptor (3/4).
+        // La única conexión entre los dos lados es óptica (CTR). Comprobamos que la corriente que
+        // sale del cátodo del LED (nodo 0) NO se transmite al colector: la rama V2/Rc es independiente.
+        // Forma práctica: sin V1 (sólo V2), no debe haber corriente en el LED ni V_C debe caer.
+        let netlist_off = CircuitNetlist {
+            mutual_inductances: None,
+            components: vec![
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 0.0,  // LED apagado
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 1000.0,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "V2".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 5.0,
+                    pins: vec!["4".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "Rc".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 10000.0,
+                    pins: vec!["4".to_string(), "3".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "O1".to_string(),
+                    comp_type: "opto".to_string(),
+                    value: 0.0,
+                    pins: vec![
+                        "2".to_string(),
+                        "0".to_string(),
+                        "3".to_string(),
+                        "0".to_string(),
+                    ],
+                    opto_ctr: Some(0.5),
+                    opto_is: Some(1e-12),
+                    opto_n: Some(1.0),
+                    opto_vsat: Some(0.2),
+                    ..Default::default()
+                },
+            ],
+            wires: vec![],
+            temperature: None,
+            fixed_step: None,
+        };
+
+        let res_off = solve_dc_circuit(&netlist_off).unwrap();
+        let v_collector_off = *res_off.node_voltages.get("3").unwrap();
+        // Con LED apagado: I_led = 0 => I_ce = 0 => no caída en Rc => V_C = 5V (aislamiento perfecto)
+        assert!((v_collector_off - 5.0).abs() < 1e-3,
+                "Con LED apagado, V_C debe ser 5V (aislamiento galvánico perfecto), obtenido: {}", v_collector_off);
+
+        // Y el ánodo del LED también debe ser ~0V (sin excitación)
+        let v_anode_off = *res_off.node_voltages.get("2").unwrap();
+        assert!(v_anode_off.abs() < 0.1,
+                "Con V1=0V, el ánodo del LED debe estar en ~0V, obtenido: {}", v_anode_off);
+
+        // Diferencia entre ON y OFF: el cambio en V_C confirma la transferencia óptica
+        let delta_vc = v_collector_off - v_collector;
+        assert!(delta_vc > 0.1,
+                "La variación de V_C entre LED ON y OFF debe ser significativa (>0.1V) indicando acoplamiento óptico, delta: {}", delta_vc);
     }
 }
 
