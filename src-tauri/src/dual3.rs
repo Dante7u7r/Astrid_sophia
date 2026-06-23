@@ -21,30 +21,33 @@ impl Dual3 {
 
     pub fn exp(self) -> Self {
         let val = self.val.exp();
-        let mut deriv = [0.0; 3];
-        for i in 0..3 {
-            deriv[i] = self.deriv[i] * val;
-        }
+        let deriv = [
+            self.deriv[0] * val,
+            self.deriv[1] * val,
+            self.deriv[2] * val,
+        ];
         Dual3 { val, deriv }
     }
 
     pub fn ln(self) -> Self {
         let val = self.val.ln();
         let denom = if self.val.abs() < 1e-30 { 1e-30 } else { self.val };
-        let mut deriv = [0.0; 3];
-        for i in 0..3 {
-            deriv[i] = self.deriv[i] / denom;
-        }
+        let deriv = [
+            self.deriv[0] / denom,
+            self.deriv[1] / denom,
+            self.deriv[2] / denom,
+        ];
         Dual3 { val, deriv }
     }
 
     pub fn sqrt(self) -> Self {
         let val = self.val.sqrt();
         let denom = if val.abs() < 1e-30 { 1e-30 } else { 2.0 * val };
-        let mut deriv = [0.0; 3];
-        for i in 0..3 {
-            deriv[i] = self.deriv[i] / denom;
-        }
+        let deriv = [
+            self.deriv[0] / denom,
+            self.deriv[1] / denom,
+            self.deriv[2] / denom,
+        ];
         Dual3 { val, deriv }
     }
 
@@ -55,20 +58,22 @@ impl Dual3 {
         } else {
             n * self.val.powf(n - 1.0)
         };
-        let mut deriv = [0.0; 3];
-        for i in 0..3 {
-            deriv[i] = self.deriv[i] * factor;
-        }
+        let deriv = [
+            self.deriv[0] * factor,
+            self.deriv[1] * factor,
+            self.deriv[2] * factor,
+        ];
         Dual3 { val, deriv }
     }
 
     pub fn tanh(self) -> Self {
         let val = self.val.tanh();
         let factor = 1.0 - val * val;
-        let mut deriv = [0.0; 3];
-        for i in 0..3 {
-            deriv[i] = self.deriv[i] * factor;
-        }
+        let deriv = [
+            self.deriv[0] * factor,
+            self.deriv[1] * factor,
+            self.deriv[2] * factor,
+        ];
         Dual3 { val, deriv }
     }
 }

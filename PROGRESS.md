@@ -45,8 +45,9 @@
 | **33** | **Integración Trapezoidal (TRAP)** — Regla TRAP 2.º orden y LTE de 3.ª derivada | ✅ | `test_trap_integration_lc_resonance` |
 | **34** | **Newton-Raphson Amortiguado** — Backtracking Line Search y residuo KCL real | ✅ | `test_diode_circuit`, `test_bjt_amplifier` |
 | **35** | **Pseudo-Transient Analysis (PTA)** — Bucle adaptativo DC ficticio amortiguado | ✅ | `test_pta_robust_convergence` |
+| **36** | **Análisis de Distorsión por Intermodulación (IMD/IP3)** — Ratios IM2/IM3 y punto de intercepción IP3 | ✅ | `test_imd_two_tone_clipper` |
 
-**Total: 87 tests unitarios pasando al 100%**
+**Total: 88 tests unitarios pasando al 100%**
 
 ---
 
@@ -146,4 +147,4 @@ npm run tauri dev
 ---
 
 > **Nota:** Este archivo se actualiza con cada bloque de fases completado.  
-> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-35 completas`
+> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-36 completas`

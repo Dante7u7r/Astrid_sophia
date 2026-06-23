@@ -6771,6 +6771,137 @@ pub struct FftResult {
     pub thd: f64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ImdResult {
+    pub fundamental_power_dbv: f64,
+    pub im2_power_dbv: f64,
+    pub im3_power_dbv: f64,
+    pub imd_ratio_percent: f64,
+    pub ip3_out_dbv: f64,
+    pub frequencies: Vec<f64>,
+    pub magnitudes_db: Vec<f64>,
+}
+
+fn find_peak_magnitude(
+    frequencies: &[f64],
+    magnitudes: &[f64],
+    target_freq: f64,
+) -> f64 {
+    let mut best_bin = 0;
+    let mut min_diff = f64::MAX;
+    for (i, &f) in frequencies.iter().enumerate() {
+        let diff = (f - target_freq).abs();
+        if diff < min_diff {
+            min_diff = diff;
+            best_bin = i;
+        }
+    }
+
+    let mut max_mag = magnitudes[best_bin];
+    let start = best_bin.saturating_sub(3);
+    let end = (best_bin + 3).min(frequencies.len() - 1);
+    for i in start..=end {
+        if magnitudes[i] > max_mag {
+            max_mag = magnitudes[i];
+        }
+    }
+    max_mag
+}
+
+pub fn calculate_imd_analysis(
+    time_steps: &[TimeStepResult],
+    node_name: &str,
+    f1: f64,
+    f2: f64,
+) -> Result<ImdResult, String> {
+    if time_steps.len() < 2 {
+        return Err("No hay suficientes pasos de tiempo para análisis de intermodulación.".to_string());
+    }
+
+    let t_max = time_steps.last().unwrap().time;
+    let n_points = 2048; // Potencia de 2
+    let dt_uniform = t_max / (n_points - 1) as f64;
+
+    // 1. Remuestrear la señal de forma uniforme con Ventana de Hann para reducir la fuga espectral
+    let mut v_samples = vec![Complex::new(0.0, 0.0); n_points];
+    for i in 0..n_points {
+        let t_target = i as f64 * dt_uniform;
+        let v_val = interpolate_node_voltage(time_steps, node_name, t_target);
+
+        // Ventana de Hann: 0.5 * (1.0 - cos(2 * PI * i / (N - 1)))
+        let hann = 0.5 * (1.0 - (2.0 * std::f64::consts::PI * i as f64 / (n_points - 1) as f64).cos());
+        v_samples[i] = Complex::new(v_val * hann, 0.0);
+    }
+
+    // 2. Correr FFT
+    fft_radix2(&mut v_samples);
+
+    // 3. Extraer densidades espectrales del espectro unilateral
+    let fs = 1.0 / dt_uniform;
+    let half_n = n_points / 2;
+    let mut frequencies = Vec::with_capacity(half_n);
+    let mut magnitudes = Vec::with_capacity(half_n);
+    let mut magnitudes_db = Vec::with_capacity(half_n);
+
+    // Con ventana de Hann, multiplicamos por 2 para restaurar la amplitud del pico senoidal
+    for k in 0..half_n {
+        let freq = k as f64 * fs / n_points as f64;
+        frequencies.push(freq);
+
+        let raw_mag = v_samples[k].norm();
+        let mag = if k == 0 {
+            2.0 * raw_mag / n_points as f64
+        } else {
+            4.0 * raw_mag / n_points as f64
+        };
+        magnitudes.push(mag);
+
+        let db = 20.0 * mag.max(1e-9).log10();
+        magnitudes_db.push(db);
+    }
+
+    // 4. Medir componentes fundamentales
+    let mag_f1 = find_peak_magnitude(&frequencies, &magnitudes, f1);
+    let mag_f2 = find_peak_magnitude(&frequencies, &magnitudes, f2);
+
+    let a_fund = 0.5 * (mag_f1 + mag_f2);
+    let fund_power_dbv = 20.0 * a_fund.max(1e-9).log10();
+
+    // 5. Medir productos IM2
+    let mag_im2_diff = find_peak_magnitude(&frequencies, &magnitudes, (f1 - f2).abs());
+    let mag_im2_sum = find_peak_magnitude(&frequencies, &magnitudes, f1 + f2);
+    let a_im2 = 0.5 * (mag_im2_diff + mag_im2_sum);
+    let im2_power_dbv = 20.0 * a_im2.max(1e-9).log10();
+
+    // 6. Medir productos IM3
+    let mag_im3_lower = find_peak_magnitude(&frequencies, &magnitudes, (2.0 * f1 - f2).abs());
+    let mag_im3_upper = find_peak_magnitude(&frequencies, &magnitudes, (2.0 * f2 - f1).abs());
+    let a_im3 = 0.5 * (mag_im3_lower + mag_im3_upper);
+    let im3_power_dbv = 20.0 * a_im3.max(1e-9).log10();
+
+    // 7. Calcular tasa de IMD en porcentaje
+    let total_im_sq = (mag_im2_diff * mag_im2_diff) + (mag_im2_sum * mag_im2_sum) + (mag_im3_lower * mag_im3_lower) + (mag_im3_upper * mag_im3_upper);
+    let imd_ratio_percent = if a_fund > 1e-6 {
+        (total_im_sq.sqrt() / a_fund) * 100.0
+    } else {
+        0.0
+    };
+
+    // 8. Extrapolar IP3 de salida
+    let ip3_out_dbv = fund_power_dbv + (fund_power_dbv - im3_power_dbv) / 2.0;
+
+    Ok(ImdResult {
+        fundamental_power_dbv: fund_power_dbv,
+        im2_power_dbv,
+        im3_power_dbv,
+        imd_ratio_percent,
+        ip3_out_dbv,
+        frequencies,
+        magnitudes_db,
+    })
+}
+
 // Remuestreo por interpolación lineal para redes temporales no uniformes del paso adaptativo
 fn interpolate_node_voltage(
     results: &[TimeStepResult],
@@ -12401,7 +12532,7 @@ mod tests {
         assert!(res.is_ok(), "Static pivoting debería estabilizar y permitir factorizar sin error");
 
         let b = nalgebra::DVector::from_vec(vec![Complex::new(1.0, 0.0), Complex::new(2.0, 0.0)]);
-        let sol = symbolic.solve_complex(&mut workspace, &b);
+        let sol = symbolic.solve_complex(&workspace, &b);
         assert!(sol.is_some(), "Debería retornar solución");
         let solution = sol.unwrap();
         // Con static pivoting en 1e-28, la solución obtenida debe ser estable y finita
@@ -12691,6 +12822,48 @@ mod tests {
         let v_out = *res.node_voltages.get("2").unwrap();
         // Con Vin = 1V, la salida se saturará a +15V o -15V (o un valor intermedio estable)
         assert!(v_out.abs() > 0.1, "Voltaje de salida del Schmitt trigger inválido: {}", v_out);
+    }
+
+    #[test]
+    fn test_imd_two_tone_clipper() {
+        let f1 = 900.0;
+        let f2 = 1000.0;
+        let t_max = 0.05; // 50 ms
+
+        // Generar 2048 pasos uniformes de una señal de dos tonos con distorsión cúbica
+        let n_steps = 2048;
+        let mut time_steps = Vec::with_capacity(n_steps);
+        for i in 0..n_steps {
+            let t = (i as f64) * (t_max / (n_steps - 1) as f64);
+            let mut node_voltages = HashMap::new();
+
+            // Señal fundamental de dos tonos
+            let v_fund = (2.0 * std::f64::consts::PI * f1 * t).sin() + (2.0 * std::f64::consts::PI * f2 * t).sin();
+            // Agregar una distorsión no lineal cúbica que genera IM3
+            let v_distorted = v_fund - 0.05 * v_fund.powi(3);
+
+            node_voltages.insert("out".to_string(), v_distorted);
+
+            time_steps.push(TimeStepResult {
+                time: t,
+                node_voltages,
+                branch_currents: HashMap::new(),
+            });
+        }
+
+        let imd_res = calculate_imd_analysis(&time_steps, "out", f1, f2).unwrap();
+
+        println!("Power Fund: {}, IM3: {}, IMD%: {}, IP3: {}",
+                 imd_res.fundamental_power_dbv, imd_res.im3_power_dbv, imd_res.imd_ratio_percent, imd_res.ip3_out_dbv);
+
+        // Las fundamentales deben detectarse con buena potencia
+        assert!(imd_res.fundamental_power_dbv > -10.0, "La potencia fundamental debería ser medible");
+        // El producto IM3 a 2f1 - f2 (800Hz) o 2f2 - f1 (1100Hz) debe ser detectable
+        assert!(imd_res.im3_power_dbv > -60.0, "Los productos IM3 deberían ser detectables en el espectro");
+        // La tasa de IMD en porcentaje debe ser positiva y razonable
+        assert!(imd_res.imd_ratio_percent > 0.1 && imd_res.imd_ratio_percent < 25.0, "IMD fuera de rango: {}%", imd_res.imd_ratio_percent);
+        // IP3 extrapolado debe ser estable y mayor que la potencia fundamental
+        assert!(imd_res.ip3_out_dbv > imd_res.fundamental_power_dbv, "IP3 de salida ({}) debe ser mayor que la fundamental ({})", imd_res.ip3_out_dbv, imd_res.fundamental_power_dbv);
     }
 }
 

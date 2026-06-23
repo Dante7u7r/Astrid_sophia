@@ -51,7 +51,7 @@ impl SchurParallelSolver {
             .collect();
 
         // Ordenar de forma descendente por grado estructural
-        degrees.sort_by(|a, b| b.1.cmp(&a.1));
+        degrees.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         // Seleccionar los nodos de mayor grado como candidatos de acoplamiento global (10%-15% del circuito)
         let num_edge_candidates = ((n as f64) * threshold_ratio).round() as usize;
@@ -62,8 +62,8 @@ impl SchurParallelSolver {
 
         // En MNA, el nodo 0 suele tener mucha conectividad (referencia GND activa en el netlist).
         // Los enviamos al borde directamente para desligar el circuito.
-        for i in 0..num_edge_candidates {
-            let node = degrees[i].0;
+        for item in degrees.iter().take(num_edge_candidates) {
+            let node = item.0;
             is_edge[node] = true;
             edge_nodes.push(node);
         }

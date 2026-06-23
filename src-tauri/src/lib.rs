@@ -68,6 +68,16 @@ async fn run_fft_analysis(
 }
 
 #[tauri::command]
+async fn run_imd_analysis(
+    time_steps: Vec<solver::TimeStepResult>,
+    node_name: String,
+    f1: f64,
+    f2: f64,
+) -> Result<solver::ImdResult, String> {
+    solver::calculate_imd_analysis(&time_steps, &node_name, f1, f2)
+}
+
+#[tauri::command]
 async fn run_noise_sweep(
     netlist: solver::CircuitNetlist,
     settings: solver::NoiseSweepSettings,
@@ -188,6 +198,7 @@ pub fn run() {
             parse_spice_netlist,
             run_monte_carlo_transient,
             run_fft_analysis,
+            run_imd_analysis,
             run_noise_sweep,
             evaluate_measures,
             expand_transmission_line,
