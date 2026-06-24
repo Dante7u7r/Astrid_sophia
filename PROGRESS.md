@@ -1,6 +1,6 @@
 # 🚀 Astryd Sophia v3.0 Evolution — Estado del Proyecto
 
-> Simulador de circuitos electrónicos de grado industrial.  
+> Simulador de circuitos electrónicos de grado industrial (37 fases completadas).  
 > **Stack:** Tauri + Rust (backend MNA) + TypeScript/Canvas (frontend)  
 > **Última actualización:** 22 de junio de 2026
 
@@ -144,8 +144,12 @@ npm run tauri dev
 | `DIODE_IS` | 1×10⁻¹² A | Corriente de saturación |
 | `DIODE_VT` | 25.852 mV | Voltaje térmico a 300K |
 | `EG_SI_300` | 1.12 eV | Banda prohibida Si (Varshni) |
+| `OPTO_RTH_JA` | 200 °C/W | Resistencia térmica opto DIP-4 |
+| `OPTO_CTH` | 100 µJ/°C | Capacidad térmica opto DIP-4 |
+| `OPTO_DEFAULT_CTR` | 0.5 | Current Transfer Ratio por defecto |
+| `OPTO_DEFAULT_VSAT` | 0.2 V | Saturación suave del fototransistor |
 
 ---
 
 > **Nota:** Este archivo se actualiza con cada bloque de fases completado.  
-> Último commit: `feat: Astryd Sophia v3.0 - Fases 22-36 completas`
+> Último commit: `feat: Astryd Sophia v3.0 - Fase 37 (Dispositivos Optoelectrónicos: LED + Optoacoplador)`

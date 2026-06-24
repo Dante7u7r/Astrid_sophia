@@ -59,6 +59,11 @@ pub struct ComponentData {
     pub opto_n: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opto_vsat: Option<f64>,
+    // Parámetros de tiristores (SCR) y TRIACs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scr_vgt: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scr_ih: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bjt_is: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -195,7 +200,32 @@ const OPTO_CTH: f64 = 1e-4;        // Opto DIP-4: 100 µJ/°C
 
 // Parámetros por defecto del optoacoplador (lado receptor fototransistor)
 const OPTO_DEFAULT_CTR: f64 = 0.5;   // Current Transfer Ratio: 50%
-const OPTO_DEFAULT_VSAT: f64 = 0.2;  // Tensión de saturación suave del transistor (V)
+const OPTO_DEFAULT_VSAT: f64 = 0.2;
+
+// Parámetros por defecto para tiristores (SCR/TRIAC)
+pub const SCR_DEFAULT_VGT: f64 = 0.7;   // Voltaje de disparo de puerta (V)
+pub const SCR_DEFAULT_IH: f64 = 5e-3;   // Corriente de mantenimiento (A)
+pub const SCR_DEFAULT_IS: f64 = 1e-12;  // Corriente de saturación de los BJTs internos (A)
+pub const SCR_MAX_BETA: f64 = 200.0;    // β máximo para evitar problemas de convergencia  // Tensión de saturación suave del transistor (V)
+
+fn evaluate_pn_junction(vj: f64, vt: f64, is_val: f64) -> (f64, f64, f64) {
+    let v_limit = 0.70; // Voltaje límite de linealización
+    if vj <= v_limit {
+        let exp_val = (vj / vt).exp();
+        let i = is_val * (exp_val - 1.0);
+        let g = (is_val / vt) * exp_val;
+        let ieq = i - g * vj;
+        (i, g, ieq)
+    } else {
+        let exp_limit = (v_limit / vt).exp();
+        let i_limit = is_val * (exp_limit - 1.0);
+        let g_limit = (is_val / vt) * exp_limit;
+        let i = i_limit + g_limit * (vj - v_limit);
+        let g = g_limit;
+        let ieq = i_limit - g_limit * v_limit;
+        (i, g, ieq)
+    }
+}
 
 // Coeficientes de temperatura para MOSFETs (SPICE Level 1 / Level 3)
 const MOS_VTH_TC: f64 = -2.3e-3;   // dVth/dT = -2.3 mV/°C (Vth disminuye con T)
@@ -1549,8 +1579,8 @@ fn solve_newton_raphson_core(
 
                 // Estimar corrientes de base y colector de la iteración previa para calcular caídas óhmicas
                 // Damping preliminar de voltajes previos para cálculo seguro sin desbordamiento
-                let vbe_prev_safe = pnjlim(vbe_old_raw, vbe_old_raw, vt, 0.6);
-                let vbc_prev_safe = pnjlim(vbc_old_raw, vbc_old_raw, vt, 0.6);
+                let vbe_prev_safe = pnjlim(vbe_old_raw, vbe_old_raw, vt, 0.6).min(0.95);
+                let vbc_prev_safe = pnjlim(vbc_old_raw, vbc_old_raw, vt, 0.6).min(0.95);
 
                 let exp_be_old = (vbe_prev_safe / vt).exp();
                 let exp_bc_old = (vbc_prev_safe / vt).exp();
@@ -1573,16 +1603,8 @@ fn solve_newton_raphson_core(
                 let vbe = pnjlim(vbe_new, vbe_old, vt, 0.6);
                 let vbc = pnjlim(vbc_new, vbc_old, vt, 0.6);
 
-                let exp_be = (vbe / vt).exp();
-                let exp_bc = (vbc / vt).exp();
-
-                let ide = bjt_is_val * (exp_be - 1.0);
-                let gbe = (bjt_is_val / vt) * exp_be;
-                let ieq_be = ide - gbe * vbe;
-
-                let idc = bjt_is_val * (exp_bc - 1.0);
-                let gbc = (bjt_is_val / vt) * exp_bc;
-                let ieq_bc = idc - gbc * vbc;
+                let (ide, gbe, ieq_be) = evaluate_pn_junction(vbe, vt, bjt_is_val);
+                let (idc, gbc, ieq_bc) = evaluate_pn_junction(vbc, vt, bjt_is_val);
 
                 let g_be_b = gbe / (beta_f + 1.0);
                 let g_bc_b = gbc / (beta_r + 1.0);
@@ -2074,6 +2096,8 @@ fn solve_newton_raphson_core(
     };
 
     let mut stamped_matrix_and_vector: Option<(SparseMatrix, DVector<f64>)> = None;
+    let mut lambda_backtrack = 1.0;
+    let mut prev_max_diff = f64::MAX;
 
     // 2. Bucle Newton-Raphson amortiguado
     for _iter in 1..=max_iter {
@@ -2238,6 +2262,9 @@ fn solve_homotopy_core(
         }
     }
 
+
+    let mut lambda_backtrack = 1.0;
+    let mut prev_max_diff = f64::MAX;
 
     // 2. Bucle Newton-Raphson
     for _iter in 1..=max_iter {
@@ -2536,8 +2563,8 @@ fn solve_homotopy_core(
                 let alpha_f = beta_f / (beta_f + 1.0);
                 let alpha_r = beta_r / (beta_r + 1.0);
 
-                let vbe_prev_safe = pnjlim(vbe_old_raw, vbe_old_raw, vt, 0.6);
-                let vbc_prev_safe = pnjlim(vbc_old_raw, vbc_old_raw, vt, 0.6);
+                let vbe_prev_safe = pnjlim(vbe_old_raw, vbe_old_raw, vt, 0.6).min(0.95);
+                let vbc_prev_safe = pnjlim(vbc_old_raw, vbc_old_raw, vt, 0.6).min(0.95);
 
                 let exp_be_old = (vbe_prev_safe / vt).exp();
                 let exp_bc_old = (vbc_prev_safe / vt).exp();
@@ -2558,16 +2585,8 @@ fn solve_homotopy_core(
                 let vbe = pnjlim(vbe_new, vbe_old, vt, 0.6);
                 let vbc = pnjlim(vbc_new, vbc_old, vt, 0.6);
 
-                let exp_be = (vbe / vt).exp();
-                let exp_bc = (vbc / vt).exp();
-
-                let ide = bjt_is_val * (exp_be - 1.0);
-                let gbe = (bjt_is_val / vt) * exp_be;
-                let ieq_be = ide - gbe * vbe;
-
-                let idc = bjt_is_val * (exp_bc - 1.0);
-                let gbc = (bjt_is_val / vt) * exp_bc;
-                let ieq_bc = idc - gbc * vbc;
+                let (ide, gbe, ieq_be) = evaluate_pn_junction(vbe, vt, bjt_is_val);
+                let (idc, gbc, ieq_bc) = evaluate_pn_junction(vbc, vt, bjt_is_val);
 
                 let g_be_b = gbe / (beta_f + 1.0);
                 let g_bc_b = gbc / (beta_r + 1.0);
@@ -2687,8 +2706,15 @@ fn solve_homotopy_core(
                 }
             }
 
-            // Amortiguamiento dinámico Newton-Raphson:
-            let lambda_damp = if max_diff > 2.0 * vt { 0.35 } else { 1.0 };
+            // Amortiguamiento dinámico Newton-Raphson con Backtracking acelerado:
+            let base_lambda = if max_diff > 2.0 * vt { 0.35 } else { 1.0 };
+            if _iter > 1 && max_diff >= prev_max_diff {
+                lambda_backtrack *= 0.5;
+            } else if _iter > 1 && max_diff < prev_max_diff {
+                lambda_backtrack = f64::min(lambda_backtrack * 2.0, 1.0);
+            }
+            let lambda_damp = base_lambda * lambda_backtrack;
+            prev_max_diff = max_diff;
 
             prev_prev_voltages = prev_voltages.clone();
             for i in 1..=n {
@@ -3015,6 +3041,7 @@ pub fn solve_transient_circuit_with_initial_states(
     cap_init: HashMap<String, f64>,
     ind_init: HashMap<String, f64>,
 ) -> Result<(Vec<TimeStepResult>, HashMap<String, f64>, HashMap<String, f64>), String> {
+
     let (vt, _is_temp) = get_thermal_parameters(netlist.temperature, None);
     let is_fixed = settings.fixed_step.unwrap_or(false) || netlist.fixed_step.unwrap_or(false);
     let integration_method = settings.integration_method.as_deref().unwrap_or("euler");
@@ -3044,6 +3071,7 @@ pub fn solve_transient_circuit_with_initial_states(
     for (idx, vs) in v_sources.iter().enumerate() {
         vsource_map.insert(vs.id.clone(), idx);
     }
+
 
     // Inicializar estados de los almacenes de energía (Capacitores y Bobinas) con valores pasados o 0.0
     let mut cap_states: HashMap<String, f64> = HashMap::new();
@@ -3086,6 +3114,7 @@ pub fn solve_transient_circuit_with_initial_states(
         }
     }
 
+
     let has_nonlinear = netlist.components.iter().any(|c| {
         c.comp_type == "diode" || c.comp_type == "led" || c.comp_type == "opto" || c.comp_type == "nmos" || c.comp_type == "pmos" ||
         c.comp_type == "npn" || c.comp_type == "pnp" || c.comp_type == "opamp" ||
@@ -3122,7 +3151,9 @@ pub fn solve_transient_circuit_with_initial_states(
     // Armar la matriz lineal estática BASE (Resistores, Fuentes de voltaje independientes)
     let mut matrix_a_linear = DMatrix::<f64>::zeros(size, size);
     let mut vector_z_linear = DVector::<f64>::zeros(size);
+
     stamp_linear_components(netlist, n, &vsource_map, &mut matrix_a_linear, &mut vector_z_linear)?;
+
 
     // Inicializar planificador Mixed-Signal y estados iniciales
     let mut ms_scheduler = MixedSignalScheduler::new();
@@ -3173,6 +3204,7 @@ pub fn solve_transient_circuit_with_initial_states(
 
     // Iterar en el tiempo de forma dinámica
     while t <= t_max {
+
         let gear2_active_this_step = integration_method == "gear2" && steps_completed >= 2;
 
         // Respaldar estados antes de intentar resolver el paso
@@ -3498,6 +3530,8 @@ pub fn solve_transient_circuit_with_initial_states(
             let mut prev_prev_v = prev_v.clone();
 
             let mut solve_err = None;
+            let mut lambda_backtrack = 1.0;
+            let mut prev_max_diff = f64::MAX;
 
             for _iter in 0..max_iter {
                 let mut matrix_a_iter = matrix_a.clone();
@@ -3861,8 +3895,8 @@ pub fn solve_transient_circuit_with_initial_states(
 
                         // Estimar corrientes de base y colector de la iteración previa para calcular caídas óhmicas
                         // Damping preliminar de voltajes previos para cálculo seguro sin desbordamiento
-                        let vbe_prev_safe = pnjlim(vbe_old_raw, vbe_old_raw, vt_b, 0.6);
-                        let vbc_prev_safe = pnjlim(vbc_old_raw, vbc_old_raw, vt_b, 0.6);
+                        let vbe_prev_safe = pnjlim(vbe_old_raw, vbe_old_raw, vt_b, 0.6).min(0.95);
+                        let vbc_prev_safe = pnjlim(vbc_old_raw, vbc_old_raw, vt_b, 0.6).min(0.95);
 
                         let exp_be_old = (vbe_prev_safe / vt_b).exp();
                         let exp_bc_old = (vbc_prev_safe / vt_b).exp();
@@ -3885,20 +3919,19 @@ pub fn solve_transient_circuit_with_initial_states(
                         let vbe = pnjlim(vbe_new, vbe_old, vt_b, 0.6);
                         let vbc = pnjlim(vbc_new, vbc_old, vt_b, 0.6);
 
-                        let exp_be = (vbe / vt_b).exp();
-                        let exp_bc = (vbc / vt_b).exp();
-
                         // Multiplicador de Efecto Early directo en activo (Upgrade 3)
                         let vce = if is_npn { v_collector - v_emitter } else { v_emitter - v_collector };
                         let v_af = comp.bjt_vaf.unwrap_or(if is_npn { 100.0 } else { 50.0 });
                         let k_early = 1.0 + vce.max(0.0) / v_af;
 
-                        let ide = is_b * (exp_be - 1.0) * k_early;
-                        let gbe = (is_b / vt_b) * exp_be * k_early;
+                        let (ide_raw, gbe_raw, ieq_be_raw) = evaluate_pn_junction(vbe, vt_b, is_b);
+                        let ide = ide_raw * k_early;
+                        let gbe = gbe_raw * k_early;
                         let ieq_be = ide - gbe * vbe;
 
-                        let idc = is_b * (exp_bc - 1.0) * k_early;
-                        let gbc = (is_b / vt_b) * exp_bc * k_early;
+                        let (idc_raw, gbc_raw, ieq_bc_raw) = evaluate_pn_junction(vbc, vt_b, is_b);
+                        let idc = idc_raw * k_early;
+                        let gbc = gbc_raw * k_early;
                         let ieq_bc = idc - gbc * vbc;
 
                         let g_be_b = gbe / (beta_f + 1.0);
@@ -4312,9 +4345,18 @@ pub fn solve_transient_circuit_with_initial_states(
                         if diff > max_diff { max_diff = diff; }
                     }
 
-                    // Amortiguamiento dinámico Newton-Raphson transitorio (Fase 15):
-                    // Aplica lambda = 0.35 ante saltos rápidos mayores que 50 mV para evitar inestabilidad exponencial.
-                    let lambda = if max_diff > 2.0 * vt { 0.35 } else { 1.0 };
+
+                    // Amortiguamiento dinámico Newton-Raphson transitorio con Backtracking acelerado:
+                    // Si el error de esta iteración es mayor o igual que el de la anterior, reducimos el paso por 0.5.
+                    // Si el error es menor, aumentamos el paso de forma multiplicativa para acelerar.
+                    let base_lambda = if max_diff > 2.0 * vt { 0.35 } else { 1.0 };
+                    if _iter > 0 && max_diff >= prev_max_diff {
+                        lambda_backtrack *= 0.5;
+                    } else if _iter > 0 && max_diff < prev_max_diff {
+                        lambda_backtrack = f64::min(lambda_backtrack * 2.0, 1.0);
+                    }
+                    let lambda = base_lambda * lambda_backtrack;
+                    prev_max_diff = max_diff;
 
                     prev_prev_v = prev_v.clone();
                     for i in 1..=n {
@@ -4410,6 +4452,8 @@ pub fn solve_transient_circuit_with_initial_states(
                 prev_dt = dt;
                 if event_intercepted {
                     dt = original_dt;
+                } else if is_fixed {
+                    dt = settings.dt;
                 }
 
                 // Rotar histórico de soluciones
@@ -5047,7 +5091,7 @@ pub fn solve_transient_circuit_with_initial_states(
             }
         } else {
             // Si la iteración física en sí misma divergió matemáticamente y dt > dt_min, reducimos dt e intentamos nuevamente
-            if !is_fixed && dt > dt_min {
+            if dt > dt_min {
                 cap_states = cap_states_backup;
                 ind_states = ind_states_backup;
                 cap_states_prev = cap_states_prev_backup;
@@ -13446,6 +13490,57 @@ mod tests {
         let delta_vc = v_collector_off - v_collector;
         assert!(delta_vc > 0.1,
                 "La variación de V_C entre LED ON y OFF debe ser significativa (>0.1V) indicando acoplamiento óptico, delta: {}", delta_vc);
+    }
+
+    #[test]
+    fn test_scr_phase_control() {
+        let netlist_str = "
+        * SCR Phase Control Test
+        .model myscr scr (vgt=0.7 ih=5m)
+        V_ac 1 0 sine (0 10 50)
+        Bgate 3 2 V={min(5.0, max(0.0, (t - 0.0025) * 100000.0)) - min(5.0, max(0.0, (t - 0.0035) * 100000.0))}
+        Rg 3 4 1k
+        S1 1 2 4 myscr
+        R_load 2 0 100
+        ";
+
+        let netlist = crate::parser::parse_spice_netlist_to_native(netlist_str).unwrap();
+
+        let settings = TransientSettings {
+            dt: 0.0001,   // 0.1 ms
+            t_max: 0.020, // 20 ms (un ciclo completo a 50Hz)
+            fixed_step: Some(true),
+            integration_method: None,
+        };
+
+        let results = solve_transient_circuit(&netlist, &settings).unwrap();
+        assert!(results.len() > 0, "Debería haber al menos un paso temporal de simulación.");
+
+        let get_voltage_at = |target_t: f64| -> f64 {
+            let mut closest_val = 0.0;
+            let mut min_diff = f64::MAX;
+            for step in &results {
+                let diff = (step.time - target_t).abs();
+                if diff < min_diff {
+                    min_diff = diff;
+                    closest_val = *step.node_voltages.get("2").unwrap_or(&0.0);
+                }
+            }
+            closest_val
+        };
+
+        // 1. Antes del disparo (t = 1.0 ms): el SCR está apagado, V_load ~ 0V
+        let v_t1 = get_voltage_at(0.001);
+        assert!(v_t1.abs() < 0.15, "Antes de disparar (1ms), la carga debería estar apagada (0V), obtenido: {}", v_t1);
+
+        // 2. Después del disparo y en el pico positivo (t = 5.0 ms): el SCR está encendido (conduce)
+        // V_in(5ms) = 10V. V_load ~ V_in - caída_scr ~ 10 - 1.4 ~ 8.6V.
+        let v_t5 = get_voltage_at(0.005);
+        assert!(v_t5 > 7.2 && v_t5 < 9.5, "Después de disparar (5ms), el SCR debería conducir (~8.6V), obtenido: {}", v_t5);
+
+        // 3. En el ciclo negativo (t = 15.0 ms): el SCR se apagó en el cruce por cero y permanece bloqueado
+        let v_t15 = get_voltage_at(0.015);
+        assert!(v_t15.abs() < 0.15, "En el semiciclo negativo (15ms), la carga debería estar bloqueada (0V), obtenido: {}", v_t15);
     }
 }
 

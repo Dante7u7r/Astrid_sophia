@@ -1,6 +1,6 @@
-mod solver;
+pub mod solver;
 mod telemetry;
-mod parser;
+pub mod parser;
 mod topology;
 mod sparse_csc;
 mod symbolic;
