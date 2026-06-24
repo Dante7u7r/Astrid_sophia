@@ -74,8 +74,8 @@ pub fn detect_ideal_voltage_loops(netlist: &CircuitNetlist, n: usize) -> Result<
     // Coleccionar aristas que sean fuentes de voltaje ideales
     for comp in &netlist.components {
         let ty = comp.comp_type.as_str();
-        if ty == "vsource" || ty == "vcvs" || ty == "ccvs" {
-            if comp.pins.len() >= 2 {
+        if (ty == "vsource" || ty == "vcvs" || ty == "ccvs")
+            && comp.pins.len() >= 2 {
                 if let (Ok(u), Ok(v)) = (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>()) {
                     let u_node = if u > n { 0 } else { u };
                     let v_node = if v > n { 0 } else { v };
@@ -86,7 +86,6 @@ pub fn detect_ideal_voltage_loops(netlist: &CircuitNetlist, n: usize) -> Result<
                     edge_sources.insert(edge, comp.id.clone());
                 }
             }
-        }
     }
 
     // Buscar ciclos simples en el grafo de fuentes usando búsqueda con retroceso (DFS)

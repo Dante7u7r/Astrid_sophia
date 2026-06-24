@@ -117,15 +117,13 @@ mod platform {
         let mut ram_bytes = 0;
         if let Ok(file) = File::open("/proc/self/status") {
             let reader = BufReader::new(file);
-            for line in reader.lines() {
-                if let Ok(l) = line {
-                    if l.starts_with("VmRSS:") {
-                        let parts: Vec<&str> = l.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            if let Ok(kb) = parts[1].parse::<usize>() {
-                                ram_bytes = kb * 1024;
-                                break;
-                            }
+            for l in reader.lines().map_while(Result::ok) {
+                if l.starts_with("VmRSS:") {
+                    let parts: Vec<&str> = l.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let Ok(kb) = parts[1].parse::<usize>() {
+                            ram_bytes = kb * 1024;
+                            break;
                         }
                     }
                 }
@@ -179,11 +177,7 @@ pub fn get_system_telemetry() -> TelemetryData {
             cpu_percent = (diff_seconds / duration) * 100.0 / num_cpus;
             
             // Acotar porcentaje
-            if cpu_percent > 100.0 {
-                cpu_percent = 100.0;
-            } else if cpu_percent < 0.0 {
-                cpu_percent = 0.0;
-            }
+            cpu_percent = cpu_percent.clamp(0.0, 100.0);
         }
     }
 

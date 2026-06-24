@@ -2,7 +2,7 @@
 
 > Simulador de circuitos electrónicos de grado industrial (37 fases completadas).  
 > **Stack:** Tauri + Rust (backend MNA) + TypeScript/Canvas (frontend)  
-> **Última actualización:** 22 de junio de 2026
+> **Última actualización:** 23 de junio de 2026
 
 ---
 
@@ -48,7 +48,7 @@
 | **36** | **Análisis de Distorsión por Intermodulación (IMD/IP3)** — Ratios IM2/IM3 y punto de intercepción IP3 | ✅ | `test_imd_two_tone_clipper` |
 | **37** | **Dispositivos Optoelectrónicos** — LED (Shockley) y Optoacoplador (CTR, V_sat, acoplamiento óptico, aislamiento galvánico) | ✅ | `test_opto_isolation` |
 
-**Total: 89 tests unitarios pasando al 100%**
+**Total: 90 tests unitarios pasando al 100%** (solver.rs: 81, parser.rs: 8, gpu_solver.rs: 1)
 
 ---
 
@@ -57,12 +57,19 @@
 ```
 Astrid_sophia/
 ├── src/                          # Frontend TypeScript
-│   ├── main.ts                   # Lógica principal, IPC, oscilógrafo, Bode
-│   ├── canvas_orchestrator.ts    # Motor de renderizado vectorial Canvas 2D
+│   ├── main.ts                   # Lógica principal, IPC, oscilógrafo, Bode (~3200L)
+│   ├── canvas_orchestrator.ts    # Motor de renderizado vectorial Canvas 2D (~1500L)
 │   ├── styles.css                # Sistema de diseño premium (HSL)
-│   └── components.css            # Componentes de UI
+│   ├── components.css            # Componentes de UI
+│   └── simulation/               # Subsistema MCU
+│       ├── index.ts              # Agregador de módulos MCU
+│       ├── mcu-types.ts          # Tipos base (McuConfig, McuExecutionState)
+│       ├── mcu-runtime.ts        # Runtime cycle-accurate (step/run/halt)
+│       ├── mcu-8051.ts           # ISA 8051 (instruction-set accurate)
+│       ├── mcu-avr.ts            # Definiciones AVR
+│       └── mcu-spice-bridge.ts  # Co-simulación digital/analógica
 ├── src-tauri/src/                # Backend Rust
-│   ├── solver.rs                 # ★ Motor MNA completo (~4,500 líneas)
+│   ├── solver.rs                 # ★ Motor MNA completo (~13500L)
 │   │   ├── solve_dc_circuit          # DC con Newton-Raphson
 │   │   ├── solve_transient_circuit   # Transitorio adaptativo (BE + LTE)
 │   │   ├── solve_ac_sweep            # Bode (amplitud + fase)
@@ -73,10 +80,23 @@ Astrid_sophia/
 │   │   ├── apply_thermal_drift       # Deriva térmica (Fase 25)
 │   │   ├── solve_dc_circuit_thermal  # DC con temperatura global
 │   │   ├── solve_monte_carlo_transient
-│   │   └── calculate_fft_and_thd
-│   ├── parser.rs                 # Parser SPICE (.subckt, .model, valores)
-│   ├── lib.rs                    # Comandos IPC Tauri (13 endpoints)
-│   └── telemetry.rs              # Métricas del sistema (CPU, RAM)
+│   │   ├── solve_pss                 # PSS shooting method
+│   │   ├── run_stability_analysis     # Polos/ceros, margen de fase
+│   │   ├── calculate_fft_and_thd     # FFT Cooley-Tukey + THD
+│   │   └── calculate_imd_analysis     # IMD/IP3 intermodulación
+│   ├── parser.rs                 # Parser SPICE (.subckt, .model, .lib, VaExpr) (~2000L)
+│   ├── sparse_csc.rs             # Matrices dispersas CSC + LU simbólico/numérico
+│   ├── sparse_parallel.rs       # Schur complement paralelo (rayon)
+│   ├── gpu_solver.rs             # Solver en GPU (WebGPU/wgpu)
+│   ├── krylov.rs                 # Iteración de Arnoldi (polos de estabilidad)
+│   ├── symbolic.rs               # Factorización simbólica (Markowitz)
+│   ├── dual3.rs                  # Autodiff numérico 3.er orden
+│   ├── topology.rs               # Detección de nodos flotantes y loops de voltaje
+│   ├── telemetry.rs              # Métricas del sistema (CPU, RAM)
+│   ├── lib.rs                    # Comandos IPC Tauri (20 endpoints)
+│   ├── main.rs                   # Entry point Tauri
+│   └── bin/
+│       └── debug_scr.rs           # Binario auxiliar para debug de SCR
 └── index.html                    # SPA principal
 ```
 
@@ -84,21 +104,29 @@ Astrid_sophia/
 
 ## 🔌 Comandos IPC Registrados (Tauri)
 
-| Comando | Fase | Descripción |
-|---------|------|-------------|
-| `ping` | 1 | Health check |
-| `run_dc_simulation` | 2 | Punto de operación DC |
-| `run_transient_simulation` | 4 | Transitorio adaptativo |
-| `run_ac_sweep` | 6 | Diagrama de Bode |
-| `run_dc_sweep` | 14 | Curva I-V paramétrica |
-| `parse_spice_netlist` | 15 | Parser SPICE jerárquico |
-| `run_monte_carlo_transient` | 16 | Monte Carlo estadístico |
-| `run_fft_analysis` | 17 | FFT + THD |
-| `run_noise_sweep` | 22 | Ruido espectral |
-| `evaluate_measures` | 23 | Mediciones automáticas |
-| `expand_transmission_line` | 24 | Expansión de línea RLCG |
-| `solve_dc_thermal` | 25 | DC con temperatura |
-| `get_performance_telemetry` | 20 | Métricas del sistema |
+| # | Comando | Fase | Descripción |
+|---|---------|------|-------------|
+| 1 | `ping` | 1 | Health check |
+| 2 | `run_dc_simulation` | 2 | Punto de operación DC |
+| 3 | `run_transient_simulation` | 4 | Transitorio adaptativo |
+| 4 | `run_ac_sweep` | 6 | Diagrama de Bode |
+| 5 | `run_dc_sweep` | 14 | Curva I-V paramétrica |
+| 6 | `parse_spice_netlist` | 15 | Parser SPICE jerárquico |
+| 7 | `run_monte_carlo_transient` | 16 | Monte Carlo estadístico |
+| 8 | `run_fft_analysis` | 17 | FFT + THD |
+| 9 | `run_imd_analysis` | 36 | Intermodulación IMD/IP3 |
+| 10 | `run_noise_sweep` | 22 | Ruido espectral |
+| 11 | `evaluate_measures` | 23 | Mediciones automáticas |
+| 12 | `expand_transmission_line` | 24 | Expansión de línea RLCG |
+| 13 | `solve_dc_thermal` | 25 | DC con temperatura |
+| 14 | `run_sensitivity_analysis` | 26 | Sensibilidad paramétrica |
+| 15 | `run_pss_simulation` | 27 | PSS shooting method |
+| 16 | `run_stability_analysis` | 29 | Polos, ceros, margen de fase |
+| 17 | `get_performance_telemetry` | 20 | Métricas del sistema |
+| 18 | `save_circuit_file` | 21 | Guardar esquemático (diálogo) |
+| 19 | `save_circuit_to_path` | 21 | Guardar esquemático (ruta directa) |
+| 20 | `open_circuit_file` | 21 | Abrir esquemático (diálogo) |
+
 ---
 
 ## 📦 Migración de Características Legacy (Electron -> Tauri)
@@ -124,6 +152,9 @@ Todas las fases del roadmap principal han sido completadas con éxito.
 # Backend (Rust tests)
 cd src-tauri
 cargo test
+
+# Linter (Clippy)
+cargo clippy --all-targets
 
 # Frontend (TypeScript build)
 npm run build
@@ -152,4 +183,4 @@ npm run tauri dev
 ---
 
 > **Nota:** Este archivo se actualiza con cada bloque de fases completado.  
-> Último commit: `feat: Astryd Sophia v3.0 - Fase 37 (Dispositivos Optoelectrónicos: LED + Optoacoplador)`
+> Último commit: `chore: clippy auto-fix (33 sugerencias) + limpieza de artefactos obsoletos`

@@ -1,4 +1,6 @@
+#![allow(clippy::needless_range_loop)]
 use crate::solver::SparseMatrix;
+
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]

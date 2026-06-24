@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 use crate::solver::{SparseMatrix, ComplexSparseMatrix};
 use num_complex::Complex;
 use nalgebra::DVector;
@@ -365,7 +366,7 @@ impl SymbolicLU {
         // Simulamos la eliminación para construir el patrón exacto de no-ceros de L y U
         let mut row_patterns = vec![BTreeMap::new(); size];
         for r in 0..size {
-            for (&c, _) in &matrix.rows[r] {
+            for &c in matrix.rows[r].keys() {
                 let r_perm = inv_p[r];
                 let c_perm = inv_q[c];
                 row_patterns[r_perm].insert(c_perm, 1.0);

@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use crate::solver::SparseMatrix;
 use crate::sparse_csc::{SparseMatrixCSC, SymbolicLU, NumericLUWorkspace};
 use nalgebra::{DVector, DMatrix};

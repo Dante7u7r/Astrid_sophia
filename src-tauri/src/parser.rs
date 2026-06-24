@@ -1,4 +1,4 @@
-use crate::solver::{ComponentData, CircuitNetlist, MutualInductance};
+use crate::solver::{ComponentData, CircuitNetlist, MutualInductance, ThermalConfig};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -40,9 +40,9 @@ pub fn resolve_includes_with_section(
             continue; // Ignorar código de control o encriptado propietario
         }
 
-        if clean.starts_with('+') {
+        if let Some(stripped) = clean.strip_prefix('+') {
             accum_line.push(' ');
-            accum_line.push_str(&clean[1..]);
+            accum_line.push_str(stripped);
         } else {
             if !accum_line.is_empty() {
                 processed_lines.push(accum_line.clone());
@@ -430,12 +430,12 @@ pub fn parse_va_expression(expr_str: &str) -> Result<VaExpr, String> {
     }
 
     // Nivel 3: Unario Negativo y Positivo
-    if clean.starts_with('-') {
-        let inner = parse_va_expression(&clean[1..])?;
+    if let Some(stripped) = clean.strip_prefix('-') {
+        let inner = parse_va_expression(stripped)?;
         return Ok(VaExpr::Neg(Box::new(inner)));
     }
-    if clean.starts_with('+') {
-        return parse_va_expression(&clean[1..]);
+    if let Some(stripped) = clean.strip_prefix('+') {
+        return parse_va_expression(stripped);
     }
 
     // Nivel 4: Paréntesis Externos
@@ -594,7 +594,7 @@ fn parse_waveform(wave_str: &str) -> Option<(String, Vec<f64>)> {
     
     let mut params = Vec::new();
     // Separar por espacios o comas
-    for token in params_str.split(|c| c == ' ' || c == ',' || c == '\t') {
+    for token in params_str.split([' ', ',', '\t']) {
         let t = token.trim();
         if !t.is_empty() {
             if let Ok(val) = parse_spice_value(t) {
@@ -834,8 +834,6 @@ fn evaluate_expression(expr: &str, param_env: &HashMap<String, f64>) -> Result<f
             t.clone()
         } else if let Some(&val) = param_env.get(&t.to_lowercase()) {
             format!("{}", val)
-        } else if let Ok(_) = parse_spice_value(t) {
-            t.clone()
         } else {
             t.clone()
         }
@@ -914,6 +912,7 @@ fn get_evaluated_model_param(
 }
 
 // Aplanar de forma recursiva una instancia de subcircuito
+#[allow(clippy::too_many_arguments)]
 fn flatten_subcircuit(
     instance_id: &str,
     subckt_template: &SubcktTemplate,
@@ -1213,9 +1212,8 @@ fn flatten_subcircuit(
             if comp_type == "bvoltage" || comp_type == "bcurrent" {
                 let joined_rest = tokens[3..].join(" ");
                 let clean_rest = joined_rest.trim();
-                let expr_part = if clean_rest.to_lowercase().starts_with("v=") {
-                    clean_rest[2..].trim()
-                } else if clean_rest.to_lowercase().starts_with("i=") {
+                let lower_clean_rest = clean_rest.to_lowercase();
+                let expr_part = if lower_clean_rest.starts_with("v=") || lower_clean_rest.starts_with("i=") {
                     clean_rest[2..].trim()
                 } else {
                     clean_rest
@@ -1227,14 +1225,13 @@ fn flatten_subcircuit(
                 comp.expression = Some(expression);
             }
 
-            if comp_type == "cccs" || comp_type == "ccvs" {
-                if tokens.len() >= 5 {
+            if (comp_type == "cccs" || comp_type == "ccvs")
+                && tokens.len() >= 5 {
                     comp.controlling_source = Some(format!("{}.{}", instance_id, tokens[3]));
                     if let Ok(val) = parse_spice_value(&tokens[4]) {
                         comp.value = val;
                     }
                 }
-            }
 
             // Parsear parámetros de compuertas lógicas si es compuerta
             if is_gate {
@@ -1333,6 +1330,12 @@ fn flatten_subcircuit(
                             comp.jfet_lambda = get_evaluated_model_param(m, "lambda", &param_env);
                             comp.jfet_cgs = get_evaluated_model_param(m, "cgs", &param_env);
                             comp.jfet_cgd = get_evaluated_model_param(m, "cgd", &param_env);
+                        } else if comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim3pmos" || comp.comp_type == "bsim4nmos" || comp.comp_type == "bsim4pmos" {
+                            comp.bsim_vmax = get_evaluated_model_param(m, "vmax", &param_env);
+                            comp.bsim_u0 = get_evaluated_model_param(m, "u0", &param_env);
+                            comp.bsim_tox = get_evaluated_model_param(m, "tox", &param_env);
+                            comp.bsim_eta0 = get_evaluated_model_param(m, "eta0", &param_env);
+                            comp.bsim_theta = get_evaluated_model_param(m, "theta", &param_env);
                         } else if comp.comp_type == "verilog_a" {
                             comp.va_model_name = Some(m.name.clone());
                             comp.va_ports = m.va_ports.clone();
@@ -1350,12 +1353,21 @@ fn flatten_subcircuit(
                 }
             }
 
-            // Parsear tolerancia opcional (ej: tol=1%)
+            // Parsear tolerancia opcional (ej: tol=1%) y parámetros térmicos (rth=, cth=)
             for tok in &tokens[actual_pins_count + 2..] {
-                if tok.to_lowercase().starts_with("tol=") {
+                let tok_lower = tok.to_lowercase();
+                if tok_lower.starts_with("tol=") {
                     let tol_str = &tok[4..].replace("%", "");
                     if let Ok(tol_val) = tol_str.parse::<f64>() {
                         comp.tolerance = Some(tol_val / 100.0);
+                    }
+                } else if tok_lower.starts_with("rth=") {
+                    if let Ok(val) = parse_spice_value(&tok[4..]) {
+                        comp.rth = Some(val);
+                    }
+                } else if tok_lower.starts_with("cth=") {
+                    if let Ok(val) = parse_spice_value(&tok[4..]) {
+                        comp.cth = Some(val);
                     }
                 }
             }
@@ -1396,6 +1408,12 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
     let mut ic_list = Vec::new();       // Para guardar condición inicial: (nodo, valor)
     let mut nodeset_list = Vec::new();  // Para guardar estimación: (nodo, valor)
     let mut global_temp: Option<f64> = None;
+    // Parámetros de simulación electro-térmica
+    let mut thermal_tamb: Option<f64> = None;
+    let mut thermal_maxiter: usize = 10;
+    let mut thermal_tol: f64 = 0.1;
+    let mut thermal_coupling: Vec<(String, String, f64)> = Vec::new();
+    let mut has_thermal_directive = false;
 
     // Fase 1: Leer y catalogar subcircuitos (.subckt / .ends), modelos (.model) y líneas raíz
     let mut current_subckt: Option<SubcktTemplate> = None;
@@ -1410,10 +1428,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             continue;
         }
 
-        if clean.starts_with('+') {
+        if let Some(stripped) = clean.strip_prefix('+') {
             // Línea de continuación
             accum_line.push(' ');
-            accum_line.push_str(&clean[1..]);
+            accum_line.push_str(stripped);
         } else {
             if !accum_line.is_empty() {
                 processed_lines.push(accum_line.clone());
@@ -1489,6 +1507,51 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                             node_part.clone()
                         };
                         nodeset_list.push((node_name, val));
+                    }
+                }
+            }
+            continue;
+        } else if first == ".thermal" {
+            // Directiva .THERMAL: configurar simulación electro-térmica
+            // Formato: .THERMAL TAMB=300.15 MAXITER=10 TOL=0.1 COUPLE=M1,M2,50.0
+            has_thermal_directive = true;
+            let thermal_line = tokens[1..].join(" ");
+            let clean_thermal = thermal_line.replace(" =", "=").replace("= ", "=");
+            let sub_tokens: Vec<String> = clean_thermal.split_whitespace().map(|s| s.to_string()).collect();
+            for token in sub_tokens {
+                if let Some(eq_idx) = token.find('=') {
+                    let key = token[..eq_idx].trim().to_lowercase();
+                    let val_str = token[eq_idx + 1..].trim();
+                    match key.as_str() {
+                        "tamb" => {
+                            if let Ok(val) = parse_spice_value(val_str) {
+                                thermal_tamb = Some(val);
+                            }
+                        }
+                        "maxiter" => {
+                            if let Ok(val) = parse_spice_value(val_str) {
+                                thermal_maxiter = val as usize;
+                            }
+                        }
+                        "tol" => {
+                            if let Ok(val) = parse_spice_value(val_str) {
+                                thermal_tol = val;
+                            }
+                        }
+                        "couple" => {
+                            // Formato: COUPLE=id1,id2,Rth_mutuo
+                            let parts: Vec<&str> = val_str.split(',').collect();
+                            if parts.len() == 3 {
+                                if let Ok(rth_val) = parse_spice_value(parts[2]) {
+                                    thermal_coupling.push((
+                                        parts[0].to_string(),
+                                        parts[1].to_string(),
+                                        rth_val,
+                                    ));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -1817,9 +1880,8 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             if comp_type == "bvoltage" || comp_type == "bcurrent" {
                 let joined_rest = tokens[3..].join(" ");
                 let clean_rest = joined_rest.trim();
-                let expr_part = if clean_rest.to_lowercase().starts_with("v=") {
-                    clean_rest[2..].trim()
-                } else if clean_rest.to_lowercase().starts_with("i=") {
+                let lower_clean_rest = clean_rest.to_lowercase();
+                let expr_part = if lower_clean_rest.starts_with("v=") || lower_clean_rest.starts_with("i=") {
                     clean_rest[2..].trim()
                 } else {
                     clean_rest
@@ -1831,14 +1893,13 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 comp.expression = Some(expression);
             }
 
-            if comp_type == "cccs" || comp_type == "ccvs" {
-                if tokens.len() >= 5 {
+            if (comp_type == "cccs" || comp_type == "ccvs")
+                && tokens.len() >= 5 {
                     comp.controlling_source = Some(tokens[3].clone());
                     if let Ok(val) = parse_spice_value(&tokens[4]) {
                         comp.value = val;
                     }
                 }
-            }
 
             // Parsear parámetros de compuertas lógicas si es compuerta
             if is_gate {
@@ -2006,6 +2067,16 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         temperature: global_temp,
         fixed_step: None,
         mutual_inductances: Some(mutual_inductances),
+        thermal_config: if has_thermal_directive {
+            Some(ThermalConfig {
+                t_amb: thermal_tamb.unwrap_or(300.15),
+                max_thermal_iters: thermal_maxiter,
+                thermal_tol,
+                thermal_coupling,
+            })
+        } else {
+            None
+        },
     })
 }
 
