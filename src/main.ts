@@ -216,7 +216,7 @@ function updatePropertiesPanel(comp: ComponentInstance) {
   const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
 
   if (waveContainer && waveTypeSelect && waveAmpInput && waveFreqInput && waveOffsetInput && waveDutyInput) {
-    if (comp.type === 'vsource') {
+    if (comp.type === 'vsource' || comp.type === 'isource') {
       waveContainer.style.display = "flex";
       waveTypeSelect.value = comp.waveType || "dc";
       waveAmpInput.value = (comp.amplitude ?? 5).toString();
@@ -285,6 +285,26 @@ function updatePropertiesPanel(comp: ComponentInstance) {
       propUnitInput.value = "Amplificador Operacional Activo";
       propValSlider.min = "0";
       propValSlider.max = "0";
+      break;
+    case 'isource':
+      propUnitInput.value = "Amperios (A) [Offset / CC]";
+      propValSlider.min = "-10";
+      propValSlider.max = "10";
+      break;
+    case 'led':
+      propUnitInput.value = "Color / Tensión Umbral (V)";
+      propValSlider.min = "1.5";
+      propValSlider.max = "3.5";
+      break;
+    case 'switch':
+      propUnitInput.value = "Estado (0=Abierto, 1=Cerrado)";
+      propValSlider.min = "0";
+      propValSlider.max = "1";
+      break;
+    case 'transformer':
+      propUnitInput.value = "Inductancia Primaria (H)";
+      propValSlider.min = "0.000001";
+      propValSlider.max = "1";
       break;
   }
 }
@@ -386,8 +406,8 @@ function initPropertyEditor() {
 
         selected.value = newVal;
 
-        // Si es una fuente de tensión, guardar los parámetros dinámicos de onda
-        if (selected.type === 'vsource') {
+// Si es una fuente de tensión o corriente, guardar los parámetros dinámicos de onda
+        if (selected.type === 'vsource' || selected.type === 'isource') {
           const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
           const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
           const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
@@ -406,6 +426,7 @@ function initPropertyEditor() {
             propValInput!.value = selected.value.toString();
             propValSlider!.value = selected.value.toString();
           }
+        }
         }
 
         updateCanvasRendering();
@@ -430,9 +451,17 @@ interface ExtractedComponent {
   dutyCycle?: number;
 }
 
+interface MutualInductance {
+  id: string;
+  l1_id: string;
+  l2_id: string;
+  k_coeff: number;
+}
+
 interface CircuitNetlist {
   components: ExtractedComponent[];
   wires: { id: string; nodes: string[] }[];
+  mutual_inductances?: MutualInductance[];
 }
 
 class DisjointSetUnion {
@@ -516,6 +545,7 @@ function extractElectricalNetlist(): CircuitNetlist | null {
   }
 
   const extractedComponents: ExtractedComponent[] = [];
+  let netlistMutualInductances: MutualInductance[] = [];
 
   for (const comp of orchestrator.components) {
     const pinsKeys = compPinMapping[comp.id] || [];
@@ -602,6 +632,59 @@ function extractElectricalNetlist(): CircuitNetlist | null {
         pins: [pin2Node, pin3Node]
       });
     }
+    else if (comp.type === 'transformer') {
+      // Transformer expands to two coupled inductors + mutual inductance entry
+      // Pins: 0,1 = primary | 2,3 = secondary
+      const pin0Root = dsu.find(`${comp.id}:0`);
+      const pin1Root = dsu.find(`${comp.id}:1`);
+      const pin2Root = dsu.find(`${comp.id}:2`);
+      const pin3Root = dsu.find(`${comp.id}:3`);
+
+      const roots = [pin0Root, pin1Root, pin2Root, pin3Root];
+      roots.forEach(r => {
+        if (!rootToNodeIdMap[r]) {
+          rootToNodeIdMap[r] = nextNodeId.toString();
+          nextNodeId++;
+        }
+      });
+
+      const priNode1 = rootToNodeIdMap[pin0Root];
+      const priNode2 = rootToNodeIdMap[pin1Root];
+      const secNode1 = rootToNodeIdMap[pin2Root];
+      const secNode2 = rootToNodeIdMap[pin3Root];
+
+      const L1 = comp.primaryInductance ?? 1e-3;
+      const L2 = comp.secondaryInductance ?? 1e-3;
+      const k = comp.couplingCoefficient ?? 0.9;
+
+      // Primary inductor
+      extractedComponents.push({
+        id: `${comp.id}__L1`,
+        type: 'inductor',
+        value: L1,
+        pins: [priNode1, priNode2]
+      });
+
+      // Secondary inductor
+      extractedComponents.push({
+        id: `${comp.id}__L2`,
+        type: 'inductor',
+        value: L2,
+        pins: [secNode1, secNode2]
+      });
+
+      // Add mutual inductance to the netlist (handled via separate field in CircuitNetlist)
+      // Note: The MutualInductance will be added to netlist.mutual_inductances after this loop
+      if (!netlistMutualInductances) {
+        netlistMutualInductances = [];
+      }
+      netlistMutualInductances.push({
+        id: `${comp.id}__K`,
+        l1_id: `${comp.id}__L1`,
+        l2_id: `${comp.id}__L2`,
+        k_coeff: k
+      });
+    }
     else {
       const pinsMapped: string[] = [];
       for (const pk of pinsKeys) {
@@ -653,6 +736,7 @@ function extractElectricalNetlist(): CircuitNetlist | null {
   return {
     components: extractedComponents,
     wires: extractedWires,
+    mutual_inductances: netlistMutualInductances.length > 0 ? netlistMutualInductances : undefined
   };
 }
 
@@ -722,7 +806,18 @@ function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
       const nodeNeg = parseInt(comp.pins[1]);
       const vsIdx = vSourceMap[comp.id];
       stampVoltageSource(vsIdx, nodePos, nodeNeg, comp.value);
+    } else if (comp.type === 'isource') {
+      const nodePos = parseInt(comp.pins[0]);
+      const nodeNeg = parseInt(comp.pins[1]);
+      // Current source: inject current into pos, extract from neg
+      if (nodePos > 0) Z[nodePos - 1] -= comp.value;
+      if (nodeNeg > 0) Z[nodeNeg - 1] += comp.value;
     } else if (comp.type === 'diode') {
+      const nodeAnode = parseInt(comp.pins[0]);
+      const nodeCathode = parseInt(comp.pins[1]);
+      stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
+    } else if (comp.type === 'led') {
+      // LED treated as diode in fallback
       const nodeAnode = parseInt(comp.pins[0]);
       const nodeCathode = parseInt(comp.pins[1]);
       stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
@@ -744,6 +839,15 @@ function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
       const nodeEmitter = parseInt(comp.pins[2]);
       stampConductance(nodeCollector, nodeEmitter, 1.0 / 1e6);
       stampConductance(nodeBase, nodeEmitter, 1.0 / 1e9);
+    } else if (comp.type === 'switch') {
+      // Switch: simple on/off resistor
+      const nodeA = parseInt(comp.pins[0]);
+      const nodeB = parseInt(comp.pins[1]);
+      const isClosed = comp.switchState ?? false;
+      const ron = comp.switchRon ?? 0.01;
+      const roff = comp.switchRoff ?? 1e9;
+      const G = 1.0 / (isClosed ? ron : roff);
+      stampConductance(nodeA, nodeB, G);
     } else if (comp.type === 'opamp') {
       const nodeInPos = parseInt(comp.pins[0]);
       const nodeInNeg = parseInt(comp.pins[1]);
@@ -1026,6 +1130,47 @@ function solveTransientCircuitTS(netlist: CircuitNetlist, dt: number, tMax: numb
         const nodeEmitter = parseInt(comp.pins[2]);
         stampConductance(nodeCollector, nodeEmitter, 1.0 / 1e6);
         stampConductance(nodeBase, nodeEmitter, 1.0 / 1e9);
+      } else if (comp.type === 'isource') {
+        const nodePos = parseInt(comp.pins[0]);
+        const nodeNeg = parseInt(comp.pins[1]);
+        
+        let iVal = comp.value;
+        if (comp.waveType) {
+          const amp = comp.amplitude ?? 0;
+          const freq = comp.frequency ?? 1000;
+          const offset = comp.offset ?? 0;
+          const duty = comp.dutyCycle ?? 0.5;
+          
+          if (comp.waveType === 'sine') {
+            iVal = offset + amp * Math.sin(2 * Math.PI * freq * t);
+          } else if (comp.waveType === 'square') {
+            const period = 1.0 / freq;
+            const tMod = t % period;
+            iVal = (tMod < duty * period) ? (offset + amp) : (offset - amp);
+          } else if (comp.waveType === 'pulse') {
+            const period = 1.0 / freq;
+            const tMod = t % period;
+            iVal = (tMod < duty * period) ? (offset + amp) : offset;
+          }
+        }
+        
+        // Current source: injects current into nodePos, out of nodeNeg
+        if (nodePos > 0) Z[nodePos - 1] -= iVal;
+        if (nodeNeg > 0) Z[nodeNeg - 1] += iVal;
+      } else if (comp.type === 'led') {
+        // LED modeled as diode
+        const nodeAnode = parseInt(comp.pins[0]);
+        const nodeCathode = parseInt(comp.pins[1]);
+        stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
+      } else if (comp.type === 'switch') {
+        // Switch: simple on/off resistor
+        const nodeA = parseInt(comp.pins[0]);
+        const nodeB = parseInt(comp.pins[1]);
+        const isClosed = comp.switchState ?? false;
+        const ron = comp.switchRon ?? 0.01;
+        const roff = comp.switchRoff ?? 1e9;
+        const G = 1.0 / (isClosed ? ron : roff);
+        stampConductance(nodeA, nodeB, G);
       } else if (comp.type === 'opamp') {
         const nodeInPos = parseInt(comp.pins[0]);
         const nodeInNeg = parseInt(comp.pins[1]);

@@ -12,7 +12,7 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch';
   value: number | string;
   x: number;
   y: number;
@@ -34,6 +34,18 @@ export interface ComponentInstance {
   mcuRuntime?: any;
   mcuBridge?: any;
   mcuPinStates?: Record<number, number | string>; // logical states (0, 1, 'X', 'Z')
+  
+  // Transformer properties
+  primaryInductance?: number;
+  secondaryInductance?: number;
+  couplingCoefficient?: number;
+  
+  // Switch properties
+  switchRon?: number;
+  switchRoff?: number;
+  switchVth?: number;
+  switchVh?: number;
+  switchState?: boolean;
 }
 
 export interface PinInstance {
@@ -202,8 +214,18 @@ export class CanvasOrchestrator {
       pins.push({ componentId: comp.id, pinIndex: 3, x: pt3.x, y: pt3.y });
       pins.push({ componentId: comp.id, pinIndex: 4, x: pt4.x, y: pt4.y });
       pins.push({ componentId: comp.id, pinIndex: 5, x: pt5.x, y: pt5.y });
+    } else if (comp.type === 'transformer') {
+      // Transformer has 4 pins: primary side (0, 1), secondary side (2, 3)
+      const ptPri1 = getRotatedOffset(-40, -20);
+      const ptPri2 = getRotatedOffset(-40, 20);
+      const ptSec1 = getRotatedOffset(40, -20);
+      const ptSec2 = getRotatedOffset(40, 20);
+      pins.push({ componentId: comp.id, pinIndex: 0, x: ptPri1.x, y: ptPri1.y });
+      pins.push({ componentId: comp.id, pinIndex: 1, x: ptPri2.x, y: ptPri2.y });
+      pins.push({ componentId: comp.id, pinIndex: 2, x: ptSec1.x, y: ptSec1.y });
+      pins.push({ componentId: comp.id, pinIndex: 3, x: ptSec2.x, y: ptSec2.y });
     } else {
-      // Other 2-pin components
+      // Other 2-pin components (resistor, capacitor, inductor, diode, vsource, isource, led, switch)
       const pt1 = getRotatedOffset(-40, 0);
       const pt2 = getRotatedOffset(40, 0);
       pins.push({ componentId: comp.id, pinIndex: 0, x: pt1.x, y: pt1.y });
@@ -1022,6 +1044,161 @@ export class CanvasOrchestrator {
         }
         break;
       }
+
+      case 'isource': {
+        // Circle with arrow inside (current source symbol)
+        this.ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Arrow inside circle
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-6, -6);
+        this.ctx.lineTo(0, 0);
+        this.ctx.lineTo(-6, 6);
+        this.ctx.moveTo(0, 0);
+        this.ctx.lineTo(8, 0);
+        this.ctx.stroke();
+        break;
+      }
+
+      case 'led': {
+        // LED symbol: diode triangle + bar with two arrows pointing outward
+        this.ctx.moveTo(-12, -10);
+        this.ctx.lineTo(-12, 10);
+        this.ctx.lineTo(8, 0);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Bar
+        this.ctx.beginPath();
+        this.ctx.moveTo(8, -10);
+        this.ctx.lineTo(8, 10);
+        this.ctx.stroke();
+
+        // Two small arrows pointing outward (light emission)
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1.2;
+        this.ctx.beginPath();
+        // Arrow 1 (up-right)
+        this.ctx.moveTo(14, -6);
+        this.ctx.lineTo(20, -10);
+        this.ctx.moveTo(20, -10);
+        this.ctx.lineTo(16, -10);
+        this.ctx.moveTo(20, -10);
+        this.ctx.lineTo(20, -6);
+        // Arrow 2 (down-right)
+        this.ctx.moveTo(14, 6);
+        this.ctx.lineTo(20, 10);
+        this.ctx.moveTo(20, 10);
+        this.ctx.lineTo(16, 10);
+        this.ctx.moveTo(20, 10);
+        this.ctx.lineTo(20, 6);
+        this.ctx.stroke();
+
+        // Glow effect if forward biased (using glowLevel like lamp)
+        const glow = comp.glowLevel ?? 0;
+        if (glow > 0.05) {
+          const grad = this.ctx.createRadialGradient(8, 0, 4, 8, 0, 28);
+          grad.addColorStop(0, `rgba(255, 100, 0, ${glow * 0.5})`);
+          grad.addColorStop(0.5, `rgba(255, 180, 0, ${glow * 0.2})`);
+          grad.addColorStop(1, 'rgba(255, 180, 0, 0)');
+          this.ctx.save();
+          this.ctx.fillStyle = grad;
+          this.ctx.beginPath();
+          this.ctx.arc(8, 0, 28, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.restore();
+        }
+        break;
+      }
+
+      case 'switch': {
+        // Switch symbol: open/closed contact
+        const isClosed = comp.switchState ?? false;
+        this.ctx.beginPath();
+        // Fixed contact (left)
+        this.ctx.moveTo(-40, 0);
+        this.ctx.lineTo(-15, 0);
+        this.ctx.moveTo(-15, -5);
+        this.ctx.lineTo(-15, 5);
+        this.ctx.stroke();
+
+        // Movable contact (right)
+        if (isClosed) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(15, 0);
+          this.ctx.lineTo(40, 0);
+          this.ctx.moveTo(15, -5);
+          this.ctx.lineTo(15, 5);
+          this.ctx.stroke();
+          // Connecting line
+          this.ctx.beginPath();
+          this.ctx.moveTo(-15, 0);
+          this.ctx.lineTo(15, 0);
+          this.ctx.strokeStyle = "hsl(174, 97%, 69%)";
+          this.ctx.shadowColor = "hsl(174, 97%, 69%)";
+          this.ctx.shadowBlur = 6;
+          this.ctx.lineWidth = 2.5;
+          this.ctx.stroke();
+        } else {
+          // Open switch - angled gap
+          this.ctx.beginPath();
+          this.ctx.moveTo(15, -8);
+          this.ctx.lineTo(40, -8);
+          this.ctx.moveTo(15, -8);
+          this.ctx.lineTo(20, 0);
+          this.ctx.lineTo(15, 8);
+          this.ctx.moveTo(40, 0);
+          this.ctx.lineTo(40, 8);
+          this.ctx.stroke();
+        }
+        break;
+      }
+
+      case 'transformer': {
+        // Two coupled inductors with core lines
+        // Primary (left)
+        this.ctx.moveTo(-40, -20);
+        for (let i = 0; i < 3; i++) {
+          const startX = -40 + i * 10;
+          this.ctx.arc(startX + 5, -20, 5, Math.PI, 0, false);
+        }
+        this.ctx.lineTo(-10, -20);
+
+        // Secondary (right)
+        this.ctx.moveTo(10, 20);
+        for (let i = 0; i < 3; i++) {
+          const startX = 10 + i * 10;
+          this.ctx.arc(startX + 5, 20, 5, Math.PI, 0, false);
+        }
+        this.ctx.lineTo(40, 20);
+
+        // Core lines (vertical dashed lines indicating magnetic coupling)
+        this.ctx.save();
+        this.ctx.setLineDash([4, 3]);
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+        this.ctx.beginPath();
+        this.ctx.moveTo(-10, -20);
+        this.ctx.lineTo(-10, 20);
+        this.ctx.moveTo(10, -20);
+        this.ctx.lineTo(10, 20);
+        this.ctx.stroke();
+        this.ctx.restore();
+
+        // Dots for polarity (primary top, secondary top)
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(-30, -20, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(20, 20, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        break;
+      }
     }
 
     // 3. Draw text value and label
@@ -1067,6 +1244,14 @@ export class CanvasOrchestrator {
         formattedVal = comp.value.toString().split(';')[0].trim();
       } else if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr' || comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
         formattedVal = comp.firmwareHex ? "Firmware cargado" : "Sin firmware";
+      } else if (comp.type === 'isource') {
+        formattedVal = comp.value + " A";
+      } else if (comp.type === 'led') {
+        formattedVal = "LED";
+      } else if (comp.type === 'switch') {
+        formattedVal = comp.switchState ? "Cerrado" : "Abierto";
+      } else if (comp.type === 'transformer') {
+        formattedVal = `${comp.primaryInductance || 1e-3} H / ${comp.secondaryInductance || 1e-3} H (k=${comp.couplingCoefficient || 0.9})`;
       }
       this.ctx.fillText(formattedVal, 0, valY);
     }
@@ -1251,6 +1436,10 @@ export class CanvasOrchestrator {
       case 'lamp': prefix = "LP"; break;
       case 'relay': prefix = "RY"; break;
       case 'buzzer': prefix = "BZ"; break;
+      case 'isource': prefix = "I"; break;
+      case 'led': prefix = "LED"; break;
+      case 'switch': prefix = "SW"; break;
+      case 'transformer': prefix = "T"; break;
     }
     const id = prefix === "GND" ? `GND${count}` : `${prefix}${count}`;
 

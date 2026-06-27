@@ -118,6 +118,17 @@ pub struct ComponentData {
     pub rth: Option<f64>,   // Resistencia térmica unión-ambiente (°C/W)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cth: Option<f64>,   // Capacidad térmica (J/°C)
+    // Switch parameters
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switch_ron: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switch_roff: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switch_vth: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switch_vh: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switch_state: Option<bool>,
 
 }
 
@@ -1071,6 +1082,19 @@ fn stamp_linear_components_sparse(
                 if node_neg > 0 {
                     vector_z[node_neg - 1] += val;
                 }
+            }
+            "switch" => {
+                let node_a = comp.pins[0].parse::<usize>().unwrap();
+                let node_b = comp.pins[1].parse::<usize>().unwrap();
+                // Switch: simple on/off resistor (R_on / R_off)
+                let ron = comp.switch_ron.unwrap_or(0.01);
+                let roff = comp.switch_roff.unwrap_or(1e9);
+                let is_closed = comp.switch_state.unwrap_or(false);
+                let conductance = 1.0 / if is_closed { ron } else { roff };
+                stamp_conductance(matrix_a, node_a, node_a, conductance);
+                stamp_conductance(matrix_a, node_b, node_b, conductance);
+                stamp_conductance(matrix_a, node_a, node_b, -conductance);
+                stamp_conductance(matrix_a, node_b, node_a, -conductance);
             }
             "vcvs" => {
                 let node_pos = comp.pins[0].parse::<usize>().unwrap();
@@ -2123,6 +2147,40 @@ fn solve_newton_raphson_core(
                     }
                 }
             // B-Sources: Evaluar expresiones y actualizar vector de excitación
+            } else if comp.comp_type == "switch" {
+                let node_a = comp.pins[0].parse::<usize>().unwrap();
+                let node_b = comp.pins[1].parse::<usize>().unwrap();
+                let ron = comp.switch_ron.unwrap_or(0.01);
+                let roff = comp.switch_roff.unwrap_or(1e9);
+                let vth = comp.switch_vth.unwrap_or(0.5);
+                let vh = comp.switch_vh.unwrap_or(0.05);
+                let is_closed = comp.switch_state.unwrap_or(false);
+                
+                // Get voltage across switch
+                let v_a = if node_a > 0 { prev_voltages[node_a] } else { 0.0 };
+                let v_b = if node_b > 0 { prev_voltages[node_b] } else { 0.0 };
+                let v_ab = v_a - v_b;
+                
+                // Hysteresis-based switching
+                let mut new_state = is_closed;
+                if !is_closed && v_ab > vth + vh/2.0 {
+                    new_state = true;
+                } else if is_closed && v_ab < vth - vh/2.0 {
+                    new_state = false;
+                }
+                
+                let conductance = 1.0 / if new_state { ron } else { roff };
+                
+                let mut stamp_conductance = |r: usize, c: usize, g: f64| {
+                    if r > 0 && c > 0 {
+                        matrix_a.add_element(r - 1, c - 1, g);
+                    }
+                };
+                
+                stamp_conductance(node_a, node_a, conductance);
+                stamp_conductance(node_b, node_b, conductance);
+                stamp_conductance(node_a, node_b, -conductance);
+                stamp_conductance(node_b, node_a, -conductance);
             } else if comp.comp_type == "bvoltage" {
                 if let Some(ref expr_str) = comp.expression {
                     let mut nv = HashMap::new();
@@ -3197,7 +3255,8 @@ pub fn solve_transient_circuit_with_initial_states(
         c.comp_type == "npn" || c.comp_type == "pnp" || c.comp_type == "opamp" ||
         c.comp_type == "bsim3nmos" || c.comp_type == "bsim3pmos" || c.comp_type == "bsim4nmos" || c.comp_type == "bsim4pmos" || c.comp_type.ends_with("_gate") ||
         c.comp_type == "arduino_uno" || c.comp_type == "esp32" || c.comp_type == "raspberry_pi_pico" ||
-        c.comp_type == "bvoltage" || c.comp_type == "bcurrent" || c.comp_type == "njf" || c.comp_type == "pjf"
+        c.comp_type == "bvoltage" || c.comp_type == "bcurrent" || c.comp_type == "njf" || c.comp_type == "pjf" ||
+        c.comp_type == "switch"
     });
 
     let mut mcu_tchip: HashMap<String, f64> = HashMap::new();

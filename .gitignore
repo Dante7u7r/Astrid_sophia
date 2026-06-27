@@ -15,12 +15,6 @@ dist-ssr
 # Rust
 src-tauri/target
 
-# Argon cache
-.argon_cache.json
-argon_graph.json
-ARGON.md
-ARGON_PRECISION.xml
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
