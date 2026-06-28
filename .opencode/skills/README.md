@@ -1,7 +1,7 @@
-# Astryd Sophia Skills — v2.0
+# Astryd Sophia Skills — v2.1
 **PhD-Grade Reference Package**
 
-Five domain-specific skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
+Eight domain-specific skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
 
 ---
 
@@ -32,12 +32,37 @@ Astryd_Sophia_Skills/
 │       ├── tauri_bridge.rs            ← Rust: commands, mpsc emitter, CancellationToken
 │       └── tauri_bindings.ts          ← TypeScript: zod, invoke wrappers, React hook
 │
-└── premium-web-aesthetics/
-    ├── SKILL.md                       ← tokens, glassmorphism, GPU animation, WCAG
+├── premium-web-aesthetics/
+│   ├── SKILL.md                       ← tokens, glassmorphism, GPU animation, WCAG
+│   └── examples/
+│       ├── design_system.css          ← full CSS design token system + components
+│       └── ui_demo.html               ← live component gallery (open in browser)
+│
+├── schematic-topology-routing/
+│   ├── SKILL.md                       ← topology graph, Manhattan routing, DSU netlist, ERC
+│   └── examples/
+│       └── graph_netlist_router.ts    ← TopologyGraph: BFS router, DSU extractor, ERC, Tauri IPC
+│
+├── spice-macromodeling-parser/
+│   ├── SKILL.md                       ← SPICE tokenizer, subckt expansion, PARAMS resolution
+│   └── examples/
+│       └── subcircuit_expander.rs     ← lexer, hierarchical flattener, ParamContext, MNA output
+│
+└── realtime-cosimulation-runtime/
+    ├── SKILL.md                       ← solver thread, lock-step MCU sync, 60 FPS telemetry, hot mutation
     └── examples/
-        ├── design_system.css          ← full CSS design token system + components
-        └── ui_demo.html               ← live component gallery (open in browser)
+        └── runtime_orchestrator.rs    ← native thread loop, MPSC drain, binary telemetry, cancel flag
 ```
+
+---
+
+## What changed from v2.0
+
+| Skill | Key additions |
+|---|---|
+| **schematic-topology-routing** | New skill. Canvas ↔ logical graph separation, 4-step Manhattan pipeline (snap → L-shape → BFS → collapse), DSU with path compression + forced GND root, 4-rule ERC (floating pin, short circuit, no GND, island) |
+| **spice-macromodeling-parser** | New skill. State-machine tokenizer for `.lib`/`.mod` files, recursive hierarchical subcircuit flattener, `ParamContext` with 3-layer inheritance (defaults → subckt → instance), `M` vs `Meg` trap documented |
+| **realtime-cosimulation-runtime** | New skill. Native solver thread with `Arc<AtomicBool>` cancel, lock-step MCU sync algorithm, compact binary telemetry (10× smaller than JSON), safe hot-mutation via MPSC drain between integration steps |
 
 ---
 

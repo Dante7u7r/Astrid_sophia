@@ -21,6 +21,15 @@ export type McuRuntime = {
   halted: boolean;
   haltReason: string | null;
   firmware: Uint8Array;
+  // Infraestructura para el Motor de Interrupciones Mixed-Signal
+  /** Vector de interrupción pendiente de ser atendido por el núcleo.
+   *  null indica que no hay interrupciones pendientes.
+   *  Equivale al latch físico de IRQ del hardware real. */
+  pendingInterruptVector: number | null;
+  /** Bit global de habilitación de interrupciones.
+   *  true = las interrupciones están habilitadas (equivalente al bit EA en 8051
+   *  o al bit I en el registro SREG de AVR). */
+  globalInterruptEnable: boolean;
 };
 
 export function createMcuRuntime(config: McuConfig): McuRuntime {
@@ -62,7 +71,9 @@ export function createMcuRuntime(config: McuConfig): McuRuntime {
     cycleLimit: config.maxCycles ?? 1e6,
     halted: false,
     haltReason: null,
-    firmware
+    firmware,
+    pendingInterruptVector: null,
+    globalInterruptEnable: true
   };
 }
 
@@ -370,3 +381,83 @@ export const RUNTIME_STATUS_LABELS: Record<string, string> = {
   watchpoint: "Watchpoint",
   "cycle-limit": "Cycle limit"
 };
+
+// ==========================================================================
+// FUNCIONES PARA EL MOTOR DE INTERRUPCIONES MIXED-SIGNAL
+// ==========================================================================
+
+/**
+ * Inyecta una interrupción de hardware en el runtime de la MCU.
+ * Respeta el bit global de habilitación (GIE/EA): si está deshabilitado,
+ * la interrupción se ignora silenciosamente, simulando el comportamiento
+ * de enmascaramiento físico del microcontrolador real.
+ *
+ * Esta función debe ser invocada desde el despachador del puente SPICE
+ * (dispatchAnalogTrigger en mcu-spice-bridge.ts) cuando se recibe un
+ * AnalogEventTrigger desde el solver Rust.
+ *
+ * @param runtime  Runtime de la MCU destino.
+ * @param vector   Vector de interrupción de hardware (ej: 0x02 para INT0).
+ */
+export function injectHardwareInterrupt(
+  runtime: McuRuntime,
+  vector: number,
+): void {
+  if (!runtime.globalInterruptEnable) {
+    return;
+  }
+  // Almacenar el vector en el registro latch de interrupciones pendientes.
+  // El núcleo lo procesará al inicio del siguiente ciclo de instrucción
+  // (véase executeCycleWithInterrupts).
+  runtime.pendingInterruptVector = vector;
+}
+
+/**
+ * Wrapper de ejecución de ciclo que verifica interrupciones pendientes
+ * antes de ejecutar la siguiente instrucción. Simula el comportamiento
+ * del hardware real donde la CPU samplea las líneas de IRQ en la frontera
+ * de cada instrucción.
+ *
+ * Si hay una interrupción pendiente:
+ *   1. Limpia el latch (ACK).
+ *   2. Deshabilita GIE para evitar anidamiento infinito (el software debe
+ *      re-habilitar con RETI explícitamente).
+ *   3. Realiza context save: push del PC (16 bits, big-endian) a la pila.
+ *   4. Salta al vector de interrupción (pc = vector * 4).
+ *   5. Retorna 4 ciclos de latencia (típico en arquitecturas modernas).
+ *
+ * Si no hay interrupción pendiente, delega a stepInstruction().
+ *
+ * @param runtime  Runtime de la MCU.
+ * @returns Número de ciclos consumidos.
+ */
+export function executeCycleWithInterrupts(runtime: McuRuntime): number {
+  if (runtime.pendingInterruptVector !== null) {
+    // 1. Latch ACK: limpiar el vector pendiente
+    const vector = runtime.pendingInterruptVector;
+    runtime.pendingInterruptVector = null;
+
+    // 2. Deshabilitar interrupciones globales para evitar reentrancia.
+    //    El software habilitará de nuevo vía instrucción RETI o SETB EA.
+    runtime.globalInterruptEnable = false;
+
+    // 3. Context save: push del PC (16 bits) a la pila.
+    //    Orden big-endian: primero byte alto, luego byte bajo.
+    const pc = runtime.state.pc;
+    runtime.state.sp += 1;
+    runtime.memory.ram[runtime.state.sp] = (pc >> 8) & 0xFF;
+    runtime.state.sp += 1;
+    runtime.memory.ram[runtime.state.sp] = pc & 0xFF;
+
+    // 4. Vector jump: redirigir el PC a la dirección base de la ISR.
+    //    Se utiliza un mapeo genérico de 4 bytes por vector.
+    runtime.state.pc = vector * 4;
+
+    // 5. Retornar latencia fija de 4 ciclos (típica en 8051 y AVR
+    //    para el acknowledge + salto de interrupción).
+    return 4;
+  }
+
+  // Sin interrupción pendiente: ejecución secuencial ordinaria
+  return stepInstruction(runtime);
+}

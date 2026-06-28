@@ -1,7 +1,10 @@
 /** Bridge para co-simulación MCU + SPICE.
  * Conecta pines GPIO del MCU a nodos del circuito analógico.
+ * Incluye el despachador de interrupciones analógicas (MCU Interrupt Engine).
  */
 import type { McuRuntime } from "./mcu-runtime";
+import { injectHardwareInterrupt } from "./mcu-runtime";
+import type { AnalogEventTrigger } from "./mcu-types";
 export type DigitalState = 0 | 1 | "X" | "Z";
 
 
@@ -267,3 +270,32 @@ export const VOLTAGE_THRESHOLDS = [
   { label: "3.3V LVTTL", high: 2.0, low: 0.4 },
   { label: "Custom", high: 2.5, low: 0.8 }
 ];
+
+// ==========================================================================
+// DESPACHADOR DE INTERRUPCIONES ANALÓGICAS (MCU INTERRUPT ENGINE)
+// ==========================================================================
+
+/**
+ * Busca el runtime de la MCU destino en el registro global y le inyecta
+ * una interrupción de hardware con el vector especificado.
+ * Diseñada para ser invocada desde el listener de Tauri 'sim-frame-update'
+ * en el orquestador principal (main.ts).
+ *
+ * @param trigger          Evento analógico recibido desde el solver Rust.
+ * @param mcuRuntimes      Mapa de runtimes activos indexados por componentId.
+ * @returns true si el despacho fue exitoso, false si no se encontró la MCU.
+ */
+export function dispatchAnalogTrigger(
+  trigger: AnalogEventTrigger,
+  mcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }>,
+): boolean {
+  const entry = mcuRuntimes[trigger.componentId];
+  if (!entry) {
+    return false;
+  }
+  // Delegar la inyección de la interrupción al runtime destino.
+  // injectHardwareInterrupt está definida en mcu-runtime.ts y maneja
+  // el enmascaramiento de interrupciones (bit GIE / EA) internamente.
+  injectHardwareInterrupt(entry.runtime, trigger.interruptVector);
+  return true;
+}

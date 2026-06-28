@@ -3,19 +3,29 @@ import { listen } from "@tauri-apps/api/event";
 import { CanvasOrchestrator, ComponentInstance, Point2D } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
 import { SettingsModal, SimulationSettings } from "./ui/settings_modal";
-import { OscilloscopePanel, TimeStepResult } from "./ui/oscilloscope_panel";
+import { OscilloscopePanel, TimeStepResult, PvtRunResult, PvtTrace } from "./ui/oscilloscope_panel";
 import { ActuatorHistoryManager, parseBuzzerActuatorModel, parseLampActuatorModel, parseRelayActuatorModel } from "./ui/actuator_helpers";
 import { AudioOrchestrator } from "./ui/audio_orchestrator";
 import { McuDebugPanel } from "./ui/mcu_debug_panel";
-import { 
-  createMcuRuntime, 
-  createMcuSpiceBridge, 
-  updateGpioInputs, 
-  runCycles, 
-  connectGpioToNode, 
-  STANDARD_8051_DEFINITION, 
+import {
+  createMcuRuntime,
+  createMcuSpiceBridge,
+  updateGpioInputs,
+  runCycles,
+  connectGpioToNode,
+  STANDARD_8051_DEFINITION,
   ATMEGA328P_DEFINITIONS,
-  resetRuntime
+  resetRuntime,
+  dispatchAnalogTrigger,
+  PVT_PROFILE_COMMERCIAL,
+  PVT_PROFILE_INDUSTRIAL,
+  PVT_PROFILE_AUTOMOTIVE,
+  type PvtConfig,
+  type AnalogEventTrigger,
+  type McuRuntime,
+  type SParameterResult,
+  type SParameterSettings,
+  type PortDefinition,
 } from "./simulation";
 // Variables Globales del Estado
 let actuatorHistory = new ActuatorHistoryManager();
@@ -27,7 +37,7 @@ let simSettings: SimulationSettings = {
   maxIterations: 100
 };
 
-let activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' = 'DC';
+let activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' | 'PVT' | 'SPAR' = 'DC';
 const transientDuration = 0.05; // 50 ms total de simulación
 let mcuDebugPanel: McuDebugPanel | null = null;
 
@@ -43,6 +53,8 @@ let analysisTranBtn: HTMLButtonElement | null = null;
 let analysisSensBtn: HTMLButtonElement | null = null;
 let analysisPssBtn: HTMLButtonElement | null = null;
 let analysisStbBtn: HTMLButtonElement | null = null;
+let analysisPvtBtn: HTMLButtonElement | null = null;
+let analysisSparBtn: HTMLButtonElement | null = null;
 let runSimBtn: HTMLButtonElement | null = null;
 let stopSimBtn: HTMLButtonElement | null = null;
 
@@ -77,7 +89,7 @@ interface Tab {
   acSweepResults: any | null;
   ch1ProbeNode: string | null;
   ch2ProbeNode: string | null;
-  activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB';
+  activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' | 'PVT' | 'SPAR';
 }
 
 let tabs: Tab[] = [];
@@ -95,6 +107,12 @@ let pinToNodeMap: Record<string, string> = {};
 
 // --- ESTADOS DE SONDAS E INSTRUMENTACIÓN DEL OSCILOSCOPIO ---
 let probePlacementMode: 'CH1' | 'CH2' | null = null;
+
+// --- ESTADO DE SELECCIÓN DE PUERTOS RF PARA PARÁMETROS S ---
+let sparPorts: { nodeId: string; z0: number }[] = [];
+let sparFStart = 10.0;
+let sparFEnd = 100000.0;
+let sparPPD = 20;
 let ch1ProbeNode: string | null = "1"; // Canal 1 por defecto al Nodo 1
 let ch2ProbeNode: string | null = "2"; // Canal 2 por defecto al Nodo 2
 
@@ -113,25 +131,44 @@ function updateCanvasRendering() {
   const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
   const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
 
-  if (orchestrator) {
-    for (const comp of orchestrator.components) {
-      const pins = orchestrator.getComponentPins(comp);
-      for (const pin of pins) {
-        const pinKey = `${comp.id}:${pin.pinIndex}`;
-        const nodeId = pinToNodeMap[pinKey];
-        if (nodeId === ch1Node && !ch1PinPos) {
-          ch1PinPos = { x: pin.x, y: pin.y };
-        }
-        if (nodeId === ch2Node && !ch2PinPos) {
-          ch2PinPos = { x: pin.x, y: pin.y };
+    if (orchestrator) {
+      // Encontrar coordenadas de puertos RF para marcadores SPAR
+      const sparMarkers: { index: number; x: number; y: number }[] = [];
+      for (const sp of sparPorts) {
+        for (const comp of orchestrator.components) {
+          const pins = orchestrator.getComponentPins(comp);
+          for (const pin of pins) {
+            const pinKey = `${comp.id}:${pin.pinIndex}`;
+            const nodeId = pinToNodeMap[pinKey];
+            if (nodeId === sp.nodeId) {
+              const idx = sparPorts.indexOf(sp) + 1;
+              if (!sparMarkers.some(m => m.index === idx)) {
+                sparMarkers.push({ index: idx, x: pin.x, y: pin.y });
+              }
+            }
+          }
         }
       }
+
+      for (const comp of orchestrator.components) {
+        const pins = orchestrator.getComponentPins(comp);
+        for (const pin of pins) {
+          const pinKey = `${comp.id}:${pin.pinIndex}`;
+          const nodeId = pinToNodeMap[pinKey];
+          if (nodeId === ch1Node && !ch1PinPos) {
+            ch1PinPos = { x: pin.x, y: pin.y };
+          }
+          if (nodeId === ch2Node && !ch2PinPos) {
+            ch2PinPos = { x: pin.x, y: pin.y };
+          }
+        }
+      }
+      orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos }, pinToNodeMap, sparMarkers.length > 0 ? sparMarkers : undefined);
     }
-    orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos }, pinToNodeMap);
-  }
 }
 
 // --- STREAMING TRANSIENT (FASE 2.1) ---
+// --- MOTOR DE INTERRUPCIONES MIXED-SIGNAL (MCU INTERRUPT ENGINE) ---
 
 interface SimulationFrame {
   time: number;
@@ -139,7 +176,15 @@ interface SimulationFrame {
   branchCurrents: Record<string, number>;
   frameIndex: number;
   isFinal: boolean;
+  /** Evento de interrupción analógica recibido desde el solver Rust.
+   *  null cuando el paso no contiene ningún cruce de umbral. */
+  triggerEvent: AnalogEventTrigger | null;
 }
+
+/** Registro de runtimes MCU activos durante la simulación interactiva.
+ *  Indexado por componentId. Se inicializa en startInteractiveTransient()
+ *  y se limpia en stopInteractiveTransient(). */
+let interactiveMcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> | null = null;
 
 let unlistenStream: (() => void) | null = null;
 
@@ -155,15 +200,43 @@ interface ComponentMutation {
 
 async function startInteractiveTransient(netlist: CircuitNetlist, settings: { dt: number; tMax: number }): Promise<void> {
   if (orchestrator) orchestrator.simulationActive = true;
+
+  // Inicializar runtimes MCU para el entorno interactivo (co-simulación TS+Rust)
+  const mcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> = {};
+  for (const comp of netlist.components) {
+    if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
+      const origComp = orchestrator?.components.find(c => c.id === comp.id);
+      if (origComp) {
+        const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
+        const runtime = createMcuRuntime({
+          definition: def,
+          firmware: origComp.firmware,
+        });
+        runtime.pendingInterruptVector = null;
+        runtime.globalInterruptEnable = true;
+        mcuRuntimes[comp.id] = { runtime, type: comp.type, pins: comp.pins };
+      }
+    }
+  }
+  interactiveMcuRuntimes = mcuRuntimes;
+
   unlistenStream = await listen<SimulationFrame>('sim-frame-update', (event) => {
     const frame = event.payload;
     liveVoltages = frame.nodeVoltages;
 
+    // --- DESPACHO DE INTERRUPCIONES ANALÓGICAS (MCU INTERRUPT ENGINE) ---
+    // Si el paso analógico contiene un trigger de cruce de umbral, se inyecta
+    // la interrupción de hardware en el runtime de la MCU destino a través
+    // del puente SPICE.
+    if (frame.triggerEvent && interactiveMcuRuntimes) {
+      dispatchAnalogTrigger(frame.triggerEvent, interactiveMcuRuntimes);
+    }
+
     if (oscilloscopePanel) {
       oscilloscopePanel.transientResults.push({
         time: frame.time,
-        node_voltages: frame.nodeVoltages,
-        branch_currents: frame.branchCurrents,
+        nodeVoltages: frame.nodeVoltages,
+        branchCurrents: frame.branchCurrents,
       });
     }
 
@@ -188,13 +261,269 @@ async function startInteractiveTransient(netlist: CircuitNetlist, settings: { dt
 async function stopInteractiveTransient(): Promise<void> {
   await invoke('stop_interactive_transient');
   if (orchestrator) orchestrator.simulationActive = false;
+  // Limpiar registro de runtimes MCU interactivos
+  interactiveMcuRuntimes = null;
   if (unlistenStream) {
     unlistenStream();
     unlistenStream = null;
   }
 }
 
+// --- ANÁLISIS PARAMÉTRICO PVT (PROCESS-VOLTAGE-TEMPERATURE) ---
+
+const PVT_LABELS: Record<string, string> = {
+  tt: 'TT (Nominal)',
+  ff: 'FF (Fast-Fast)',
+  ss: 'SS (Slow-Slow)',
+  fs: 'FS (Fast-Slow)',
+  sf: 'SF (Slow-Fast)',
+};
+const PVT_COLORS: string[] = ['#66fcf1', '#a855f7', '#f97316', '#22c55e', '#ef4444'];
+
+async function runPvtAnalysis(netlist: CircuitNetlist): Promise<void> {
+  if (!oscilloscopePanel) return;
+
+  addLog('Selecciona un perfil PVT predefinido para el análisis matricial:', 'system');
+
+  const container = document.querySelector('#simulation-bar');
+  if (!container) return;
+
+  // Limpiar botones de perfil PVT previos si existen
+  document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
+
+  const profiles: { label: string; configs: readonly PvtConfig[] }[] = [
+    { label: 'Comercial (0-70°C)', configs: PVT_PROFILE_COMMERCIAL },
+    { label: 'Industrial (-40-85°C)', configs: PVT_PROFILE_INDUSTRIAL },
+    { label: 'Automotriz (-40-125°C)', configs: PVT_PROFILE_AUTOMOTIVE },
+  ];
+
+  for (const profile of profiles) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-ctrl pvt-profile-btn';
+    btn.type = 'button';
+    btn.textContent = profile.label;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pvt-profile-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      executePvtAnalysisMatrix(netlist, [...profile.configs]);
+    });
+    const separator = container.querySelector('div[style*="width: 1px"]');
+    if (separator) {
+      container.insertBefore(btn, separator);
+    } else {
+      container.appendChild(btn);
+    }
+  }
+}
+
+async function executePvtAnalysisMatrix(netlist: CircuitNetlist, pvtConfigs: PvtConfig[]): Promise<void> {
+  if (!oscilloscopePanel) return;
+
+  addLog('Iniciando análisis matricial PVT paralelo en Rust...', 'send');
+
+  const monitoredNodes: string[] = [];
+  if (oscilloscopePanel.ch1ProbeNode) monitoredNodes.push(oscilloscopePanel.ch1ProbeNode);
+  if (oscilloscopePanel.ch2ProbeNode) monitoredNodes.push(oscilloscopePanel.ch2ProbeNode);
+
+  const settings = { dt: simSettings.dt, tMax: 0.05 };
+
+  try {
+    const results = await invoke<PvtRunResult[]>('run_pvt_matrix_analysis', {
+      netlist,
+      transientSettings: settings,
+      pvtConfigs,
+      monitoredNodes,
+    });
+
+    const traces: PvtTrace[] = results.map((r, i) => ({
+      config: r.config,
+      results: r.transient,
+      visible: true,
+      color: PVT_COLORS[i % PVT_COLORS.length],
+    }));
+    oscilloscopePanel.pvtTraces = traces;
+    oscilloscopePanel.pvtMode = true;
+    oscilloscopePanel.transientResults = [];
+    oscilloscopePanel.sweepTime = 0.0;
+    oscilloscopePanel.activeAnalysisMode = 'PVT';
+    oscilloscopePanel.start();
+
+    addLog('----------------------------------------------------------------', 'system');
+    addLog('=== RESULTADOS DEL ANÁLISIS PVT (PROCESS-VOLTAGE-TEMPERATURE) ===', 'system');
+    for (const r of results) {
+      const label = PVT_LABELS[r.config.corner] ?? r.config.corner.toUpperCase();
+      const convIcon = r.converged ? '✅' : '❌';
+      addLog(`${convIcon} ${label} | T = ${r.config.temperatureC}°C | V = ${(r.config.voltageScaling * 100).toFixed(0)}% | ${r.converged ? 'Convergió' : `Falló: ${r.error ?? 'desconocido'}`}`, 'receive');
+    }
+    addLog('----------------------------------------------------------------', 'system');
+
+    if (ipcStatusDot && ipcStatusText) {
+      ipcStatusDot.classList.add('active');
+      ipcStatusText.textContent = 'PVT Matrix Solver Activo';
+      ipcStatusText.style.color = 'var(--accent-cyan)';
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    addLog(`Error en análisis PVT: ${errorMsg}`, 'error');
+  }
+}
+
 // --- FUNCIONES AUXILIARES ---
+
+// ==========================================================================
+// ANÁLISIS Y EXPORTACIÓN DE PARÁMETROS S (TOUCHSTONE .sNp)
+// ==========================================================================
+
+/** Inicia el flujo de extracción de parámetros S y exportación Touchstone.
+ *  Si no hay puertos seleccionados, activa el modo de selección en el canvas. */
+async function runSparamExport(netlist: CircuitNetlist): Promise<void> {
+  if (!oscilloscopePanel) return;
+
+  if (sparPorts.length === 0) {
+    addLog('Modo Selección de Puertos RF: Haz clic en los nodos del circuito para designarlos como puertos.', 'system');
+    probePlacementMode = 'CH1'; // Reutilizamos el mecanismo de selección de sondas
+    addLog('Usa la sonda CH1 para seleccionar el nodo positivo de cada puerto (GND = referencia automática).', 'system');
+    return;
+  }
+
+  const ports: PortDefinition[] = sparPorts.map((p, i) => ({
+    name: `Puerto ${i + 1}`,
+    positiveNode: p.nodeId,
+    negativeNode: '0',
+    referenceImpedance: p.z0,
+  }));
+
+  addLog(`Iniciando extracción de parámetros S para ${ports.length} puertos de RF...`, 'send');
+
+  const settings: SParameterSettings = {
+    ports,
+    fStart: sparFStart,
+    fEnd: sparFEnd,
+    pointsPerDecade: sparPPD,
+    outputFormat: 'ma',
+  };
+
+  try {
+    const result = await invoke<SParameterResult>('extract_sparameter', {
+      netlist,
+      settings,
+    });
+
+    if (!result.converged) {
+      addLog(`Error en extracción S: ${result.error ?? 'desconocido'}`, 'error');
+      return;
+    }
+
+    // Mostrar resultados en el osciloscopio
+    oscilloscopePanel.sparResult = result;
+    oscilloscopePanel.activeAnalysisMode = 'SPAR';
+    oscilloscopePanel.start();
+
+    // Generar contenido Touchstone
+    const touchstoneContent = formatTouchstone(result);
+    if (!touchstoneContent) {
+      addLog('Error al formatear el archivo Touchstone.', 'error');
+      return;
+    }
+
+    addLog('Matriz S extraída correctamente. Abriendo diálogo de exportación...', 'receive');
+
+    // Exportar archivo .sNp
+    const nPorts = ports.length;
+    try {
+      const savedPath = await invoke<string>('export_touchstone_file', {
+        content: touchstoneContent,
+        nPorts,
+      });
+      addLog(`Archivo Touchstone .s${nPorts}p exportado exitosamente: ${savedPath}`, 'receive');
+    } catch (dialogErr) {
+      if (typeof dialogErr === 'string' && dialogErr.includes('cancelada')) {
+        addLog('Exportación cancelada por el usuario.', 'system');
+      } else {
+        addLog(`Error al guardar archivo Touchstone: ${dialogErr}`, 'error');
+      }
+    }
+
+    if (ipcStatusDot && ipcStatusText) {
+      ipcStatusDot.classList.add('active');
+      ipcStatusText.textContent = 'S-Parameter Solver Activo';
+      ipcStatusText.style.color = 'var(--accent-cyan)';
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    addLog(`Error en extracción de parámetros S: ${errorMsg}`, 'error');
+  }
+}
+
+/** Formatea un resultado de parámetros S a string Touchstone v2.0.
+ *  Compatible con el estándar IEEE 1597.1-2008. */
+function formatTouchstone(result: SParameterResult): string {
+  const n = result.sMatrices.length > 0 ? result.sMatrices[0].length : 0;
+  if (n === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('! Touchstone file generated by Astrid Sophia');
+  lines.push(`! S-Parameter Matrix: ${n}-port`);
+  lines.push(`! Date: ${new Date().toISOString()}`);
+  lines.push(`! Reference impedance: ${result.referenceImpedance} ohm`);
+  const fmtStr = result.format === 'ma' ? 'MA' : 'RI';
+  lines.push(`# Hz S ${fmtStr} R ${result.referenceImpedance}`);
+
+  for (let fi = 0; fi < result.frequencies.length; fi++) {
+    const freq = result.frequencies[fi];
+    const s = result.sMatrices[fi];
+
+    if (n <= 2) {
+      // Una sola línea con todos los datos
+      let rowParts = `${freq.toExponential(6)}`;
+      for (let j = 0; j < n; j++) {
+        for (let i = 0; i < n; i++) {
+          const val = s[j][i];
+          if (fmtStr === 'MA') {
+            const mag = Math.sqrt(val.re * val.re + val.im * val.im);
+            const ang = Math.atan2(val.im, val.re) * (180 / Math.PI);
+            rowParts += `  ${mag.toExponential(6)} ${ang.toFixed(3)}`;
+          } else {
+            rowParts += `  ${val.re.toExponential(6)}  ${val.im.toExponential(6)}`;
+          }
+        }
+      }
+      lines.push(rowParts);
+    } else {
+      // Una línea por fila de la matriz (estándar Touchstone v2.0 para N≥3)
+      let firstLine = `${freq.toExponential(6)}`;
+      for (let i = 0; i < n; i++) {
+        const val = s[0][i];
+        if (fmtStr === 'MA') {
+          const mag = Math.sqrt(val.re * val.re + val.im * val.im);
+          const ang = Math.atan2(val.im, val.re) * (180 / Math.PI);
+          firstLine += `  ${mag.toExponential(6)} ${ang.toFixed(3)}`;
+        } else {
+          firstLine += `  ${val.re.toExponential(6)}  ${val.im.toExponential(6)}`;
+        }
+      }
+      lines.push(firstLine);
+      for (let j = 1; j < n; j++) {
+        let rowLine = '  ';
+        for (let i = 0; i < n; i++) {
+          const val = s[j][i];
+          if (i > 0) rowLine += '  ';
+          if (fmtStr === 'MA') {
+            const mag = Math.sqrt(val.re * val.re + val.im * val.im);
+            const ang = Math.atan2(val.im, val.re) * (180 / Math.PI);
+            rowLine += `${mag.toExponential(6)} ${ang.toFixed(3)}`;
+          } else {
+            rowLine += `${val.re.toExponential(6)}  ${val.im.toExponential(6)}`;
+          }
+        }
+        lines.push(rowLine);
+      }
+    }
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
 
 function getTimestamp(): string {
   const now = new Date();
@@ -1471,15 +1800,17 @@ function initSimulationControls() {
   analysisSensBtn = document.querySelector("#analysis-sens-btn");
   analysisPssBtn = document.querySelector("#analysis-pss-btn");
   analysisStbBtn = document.querySelector("#analysis-stb-btn");
+  analysisPvtBtn = document.querySelector("#analysis-pvt-btn");
+  analysisSparBtn = document.querySelector("#analysis-spar-btn");
   runSimBtn = document.querySelector("#run-sim-btn");
   stopSimBtn = document.querySelector("#stop-sim-btn");
   ipcStatusDot = document.querySelector("#ipc-status-dot");
   ipcStatusText = document.querySelector("#ipc-status-text");
 
-  const selectMode = (btn: HTMLButtonElement | null, mode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB') => {
+  const selectMode = (btn: HTMLButtonElement | null, mode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' | 'PVT' | 'SPAR') => {
     if (!btn) return;
     btn.addEventListener("click", () => {
-      [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn].forEach(b => b?.classList.remove("active"));
+      [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn, analysisPvtBtn, analysisSparBtn].forEach(b => b?.classList.remove("active"));
       btn.classList.add("active");
       activeAnalysisMode = mode;
       const modoTexto = mode === 'DC' ? 'Corriente Continua (CC)' : 
@@ -1487,11 +1818,17 @@ function initSimulationControls() {
                         mode === 'TRAN' ? 'Transitorio (TRAN)' : 
                         mode === 'SENS' ? 'Sensibilidad y Peor Caso (SENS)' :
                         mode === 'PSS' ? 'Régimen Permanente Periódico (PSS)' :
+                        mode === 'PVT' ? 'Análisis PVT (Process-Voltage-Temperature)' :
+                        mode === 'SPAR' ? 'Parámetros S (Touchstone)' :
                         'Análisis de Estabilidad (STB)';
       addLog(`Modo de Simulación: ${modoTexto}`, "system");
       if (oscilloscopePanel) {
         oscilloscopePanel.activeAnalysisMode = mode;
         oscilloscopePanel.draw();
+      }
+      // Limpiar botones de perfil PVT al cambiar de modo
+      if (mode !== 'PVT') {
+        document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
       }
     });
   };
@@ -1502,6 +1839,8 @@ function initSimulationControls() {
   selectMode(analysisSensBtn, 'SENS');
   selectMode(analysisPssBtn, 'PSS');
   selectMode(analysisStbBtn, 'STB');
+  selectMode(analysisPvtBtn, 'PVT');
+  selectMode(analysisSparBtn, 'SPAR');
 
   interface ERCResult {
     passed: boolean;
@@ -1585,7 +1924,12 @@ function initSimulationControls() {
 
   if (runSimBtn && stopSimBtn) {
     runSimBtn.addEventListener("click", async () => {
-      addLog(`Iniciando simulación física de análisis [${activeAnalysisMode === 'DC' ? 'Corriente Continua' : activeAnalysisMode === 'AC' ? 'Barrido CA' : 'Transitorio'}]...`, "system");
+      addLog(`Iniciando simulación física de análisis [${
+        activeAnalysisMode === 'DC' ? 'Corriente Continua' :
+        activeAnalysisMode === 'AC' ? 'Barrido CA' :
+        activeAnalysisMode === 'TRAN' ? 'Transitorio' :
+        activeAnalysisMode === 'PVT' ? 'PVT Corner Analysis' : 'Transitorio'
+      }]...`, "system");
       
       const netlist = extractElectricalNetlist();
       if (!netlist || netlist.components.length === 0) {
@@ -1617,6 +1961,10 @@ function initSimulationControls() {
       if (oscilloscopePanel) {
         oscilloscopePanel.transientResults = [];
         oscilloscopePanel.sweepTime = 0.0;
+        if (activeAnalysisMode !== 'PVT') {
+          oscilloscopePanel.pvtMode = false;
+          oscilloscopePanel.pvtTraces = [];
+        }
         oscilloscopePanel.start();
       }
 
@@ -1716,6 +2064,12 @@ function initSimulationControls() {
           }
 
           updateCanvasRendering();
+
+        } else if (activeAnalysisMode === 'PVT') {
+          await runPvtAnalysis(netlist);
+
+        } else if (activeAnalysisMode === 'SPAR') {
+          await runSparamExport(netlist);
 
         } else if (activeAnalysisMode === 'STB') {
           addLog("Enviando conexiones al motor de análisis de Estabilidad [Polos y Ceros] de Rust...", "send");
@@ -2037,6 +2391,21 @@ function initCanvasCAD() {
         probePlacementMode = null;
         updateCanvasRendering();
         return;
+      }
+
+      // MODO DE SELECCIÓN DE PUERTOS RF PARA PARÁMETROS S
+      if (activeAnalysisMode === 'SPAR' && orchestrator!.hoveredPin) {
+        const pinKey = `${orchestrator!.hoveredPin.componentId}:${orchestrator!.hoveredPin.pinIndex}`;
+        const nodeId = pinToNodeMap[pinKey];
+        if (nodeId !== undefined && !sparPorts.some(p => p.nodeId === nodeId)) {
+          sparPorts.push({ nodeId, z0: 50 });
+          addLog(`Puerto RF ${sparPorts.length} asignado al Nodo ${nodeId} (Z0 = 50 Ω).`, 'system');
+          updateCanvasRendering();
+          return;
+        } else if (nodeId !== undefined) {
+          addLog(`El Nodo ${nodeId} ya está asignado como puerto RF.`, 'system');
+          return;
+        }
       }
 
       // Modo normal de CAD
@@ -3056,12 +3425,16 @@ function deserializeCircuit(jsonStr: string): boolean {
     // 6. Restaurar modo de simulación
     if (data.activeAnalysisMode) {
       activeAnalysisMode = data.activeAnalysisMode;
-      const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn];
+      const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn, analysisPvtBtn, analysisSparBtn];
       modeButtons.forEach(btn => btn?.classList.remove('active'));
       if (activeAnalysisMode === 'DC' && analysisDcBtn) analysisDcBtn.classList.add('active');
       if (activeAnalysisMode === 'AC' && analysisAcBtn) analysisAcBtn.classList.add('active');
       if (activeAnalysisMode === 'TRAN' && analysisTranBtn) analysisTranBtn.classList.add('active');
       if (activeAnalysisMode === 'SENS' && analysisSensBtn) analysisSensBtn.classList.add('active');
+      if (activeAnalysisMode === 'PSS' && analysisPssBtn) analysisPssBtn.classList.add('active');
+      if (activeAnalysisMode === 'STB' && analysisStbBtn) analysisStbBtn.classList.add('active');
+      if (activeAnalysisMode === 'PVT' && analysisPvtBtn) analysisPvtBtn.classList.add('active');
+      if (activeAnalysisMode === 'SPAR' && analysisSparBtn) analysisSparBtn.classList.add('active');
     }
 
     // 7. Restaurar asignaciones de osciloscopio
@@ -3223,7 +3596,7 @@ function switchTab(tabId: string) {
     ch2ProbeNode = targetTab.ch2ProbeNode;
 
     // Refrescar los botones de control de análisis en la cabecera
-    const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn];
+    const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn, analysisPvtBtn, analysisSparBtn];
     modeButtons.forEach(btn => btn?.classList.remove('active'));
     if (activeAnalysisMode === 'DC' && analysisDcBtn) analysisDcBtn.classList.add('active');
     if (activeAnalysisMode === 'AC' && analysisAcBtn) analysisAcBtn.classList.add('active');
@@ -3231,16 +3604,23 @@ function switchTab(tabId: string) {
     if (activeAnalysisMode === 'SENS' && analysisSensBtn) analysisSensBtn.classList.add('active');
     if (activeAnalysisMode === 'PSS' && analysisPssBtn) analysisPssBtn.classList.add('active');
     if (activeAnalysisMode === 'STB' && analysisStbBtn) analysisStbBtn.classList.add('active');
+    if (activeAnalysisMode === 'PVT' && analysisPvtBtn) analysisPvtBtn.classList.add('active');
+    if (activeAnalysisMode === 'SPAR' && analysisSparBtn) analysisSparBtn.classList.add('active');
 
     // Refrescar el Osciloscopio
     if (oscilloscopePanel) {
-      oscilloscopePanel.activeAnalysisMode = activeAnalysisMode as any;
+      oscilloscopePanel.activeAnalysisMode = activeAnalysisMode;
       oscilloscopePanel.ch1ProbeNode = ch1ProbeNode;
       oscilloscopePanel.ch2ProbeNode = ch2ProbeNode;
       oscilloscopePanel.transientResults = targetTab.transientResults;
       oscilloscopePanel.acSweepResults = targetTab.acSweepResults;
       oscilloscopePanel.sweepTime = 0.0;
+      oscilloscopePanel.pvtMode = false;
+      oscilloscopePanel.pvtTraces = [];
+      oscilloscopePanel.sparResult = null;
     }
+    sparPorts = [];
+    document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
 
     // Actualizar netlist eléctrico y dibujo
     extractElectricalNetlist();

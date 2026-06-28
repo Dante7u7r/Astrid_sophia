@@ -335,7 +335,7 @@ export class CanvasOrchestrator {
 
   // --- DRAWING / RENDERING ---
 
-  public render(_voltageMap: Record<string, number> = {}, probes: { ch1?: Point2D; ch2?: Point2D } = {}, nodeMap: Record<string, string> = {}): void {
+  public render(_voltageMap: Record<string, number> = {}, probes: { ch1?: Point2D; ch2?: Point2D } = {}, nodeMap: Record<string, string> = {}, sparMarkers?: { index: number; x: number; y: number }[]): void {
     const { width, height } = this.canvas;
     
     // Sync actual drawing bounds
@@ -410,6 +410,24 @@ export class CanvasOrchestrator {
       this.ctx.font = "bold 9px var(--font-sans)";
       this.ctx.textAlign = "center";
       this.ctx.fillText("②", probes.ch2.x, probes.ch2.y - 11);
+    }
+
+    // 7b. Draw S-Parameter RF Port Markers (P1, P2, ...)
+    if (sparMarkers) {
+      for (const marker of sparMarkers) {
+        const hue = 140 + marker.index * 30; // Verde → turquesa → naranja
+        this.ctx.fillStyle = `hsla(${hue}, 90%, 60%, 0.85)`;
+        this.ctx.shadowColor = `hsla(${hue}, 90%, 60%, 0.6)`;
+        this.ctx.shadowBlur = 10;
+        this.ctx.beginPath();
+        this.ctx.arc(marker.x, marker.y - 14, 10, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.shadowBlur = 0;
+        this.ctx.fillStyle = '#030508';
+        this.ctx.font = 'bold 10px var(--font-sans)';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`P${marker.index}`, marker.x, marker.y - 11);
+      }
     }
 
     // 8. Draw CAD Selection Drag Box
