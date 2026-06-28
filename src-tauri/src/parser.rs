@@ -2082,6 +2082,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             None
         },
         subcircuit_definitions: None,
+        triggers: None,
     })
 }
 
@@ -2110,10 +2111,11 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
             }
             // El nombre del subcircuito se toma del campo subcircuit_name,
             // o del valor numérico como fallback
+            let fallback_name = comp.value.to_string();
             let name = comp
                 .subcircuit_name
                 .as_deref()
-                .unwrap_or(&comp.value.to_string());
+                .unwrap_or(&fallback_name);
             x_lines.push(' ');
             x_lines.push_str(name);
             x_lines.push('\n');
@@ -2142,6 +2144,7 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
         mutual_inductances: netlist.mutual_inductances.clone(),
         thermal_config: netlist.thermal_config.clone(),
         subcircuit_definitions: None,
+        triggers: None,
     })
 }
 

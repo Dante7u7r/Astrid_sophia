@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use crate::ad_value::AdValue;
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex;
 use rayon::prelude::*;
@@ -172,6 +174,27 @@ pub struct MutualInductance {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
+pub enum DigitalThresholdDirection {
+    #[serde(rename = "rising")]
+    Rising,
+    #[serde(rename = "falling")]
+    Falling,
+    #[serde(rename = "either")]
+    Either,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalogEventTrigger {
+    pub component_id: String,
+    pub node_idx: usize,
+    pub threshold_voltage: f64,
+    pub direction: DigitalThresholdDirection,
+    pub interrupt_vector: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct CircuitNetlist {
     pub components: Vec<ComponentData>,
     pub wires: Vec<WireData>,
@@ -185,6 +208,8 @@ pub struct CircuitNetlist {
     pub thermal_config: Option<ThermalConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subcircuit_definitions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<AnalogEventTrigger>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -816,78 +841,7 @@ struct EvalContext<'a> {
 
 }
 
-fn evaluate_ast(ast: &ExprAST, ctx: &EvalContext) -> Result<f64, String> {
-    match ast {
-        ExprAST::Num(val) => Ok(*val),
-        ExprAST::Var(name) => {
-            if name == "t" {
-                Ok(ctx.time)
-            } else {
-                Err(format!("Variable desconocida en expresión B-Source: '{}'", name))
-            }
-        }
-        ExprAST::UnaryMinus(inner) => {
-            let val = evaluate_ast(inner, ctx)?;
-            Ok(-val)
-        }
-        ExprAST::BinOp { op, left, right } => {
-            let l = evaluate_ast(left, ctx)?;
-            let r = evaluate_ast(right, ctx)?;
-            match op {
-                '+' => Ok(l + r),
-                '-' => Ok(l - r),
-                '*' => Ok(l * r),
-                '/' => {
-                    if r.abs() < 1e-30 { Ok(0.0) } else { Ok(l / r) }
-                }
-                '^' => Ok(l.powf(r)),
-                _ => Err(format!("Operador desconocido: '{}'", op)),
-            }
-        }
-        ExprAST::FuncCall { name, args } => {
-            if args.is_empty() {
-                return Err(format!("La función '{}' requiere al menos un argumento", name));
-            }
-            let a = evaluate_ast(&args[0], ctx)?;
-            match name.as_str() {
-                "sin" => Ok(a.sin()),
-                "cos" => Ok(a.cos()),
-                "tan" => Ok(a.tan()),
-                "exp" => Ok(a.exp().min(1e30)),
-                "ln" => Ok(if a > 0.0 { a.ln() } else { -1e30 }),
-                "log" => Ok(if a > 0.0 { a.log10() } else { -1e30 }),
-                "sqrt" => Ok(if a >= 0.0 { a.sqrt() } else { 0.0 }),
-                "abs" => Ok(a.abs()),
-                "max" => {
-                    if args.len() < 2 { return Err("max() requiere 2 argumentos".to_string()); }
-                    let b = evaluate_ast(&args[1], ctx)?;
-                    Ok(a.max(b))
-                }
-                "min" => {
-                    if args.len() < 2 { return Err("min() requiere 2 argumentos".to_string()); }
-                    let b = evaluate_ast(&args[1], ctx)?;
-                    Ok(a.min(b))
-                }
-                _ => Err(format!("Función desconocida en B-Source: '{}'", name)),
-            }
-        }
-        ExprAST::VoltageRef(node1, node2_opt) => {
-            let v1 = *ctx.node_voltages.get(node1).unwrap_or(&0.0);
-            match node2_opt {
-                Some(node2) => {
-                    let v2 = *ctx.node_voltages.get(node2).unwrap_or(&0.0);
-                    Ok(v1 - v2)
-                }
-                None => Ok(v1),
-            }
-        }
-        ExprAST::CurrentRef(src_id) => {
-            Ok(*ctx.branch_currents.get(src_id).unwrap_or(&0.0))
-        }
-    }
-
-}
-
+#[allow(dead_code)]
 /// Evalúa una cadena de expresión B-Source y devuelve el valor numérico
 fn evaluate_expression_string(
     expr_str: &str,
@@ -903,9 +857,222 @@ fn evaluate_expression_string(
 
 }
 
+// ==========================================================================
+// EVALUACIÓN AD (AUTOMATIC DIFFERENTIATION) DE EXPRESIONES B-SOURCE
+// ==========================================================================
+fn evaluate_ast_ad(ast: &ExprAST, ctx: &EvalContext) -> Result<AdValue, String> {
+    match ast {
+        ExprAST::Num(val) => Ok(AdValue::constant(*val)),
+        ExprAST::Var(name) => {
+            if name == "t" {
+                Ok(AdValue::constant(ctx.time))
+            } else if name == "pi" {
+                Ok(AdValue::constant(std::f64::consts::PI))
+            } else if name == "e" {
+                Ok(AdValue::constant(std::f64::consts::E))
+            } else {
+                let v = *ctx.node_voltages.get(name).unwrap_or(&0.0);
+                let mut result = AdValue::constant(v);
+                if let Ok(node_idx) = name.parse::<usize>() {
+                    result.grad.insert(node_idx, 1.0);
+                }
+                Ok(result)
+            }
+        }
+        ExprAST::UnaryMinus(inner) => {
+            let v = evaluate_ast_ad(inner, ctx)?;
+            Ok(AdValue::neg(&v))
+        }
+        ExprAST::BinOp { op, left, right } => {
+            let l = evaluate_ast_ad(left, ctx)?;
+            let r = evaluate_ast_ad(right, ctx)?;
+            match op {
+                '+' => Ok(AdValue::add(&l, &r)),
+                '-' => Ok(AdValue::sub(&l, &r)),
+                '*' => Ok(AdValue::mul(&l, &r)),
+                '/' => Ok(AdValue::div(&l, &r)),
+                '^' => Ok(AdValue::pow(&l, r.value)),
+                _ => Err(format!("Operador desconocido: '{}'", op)),
+            }
+        }
+        ExprAST::FuncCall { name, args } => {
+            if args.is_empty() {
+                return Err(format!("La función '{}' requiere al menos un argumento", name));
+            }
+            let evaled: Vec<AdValue> = args.iter()
+                .map(|a| evaluate_ast_ad(a, ctx))
+                .collect::<Result<Vec<_>, _>>()?;
+            match name.as_str() {
+                "sin" => Ok(AdValue::sin(&evaled[0])),
+                "cos" => Ok(AdValue::cos(&evaled[0])),
+                "tan" => Ok(AdValue::tan(&evaled[0])),
+                "exp" => Ok(AdValue::exp(&evaled[0])),
+                "ln"  => Ok(AdValue::ln(&evaled[0])),
+                "log" => {
+                    let ln_val = AdValue::ln(&evaled[0]);
+                    let ln10 = AdValue::constant(std::f64::consts::LN_10);
+                    Ok(AdValue::div(&ln_val, &ln10))
+                }
+                "sqrt" => Ok(AdValue::sqrt(&evaled[0])),
+                "abs" => Ok(AdValue::abs(&evaled[0])),
+                "max" => {
+                    if args.len() < 2 {
+                        return Err("max() requiere 2 argumentos".to_string());
+                    }
+                    Ok(AdValue::max(&evaled[0], &evaled[1]))
+                }
+                "min" => {
+                    if args.len() < 2 {
+                        return Err("min() requiere 2 argumentos".to_string());
+                    }
+                    Ok(AdValue::min(&evaled[0], &evaled[1]))
+                }
+                _ => Err(format!("Función desconocida: '{}'", name)),
+            }
+        }
+        ExprAST::VoltageRef(node_a, node_b_opt) => {
+            let v_a = *ctx.node_voltages.get(node_a).unwrap_or(&0.0);
+            let (v_b, _is_gnd_b) = match node_b_opt {
+                Some(nb) => {
+                    let vb = *ctx.node_voltages.get(nb).unwrap_or(&0.0);
+                    (vb, nb == "0")
+                }
+                None => (0.0, true),
+            };
+            let mut result = AdValue::constant(v_a - v_b);
+            if let Ok(idx) = node_a.parse::<usize>() {
+                if idx > 0 {
+                    result.grad.insert(idx, 1.0);
+                }
+            }
+            if let Some(nb) = node_b_opt {
+                if nb != "0" {
+                    if let Ok(idx) = nb.parse::<usize>() {
+                        if idx > 0 {
+                            result.grad.insert(idx, -1.0);
+                        }
+                    }
+                }
+            }
+            Ok(result)
+        }
+        ExprAST::CurrentRef(src_id) => {
+            let i = *ctx.branch_currents.get(src_id).unwrap_or(&0.0);
+            Ok(AdValue::constant(i))
+        }
+    }
+}
+
+fn evaluate_expression_ad(
+    expr_str: &str,
+    node_voltages: &HashMap<String, f64>,
+    branch_currents: &HashMap<String, f64>,
+    time: f64,
+    ast_cache: &mut HashMap<String, ExprAST>,
+) -> Result<AdValue, String> {
+    let ast = match ast_cache.get(expr_str) {
+        Some(cached) => cached,
+        None => {
+            let tokens = tokenize_expression(expr_str)?;
+            let mut parser = ExprParser::new(tokens);
+            let parsed_ast = parser.parse_expression()?;
+            ast_cache.entry(expr_str.to_string()).or_insert(parsed_ast)
+        }
+    };
+    let ctx = EvalContext { node_voltages, branch_currents, time };
+    evaluate_ast_ad(ast, &ctx)
+}
+
+#[allow(dead_code)]
+fn evaluate_ast(ast: &ExprAST, ctx: &EvalContext) -> Result<f64, String> {
+    match ast {
+        ExprAST::Num(val) => Ok(*val),
+        ExprAST::Var(name) => {
+            if name == "t" {
+                Ok(ctx.time)
+            } else if name == "pi" {
+                Ok(std::f64::consts::PI)
+            } else if name == "e" {
+                Ok(std::f64::consts::E)
+            } else {
+                Ok(*ctx.node_voltages.get(name).unwrap_or(&0.0))
+            }
+        }
+        ExprAST::UnaryMinus(inner) => {
+            let v = evaluate_ast(inner, ctx)?;
+            Ok(-v)
+        }
+        ExprAST::BinOp { op, left, right } => {
+            let l = evaluate_ast(left, ctx)?;
+            let r = evaluate_ast(right, ctx)?;
+            match op {
+                '+' => Ok(l + r),
+                '-' => Ok(l - r),
+                '*' => Ok(l * r),
+                '/' => {
+                    if r.abs() < 1e-15 {
+                        Err("División por cero en expresión B-Source".to_string())
+                    } else {
+                        Ok(l / r)
+                    }
+                }
+                '^' => Ok(l.powf(r)),
+                _ => Err(format!("Operador desconocido: '{}'", op)),
+            }
+        }
+        ExprAST::FuncCall { name, args } => {
+            if args.is_empty() {
+                return Err(format!("La función '{}' requiere al menos un argumento", name));
+            }
+            let evaled: Vec<f64> = args.iter()
+                .map(|a| evaluate_ast(a, ctx))
+                .collect::<Result<Vec<_>, _>>()?;
+            match name.as_str() {
+                "sin" => Ok(evaled[0].sin()),
+                "cos" => Ok(evaled[0].cos()),
+                "tan" => Ok(evaled[0].tan()),
+                "exp" => Ok(evaled[0].exp()),
+                "ln"  => {
+                    if evaled[0] <= 0.0 { Err("ln(x) requiere x > 0".to_string()) }
+                    else { Ok(evaled[0].ln()) }
+                }
+                "log" => {
+                    if evaled[0] <= 0.0 { Err("log(x) requiere x > 0".to_string()) }
+                    else { Ok(evaled[0].log10()) }
+                }
+                "sqrt" => {
+                    if evaled[0] < 0.0 { Err("sqrt(x) requiere x >= 0".to_string()) }
+                    else { Ok(evaled[0].sqrt()) }
+                }
+                "abs" => Ok(evaled[0].abs()),
+                "max" => {
+                    if args.len() < 2 { return Err("max() requiere 2 argumentos".to_string()); }
+                    Ok(evaled[0].max(evaled[1]))
+                }
+                "min" => {
+                    if args.len() < 2 { return Err("min() requiere 2 argumentos".to_string()); }
+                    Ok(evaled[0].min(evaled[1]))
+                }
+                _ => Err(format!("Función desconocida: '{}'", name)),
+            }
+        }
+        ExprAST::VoltageRef(node_a, node_b_opt) => {
+            let v_a = *ctx.node_voltages.get(node_a).unwrap_or(&0.0);
+            let v_b = match node_b_opt {
+                Some(nb) => *ctx.node_voltages.get(nb).unwrap_or(&0.0),
+                None => 0.0,
+            };
+            Ok(v_a - v_b)
+        }
+        ExprAST::CurrentRef(src_id) => {
+            Ok(*ctx.branch_currents.get(src_id).unwrap_or(&0.0))
+        }
+    }
+}
+
+#[allow(dead_code)]
 pub fn solve_dc_circuit(netlist: &CircuitNetlist) -> Result<SimulationResult, String> {
     solve_dc_circuit_with_guess(netlist, None).map(|(res, _)| res)
-
 }
 
 pub fn solve_dc_circuit_with_guess(
@@ -1275,8 +1442,12 @@ fn solve_newton_raphson_core(
         }
     }
 
+    // Caché de ASTs para B-sources
+    let mut ast_cache: HashMap<String, ExprAST> = HashMap::new();
+
     // Clausura para estampar los componentes no lineales a partir de cualquier estimación de tensiones y corrientes
-    let stamp_at = |prev_voltages: &Vec<f64>, prev_prev_voltages: &Vec<f64>, solution: &DVector<f64>| -> Result<(SparseMatrix, DVector<f64>), String> {
+    // NOTA: FnMut porque captura ast_cache por &mut para el caché de ASTs
+    let mut stamp_at = |prev_voltages: &Vec<f64>, prev_prev_voltages: &Vec<f64>, solution: &DVector<f64>| -> Result<(SparseMatrix, DVector<f64>), String> {
         let mut matrix_a = matrix_a_linear.clone();
         let mut vector_z = vector_z_linear.clone();
 
@@ -2161,6 +2332,8 @@ fn solve_newton_raphson_core(
                 stamp_conductance(node_b, node_a, -conductance);
             } else if comp.comp_type == "bvoltage" {
                 if let Some(ref expr_str) = comp.expression {
+                    let _node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                    let _node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                     let mut nv = HashMap::new();
                     nv.insert("0".to_string(), 0.0);
                     for i in 1..=n { nv.insert(i.to_string(), prev_voltages[i]); }
@@ -2170,9 +2343,18 @@ fn solve_newton_raphson_core(
                             bc.insert(vs_comp.id.clone(), solution[n + idx]);
                         }
                     }
-                    if let Ok(v_val) = evaluate_expression_string(expr_str, &nv, &bc, 0.0) {
+                    if let Ok(ad) = evaluate_expression_ad(&expr_str, &nv, &bc, 0.0, &mut ast_cache) {
                         let vs_idx = *vsource_map.get(&comp.id).unwrap();
-                        vector_z[n + vs_idx] = v_val;
+                        let col = n + vs_idx;
+                        let mut ieq = ad.value;
+                        for (&node_idx, &dv_dvx) in &ad.grad {
+                            let v_k = if node_idx > 0 { prev_voltages[node_idx] } else { 0.0 };
+                            ieq -= dv_dvx * v_k;
+                            if col < size && node_idx > 0 {
+                                matrix_a.add_element(col, node_idx - 1, -dv_dvx);
+                            }
+                        }
+                        vector_z[col] = ieq;
                     }
                 }
             } else if comp.comp_type == "bcurrent" {
@@ -2188,9 +2370,22 @@ fn solve_newton_raphson_core(
                             bc.insert(vs_comp.id.clone(), solution[n + idx]);
                         }
                     }
-                    if let Ok(i_val) = evaluate_expression_string(expr_str, &nv, &bc, 0.0) {
-                        if node_pos > 0 { vector_z[node_pos - 1] -= i_val; }
-                        if node_neg > 0 { vector_z[node_neg - 1] += i_val; }
+                    if let Ok(ad) = evaluate_expression_ad(&expr_str, &nv, &bc, 0.0, &mut ast_cache) {
+                        let mut ieq = ad.value;
+                        for (&node_idx, &di_dv) in &ad.grad {
+                            let v_k = if node_idx > 0 { prev_voltages[node_idx] } else { 0.0 };
+                            ieq -= di_dv * v_k;
+                            if node_idx > 0 {
+                                if node_pos > 0 {
+                                    matrix_a.add_element(node_pos - 1, node_idx - 1, di_dv);
+                                }
+                                if node_neg > 0 {
+                                    matrix_a.add_element(node_neg - 1, node_idx - 1, -di_dv);
+                                }
+                            }
+                        }
+                        if node_pos > 0 { vector_z[node_pos - 1] -= ieq; }
+                        if node_neg > 0 { vector_z[node_neg - 1] += ieq; }
                     }
                 }
             }
@@ -3850,6 +4045,8 @@ where
             }
             let mut prev_prev_v = prev_v.clone();
 
+            let mut ast_cache_t: HashMap<String, ExprAST> = HashMap::new();
+
             let mut solve_err = None;
             let mut lambda_backtrack = 1.0;
             let mut prev_max_diff = f64::MAX;
@@ -4621,22 +4818,31 @@ where
                 }
 
                 // B-Sources dinámicas en transitorio
+                // B-Sources dinámicas en transitorio con diferenciación automática
                 for comp_bs in &netlist.components {
                     if comp_bs.comp_type == "bvoltage" {
                         if let Some(ref expr_str) = comp_bs.expression {
+                            let _node_pos_t = comp_bs.pins[0].parse::<usize>().unwrap_or(0);
+                            let _node_neg_t = comp_bs.pins[1].parse::<usize>().unwrap_or(0);
                             let mut nv = HashMap::new();
                             nv.insert("0".to_string(), 0.0);
                             for i in 1..=n { nv.insert(i.to_string(), prev_v[i]); }
                             let mut bc = HashMap::new();
-                            for i in n..solution_iter.len() { 
-                                // Mapear corrientes de rama usando vsource_map inverso
-                                for (sid, &sidx) in vsource_map.iter() {
-                                    if n + sidx == i { bc.insert(sid.clone(), solution_iter[i]); }
-                                }
+                            for (sid, &sidx) in vsource_map.iter() {
+                                bc.insert(sid.clone(), solution_iter[n + sidx]);
                             }
-                            if let Ok(v_val) = evaluate_expression_string(expr_str, &nv, &bc, t) {
+                            if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, t, &mut ast_cache_t) {
                                 let vs_idx = *vsource_map.get(&comp_bs.id).unwrap();
-                                vector_z_iter[n + vs_idx] = v_val;
+                                let col = n + vs_idx;
+                                let mut ieq = ad.value;
+                                for (&node_idx, &dv_dvx) in &ad.grad {
+                                    let v_k = if node_idx > 0 { prev_v[node_idx] } else { 0.0 };
+                                    ieq -= dv_dvx * v_k;
+                                    if col < size && node_idx > 0 {
+                                        matrix_a_iter[(col, node_idx - 1)] += -dv_dvx;
+                                    }
+                                }
+                                vector_z_iter[col] = ieq;
                             }
                         }
                     } else if comp_bs.comp_type == "bcurrent" {
@@ -4650,9 +4856,22 @@ where
                             for (sid, &sidx) in vsource_map.iter() {
                                 bc.insert(sid.clone(), solution_iter[n + sidx]);
                             }
-                            if let Ok(i_val) = evaluate_expression_string(expr_str, &nv, &bc, t) {
-                                if node_pos > 0 { vector_z_iter[node_pos - 1] -= i_val; }
-                                if node_neg > 0 { vector_z_iter[node_neg - 1] += i_val; }
+                            if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, t, &mut ast_cache_t) {
+                                let mut ieq = ad.value;
+                                for (&node_idx, &di_dv) in &ad.grad {
+                                    let v_k = if node_idx > 0 { prev_v[node_idx] } else { 0.0 };
+                                    ieq -= di_dv * v_k;
+                                    if node_idx > 0 {
+                                        if node_pos > 0 {
+                                            matrix_a_iter[(node_pos - 1, node_idx - 1)] += di_dv;
+                                        }
+                                        if node_neg > 0 {
+                                            matrix_a_iter[(node_neg - 1, node_idx - 1)] += -di_dv;
+                                        }
+                                    }
+                                }
+                                if node_pos > 0 { vector_z_iter[node_pos - 1] -= ieq; }
+                                if node_neg > 0 { vector_z_iter[node_neg - 1] += ieq; }
                             }
                         }
                     }
@@ -10118,6 +10337,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(false),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -10184,6 +10405,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(false),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -10238,6 +10461,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(false),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -10334,6 +10559,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -10377,6 +10604,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_sensitivity(&netlist).unwrap();
@@ -10443,6 +10672,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -10481,6 +10712,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -10547,6 +10780,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = AcSweepSettings {
@@ -10619,6 +10854,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result_off = solve_dc_circuit(&netlist_off).unwrap();
@@ -10661,6 +10898,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result_on = solve_dc_circuit(&netlist_on).unwrap();
@@ -10731,6 +10970,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -10781,6 +11022,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result_off = solve_dc_circuit(&netlist_off).unwrap();
@@ -10823,6 +11066,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result_on = solve_dc_circuit(&netlist_on).unwrap();
@@ -10875,6 +11120,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -10928,6 +11175,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -11014,6 +11263,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -11079,6 +11330,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = DcSweepSettings {
@@ -11135,6 +11388,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let t_settings = TransientSettings {
@@ -11233,6 +11488,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = NoiseSweepSettings {
@@ -11567,6 +11824,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // Resolver a 27°C (300K)
@@ -11651,6 +11910,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let pss_settings = PssSettings {
@@ -11708,6 +11969,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let res = run_stability_analysis(&netlist);
@@ -11746,6 +12009,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist);
@@ -11812,6 +12077,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let res = run_stability_analysis(&netlist);
@@ -11866,6 +12133,8 @@ mod tests {
             wires: vec![],
             temperature: Some(300.0),
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // 1. Probar AC Sweep
@@ -11923,6 +12192,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let sweep_settings = DcSweepSettings {
@@ -11971,6 +12242,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // Probar AC Sweep a 1 Hz y 1000 Hz
@@ -12039,6 +12312,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // NMOS con W = 50 um (5x más ancho, debería tener 5x menos ruido 1/f)
@@ -12080,6 +12355,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let noise_settings = NoiseSweepSettings {
@@ -12138,6 +12415,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -12180,6 +12459,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // En continua (DC), el carril Pin_VCC (nodo 5) debería auto-polarizarse a 5.0 V gracias al Norton equivalent interno.
@@ -12236,6 +12517,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let dc_res_esp32 = solve_dc_circuit(&netlist_esp32).unwrap();
@@ -12274,6 +12557,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings_pico = TransientSettings {
@@ -12313,6 +12598,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // En continua (DC), resolvemos el circuito.
@@ -12353,6 +12640,8 @@ mod tests {
             wires: vec![],
             temperature: Some(300.0), // 300 K = 26.85 ºC
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -12405,6 +12694,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // 1. Simular con Backward Euler
@@ -12542,6 +12833,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -12597,6 +12890,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -12616,6 +12911,162 @@ mod tests {
         let v2 = *result.node_voltages.get("2").unwrap();
         let expected_v2 = 5.0 / 3.0;
         assert!((v2 - expected_v2).abs() < 0.1, "V(2) debería ser ~{:.3}V con bcurrent, obtenido: {}", expected_v2, v2);
+    }
+
+    // ======================================================================
+    // PRUEBAS UNITARIAS DEL MOTOR DE DIFERENCIACIÓN AUTOMÁTICA AD (B-SOURCE)
+    // ======================================================================
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_empty_grad() {
+        let mut cache = HashMap::new();
+        let nv = [("1".to_string(), 5.0), ("2".to_string(), 3.0)].into_iter().collect();
+        let bc = HashMap::new();
+        let ad = evaluate_expression_ad("42.0", &nv, &bc, 0.0, &mut cache).unwrap();
+        assert!(ad.grad.is_empty(), "Constante 42 debería tener grad vacío, tiene {:?}", ad.grad);
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_voltage_ref() {
+        let mut cache = HashMap::new();
+        let nv = [("1".to_string(), 5.0), ("2".to_string(), 3.0)].into_iter().collect();
+        let bc = HashMap::new();
+        let ad = evaluate_expression_ad("V(1)", &nv, &bc, 0.0, &mut cache).unwrap();
+        assert_eq!(ad.value, 5.0, "V(1) debería ser 5.0");
+        assert_eq!(ad.grad.get(&1), Some(&1.0), "dV(1)/dV1 debería ser 1");
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_vdiff_grad() {
+        let mut cache = HashMap::new();
+        let nv = [("1".to_string(), 7.0), ("2".to_string(), 2.0)].into_iter().collect();
+        let bc = HashMap::new();
+        let ad = evaluate_expression_ad("V(1,2)", &nv, &bc, 0.0, &mut cache).unwrap();
+        assert!((ad.value - 5.0).abs() < 1e-12, "V(1,2) debería ser 5.0, es {}", ad.value);
+        assert_eq!(ad.grad.get(&1), Some(&1.0), "dV(1,2)/dV1 debería ser 1");
+        assert_eq!(ad.grad.get(&2), Some(&-1.0), "dV(1,2)/dV2 debería ser -1");
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_product_rule() {
+        let mut cache = HashMap::new();
+        let nv = [("1".to_string(), 3.0), ("2".to_string(), 4.0)].into_iter().collect();
+        let bc = HashMap::new();
+        let ad = evaluate_expression_ad("V(1)*V(2)", &nv, &bc, 0.0, &mut cache).unwrap();
+        assert!((ad.value - 12.0).abs() < 1e-12, "V(1)*V(2) debería ser 12, es {}", ad.value);
+        // d/dV1 = V(2) = 4, d/dV2 = V(1) = 3
+        assert!((ad.grad.get(&1).unwrap_or(&0.0) - 4.0).abs() < 1e-12, "dV/dV1 debería ser 4");
+        assert!((ad.grad.get(&2).unwrap_or(&0.0) - 3.0).abs() < 1e-12, "dV/dV2 debería ser 3");
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_chain_rule() {
+        let mut cache = HashMap::new();
+        let nv = [("1".to_string(), std::f64::consts::FRAC_PI_4)].into_iter().collect();
+        let bc = HashMap::new();
+        let ad = evaluate_expression_ad("sin(V(1))", &nv, &bc, 0.0, &mut cache).unwrap();
+        let expected_val = (std::f64::consts::FRAC_PI_4).sin();
+        assert!((ad.value - expected_val).abs() < 1e-12, "sin(V(1)) debería ser {}, es {}", expected_val, ad.value);
+        let expected_deriv = (std::f64::consts::FRAC_PI_4).cos();
+        assert!((ad.grad.get(&1).unwrap_or(&0.0) - expected_deriv).abs() < 1e-12,
+            "d(sin(V1))/dV1 debería ser {}, es {}", expected_deriv, ad.grad.get(&1).unwrap_or(&0.0));
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_vs_findiff() {
+        let mut cache = HashMap::new();
+        let eps = 1e-6;
+        let v0 = 2.0;
+        let nv = [("1".to_string(), v0)].into_iter().collect();
+        let bc = HashMap::new();
+        let ad = evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv, &bc, 0.0, &mut cache).unwrap();
+        let analytic_deriv = ad.grad.get(&1).unwrap_or(&0.0);
+
+        let nv_plus = [("1".to_string(), v0 + eps)].into_iter().collect();
+        let ad_plus = evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv_plus, &bc, 0.0, &mut cache).unwrap();
+        let nv_minus = [("1".to_string(), v0 - eps)].into_iter().collect();
+        let ad_minus = evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv_minus, &bc, 0.0, &mut cache).unwrap();
+        let fd_deriv = (ad_plus.value - ad_minus.value) / (2.0 * eps);
+
+        assert!((analytic_deriv - fd_deriv).abs() < 1e-6,
+            "Analytic dV/dV1={} no coincide con FD={}", analytic_deriv, fd_deriv);
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_bvoltage_stamp() {
+        let netlist = CircuitNetlist {
+            components: vec![
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 10.0,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 1000.0,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "B1".to_string(),
+                    comp_type: "bvoltage".to_string(),
+                    value: 0.0,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    expression: Some("V(1) / 2.0".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let result = solve_dc_circuit(&netlist).unwrap();
+        let v2 = *result.node_voltages.get("2").unwrap();
+        assert!((v2 - 5.0).abs() < 0.1, "V(2) con bvoltage AD debería ser ~5.0V, es {}", v2);
+    }
+
+    #[test]
+    fn test_b_source_ad_findiff_codegen_bcurrent_stamp() {
+        let netlist = CircuitNetlist {
+            components: vec![
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 5.0,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 1000.0,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R2".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 1000.0,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "B1".to_string(),
+                    comp_type: "bcurrent".to_string(),
+                    value: 0.0,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    expression: Some("V(2) / 1000".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let result = solve_dc_circuit(&netlist).unwrap();
+        let v2 = *result.node_voltages.get("2").unwrap();
+        let expected_v2 = 5.0 / 3.0;
+        assert!((v2 - expected_v2).abs() < 0.1,
+            "V(2) con bcurrent AD debería ser ~{:.3}V, es {}", expected_v2, v2);
     }
 
     #[test]
@@ -12654,6 +13105,8 @@ mod tests {
             wires: vec![],
             temperature: Some(300.0),
             fixed_step: Some(true),
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -12951,6 +13404,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist);
@@ -13003,6 +13458,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result_cutoff = solve_dc_circuit(&netlist_cutoff);
@@ -13623,6 +14080,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // Correr la simulación de DC.
@@ -13728,6 +14187,8 @@ mod tests {
             temperature: None,
             fixed_step: Some(true),
             thermal_config: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = TransientSettings {
@@ -13792,6 +14253,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings = AcSweepSettings {
@@ -13855,6 +14318,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let settings_trap = TransientSettings {
@@ -13952,6 +14417,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         // Debe converger usando PTA (u Homotopía/Source Stepping si PTA no se dispara antes, pero PTA lo garantiza)
@@ -14070,6 +14537,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
@@ -14144,6 +14613,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let res_off = solve_dc_circuit(&netlist_off).unwrap();
@@ -14251,6 +14722,8 @@ mod tests {
             wires: vec![],
             temperature: None,
             fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
         };
 
         let (result, temps) = solve_dc_electrothermal(&netlist).unwrap();

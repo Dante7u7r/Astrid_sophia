@@ -8,7 +8,9 @@ mod krylov;
 pub mod dual3;
 pub mod sparse_parallel;
 mod gpu_solver;
+pub mod ad_value;
 
+use tauri::Emitter;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -173,7 +175,7 @@ fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
     mutation: ComponentMutation,
 ) -> Result<(), String> {
-    let queue = state.hot_mutations.lock().map_err(|e| e.to_string())?;
+    let mut queue = state.hot_mutations.lock().map_err(|e| e.to_string())?;
     queue.push(mutation);
     Ok(())
 }
