@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { CanvasOrchestrator, ComponentInstance, Point2D } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
 import { SettingsModal, SimulationSettings } from "./ui/settings_modal";
@@ -126,7 +127,70 @@ function updateCanvasRendering() {
         }
       }
     }
-    orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos });
+    orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos }, pinToNodeMap);
+  }
+}
+
+// --- STREAMING TRANSIENT (FASE 2.1) ---
+
+interface SimulationFrame {
+  time: number;
+  nodeVoltages: Record<string, number>;
+  branchCurrents: Record<string, number>;
+  frameIndex: number;
+  isFinal: boolean;
+}
+
+let unlistenStream: (() => void) | null = null;
+
+function isSimulationActive(): boolean {
+  return unlistenStream !== null;
+}
+
+interface ComponentMutation {
+  componentId: string;
+  field: string;
+  value: number;
+}
+
+async function startInteractiveTransient(netlist: CircuitNetlist, settings: { dt: number; tMax: number }): Promise<void> {
+  if (orchestrator) orchestrator.simulationActive = true;
+  unlistenStream = await listen<SimulationFrame>('sim-frame-update', (event) => {
+    const frame = event.payload;
+    liveVoltages = frame.nodeVoltages;
+
+    if (oscilloscopePanel) {
+      oscilloscopePanel.transientResults.push({
+        time: frame.time,
+        node_voltages: frame.nodeVoltages,
+        branch_currents: frame.branchCurrents,
+      });
+    }
+
+    updateCanvasRendering();
+
+    if (frame.isFinal) {
+      addLog(`Simulación interactiva completada en t = ${frame.time.toFixed(6)} s.`, 'receive');
+      if (oscilloscopePanel) {
+        actuatorHistory.precompute(orchestrator!.components, oscilloscopePanel.transientResults, pinToNodeMap);
+      }
+    }
+  });
+
+  listen<string>('sim-frame-error', (event) => {
+    addLog(`Error en simulación: ${event.payload}`, 'error');
+    stopInteractiveTransient();
+  });
+
+  await invoke('start_interactive_transient', { netlist, settings });
+}
+
+async function stopInteractiveTransient(): Promise<void> {
+  await invoke('stop_interactive_transient');
+  if (orchestrator) orchestrator.simulationActive = false;
+  if (unlistenStream) {
+    unlistenStream();
+    unlistenStream = null;
   }
 }
 
@@ -228,6 +292,26 @@ function updatePropertiesPanel(comp: ComponentInstance) {
     } else {
       waveContainer.style.display = "none";
     }
+  }
+
+  // Mostrar/ocultar editor de macromodelo SPICE para Subcircuito Genérico
+  const macroContainer = document.querySelector("#macro-spice-container") as HTMLElement;
+  const macroTextarea = document.querySelector("#prop-spice-macro") as HTMLTextAreaElement;
+  const pinCountInput = document.querySelector("#prop-pin-count") as HTMLInputElement;
+  if (macroContainer && macroTextarea) {
+    if (comp.type === 'x') {
+      macroContainer.style.display = "flex";
+      macroTextarea.value = comp.spiceMacro || "";
+      if (pinCountInput) pinCountInput.value = (comp.pinCount ?? 4).toString();
+    } else {
+      macroContainer.style.display = "none";
+    }
+  }
+
+  // Para subcircuito genérico, ocultar campos de valor/undad físicos
+  if (comp.type === 'x') {
+    if (valGroup) valGroup.style.display = "none";
+    if (unitGroup) unitGroup.style.display = "none";
   }
 
   switch (comp.type) {
@@ -395,7 +479,6 @@ function initPropertyEditor() {
 
         // Validar ID
         if (newId.length > 0 && newId !== oldId) {
-          // Verificar duplicados
           const duplicate = orchestrator!.components.some(c => c.id === newId);
           if (!duplicate) {
             selected.id = newId;
@@ -406,7 +489,6 @@ function initPropertyEditor() {
 
         selected.value = newVal;
 
-// Si es una fuente de tensión o corriente, guardar los parámetros dinámicos de onda
         if (selected.type === 'vsource' || selected.type === 'isource') {
           const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
           const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
@@ -421,12 +503,53 @@ function initPropertyEditor() {
             selected.offset = parseFloat(waveOffsetInput.value) || 0;
             selected.dutyCycle = parseFloat(waveDutyInput.value) || 0.5;
 
-            // Sincronizar el valor principal con el offset de CC
             selected.value = selected.offset;
             propValInput!.value = selected.value.toString();
             propValSlider!.value = selected.value.toString();
           }
         }
+
+        // Guardar macromodelo SPICE y número de pines para Subcircuito Genérico
+        if (selected.type === 'x') {
+          const macroTextarea = document.querySelector("#prop-spice-macro") as HTMLTextAreaElement;
+          if (macroTextarea) {
+            selected.spiceMacro = macroTextarea.value.trim() || undefined;
+          }
+          const pinCountInput = document.querySelector("#prop-pin-count") as HTMLInputElement;
+          if (pinCountInput) {
+            const newPinCount = parseInt(pinCountInput.value) || 4;
+            selected.pinCount = Math.max(2, Math.min(64, newPinCount));
+          }
+        }
+
+        // Emitir mutación en caliente si la simulación está activa
+        if (isSimulationActive()) {
+          const mutations: ComponentMutation[] = [];
+          mutations.push({ componentId: selected.id, field: 'value', value: newVal });
+          if (selected.amplitude !== undefined) {
+            mutations.push({ componentId: selected.id, field: 'amplitude', value: selected.amplitude });
+          }
+          if (selected.frequency !== undefined) {
+            mutations.push({ componentId: selected.id, field: 'frequency', value: selected.frequency });
+          }
+          if (selected.offset !== undefined) {
+            mutations.push({ componentId: selected.id, field: 'offset', value: selected.offset });
+          }
+          if (selected.dutyCycle !== undefined) {
+            mutations.push({ componentId: selected.id, field: 'duty_cycle', value: selected.dutyCycle });
+          }
+          if (selected.switchRon !== undefined) {
+            mutations.push({ componentId: selected.id, field: 'switch_ron', value: selected.switchRon });
+          }
+          if (selected.switchRoff !== undefined) {
+            mutations.push({ componentId: selected.id, field: 'switch_roff', value: selected.switchRoff });
+          }
+          for (const m of mutations) {
+            invoke('inject_live_mutation', { mutation: m }).catch((err: unknown) => {
+              addLog(`Error en mutación en caliente: ${err}`, 'error');
+            });
+          }
+          addLog(`Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`, "send");
         }
 
         updateCanvasRendering();
@@ -449,6 +572,10 @@ interface ExtractedComponent {
   frequency?: number;
   offset?: number;
   dutyCycle?: number;
+  switchState?: boolean;
+  switchRon?: number;
+  switchRoff?: number;
+  subcircuitName?: string; // nombre del subcircuito para tipo 'x'
 }
 
 interface MutualInductance {
@@ -462,6 +589,7 @@ interface CircuitNetlist {
   components: ExtractedComponent[];
   wires: { id: string; nodes: string[] }[];
   mutual_inductances?: MutualInductance[];
+  subcircuitDefinitions?: string;
 }
 
 class DisjointSetUnion {
@@ -655,7 +783,7 @@ function extractElectricalNetlist(): CircuitNetlist | null {
 
       const L1 = comp.primaryInductance ?? 1e-3;
       const L2 = comp.secondaryInductance ?? 1e-3;
-      const k = comp.couplingCoefficient ?? 0.9;
+      const k = Math.max(0, Math.min(0.9999, comp.couplingCoefficient ?? 0.9));
 
       // Primary inductor
       extractedComponents.push({
@@ -696,6 +824,18 @@ function extractElectricalNetlist(): CircuitNetlist | null {
         pinsMapped.push(rootToNodeIdMap[root]);
       }
 
+      let subcircuitName: string | undefined;
+      if (comp.type === 'x' && comp.spiceMacro) {
+        for (const line of comp.spiceMacro.split('\n')) {
+          const t = line.trim();
+          if (t.toLowerCase().startsWith('.subckt')) {
+            const parts = t.split(/\s+/);
+            if (parts.length >= 2) subcircuitName = parts[1];
+            break;
+          }
+        }
+      }
+
       extractedComponents.push({
         id: comp.id,
         type: comp.type,
@@ -706,6 +846,10 @@ function extractElectricalNetlist(): CircuitNetlist | null {
         frequency: comp.frequency,
         offset: comp.offset,
         dutyCycle: comp.dutyCycle,
+        switchState: comp.type === 'switch' ? (comp.switchState ?? false) : undefined,
+        switchRon: comp.switchRon,
+        switchRoff: comp.switchRoff,
+        subcircuitName,
       });
     }
   }
@@ -733,10 +877,20 @@ function extractElectricalNetlist(): CircuitNetlist | null {
     }
   }
 
+  // Concatenar todos los bloques spiceMacro de los Subcircuitos Genéricos (tipo 'x')
+  const macroBlocks: string[] = [];
+  for (const comp of orchestrator.components) {
+    if (comp.type === 'x' && comp.spiceMacro && comp.spiceMacro.trim().length > 0) {
+      macroBlocks.push(comp.spiceMacro.trim());
+    }
+  }
+  const subcircuitDefinitions = macroBlocks.length > 0 ? macroBlocks.join("\n\n") : undefined;
+
   return {
     components: extractedComponents,
     wires: extractedWires,
-    mutual_inductances: netlistMutualInductances.length > 0 ? netlistMutualInductances : undefined
+    mutual_inductances: netlistMutualInductances.length > 0 ? netlistMutualInductances : undefined,
+    subcircuitDefinitions
   };
 }
 
@@ -1486,30 +1640,20 @@ function initSimulationControls() {
           updateCanvasRendering();
 
         } else if (activeAnalysisMode === 'TRAN') {
-          addLog("Enviando conexiones al motor transitorio de Rust...", "send");
-          
-          const settings = { dt: simSettings.dt, tMax: transientDuration };
-          const results = await invoke<any>("run_transient_simulation", { netlist, settings });
-          
-          addLog(`¡Resultados calculados exitosamente en Rust [Integración en el dominio del tiempo]!`, "receive");
-          
+          addLog("Iniciando simulación transitoria interactiva (streaming)...", "send");
+
           if (oscilloscopePanel) {
-            oscilloscopePanel.transientResults = results || [];
-            actuatorHistory.precompute(orchestrator!.components, results || [], pinToNodeMap);
+            oscilloscopePanel.transientResults = [];
           }
 
-          const oscTransient = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
-          if (oscTransient.length > 0) {
-            liveVoltages = oscTransient[oscTransient.length - 1].nodeVoltages;
-          }
+          const settings = { dt: simSettings.dt, tMax: transientDuration };
+          await startInteractiveTransient(netlist, settings);
 
           if (ipcStatusDot && ipcStatusText) {
             ipcStatusDot.classList.add("active");
             ipcStatusText.textContent = "Solucionador Rust Activo";
             ipcStatusText.style.color = "var(--accent-cyan)";
           }
-
-          updateCanvasRendering();
 
         } else if (activeAnalysisMode === 'SENS') {
           addLog("Enviando conexiones al solucionador de sensibilidad de Rust...", "send");
@@ -1898,7 +2042,7 @@ function initCanvasCAD() {
       // Modo normal de CAD
       if (orchestrator!.hoveredPin) {
         orchestrator!.activePinForWire = orchestrator!.hoveredPin;
-        orchestrator!.tempWireEnd = worldPt;
+        orchestrator!.tempWireEnd = orchestrator!.snapPointToGrid(worldPt);
       } else {
         const isShift = e.shiftKey;
         const comp = orchestrator!.selectComponentAt(worldPt.x, worldPt.y, isShift);
@@ -1910,8 +2054,8 @@ function initCanvasCAD() {
         } else {
           // Si no golpeó ningún componente y no hay Shift, activar caja de arrastre Glassmorphic
           if (!isShift && !orchestrator!.hoveredWire) {
-            orchestrator!.selectionStart = worldPt;
-            orchestrator!.selectionEnd = worldPt;
+            orchestrator!.selectionStart = orchestrator!.snapPointToGrid(worldPt);
+            orchestrator!.selectionEnd = orchestrator!.snapPointToGrid(worldPt);
             mcuDebugPanel?.hide();
           } else if (orchestrator!.selectedWire) {
             addLog(`Cable seleccionado: [${orchestrator!.selectedWire.id}]. Presiona Delete/Backspace para eliminarlo de forma individual.`, "system");
@@ -1941,11 +2085,11 @@ function initCanvasCAD() {
 
     // Dibujo de la caja de selección colectiva
     if (orchestrator!.selectionStart) {
-      orchestrator!.selectionEnd = worldPt;
+      orchestrator!.selectionEnd = orchestrator!.snapPointToGrid(worldPt);
     }
 
     if (orchestrator!.activePinForWire) {
-      orchestrator!.tempWireEnd = worldPt;
+      orchestrator!.tempWireEnd = orchestrator!.snapPointToGrid(worldPt);
     }
 
     if (isRightClickPanning) {
@@ -1963,6 +2107,7 @@ function initCanvasCAD() {
     if (orchestrator!.activePinForWire) {
       if (orchestrator!.hoveredPin) {
         orchestrator!.connectPins(orchestrator!.activePinForWire, orchestrator!.hoveredPin);
+        extractElectricalNetlist();
         addLog(`Cable conectado: [${orchestrator!.activePinForWire.componentId}] terminal ${orchestrator!.activePinForWire.pinIndex} a [${orchestrator!.hoveredPin.componentId}] terminal ${orchestrator!.hoveredPin.pinIndex}`, "system");
         markCurrentTabAsModified();
       }
@@ -1983,6 +2128,7 @@ function initCanvasCAD() {
     }
 
     orchestrator!.stopDragging();
+    extractElectricalNetlist();
     isRightClickPanning = false;
     updateCanvasRendering();
   };
@@ -1991,6 +2137,35 @@ function initCanvasCAD() {
   canvasElement.addEventListener("mouseleave", completeConnection);
 
   canvasElement.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // Doble clic para interactuar con componentes en caliente (Switch)
+  canvasElement.addEventListener("dblclick", async (e) => {
+    const rect = canvasElement.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const worldPt = orchestrator!.screenToWorld(screenX, screenY);
+    const comp = orchestrator!.selectComponentAt(worldPt.x, worldPt.y);
+
+    if (comp && comp.type === 'switch') {
+      comp.switchState = !(comp.switchState ?? false);
+      if (isSimulationActive()) {
+        try {
+          await invoke('inject_live_mutation', {
+            mutation: {
+              componentId: comp.id,
+              field: 'switch_state',
+              value: comp.switchState ? 1.0 : 0.0,
+            }
+          });
+          addLog(`Switch [${comp.id}] → ${comp.switchState ? 'Cerrado' : 'Abierto'} (mutación en caliente)`, "system");
+        } catch (err) {
+          addLog(`Error al mutar switch: ${err}`, "error");
+        }
+      }
+      updateCanvasRendering();
+      markCurrentTabAsModified();
+    }
+  });
 
   canvasElement.addEventListener("wheel", (e) => {
     const rect = canvasElement.getBoundingClientRect();
@@ -2035,7 +2210,9 @@ function initCanvasCAD() {
           const screenY = htmlEvent.clientY - rect.top;
           const worldPt = orchestrator!.screenToWorld(screenX, screenY);
 
-          const newComp = orchestrator!.addComponent(type, worldPt.x, worldPt.y, value);
+          const snapped = orchestrator!.snapPointToGrid(worldPt);
+          const newComp = orchestrator!.addComponent(type, snapped.x, snapped.y, value);
+          extractElectricalNetlist();
           addLog(`Componente colocado: [${newComp.id}] en (X:${newComp.x}, Y:${newComp.y})`, "system");
           
           orchestrator!.selectedComponent = newComp;
@@ -2080,6 +2257,7 @@ function initCanvasCAD() {
       }
       
       orchestrator.removeSelected();
+      extractElectricalNetlist();
       updateCanvasRendering();
       markCurrentTabAsModified();
     }
@@ -2858,6 +3036,8 @@ function deserializeCircuit(jsonStr: string): boolean {
         points: wire.points || []
       });
     }
+
+    orchestrator!.syncWireConnections();
 
     // 4. Restaurar cámara/viewport
     if (data.viewport) {

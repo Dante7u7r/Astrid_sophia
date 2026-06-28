@@ -474,6 +474,29 @@
                 </div>
               </div>
             </div>
+
+            <!-- CATEGORÍA: MACROMODELOS SPICE -->
+            <div class="category-group">
+              <div class="category-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+                <span class="cat-icon">&#9881;</span>
+                <span class="cat-name">Macromodelos</span>
+                <span class="cat-arrow">&#9660;</span>
+              </div>
+              <div class="category-content" id="cat-macromodelos">
+                <div class="component-card" draggable="true" id="comp-subcircuit" data-type="x" data-default="1">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="6" y="6" width="28" height="28" rx="3" stroke-dasharray="3 2" />
+                      <text x="20" y="24" text-anchor="middle" font-size="10" fill="currentColor">X</text>
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Subcircuito Genérico</span>
+                    <span class="comp-desc">Macromodelo SPICE (.subckt)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </aside>
 
@@ -601,6 +624,18 @@
                 <div id="group-wave-duty" class="property-group" style="display: none;">
                   <label class="property-label">Ciclo de Trabajo / Ancho</label>
                   <input id="prop-wave-duty" class="prop-input" type="number" step="0.05" min="0.01" max="0.99" value="0.5" />
+                </div>
+              </div>
+
+              <!-- Contenedor de Macromodelo SPICE para Subcircuito Genérico -->
+              <div id="macro-spice-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px;">
+                <div class="property-group">
+                  <label class="property-label">Código de Macromodelo SPICE (.subckt)</label>
+                  <textarea id="prop-spice-macro" class="prop-input" rows="8" style="width:100%; resize:vertical; font-family:var(--font-mono); font-size:11px; background:rgba(0,0,0,0.4); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; padding:8px;" placeholder="Ej:&#10;.subckt OpAmp IN+ IN- OUT&#10;Rin IN+ IN- 1Meg&#10;E1 OUT 0 IN+ IN- 100K&#10;.ends OpAmp"></textarea>
+                </div>
+                <div class="property-group" style="margin-top:8px;">
+                  <label class="property-label">Número de Pines</label>
+                  <input id="prop-pin-count" class="prop-input" type="number" min="2" max="64" value="4" />
                 </div>
               </div>
 

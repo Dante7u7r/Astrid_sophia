@@ -26,7 +26,9 @@ pub fn resolve_includes_with_section(
     // Manejar continuación de línea con '+' e ignorar preventivamente bloques protegidos encriptados
     let mut is_protected = false;
     for raw_line in netlist_str.lines() {
-        let clean = raw_line.trim();
+        // Eliminar comentarios inline $ (estándar SPICE)
+        let line_no_comment = raw_line.split('$').next().unwrap_or(raw_line);
+        let clean = line_no_comment.trim();
         let clean_lower = clean.to_lowercase();
         if clean_lower.starts_with(".protected") {
             is_protected = true;
@@ -1423,7 +1425,9 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
     let mut accum_line = String::new();
 
     for raw_line in resolved_netlist.lines() {
-        let clean = raw_line.trim();
+        // Eliminar comentarios inline $ (estándar SPICE)
+        let line_no_comment = raw_line.split('$').next().unwrap_or(raw_line);
+        let clean = line_no_comment.trim();
         if clean.is_empty() || clean.starts_with('*') {
             continue;
         }
@@ -2077,6 +2081,67 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         } else {
             None
         },
+        subcircuit_definitions: None,
+    })
+}
+
+/// Expande los componentes tipo 'x' de un CircuitNetlist utilizando las
+/// definiciones de subcircuito proporcionadas en `subcircuit_definitions`.
+/// Construye un netlist de texto plano (definiciones + líneas X) y lo
+/// re‑parsea para que el aplanador jerárquico convierta cada X en sus
+/// componentes primitivos. Los componentes no‑X se conservan intactos.
+pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNetlist, String> {
+    let defs = match &netlist.subcircuit_definitions {
+        Some(d) if !d.trim().is_empty() => d.clone(),
+        _ => return Ok(netlist.clone()),
+    };
+
+    // Separar componentes tipo 'x' del resto
+    let mut x_lines = String::new();
+    let mut regular_comps: Vec<ComponentData> = Vec::new();
+
+    for comp in &netlist.components {
+        if comp.comp_type == "x" {
+            // Generar línea SPICE de instanciación: X<nombre> <pin0> <pin1> ... <subckt_name>
+            x_lines.push_str(&comp.id);
+            for pin in &comp.pins {
+                x_lines.push(' ');
+                x_lines.push_str(pin);
+            }
+            // El nombre del subcircuito se toma del campo subcircuit_name,
+            // o del valor numérico como fallback
+            let name = comp
+                .subcircuit_name
+                .as_deref()
+                .unwrap_or(&comp.value.to_string());
+            x_lines.push(' ');
+            x_lines.push_str(name);
+            x_lines.push('\n');
+        } else {
+            regular_comps.push(comp.clone());
+        }
+    }
+
+    if x_lines.is_empty() {
+        return Ok(netlist.clone());
+    }
+
+    // Combinar definiciones + líneas X y parsear
+    let combined_text = format!("{}{}", defs, x_lines);
+    let expanded = parse_spice_netlist_to_native(&combined_text)?;
+
+    // Fusionar: componentes regulares originales + componentes expandidos
+    let mut all_components = regular_comps;
+    all_components.extend(expanded.components);
+
+    Ok(CircuitNetlist {
+        components: all_components,
+        wires: netlist.wires.clone(),
+        temperature: netlist.temperature,
+        fixed_step: netlist.fixed_step,
+        mutual_inductances: netlist.mutual_inductances.clone(),
+        thermal_config: netlist.thermal_config.clone(),
+        subcircuit_definitions: None,
     })
 }
 

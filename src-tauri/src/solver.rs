@@ -1,6 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex;
 use rayon::prelude::*;
@@ -129,6 +130,9 @@ pub struct ComponentData {
     pub switch_vh: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub switch_state: Option<bool>,
+    // Nombre del subcircuito a instanciar (para componentes tipo 'x')
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subcircuit_name: Option<String>,
 
 }
 
@@ -179,7 +183,8 @@ pub struct CircuitNetlist {
     pub mutual_inductances: Option<Vec<MutualInductance>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thermal_config: Option<ThermalConfig>,
-
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subcircuit_definitions: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1083,19 +1088,6 @@ fn stamp_linear_components_sparse(
                     vector_z[node_neg - 1] += val;
                 }
             }
-            "switch" => {
-                let node_a = comp.pins[0].parse::<usize>().unwrap();
-                let node_b = comp.pins[1].parse::<usize>().unwrap();
-                // Switch: simple on/off resistor (R_on / R_off)
-                let ron = comp.switch_ron.unwrap_or(0.01);
-                let roff = comp.switch_roff.unwrap_or(1e9);
-                let is_closed = comp.switch_state.unwrap_or(false);
-                let conductance = 1.0 / if is_closed { ron } else { roff };
-                stamp_conductance(matrix_a, node_a, node_a, conductance);
-                stamp_conductance(matrix_a, node_b, node_b, conductance);
-                stamp_conductance(matrix_a, node_a, node_b, -conductance);
-                stamp_conductance(matrix_a, node_b, node_a, -conductance);
-            }
             "vcvs" => {
                 let node_pos = comp.pins[0].parse::<usize>().unwrap();
                 let node_neg = comp.pins[1].parse::<usize>().unwrap();
@@ -1232,6 +1224,7 @@ fn solve_newton_raphson_core(
     alpha: f64,
     initial_guess: &Vec<f64>,
     pta_params: Option<(f64, f64, &DVector<f64>)>,
+    switch_frozen_states: &HashMap<String, bool>,
 ) -> Result<DVector<f64>, String> {
     let (vt, is_temp) = get_thermal_parameters(netlist.temperature, None);
     let size = n + m;
@@ -2148,28 +2141,13 @@ fn solve_newton_raphson_core(
                 }
             // B-Sources: Evaluar expresiones y actualizar vector de excitación
             } else if comp.comp_type == "switch" {
+                // Frozen-state stamping: state determined before NR loop from initial_guess
                 let node_a = comp.pins[0].parse::<usize>().unwrap();
                 let node_b = comp.pins[1].parse::<usize>().unwrap();
                 let ron = comp.switch_ron.unwrap_or(0.01);
                 let roff = comp.switch_roff.unwrap_or(1e9);
-                let vth = comp.switch_vth.unwrap_or(0.5);
-                let vh = comp.switch_vh.unwrap_or(0.05);
-                let is_closed = comp.switch_state.unwrap_or(false);
-                
-                // Get voltage across switch
-                let v_a = if node_a > 0 { prev_voltages[node_a] } else { 0.0 };
-                let v_b = if node_b > 0 { prev_voltages[node_b] } else { 0.0 };
-                let v_ab = v_a - v_b;
-                
-                // Hysteresis-based switching
-                let mut new_state = is_closed;
-                if !is_closed && v_ab > vth + vh/2.0 {
-                    new_state = true;
-                } else if is_closed && v_ab < vth - vh/2.0 {
-                    new_state = false;
-                }
-                
-                let conductance = 1.0 / if new_state { ron } else { roff };
+                let is_closed = switch_frozen_states.get(&comp.id).copied().unwrap_or(false);
+                let conductance = 1.0 / if is_closed { ron } else { roff };
                 
                 let mut stamp_conductance = |r: usize, c: usize, g: f64| {
                     if r > 0 && c > 0 {
@@ -2909,6 +2887,7 @@ fn build_simulation_result(
 }
 
 // SOLVER ITERATIVO NEWTON-RAPHSON ROBUSTO CON AUTO-RECUPERACIÓN (GMIN STEPPING Y SOURCE STEPPING)
+// Incluye bucle externo de convergencia de estados del Switch (Latching)
 fn solve_newton_raphson(
     netlist: &CircuitNetlist,
     n: usize,
@@ -2936,208 +2915,296 @@ fn solve_newton_raphson(
     }
     let base_gmin = 1e-12; // G_min residual para estabilidad permanente de nodos flotantes
 
-    // Intento 1: Newton-Raphson básico amortiguado
-    match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &initial_guess, None) {
-        Ok(solution) => {
-            let res = build_simulation_result(netlist, n, m, vsource_map, &solution, 1)?;
-            let mut final_voltages = vec![0.0; n + 1];
-            for i in 1..=n {
-                final_voltages[i] = solution[i - 1];
-            }
-            return Ok((res, final_voltages));
-        }
-        Err(_) => {
-            // "Fallo convergencia NR básico. Activando Gmin Stepping..."
-        }
-    }
-
-    // Intento 2: Gmin Stepping logarítmico (Fase 14)
-    let mut gmin_temp = 1e-3;
-    let mut current_guess = initial_guess.clone();
-    let mut gmin_success = true;
-    let mut iters_gmin = 0;
-
-    while gmin_temp >= base_gmin {
-        iters_gmin += 1;
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, gmin_temp, 1.0, &current_guess, None) {
-            Ok(sol) => {
-                for i in 1..=n {
-                    current_guess[i] = sol[i - 1];
+    // Construir estados iniciales congelados del switch evaluando initial_guess
+    let mut switch_frozen_states: HashMap<String, bool> = HashMap::new();
+    for comp in &netlist.components {
+        if comp.comp_type == "switch" {
+            let is_closed = comp.switch_state.unwrap_or(false);
+            if let (Ok(node_a), Ok(node_b)) = (
+                comp.pins[0].parse::<usize>(),
+                comp.pins[1].parse::<usize>()
+            ) {
+                let v_a = if node_a <= n { initial_guess[node_a] } else { 0.0 };
+                let v_b = if node_b <= n { initial_guess[node_b] } else { 0.0 };
+                let v_ab = v_a - v_b;
+                let vth = comp.switch_vth.unwrap_or(0.5);
+                let vh = comp.switch_vh.unwrap_or(0.05);
+                let mut state = is_closed;
+                if !is_closed && v_ab > vth + vh / 2.0 {
+                    state = true;
+                } else if is_closed && v_ab < vth - vh / 2.0 {
+                    state = false;
                 }
-                if gmin_temp <= base_gmin {
-                    break;
-                }
-                gmin_temp *= 0.1;
-                if gmin_temp < base_gmin {
-                    gmin_temp = base_gmin;
-                }
-            }
-            Err(_) => {
-                gmin_success = false;
-                break;
+                switch_frozen_states.insert(comp.id.clone(), state);
+            } else {
+                switch_frozen_states.insert(comp.id.clone(), is_closed);
             }
         }
     }
 
-    if gmin_success {
-        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, None) {
-            let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_gmin * 15)?;
-            let mut final_voltages = vec![0.0; n + 1];
-            for i in 1..=n {
-                final_voltages[i] = solution[i - 1];
-            }
-            return Ok((res, final_voltages));
-        }
-    }
-
-    // Intento 3: Source Stepping adaptativo (Fase 14)
-    let mut alpha: f64 = 0.0;
-    let mut d_alpha: f64 = 0.05; // Paso de rampa inicial del 5%
-    let mut current_guess = initial_guess.clone();
-    let mut source_success = true;
-    let mut iters_source = 0;
-
-    while alpha < 1.0_f64 {
-        iters_source += 1;
-        let next_alpha = (alpha + d_alpha).min(1.0_f64);
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, next_alpha, &current_guess, None) {
-            Ok(sol) => {
-                // Paso aceptado: actualizar estimación inicial y avanzar alpha
-                for i in 1..=n {
-                    current_guess[i] = sol[i - 1];
-                }
-                alpha = next_alpha;
-                // Si la convergencia fue fluida, expandimos el tamaño del paso (hasta un límite de 0.2)
-                d_alpha = (d_alpha * 1.5).min(0.2_f64);
-            }
-            Err(_) => {
-                // Paso rechazado por divergencia: retroceder y reducir el paso a la mitad
-                d_alpha /= 2.0;
-                if d_alpha < 1e-4_f64 {
-                    source_success = false;
-                    break;
+    // Helper: verificar si algún switch debe cambiar de estado tras convergencia
+    let check_switch_convergence = |solution: &DVector<f64>,
+                                    current_states: &HashMap<String, bool>|
+     -> (bool, HashMap<String, bool>) {
+        let mut changed = false;
+        let mut new_states = current_states.clone();
+        for comp in &netlist.components {
+            if comp.comp_type == "switch" {
+                if let (Ok(node_a), Ok(node_b)) = (
+                    comp.pins[0].parse::<usize>(),
+                    comp.pins[1].parse::<usize>()
+                ) {
+                    let v_a = if node_a > 0 { solution[node_a - 1] } else { 0.0 };
+                    let v_b = if node_b > 0 { solution[node_b - 1] } else { 0.0 };
+                    let v_ab = v_a - v_b;
+                    let vth = comp.switch_vth.unwrap_or(0.5);
+                    let vh = comp.switch_vh.unwrap_or(0.05);
+                    let is_closed = current_states.get(&comp.id).copied().unwrap_or(false);
+                    let desired = if !is_closed && v_ab > vth + vh / 2.0 {
+                        true
+                    } else if is_closed && v_ab < vth - vh / 2.0 {
+                        false
+                    } else {
+                        is_closed
+                    };
+                    if desired != is_closed {
+                        new_states.insert(comp.id.clone(), desired);
+                        changed = true;
+                    }
                 }
             }
         }
-    }
+        (changed, new_states)
+    };
 
-    if source_success && alpha >= 1.0 {
-        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, None) {
-            let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_source * 20)?;
-            let mut final_voltages = vec![0.0; n + 1];
-            for i in 1..=n {
-                final_voltages[i] = solution[i - 1];
-            }
-            return Ok((res, final_voltages));
-        }
-    }
-
-    // Intento 4: Bucle de Homotopía de Continuación de Punto Fijo (Fixed-Point Homotopy) Nivel Doctorado
-    let mut lambda: f64 = 0.0;
-    let mut d_lambda: f64 = 0.05; // Paso inicial del 5%
-    let mut current_guess_hom = initial_guess.clone();
-    let x_init = initial_guess.clone(); // Punto fijo de partida
-    let mut homotopy_success = true;
-    let mut iters_homotopy = 0;
-
-    while lambda < 1.0_f64 {
-        iters_homotopy += 1;
-        let next_lambda = (lambda + d_lambda).min(1.0_f64);
-        match solve_homotopy_core(netlist, n, m, vsource_map, base_gmin, next_lambda, &x_init, &current_guess_hom) {
-            Ok(sol) => {
-                for i in 1..=n {
-                    current_guess_hom[i] = sol[i - 1];
-                }
-                lambda = next_lambda;
-                d_lambda = (d_lambda * 1.5).min(0.2_f64);
-            }
-            Err(_e) => {
-                d_lambda /= 2.0;
-                if d_lambda < 1e-4_f64 {
-                    homotopy_success = false;
-                    break;
-                }
-            }
-        }
-    }
-
-    if homotopy_success && lambda >= 1.0 {
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess_hom, None) {
+    // Bucle externo: reintentar con estados de switch actualizados hasta estabilizar
+    for _outer_iter in 0..4 {
+        // Intento 1: Newton-Raphson básico amortiguado
+        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &initial_guess, None, &switch_frozen_states) {
             Ok(solution) => {
-                let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_homotopy * 20)?;
-                let mut final_voltages = vec![0.0; n + 1];
-                for i in 1..=n {
-                    final_voltages[i] = solution[i - 1];
+                let (sw_changed, new_sw) = check_switch_convergence(&solution, &switch_frozen_states);
+                if !sw_changed {
+                    let res = build_simulation_result(netlist, n, m, vsource_map, &solution, 1)?;
+                    let mut final_voltages = vec![0.0; n + 1];
+                    for i in 1..=n {
+                        final_voltages[i] = solution[i - 1];
+                    }
+                    return Ok((res, final_voltages));
                 }
-                return Ok((res, final_voltages));
+                switch_frozen_states = new_sw;
+                for i in 1..=n { initial_guess[i] = solution[i - 1]; }
+                continue;
             }
-            Err(_e) => {}
-        }
-    }
-
-    // Intento 5: Pseudo-Transient Analysis (PTA) para circuitos altamente no lineales o con histéresis
-    let size = n + m;
-    let mut pta_sol = DVector::<f64>::zeros(size);
-    for i in 1..=n {
-        pta_sol[i - 1] = initial_guess[i];
-    }
-
-    let c_pseudo = 1e-6; // 1 uF para amortiguar nodos de voltaje
-    let l_pseudo = 1e-3; // 1 mH para amortiguar ramas de corriente
-    let mut dt_pseudo = 1e-6; // Paso inicial de 1 us
-    let mut t_pseudo = 0.0;
-    let t_max_pseudo = 0.5; // Simular hasta 500 ms ficticios
-    let mut steps_completed = 0;
-    let max_pta_steps = 300;
-    let mut pta_success = true;
-
-    while t_pseudo < t_max_pseudo && steps_completed < max_pta_steps {
-        let g_pseudo = c_pseudo / dt_pseudo;
-        let r_pseudo = l_pseudo / dt_pseudo;
-
-        let mut current_guess = vec![0.0; n + 1];
-        for i in 1..=n {
-            current_guess[i] = pta_sol[i - 1];
+            Err(_) => {}
         }
 
-        match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, Some((g_pseudo, r_pseudo, &pta_sol))) {
-            Ok(sol) => {
-                // Paso aceptado
-                pta_sol = sol;
-                t_pseudo += dt_pseudo;
-                steps_completed += 1;
-                // Incrementar el paso de tiempo para acelerar hacia el estado estacionario
-                dt_pseudo = (dt_pseudo * 1.5).min(0.1);
-            }
-            Err(_) => {
-                // Paso rechazado: reducir el paso e intentar de nuevo
-                dt_pseudo /= 2.0;
-                if dt_pseudo < 1e-12 {
-                    pta_success = false;
+        // Intento 2: Gmin Stepping logarítmico (Fase 14)
+        let mut gmin_temp = 1e-3;
+        let mut current_guess = initial_guess.clone();
+        let mut gmin_success = true;
+        let mut iters_gmin = 0;
+
+        while gmin_temp >= base_gmin {
+            iters_gmin += 1;
+            match solve_newton_raphson_core(netlist, n, m, vsource_map, gmin_temp, 1.0, &current_guess, None, &switch_frozen_states) {
+                Ok(sol) => {
+                    for i in 1..=n {
+                        current_guess[i] = sol[i - 1];
+                    }
+                    if gmin_temp <= base_gmin {
+                        break;
+                    }
+                    gmin_temp *= 0.1;
+                    if gmin_temp < base_gmin {
+                        gmin_temp = base_gmin;
+                    }
+                }
+                Err(_) => {
+                    gmin_success = false;
                     break;
                 }
             }
         }
-    }
 
-    if pta_success && steps_completed > 0 {
-        // Ejecución final Newton-Raphson regular usando el estado de PTA como estimación inicial
-        let mut final_guess = vec![0.0; n + 1];
-        for i in 1..=n {
-            final_guess[i] = pta_sol[i - 1];
-        }
-        if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &final_guess, None) {
-            let res = build_simulation_result(netlist, n, m, vsource_map, &solution, steps_completed * 10 + 10)?;
-            let mut final_voltages = vec![0.0; n + 1];
-            for i in 1..=n {
-                final_voltages[i] = solution[i - 1];
+        if gmin_success {
+            if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, None, &switch_frozen_states) {
+                let (sw_changed, new_sw) = check_switch_convergence(&solution, &switch_frozen_states);
+                if !sw_changed {
+                    let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_gmin * 15)?;
+                    let mut final_voltages = vec![0.0; n + 1];
+                    for i in 1..=n {
+                        final_voltages[i] = solution[i - 1];
+                    }
+                    return Ok((res, final_voltages));
+                }
+                switch_frozen_states = new_sw;
+                for i in 1..=n { initial_guess[i] = solution[i - 1]; }
+                continue;
             }
-            return Ok((res, final_voltages));
         }
+
+        // Intento 3: Source Stepping adaptativo (Fase 14)
+        let mut alpha: f64 = 0.0;
+        let mut d_alpha: f64 = 0.05;
+        let mut current_guess = initial_guess.clone();
+        let mut source_success = true;
+        let mut iters_source = 0;
+
+        while alpha < 1.0_f64 {
+            iters_source += 1;
+            let next_alpha = (alpha + d_alpha).min(1.0_f64);
+            match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, next_alpha, &current_guess, None, &switch_frozen_states) {
+                Ok(sol) => {
+                    for i in 1..=n {
+                        current_guess[i] = sol[i - 1];
+                    }
+                    alpha = next_alpha;
+                    d_alpha = (d_alpha * 1.5).min(0.2_f64);
+                }
+                Err(_) => {
+                    d_alpha /= 2.0;
+                    if d_alpha < 1e-4_f64 {
+                        source_success = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if source_success && alpha >= 1.0 {
+            if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, None, &switch_frozen_states) {
+                let (sw_changed, new_sw) = check_switch_convergence(&solution, &switch_frozen_states);
+                if !sw_changed {
+                    let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_source * 20)?;
+                    let mut final_voltages = vec![0.0; n + 1];
+                    for i in 1..=n {
+                        final_voltages[i] = solution[i - 1];
+                    }
+                    return Ok((res, final_voltages));
+                }
+                switch_frozen_states = new_sw;
+                for i in 1..=n { initial_guess[i] = solution[i - 1]; }
+                continue;
+            }
+        }
+
+        // Intento 4: Homotopía de Continuación de Punto Fijo
+        let mut lambda: f64 = 0.0;
+        let mut d_lambda: f64 = 0.05;
+        let mut current_guess_hom = initial_guess.clone();
+        let x_init = initial_guess.clone();
+        let mut homotopy_success = true;
+        let mut iters_homotopy = 0;
+
+        while lambda < 1.0_f64 {
+            iters_homotopy += 1;
+            let next_lambda = (lambda + d_lambda).min(1.0_f64);
+            match solve_homotopy_core(netlist, n, m, vsource_map, base_gmin, next_lambda, &x_init, &current_guess_hom) {
+                Ok(sol) => {
+                    for i in 1..=n {
+                        current_guess_hom[i] = sol[i - 1];
+                    }
+                    lambda = next_lambda;
+                    d_lambda = (d_lambda * 1.5).min(0.2_f64);
+                }
+                Err(_e) => {
+                    d_lambda /= 2.0;
+                    if d_lambda < 1e-4_f64 {
+                        homotopy_success = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if homotopy_success && lambda >= 1.0 {
+            match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess_hom, None, &switch_frozen_states) {
+                Ok(solution) => {
+                    let (sw_changed, new_sw) = check_switch_convergence(&solution, &switch_frozen_states);
+                    if !sw_changed {
+                        let res = build_simulation_result(netlist, n, m, vsource_map, &solution, iters_homotopy * 20)?;
+                        let mut final_voltages = vec![0.0; n + 1];
+                        for i in 1..=n {
+                            final_voltages[i] = solution[i - 1];
+                        }
+                        return Ok((res, final_voltages));
+                    }
+                    switch_frozen_states = new_sw;
+                    for i in 1..=n { initial_guess[i] = solution[i - 1]; }
+                    continue;
+                }
+                Err(_e) => {}
+            }
+        }
+
+        // Intento 5: Pseudo-Transient Analysis (PTA)
+        let size = n + m;
+        let mut pta_sol = DVector::<f64>::zeros(size);
+        for i in 1..=n {
+            pta_sol[i - 1] = initial_guess[i];
+        }
+
+        let c_pseudo = 1e-6;
+        let l_pseudo = 1e-3;
+        let mut dt_pseudo = 1e-6;
+        let mut t_pseudo = 0.0;
+        let t_max_pseudo = 0.5;
+        let mut steps_completed = 0;
+        let max_pta_steps = 300;
+        let mut pta_success = true;
+
+        while t_pseudo < t_max_pseudo && steps_completed < max_pta_steps {
+            let g_pseudo = c_pseudo / dt_pseudo;
+            let r_pseudo = l_pseudo / dt_pseudo;
+
+            let mut current_guess = vec![0.0; n + 1];
+            for i in 1..=n {
+                current_guess[i] = pta_sol[i - 1];
+            }
+
+            match solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &current_guess, Some((g_pseudo, r_pseudo, &pta_sol)), &switch_frozen_states) {
+                Ok(sol) => {
+                    pta_sol = sol;
+                    t_pseudo += dt_pseudo;
+                    steps_completed += 1;
+                    dt_pseudo = (dt_pseudo * 1.5).min(0.1);
+                }
+                Err(_) => {
+                    dt_pseudo /= 2.0;
+                    if dt_pseudo < 1e-12 {
+                        pta_success = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if pta_success && steps_completed > 0 {
+            let mut final_guess = vec![0.0; n + 1];
+            for i in 1..=n {
+                final_guess[i] = pta_sol[i - 1];
+            }
+            if let Ok(solution) = solve_newton_raphson_core(netlist, n, m, vsource_map, base_gmin, 1.0, &final_guess, None, &switch_frozen_states) {
+                let (sw_changed, new_sw) = check_switch_convergence(&solution, &switch_frozen_states);
+                if !sw_changed {
+                    let res = build_simulation_result(netlist, n, m, vsource_map, &solution, steps_completed * 10 + 10)?;
+                    let mut final_voltages = vec![0.0; n + 1];
+                    for i in 1..=n {
+                        final_voltages[i] = solution[i - 1];
+                    }
+                    return Ok((res, final_voltages));
+                }
+                switch_frozen_states = new_sw;
+                for i in 1..=n { initial_guess[i] = solution[i - 1]; }
+                continue;
+            }
+        }
+
+        // Si ningún mecanismo de recuperación funcionó, retornar error
+        return Err("Divergencia matemática insuperable. El circuito no converge con Newton-Raphson regular amortiguado, Gmin Stepping logarítmico, Source Stepping adaptativo, Homotopía de Continuación de Punto Fijo ni Pseudo-Transient Analysis (PTA). Verifica que no existan bucles de retroalimentación positiva infinitos o singularidades insalvables.".to_string());
     }
 
-    Err("Divergencia matemática insuperable. El circuito no converge con Newton-Raphson regular amortiguado, Gmin Stepping logarítmico, Source Stepping adaptativo, Homotopía de Continuación de Punto Fijo ni Pseudo-Transient Analysis (PTA). Verifica que no existan bucles de retroalimentación positiva infinitos o singularidades insalvables.".to_string())
-
+    Err("No se pudo encontrar un estado estable del interruptor después de múltiples reintentos de convergencia.".to_string())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -3169,13 +3236,27 @@ pub fn solve_transient_circuit(
 
 }
 
-#[allow(clippy::type_complexity)]
 pub fn solve_transient_circuit_with_initial_states(
     netlist: &CircuitNetlist,
     settings: &TransientSettings,
     cap_init: HashMap<String, f64>,
     ind_init: HashMap<String, f64>,
 ) -> Result<(Vec<TimeStepResult>, HashMap<String, f64>, HashMap<String, f64>), String> {
+    solve_transient_circuit_inner(netlist, settings, cap_init, ind_init, None::<Arc<Mutex<Vec<crate::ComponentMutation>>>>, None::<fn(&TimeStepResult) -> bool>)
+}
+
+#[allow(clippy::type_complexity)]
+pub(crate) fn solve_transient_circuit_inner<F>(
+    netlist: &CircuitNetlist,
+    settings: &TransientSettings,
+    cap_init: HashMap<String, f64>,
+    ind_init: HashMap<String, f64>,
+    live_overrides: Option<Arc<Mutex<Vec<crate::ComponentMutation>>>>,
+    mut on_step: Option<F>,
+) -> Result<(Vec<TimeStepResult>, HashMap<String, f64>, HashMap<String, f64>), String>
+where
+    F: FnMut(&TimeStepResult) -> bool,
+{
 
     let (vt, _is_temp) = get_thermal_parameters(netlist.temperature, None);
     let is_fixed = settings.fixed_step.unwrap_or(false) || netlist.fixed_step.unwrap_or(false);
@@ -3215,6 +3296,7 @@ pub fn solve_transient_circuit_with_initial_states(
     let mut ind_states_prev: HashMap<String, f64> = HashMap::new();
     let mut cap_currents: HashMap<String, f64> = HashMap::new();
     let mut ind_voltages: HashMap<String, f64> = HashMap::new();
+    let mut switch_states: HashMap<String, bool> = HashMap::new();
 
     // Extraer .ic_directive a un mapa local para facilidad de acceso
     let mut ic_map = HashMap::new();
@@ -3246,6 +3328,8 @@ pub fn solve_transient_circuit_with_initial_states(
             ind_states.insert(comp.id.clone(), val);
             ind_states_prev.insert(comp.id.clone(), val);
             ind_voltages.insert(comp.id.clone(), 0.0);
+        } else if comp.comp_type == "switch" {
+            switch_states.insert(comp.id.clone(), comp.switch_state.unwrap_or(false));
         }
     }
 
@@ -3337,9 +3421,21 @@ pub fn solve_transient_circuit_with_initial_states(
 
     let mut results = Vec::new();
     let mut current_solution = DVector::<f64>::zeros(size);
+    let mut local_overrides: HashMap<String, HashMap<String, f64>> = HashMap::new();
 
     // Iterar en el tiempo de forma dinámica
     while t <= t_max {
+
+        // Drenar mutaciones en caliente hacia el mapa local de overrides
+        if let Some(ref queue) = live_overrides {
+            if let Ok(mut guard) = queue.lock() {
+                for mutation in guard.drain(..) {
+                    local_overrides.entry(mutation.component_id)
+                        .or_default()
+                        .insert(mutation.field, mutation.value);
+                }
+            }
+        }
 
         let gear2_active_this_step = integration_method == "gear2" && steps_completed >= 2;
 
@@ -3348,6 +3444,7 @@ pub fn solve_transient_circuit_with_initial_states(
         let ind_states_backup = ind_states.clone();
         let cap_states_prev_backup = cap_states_prev.clone();
         let ind_states_prev_backup = ind_states_prev.clone();
+        let switch_states_backup = switch_states.clone();
         let mcu_tchip_backup = mcu_tchip.clone();
         let mcu_vsample_backup = mcu_vsample.clone();
         let mcu_vdaceff_backup = mcu_vdaceff.clone();
@@ -3368,14 +3465,59 @@ pub fn solve_transient_circuit_with_initial_states(
         let mut matrix_a = matrix_a_linear.clone();
         let mut vector_z = vector_z_linear.clone();
 
+        // Aplicar overrides sobre la matriz y vector clonados (resistor DC, fuente DC)
+        for (comp_id, fields) in &local_overrides {
+            if let Some(&new_val) = fields.get("value") {
+                if let Some(comp) = netlist.components.iter().find(|c| c.id == *comp_id) {
+                    match comp.comp_type.as_str() {
+                        "resistor" => {
+                            if comp.value > 0.0 && new_val > 0.0 {
+                                let g_old = 1.0 / comp.value;
+                                let g_new = 1.0 / new_val;
+                                let dg = g_new - g_old;
+                                let node_a = comp.pins[0].parse::<usize>().unwrap_or(0);
+                                let node_b = comp.pins[1].parse::<usize>().unwrap_or(0);
+                                if node_a > 0 { matrix_a[(node_a - 1, node_a - 1)] += dg; }
+                                if node_b > 0 { matrix_a[(node_b - 1, node_b - 1)] += dg; }
+                                if node_a > 0 && node_b > 0 {
+                                    matrix_a[(node_a - 1, node_b - 1)] -= dg;
+                                    matrix_a[(node_b - 1, node_a - 1)] -= dg;
+                                }
+                            }
+                        }
+                        "vsource" => {
+                            if comp.wave_type.is_none() {
+                                if let Some(&vs_idx) = vsource_map.get(comp_id) {
+                                    let diff = new_val - comp.value;
+                                    vector_z[n + vs_idx] += diff;
+                                }
+                            }
+                        }
+                        "isource" => {
+                            if comp.wave_type.is_none() {
+                                let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                                let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
+                                let diff = new_val - comp.value;
+                                if node_pos > 0 { vector_z[node_pos - 1] -= diff; }
+                                if node_neg > 0 { vector_z[node_neg - 1] += diff; }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         // Actualizar fuentes de tensión dinámicas transitorias para el t actual
         for comp in &netlist.components {
             if comp.comp_type == "vsource" {
+                let co = local_overrides.get(&comp.id);
                 if let Some(ref wave) = comp.wave_type {
-                    let amp = comp.amplitude.unwrap_or(0.0);
-                    let freq = comp.frequency.unwrap_or(1e3);
-                    let offset = comp.offset.unwrap_or(0.0);
-                    let duty = comp.duty_cycle.unwrap_or(0.5);
+                    let amp = co.and_then(|f| f.get("amplitude").copied()).or(comp.amplitude).unwrap_or(0.0);
+                    let freq = co.and_then(|f| f.get("frequency").copied()).or(comp.frequency).unwrap_or(1e3);
+                    let offset = co.and_then(|f| f.get("offset").copied()).or(comp.offset).unwrap_or(0.0);
+                    let duty = co.and_then(|f| f.get("duty_cycle").copied()).or(comp.duty_cycle).unwrap_or(0.5);
+                    let v_base = co.and_then(|f| f.get("value").copied()).unwrap_or(comp.value);
 
                     let v_val = match wave.as_str() {
                         "sine" => offset + amp * (2.0 * std::f64::consts::PI * freq * t).sin(),
@@ -3398,18 +3540,19 @@ pub fn solve_transient_circuit_with_initial_states(
                                 offset
                             }
                         }
-                        _ => comp.value,
+                        _ => v_base,
                     };
 
                     let vs_idx = *vsource_map.get(&comp.id).unwrap();
                     vector_z[n + vs_idx] = v_val;
                 }
             } else if comp.comp_type == "isource" {
+                let co = local_overrides.get(&comp.id);
                 if let Some(ref wave) = comp.wave_type {
-                    let amp = comp.amplitude.unwrap_or(0.0);
-                    let freq = comp.frequency.unwrap_or(1e3);
-                    let offset = comp.offset.unwrap_or(0.0);
-                    let duty = comp.duty_cycle.unwrap_or(0.5);
+                    let amp = co.and_then(|f| f.get("amplitude").copied()).or(comp.amplitude).unwrap_or(0.0);
+                    let freq = co.and_then(|f| f.get("frequency").copied()).or(comp.frequency).unwrap_or(1e3);
+                    let offset = co.and_then(|f| f.get("offset").copied()).or(comp.offset).unwrap_or(0.0);
+                    let duty = co.and_then(|f| f.get("duty_cycle").copied()).or(comp.duty_cycle).unwrap_or(0.5);
 
                     let i_val = match wave.as_str() {
                         "sine" => offset + amp * (2.0 * std::f64::consts::PI * freq * t).sin(),
@@ -3445,6 +3588,35 @@ pub fn solve_transient_circuit_with_initial_states(
                     if node_neg > 0 {
                         vector_z[node_neg - 1] += diff;
                     }
+                }
+            }
+        }
+
+        // Actualizar estados congelados del switch usando voltajes del paso anterior convergido
+        for comp in &netlist.components {
+            if comp.comp_type == "switch" {
+                let co = local_overrides.get(&comp.id);
+                // Si hay override de switch_state, forzar estado sin pasar por histéresis
+                if let Some(&forced) = co.and_then(|f| f.get("switch_state")) {
+                    switch_states.insert(comp.id.clone(), forced >= 0.5);
+                } else if let (Ok(node_a), Ok(node_b)) = (
+                    comp.pins[0].parse::<usize>(),
+                    comp.pins[1].parse::<usize>()
+                ) {
+                    let v_a = if node_a > 0 { current_solution[node_a - 1] } else { 0.0 };
+                    let v_b = if node_b > 0 { current_solution[node_b - 1] } else { 0.0 };
+                    let v_ab = v_a - v_b;
+                    let vth = co.and_then(|f| f.get("switch_vth").copied()).unwrap_or(comp.switch_vth.unwrap_or(0.5));
+                    let vh = co.and_then(|f| f.get("switch_vh").copied()).unwrap_or(comp.switch_vh.unwrap_or(0.05));
+                    let was_closed = switch_states.get(&comp.id).copied().unwrap_or(false);
+                    let new_state = if !was_closed && v_ab > vth + vh / 2.0 {
+                        true
+                    } else if was_closed && v_ab < vth - vh / 2.0 {
+                        false
+                    } else {
+                        was_closed
+                    };
+                    switch_states.insert(comp.id.clone(), new_state);
                 }
             }
         }
@@ -3568,6 +3740,19 @@ pub fn solve_transient_circuit_with_initial_states(
                     if node_out > 0 {
                         vector_z[node_out - 1] += i_eq;
                     }
+                }
+                "switch" => {
+                    let co = local_overrides.get(&comp.id);
+                    let node_a = comp.pins[0].parse::<usize>().unwrap();
+                    let node_b = comp.pins[1].parse::<usize>().unwrap();
+                    let ron = co.and_then(|f| f.get("switch_ron").copied()).unwrap_or(comp.switch_ron.unwrap_or(0.01));
+                    let roff = co.and_then(|f| f.get("switch_roff").copied()).unwrap_or(comp.switch_roff.unwrap_or(1e9));
+                    let is_closed = switch_states.get(&comp.id).copied().unwrap_or(false);
+                    let conductance = 1.0 / if is_closed { ron } else { roff };
+                    stamp_companion_conductance(&mut matrix_a, node_a, node_a, conductance);
+                    stamp_companion_conductance(&mut matrix_a, node_b, node_b, conductance);
+                    stamp_companion_conductance(&mut matrix_a, node_a, node_b, -conductance);
+                    stamp_companion_conductance(&mut matrix_a, node_b, node_a, -conductance);
                 }
                 _ => {}
             }
@@ -4592,6 +4777,7 @@ pub fn solve_transient_circuit_with_initial_states(
                 ind_states = ind_states_backup;
                 cap_states_prev = cap_states_prev_backup;
                 ind_states_prev = ind_states_prev_backup;
+                switch_states = switch_states_backup;
                 mcu_tchip = mcu_tchip_backup;
                 mcu_vsample = mcu_vsample_backup;
                 mcu_vdaceff = mcu_vdaceff_backup;
@@ -4677,6 +4863,15 @@ pub fn solve_transient_circuit_with_initial_states(
                     node_voltages,
                     branch_currents,
                 });
+
+                // --- STREAMING CALLBACK: punto de extension para emision en vivo ---
+                if let Some(ref mut cb) = on_step {
+                    if let Some(last_result) = results.last() {
+                        if !cb(last_result) {
+                            break;
+                        }
+                    }
+                }
 
                 // --- DETECCION DE CRUCE DE UMBRALES Y EVENTOS DIGITALES ---
                 for comp in &netlist.components {
@@ -5261,6 +5456,7 @@ pub fn solve_transient_circuit_with_initial_states(
                 ind_states = ind_states_backup;
                 cap_states_prev = cap_states_prev_backup;
                 ind_states_prev = ind_states_prev_backup;
+                switch_states = switch_states_backup;
                 mcu_tchip = mcu_tchip_backup;
                 mcu_vsample = mcu_vsample_backup;
                 mcu_vdaceff = mcu_vdaceff_backup;

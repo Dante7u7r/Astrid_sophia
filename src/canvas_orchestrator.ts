@@ -12,7 +12,7 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x';
   value: number | string;
   x: number;
   y: number;
@@ -46,6 +46,11 @@ export interface ComponentInstance {
   switchVth?: number;
   switchVh?: number;
   switchState?: boolean;
+
+  // Macromodelo SPICE (subcircuito definido por el usuario)
+  spiceMacro?: string;
+  // Número dinámico de pines para subcircuito genérico (defecto 4)
+  pinCount?: number;
 }
 
 export interface PinInstance {
@@ -55,15 +60,25 @@ export interface PinInstance {
   y: number; // World Y
 }
 
+export interface WireEndpoint {
+  componentId: string;
+  pinIndex: number;
+}
+
 export interface WireInstance {
   id: string;
-  from: { componentId: string; pinIndex: number };
-  to: { componentId: string; pinIndex: number };
+  from: WireEndpoint;
+  to: WireEndpoint;
   points: Point2D[]; // Path points for rendering
+}
+
+export function wireEndpointKey(ep: WireEndpoint): string {
+  return `${ep.componentId}:${ep.pinIndex}`;
 }
 
 export class CanvasOrchestrator {
   private canvas: HTMLCanvasElement;
+  public simulationActive: boolean = false;
   private ctx: CanvasRenderingContext2D;
 
   // Viewport State
@@ -125,6 +140,41 @@ export class CanvasOrchestrator {
 
   public snapToGrid(coord: number): number {
     return Math.round(coord / this.gridSize) * this.gridSize;
+  }
+
+  public snapPointToGrid(p: Point2D): Point2D {
+    return {
+      x: this.snapToGrid(p.x),
+      y: this.snapToGrid(p.y),
+    };
+  }
+
+  public screenToWorldSnapped(screenX: number, screenY: number): Point2D {
+    return this.snapPointToGrid(this.screenToWorld(screenX, screenY));
+  }
+
+  public generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[] {
+    const pts: Point2D[] = [{ x: start.x, y: start.y }];
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+
+    if (dx < 0.1) {
+      pts.push({ x: end.x, y: end.y });
+    } else if (dy < 0.1) {
+      pts.push({ x: end.x, y: end.y });
+    } else {
+      if (dx >= dy) {
+        const midX = start.x + (end.x - start.x) / 2;
+        pts.push(this.snapPointToGrid({ x: midX, y: start.y }));
+        pts.push(this.snapPointToGrid({ x: midX, y: end.y }));
+      } else {
+        const midY = start.y + (end.y - start.y) / 2;
+        pts.push(this.snapPointToGrid({ x: start.x, y: midY }));
+        pts.push(this.snapPointToGrid({ x: end.x, y: midY }));
+      }
+      pts.push({ x: end.x, y: end.y });
+    }
+    return pts;
   }
 
   public getComponentPins(comp: ComponentInstance): PinInstance[] {
@@ -224,6 +274,25 @@ export class CanvasOrchestrator {
       pins.push({ componentId: comp.id, pinIndex: 1, x: ptPri2.x, y: ptPri2.y });
       pins.push({ componentId: comp.id, pinIndex: 2, x: ptSec1.x, y: ptSec1.y });
       pins.push({ componentId: comp.id, pinIndex: 3, x: ptSec2.x, y: ptSec2.y });
+    } else if (comp.type === 'x') {
+      const pinCount = comp.pinCount ?? 4;
+      const pinsLeft = Math.ceil(pinCount / 2);
+      const totalHeight = Math.max(pinsLeft * 40, 60);
+      const halfH = totalHeight / 2;
+
+      for (let i = 0; i < pinCount; i++) {
+        const pos = Math.floor(i / 2);
+        const yOffset = -halfH + 20 + pos * 40;
+        if (i % 2 === 0) {
+          // Pin par (0, 2, 4...) -> Izquierda. Conexión lógica en la punta exterior (-60)
+          const pt = getRotatedOffset(-60, yOffset);
+          pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
+        } else {
+          // Pin impar (1, 3, 5...) -> Derecha. Conexión lógica en la punta exterior (60)
+          const pt = getRotatedOffset(60, yOffset);
+          pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
+        }
+      }
     } else {
       // Other 2-pin components (resistor, capacitor, inductor, diode, vsource, isource, led, switch)
       const pt1 = getRotatedOffset(-40, 0);
@@ -266,7 +335,7 @@ export class CanvasOrchestrator {
 
   // --- DRAWING / RENDERING ---
 
-  public render(_voltageMap: Record<string, number> = {}, probes: { ch1?: Point2D; ch2?: Point2D } = {}): void {
+  public render(_voltageMap: Record<string, number> = {}, probes: { ch1?: Point2D; ch2?: Point2D } = {}, nodeMap: Record<string, string> = {}): void {
     const { width, height } = this.canvas;
     
     // Sync actual drawing bounds
@@ -300,20 +369,18 @@ export class CanvasOrchestrator {
       this.ctx.beginPath();
       
       const pinPt = this.activePinForWire;
-      this.ctx.moveTo(pinPt.x, pinPt.y);
-
-      // Orthogonal path for preview
-      const midX = pinPt.x + (this.tempWireEnd.x - pinPt.x) / 2;
-      this.ctx.lineTo(midX, pinPt.y);
-      this.ctx.lineTo(midX, this.tempWireEnd.y);
-      this.ctx.lineTo(this.tempWireEnd.x, this.tempWireEnd.y);
+      const previewPath = this.generateOrthogonalPath(pinPt, this.tempWireEnd);
+      this.ctx.moveTo(previewPath[0].x, previewPath[0].y);
+      for (let i = 1; i < previewPath.length; i++) {
+        this.ctx.lineTo(previewPath[i].x, previewPath[i].y);
+      }
       
       this.ctx.stroke();
       this.ctx.setLineDash([]);
     }
 
     // 6. Draw Highlights & Pins
-    this.drawPins(_voltageMap);
+    this.drawPins(_voltageMap, nodeMap);
 
     // 7. Draw Oscilloscope Probe Badges
     if (probes.ch1) {
@@ -418,7 +485,7 @@ export class CanvasOrchestrator {
     }
 
     // 1. Draw Leads
-    if (comp.type !== 'ground' && comp.type !== 'nmos' && comp.type !== 'pmos' && comp.type !== 'npn' && comp.type !== 'pnp' && comp.type !== 'opamp' && comp.type !== 'relay' && comp.type !== 'mcu_8051' && comp.type !== 'mcu_avr' && comp.type !== 'arduino_uno' && comp.type !== 'esp32' && comp.type !== 'raspberry_pi_pico') {
+    if (comp.type !== 'ground' && comp.type !== 'nmos' && comp.type !== 'pmos' && comp.type !== 'npn' && comp.type !== 'pnp' && comp.type !== 'opamp' && comp.type !== 'relay' && comp.type !== 'mcu_8051' && comp.type !== 'mcu_avr' && comp.type !== 'arduino_uno' && comp.type !== 'esp32' && comp.type !== 'raspberry_pi_pico' && comp.type !== 'x') {
       this.ctx.beginPath();
       this.ctx.moveTo(-40, 0);
       this.ctx.lineTo(-20, 0);
@@ -1199,6 +1266,75 @@ export class CanvasOrchestrator {
         this.ctx.fill();
         break;
       }
+
+      // --- Caja negra para Subcircuito Genérico (tipo 'x') ---
+      case 'x': {
+        const pinCount = comp.pinCount ?? 4;
+        const pinsLeft = Math.ceil(pinCount / 2);
+        const totalHeight = Math.max(pinsLeft * 40, 60);
+        const halfH = totalHeight / 2;
+
+        // 1. Hilos de conexión (Leads) desde el cuerpo (-40) hasta el terminal (-60)
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = isSelected ? 3 : 2;
+        this.ctx.beginPath();
+        for (let i = 0; i < pinCount; i++) {
+          const pos = Math.floor(i / 2);
+          const yPin = -halfH + 20 + pos * 40;
+          if (i % 2 === 0) {
+            this.ctx.moveTo(-60, yPin);
+            this.ctx.lineTo(-40, yPin);
+          } else {
+            this.ctx.moveTo(40, yPin);
+            this.ctx.lineTo(60, yPin);
+          }
+        }
+        this.ctx.stroke();
+
+        // 2. Caja negra con estética premium Glassmorphic
+        this.ctx.fillStyle = "rgba(8, 12, 22, 0.85)";
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        if (isSelected || isHovered) {
+          this.ctx.shadowColor = color;
+          this.ctx.shadowBlur = isSelected ? 10 : 5;
+        }
+        const r = 6; // Radio de redondeo
+        this.ctx.beginPath();
+        this.ctx.moveTo(-40 + r, -halfH);
+        this.ctx.lineTo(40 - r, -halfH);
+        this.ctx.arcTo(40, -halfH, 40, -halfH + r, r);
+        this.ctx.lineTo(40, halfH - r);
+        this.ctx.arcTo(40, halfH, 40 - r, halfH, r);
+        this.ctx.lineTo(-40 + r, halfH);
+        this.ctx.arcTo(-40, halfH, -40, halfH - r, r);
+        this.ctx.lineTo(-40, -halfH + r);
+        this.ctx.arcTo(-40, -halfH, -40 + r, -halfH, r);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Brillo interno superior
+        this.ctx.shadowBlur = 0;
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-38 + r, -halfH + 2);
+        this.ctx.lineTo(38 - r, -halfH + 2);
+        this.ctx.stroke();
+
+        // 3. Renderizar números identificadores de pines físicos (.subckt)
+        for (let i = 0; i < pinCount; i++) {
+          const pos = Math.floor(i / 2);
+          const yLabel = -halfH + 20 + pos * 40;
+          this.ctx.fillStyle = "hsl(210, 17%, 60%)";
+          this.ctx.font = "8px var(--font-mono)";
+          this.ctx.textAlign = i % 2 === 0 ? "left" : "right";
+          this.ctx.fillText(`${i + 1}`, i % 2 === 0 ? -34 : 34, yLabel + 3);
+        }
+
+        break;
+      }
     }
 
     // 3. Draw text value and label
@@ -1218,6 +1354,11 @@ export class CanvasOrchestrator {
     } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
       idY = -70;
       valY = 75;
+    } else if (comp.type === 'x') {
+      const pinsLeft = Math.ceil((comp.pinCount ?? 4) / 2);
+      const totalHeight = Math.max(pinsLeft * 40, 60);
+      idY = -totalHeight / 2 - 10;
+      valY = totalHeight / 2 + 14;
     }
 
     this.ctx.fillStyle = isSelected ? "hsl(270, 89%, 80%)" : "hsl(210, 17%, 85%)";
@@ -1225,7 +1366,7 @@ export class CanvasOrchestrator {
     this.ctx.textAlign = "center";
     this.ctx.fillText(comp.id, 0, idY);
 
-    if (comp.type !== 'ground') {
+    if (comp.type !== 'ground' && comp.type !== 'x') {
       this.ctx.fillStyle = "var(--text-muted)";
       this.ctx.font = "9px var(--font-mono)";
       let formattedVal = comp.value ? comp.value.toString() : "";
@@ -1276,48 +1417,22 @@ export class CanvasOrchestrator {
 
       if (!startPt || !endPt) continue;
 
-      // Calcular puntos del camino ortogonal
-      const points: Point2D[] = [];
-      points.push({ x: startPt.x, y: startPt.y });
-
-      const dx = Math.abs(endPt.x - startPt.x);
-      const dy = Math.abs(endPt.y - startPt.y);
-
-      if (dx < 0.1) {
-        // Línea vertical pura
-        points.push({ x: endPt.x, y: endPt.y });
-      } else if (dy < 0.1) {
-        // Línea horizontal pura
-        points.push({ x: endPt.x, y: endPt.y });
-      } else {
-        // Determinar orientación dominante para decidir la salida ortogonal
-        // Componentes horizontales (rotación 0 o 180) usualmente conectan en X.
-        // Si la distancia horizontal es mayor, trazamos X -> Y -> X. De lo contrario Y -> X -> Y.
-        if (dx >= dy) {
-          const midX = startPt.x + (endPt.x - startPt.x) / 2;
-          points.push({ x: midX, y: startPt.y });
-          points.push({ x: midX, y: endPt.y });
-        } else {
-          const midY = startPt.y + (endPt.y - startPt.y) / 2;
-          points.push({ x: startPt.x, y: midY });
-          points.push({ x: endPt.x, y: midY });
-        }
-        points.push({ x: endPt.x, y: endPt.y });
-      }
+      const pts = wire.points;
+      if (!pts || pts.length < 2) continue;
 
       // Dibujar camino ortogonal con esquinas redondeadas
       this.ctx.beginPath();
-      this.ctx.moveTo(points[0].x, points[0].y);
-      
+      this.ctx.moveTo(pts[0].x, pts[0].y);
+
       const cornerRadius = 8;
-      if (points.length > 2) {
-        for (let i = 1; i < points.length - 1; i++) {
-          const p1 = points[i];
-          const p2 = points[i + 1];
+      if (pts.length > 2) {
+        for (let i = 1; i < pts.length - 1; i++) {
+          const p1 = pts[i];
+          const p2 = pts[i + 1];
           this.ctx.arcTo(p1.x, p1.y, p2.x, p2.y, cornerRadius);
         }
       }
-      this.ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+      this.ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
 
       // Estilo interactivo del cable
       const isSelected = this.selectedWire?.id === wire.id;
@@ -1342,9 +1457,6 @@ export class CanvasOrchestrator {
       this.ctx.stroke();
       this.ctx.shadowBlur = 0; // Reset shadow
 
-      // Guardar los puntos calculados en la instancia del cable para colisiones posteriores
-      wire.points = points;
-
       // Highlight conexiones/pins
       this.ctx.fillStyle = isSelected 
         ? "hsl(270, 89%, 65%)" 
@@ -1360,7 +1472,7 @@ export class CanvasOrchestrator {
     this.ctx.restore();
   }
 
-  private drawPins(voltageMap: Record<string, number> = {}): void {
+  private drawPins(voltageMap: Record<string, number> = {}, nodeMap: Record<string, string> = {}): void {
     this.ctx.save();
 
     for (const comp of this.components) {
@@ -1382,28 +1494,49 @@ export class CanvasOrchestrator {
           this.ctx.fill();
           this.ctx.shadowBlur = 0;
 
-          // Draw tooltip with voltage
+          // Draw tooltip with node info and voltage
           const pinKey = `${pin.componentId}:${pin.pinIndex}`;
-          if (isHovered && voltageMap[pinKey] !== undefined) {
+          const nodeId = nodeMap[pinKey];
+          if (isHovered && nodeId) {
+            const nodeLabel = nodeId === "0" ? "Nodo 0 (GND)" : `Nodo ${nodeId}`;
             const volt = voltageMap[pinKey];
+            const voltLine = volt !== undefined ? `${volt.toFixed(4)} V` : null;
+
+            const lines: string[] = [nodeLabel];
+            if (voltLine) lines.push(voltLine);
+
+            this.ctx.font = "bold 9px var(--font-mono)";
+            const lineHeight = 12;
+            const paddingX = 8;
+            const paddingY = 5;
+            let maxWidth = 0;
+            for (const line of lines) {
+              const w = this.ctx.measureText(line).width;
+              if (w > maxWidth) maxWidth = w;
+            }
+
+            const boxH = lines.length * lineHeight + paddingY * 2;
+            const boxY = pin.y - 10 - boxH;
+
             this.ctx.fillStyle = "rgba(8, 12, 22, 0.95)";
             this.ctx.strokeStyle = "rgba(102, 252, 241, 0.4)";
             this.ctx.lineWidth = 1;
-            
-            const txt = `${volt.toFixed(4)} V`;
-            this.ctx.font = "bold 9px var(--font-mono)";
-            const txtWidth = this.ctx.measureText(txt).width;
-            
-            // Draw small rounded rect
             this.ctx.beginPath();
-            this.ctx.roundRect(pin.x - txtWidth / 2 - 6, pin.y - 25, txtWidth + 12, 16, 4);
+            this.ctx.roundRect(
+              pin.x - maxWidth / 2 - paddingX,
+              boxY,
+              maxWidth + paddingX * 2,
+              boxH,
+              4
+            );
             this.ctx.fill();
             this.ctx.stroke();
-            
-            // Draw text
+
             this.ctx.fillStyle = "hsl(174, 97%, 69%)";
             this.ctx.textAlign = "center";
-            this.ctx.fillText(txt, pin.x, pin.y - 14);
+            for (let i = 0; i < lines.length; i++) {
+              this.ctx.fillText(lines[i], pin.x, boxY + paddingY + lineHeight * (i + 0.7));
+            }
           }
         } else {
           this.ctx.fillStyle = "rgba(102, 252, 241, 0.5)";
@@ -1415,6 +1548,20 @@ export class CanvasOrchestrator {
     }
 
     this.ctx.restore();
+  }
+
+  public hitTestPin(worldX: number, worldY: number, threshold = 8): { pin: PinInstance; comp: ComponentInstance } | null {
+    for (const comp of this.components) {
+      const pins = this.getComponentPins(comp);
+      for (const pin of pins) {
+        const dx = worldX - pin.x;
+        const dy = worldY - pin.y;
+        if (dx * dx + dy * dy <= threshold * threshold) {
+          return { pin, comp };
+        }
+      }
+    }
+    return null;
   }
 
   // --- ACTIONS & OPERATIONS ---
@@ -1440,6 +1587,7 @@ export class CanvasOrchestrator {
       case 'led': prefix = "LED"; break;
       case 'switch': prefix = "SW"; break;
       case 'transformer': prefix = "T"; break;
+      case 'x': prefix = "X"; break;
     }
     const id = prefix === "GND" ? `GND${count}` : `${prefix}${count}`;
 
@@ -1469,16 +1617,11 @@ export class CanvasOrchestrator {
     this.hoveredWire = null;
 
     // 1. Check pin hover first (takes priority)
-    for (const comp of this.components) {
-      const pins = this.getComponentPins(comp);
-      for (const pin of pins) {
-        const dx = worldX - pin.x;
-        const dy = worldY - pin.y;
-        if (dx * dx + dy * dy < 64) { // 8px radius check
-          this.hoveredPin = pin;
-          return;
-        }
-      }
+    const hit = this.hitTestPin(worldX, worldY, 8);
+    if (hit) {
+      this.hoveredPin = hit.pin;
+      this.canvas.style.cursor = 'pointer';
+      return;
     }
 
     // 2. Check component bounds hover
@@ -1491,6 +1634,12 @@ export class CanvasOrchestrator {
         worldY <= comp.y + size
       ) {
         this.hoveredComponent = comp;
+        // Cambiar cursor si es un componente interactivo
+        if (this.simulationActive && (comp.type === 'switch')) {
+          this.canvas.style.cursor = 'pointer';
+        } else {
+          this.canvas.style.cursor = 'default';
+        }
         return;
       }
     }
@@ -1519,10 +1668,12 @@ export class CanvasOrchestrator {
         
         if (dist < 6) { // Tolerancia de proximidad al cable de 6px
           this.hoveredWire = wire;
+          this.canvas.style.cursor = 'pointer';
           return;
         }
       }
     }
+    this.canvas.style.cursor = 'default';
   }
 
   public selectComponentAt(worldX: number, worldY: number, isShift: boolean = false): ComponentInstance | null {
@@ -1665,7 +1816,19 @@ export class CanvasOrchestrator {
   }
 
   public syncWireConnections(): void {
-    // Las conexiones físicas de las pistas se sincronizan dinámicamente en drawWires()
+    for (const wire of this.wires) {
+      const fromComp = this.components.find(c => c.id === wire.from.componentId);
+      const toComp = this.components.find(c => c.id === wire.to.componentId);
+      if (!fromComp || !toComp) continue;
+
+      const fromPins = this.getComponentPins(fromComp);
+      const toPins = this.getComponentPins(toComp);
+      const startPt = fromPins.find(p => p.pinIndex === wire.from.pinIndex);
+      const endPt = toPins.find(p => p.pinIndex === wire.to.pinIndex);
+      if (!startPt || !endPt) continue;
+
+      wire.points = this.generateOrthogonalPath(startPt, endPt);
+    }
   }
 
   public connectPins(from: PinInstance, to: PinInstance): void {
@@ -1688,6 +1851,7 @@ export class CanvasOrchestrator {
       to: { componentId: to.componentId, pinIndex: to.pinIndex },
       points: []
     });
+    this.syncWireConnections();
   }
 
   public rotateSelectedComponent(): void {
