@@ -27,4 +27,10 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // Vitest — pruebas unitarias de módulos puros (sin DOM, sin Tauri)
+  test: {
+    include: ["src/**/*.test.ts"],
+    environment: "node",
+  },
 }));

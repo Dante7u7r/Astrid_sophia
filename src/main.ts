@@ -1,35 +1,29 @@
 import { safeInvoke as invoke } from "./simulation/tauri_mock";
-import { listen } from "@tauri-apps/api/event";
 import { CanvasOrchestrator, ComponentInstance, Point2D } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
 import { SettingsModal, SimulationSettings } from "./ui/settings_modal";
 import { OscilloscopePanel, TimeStepResult, PvtRunResult, PvtTrace } from "./ui/oscilloscope_panel";
-import { ActuatorHistoryManager, parseBuzzerActuatorModel, parseLampActuatorModel, parseRelayActuatorModel } from "./ui/actuator_helpers";
-import { AudioOrchestrator } from "./ui/audio_orchestrator";
+import { parseBuzzerActuatorModel } from "./ui/actuator_helpers";
+import { extractElectricalNetlist, type CircuitNetlist } from "./simulation/netlist_extractor";
 import { McuDebugPanel } from "./ui/mcu_debug_panel";
 import {
-  createMcuRuntime,
-  createMcuSpiceBridge,
-  updateGpioInputs,
   runCycles,
-  connectGpioToNode,
-  STANDARD_8051_DEFINITION,
-  ATMEGA328P_DEFINITIONS,
   resetRuntime,
-  dispatchAnalogTrigger,
   PVT_PROFILE_COMMERCIAL,
   PVT_PROFILE_INDUSTRIAL,
   PVT_PROFILE_AUTOMOTIVE,
   type PvtConfig,
-  type AnalogEventTrigger,
-  type McuRuntime,
   type SParameterResult,
   type SParameterSettings,
   type PortDefinition,
 } from "./simulation";
-// Variables Globales del Estado
-let actuatorHistory = new ActuatorHistoryManager();
-let audioOrchestrator = new AudioOrchestrator();
+import { solveCircuitTS, solveTransientCircuitTS } from "./simulation/fallback_solver";
+import { createSimulationRunner, type SimulationRunner } from "./simulation/simulation_runner";
+import { initSimulationControls, type SimulationControls } from "./ui/simulation_controls";
+import { runElectricalRuleCheck, dispatchSimulation } from "./simulation/simulation_dispatcher";
+import { createCircuitStateManager } from "./simulation/circuit_state_manager";
+// Variables Globales del Estado — centralizadas en CircuitStateManager
+const circuitState = createCircuitStateManager();
 
 let simSettings: SimulationSettings = {
   dt: 0.0001,
@@ -46,17 +40,6 @@ let sidebarLeft: HTMLElement | null = null;
 let sidebarRight: HTMLElement | null = null;
 let btnToggleLeft: HTMLButtonElement | null = null;
 let btnToggleRight: HTMLButtonElement | null = null;
-
-let analysisDcBtn: HTMLButtonElement | null = null;
-let analysisAcBtn: HTMLButtonElement | null = null;
-let analysisTranBtn: HTMLButtonElement | null = null;
-let analysisSensBtn: HTMLButtonElement | null = null;
-let analysisPssBtn: HTMLButtonElement | null = null;
-let analysisStbBtn: HTMLButtonElement | null = null;
-let analysisPvtBtn: HTMLButtonElement | null = null;
-let analysisSparBtn: HTMLButtonElement | null = null;
-let runSimBtn: HTMLButtonElement | null = null;
-let stopSimBtn: HTMLButtonElement | null = null;
 
 let propValInput: HTMLInputElement | null = null;
 let propValSlider: HTMLInputElement | null = null;
@@ -100,10 +83,10 @@ let telemetryPanel: TelemetryPanel | null = null;
 let oscilloscopePanel: OscilloscopePanel | null = null;
 
 // Mapa global de voltajes resueltos para visualización
-let liveVoltages: Record<string, number> = {};
+// (centralizado en circuitState.getVoltageMap())
 
 // Mapa de correspondencia entre cada terminal física y su nodo eléctrico resuelto
-let pinToNodeMap: Record<string, string> = {};
+// (centralizado en circuitState.getPinToNodeMap())
 
 // --- ESTADOS DE SONDAS E INSTRUMENTACIÓN DEL OSCILOSCOPIO ---
 let probePlacementMode: 'CH1' | 'CH2' | null = null;
@@ -117,157 +100,52 @@ let ch1ProbeNode: string | null = "1"; // Canal 1 por defecto al Nodo 1
 let ch2ProbeNode: string | null = "2"; // Canal 2 por defecto al Nodo 2
 
 function updateCanvasRendering() {
-  const pinVoltageMap: Record<string, number> = {};
-  for (const [pinKey, nodeId] of Object.entries(pinToNodeMap)) {
-    if (liveVoltages[nodeId] !== undefined) {
-      pinVoltageMap[pinKey] = liveVoltages[nodeId];
-    }
-  }
+  const pinVoltageMap = circuitState.buildPinVoltageMap();
 
-  // Encontrar coordenadas absolutas lógicas de los terminales asociados a las sondas
   let ch1PinPos: Point2D | undefined;
   let ch2PinPos: Point2D | undefined;
 
   const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
   const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
 
-    if (orchestrator) {
-      // Encontrar coordenadas de puertos RF para marcadores SPAR
-      const sparMarkers: { index: number; x: number; y: number }[] = [];
-      for (const sp of sparPorts) {
-        for (const comp of orchestrator.components) {
-          const pins = orchestrator.getComponentPins(comp);
-          for (const pin of pins) {
-            const pinKey = `${comp.id}:${pin.pinIndex}`;
-            const nodeId = pinToNodeMap[pinKey];
-            if (nodeId === sp.nodeId) {
-              const idx = sparPorts.indexOf(sp) + 1;
-              if (!sparMarkers.some(m => m.index === idx)) {
-                sparMarkers.push({ index: idx, x: pin.x, y: pin.y });
-              }
-            }
-          }
-        }
-      }
-
+  if (orchestrator) {
+    const sparMarkers: { index: number; x: number; y: number }[] = [];
+    for (const sp of sparPorts) {
       for (const comp of orchestrator.components) {
         const pins = orchestrator.getComponentPins(comp);
         for (const pin of pins) {
           const pinKey = `${comp.id}:${pin.pinIndex}`;
-          const nodeId = pinToNodeMap[pinKey];
-          if (nodeId === ch1Node && !ch1PinPos) {
-            ch1PinPos = { x: pin.x, y: pin.y };
-          }
-          if (nodeId === ch2Node && !ch2PinPos) {
-            ch2PinPos = { x: pin.x, y: pin.y };
+          const nodeId = circuitState.getPinNode(pinKey);
+          if (nodeId === sp.nodeId) {
+            const idx = sparPorts.indexOf(sp) + 1;
+            if (!sparMarkers.some(m => m.index === idx)) {
+              sparMarkers.push({ index: idx, x: pin.x, y: pin.y });
+            }
           }
         }
       }
-      orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos }, pinToNodeMap, sparMarkers.length > 0 ? sparMarkers : undefined);
     }
-}
 
-// --- STREAMING TRANSIENT (FASE 2.1) ---
-// --- MOTOR DE INTERRUPCIONES MIXED-SIGNAL (MCU INTERRUPT ENGINE) ---
-
-interface SimulationFrame {
-  time: number;
-  nodeVoltages: Record<string, number>;
-  branchCurrents: Record<string, number>;
-  frameIndex: number;
-  isFinal: boolean;
-  /** Evento de interrupción analógica recibido desde el solver Rust.
-   *  null cuando el paso no contiene ningún cruce de umbral. */
-  triggerEvent: AnalogEventTrigger | null;
-}
-
-/** Registro de runtimes MCU activos durante la simulación interactiva.
- *  Indexado por componentId. Se inicializa en startInteractiveTransient()
- *  y se limpia en stopInteractiveTransient(). */
-let interactiveMcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> | null = null;
-
-let unlistenStream: (() => void) | null = null;
-
-function isSimulationActive(): boolean {
-  return unlistenStream !== null;
-}
-
-interface ComponentMutation {
-  componentId: string;
-  field: string;
-  value: number;
-}
-
-async function startInteractiveTransient(netlist: CircuitNetlist, settings: { dt: number; tMax: number }): Promise<void> {
-  if (orchestrator) orchestrator.simulationActive = true;
-
-  // Inicializar runtimes MCU para el entorno interactivo (co-simulación TS+Rust)
-  const mcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> = {};
-  for (const comp of netlist.components) {
-    if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
-      const origComp = orchestrator?.components.find(c => c.id === comp.id);
-      if (origComp) {
-        const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
-        const runtime = createMcuRuntime({
-          definition: def,
-          firmware: origComp.firmware,
-        });
-        runtime.pendingInterruptVector = null;
-        runtime.globalInterruptEnable = true;
-        mcuRuntimes[comp.id] = { runtime, type: comp.type, pins: comp.pins };
+    for (const comp of orchestrator.components) {
+      const pins = orchestrator.getComponentPins(comp);
+      for (const pin of pins) {
+        const pinKey = `${comp.id}:${pin.pinIndex}`;
+        const nodeId = circuitState.getPinNode(pinKey);
+        if (nodeId === ch1Node && !ch1PinPos) {
+          ch1PinPos = { x: pin.x, y: pin.y };
+        }
+        if (nodeId === ch2Node && !ch2PinPos) {
+          ch2PinPos = { x: pin.x, y: pin.y };
+        }
       }
     }
-  }
-  interactiveMcuRuntimes = mcuRuntimes;
-
-  unlistenStream = await listen<SimulationFrame>('sim-frame-update', (event) => {
-    const frame = event.payload;
-    liveVoltages = frame.nodeVoltages;
-
-    // --- DESPACHO DE INTERRUPCIONES ANALÓGICAS (MCU INTERRUPT ENGINE) ---
-    // Si el paso analógico contiene un trigger de cruce de umbral, se inyecta
-    // la interrupción de hardware en el runtime de la MCU destino a través
-    // del puente SPICE.
-    if (frame.triggerEvent && interactiveMcuRuntimes) {
-      dispatchAnalogTrigger(frame.triggerEvent, interactiveMcuRuntimes);
-    }
-
-    if (oscilloscopePanel) {
-      oscilloscopePanel.transientResults.push({
-        time: frame.time,
-        nodeVoltages: frame.nodeVoltages,
-        branchCurrents: frame.branchCurrents,
-      });
-    }
-
-    updateCanvasRendering();
-
-    if (frame.isFinal) {
-      addLog(`Simulación interactiva completada en t = ${frame.time.toFixed(6)} s.`, 'receive');
-      if (oscilloscopePanel) {
-        actuatorHistory.precompute(orchestrator!.components, oscilloscopePanel.transientResults, pinToNodeMap);
-      }
-    }
-  });
-
-  listen<string>('sim-frame-error', (event) => {
-    addLog(`Error en simulación: ${event.payload}`, 'error');
-    stopInteractiveTransient();
-  });
-
-  await invoke('start_interactive_transient', { netlist, settings });
-}
-
-async function stopInteractiveTransient(): Promise<void> {
-  await invoke('stop_interactive_transient');
-  if (orchestrator) orchestrator.simulationActive = false;
-  // Limpiar registro de runtimes MCU interactivos
-  interactiveMcuRuntimes = null;
-  if (unlistenStream) {
-    unlistenStream();
-    unlistenStream = null;
+    orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos }, circuitState.getPinToNodeMap(), sparMarkers.length > 0 ? sparMarkers : undefined);
   }
 }
+
+// Instancia global del runner de simulación interactiva
+let simulationRunner: SimulationRunner | null = null;
+let simulationControls: SimulationControls | null = null;
 
 // --- ANÁLISIS PARAMÉTRICO PVT (PROCESS-VOLTAGE-TEMPERATURE) ---
 
@@ -866,8 +744,8 @@ function initPropertyEditor() {
         }
 
         // Emitir mutación en caliente si la simulación está activa
-        if (isSimulationActive()) {
-          const mutations: ComponentMutation[] = [];
+        if (simulationRunner?.isSimulationActive() ?? false) {
+          const mutations: { componentId: string; field: string; value: number }[] = [];
           mutations.push({ componentId: selected.id, field: 'value', value: newVal });
           if (selected.amplitude !== undefined) {
             mutations.push({ componentId: selected.id, field: 'amplitude', value: selected.amplitude });
@@ -904,1352 +782,32 @@ function initPropertyEditor() {
 }
 
 // --- ALGORITMO DE EXTRACCIÓN DE NODOS ELÉCTRICOS (DSU / DISJOINT SETS) ---
+// Adaptador puro: convierte el estado global del orchestrator en la
+// netlist eléctrica y actualiza el mapa de terminales a nodos.
 
-interface ExtractedComponent {
-  id: string;
-  type: string;
-  value: number;
-  pins: string[]; // IDs de nodos eléctricos asignados a cada pin
-  waveType?: string;
-  amplitude?: number;
-  frequency?: number;
-  offset?: number;
-  dutyCycle?: number;
-  switchState?: boolean;
-  switchRon?: number;
-  switchRoff?: number;
-  subcircuitName?: string; // nombre del subcircuito para tipo 'x'
-}
-
-interface MutualInductance {
-  id: string;
-  l1_id: string;
-  l2_id: string;
-  k_coeff: number;
-}
-
-interface CircuitNetlist {
-  components: ExtractedComponent[];
-  wires: { id: string; nodes: string[] }[];
-  mutual_inductances?: MutualInductance[];
-  subcircuitDefinitions?: string;
-}
-
-class DisjointSetUnion {
-  private parent: Record<string, string> = {};
-
-  find(i: string): string {
-    if (!this.parent[i]) {
-      this.parent[i] = i;
-      return i;
-    }
-    if (this.parent[i] === i) {
-      return i;
-    }
-    const root = this.find(this.parent[i]);
-    this.parent[i] = root; // Path compression
-    return root;
-  }
-
-  union(i: string, j: string): void {
-    const rootI = this.find(i);
-    const rootJ = this.find(j);
-    if (rootI !== rootJ) {
-      this.parent[rootI] = rootJ;
-    }
-  }
-}
-
-function extractElectricalNetlist(): CircuitNetlist | null {
+function extractNetlist(): CircuitNetlist | null {
   if (!orchestrator) return null;
-
-  const dsu = new DisjointSetUnion();
-
-  // 1. Declarar cada pin de cada componente en el DSU
-  const allPinKeys: string[] = [];
-  const compPinMapping: Record<string, string[]> = {};
-
-  for (const comp of orchestrator.components) {
-    if (comp.type === 'relay') {
-      compPinMapping[comp.id] = [
-        `${comp.id}:0`,
-        `${comp.id}:1`,
-        `${comp.id}:2`,
-        `${comp.id}:3`,
-        `${comp.id}:internal`
-      ];
-      allPinKeys.push(`${comp.id}:0`, `${comp.id}:1`, `${comp.id}:2`, `${comp.id}:3`, `${comp.id}:internal`);
-    } else {
-      const pins = orchestrator.getComponentPins(comp);
-      compPinMapping[comp.id] = [];
-      for (const pin of pins) {
-        const pinKey = `${comp.id}:${pin.pinIndex}`;
-        allPinKeys.push(pinKey);
-        compPinMapping[comp.id].push(pinKey);
-      }
-    }
-  }
-
-  // 2. Unir los pins que están conectados por cables (wires)
-  for (const wire of orchestrator.wires) {
-    const keyFrom = `${wire.from.componentId}:${wire.from.pinIndex}`;
-    const keyTo = `${wire.to.componentId}:${wire.to.pinIndex}`;
-    dsu.union(keyFrom, keyTo);
-  }
-
-  // 3. Identificar el grupo de Tierra (GND) y asignarle el ID de nodo "0"
-  let gndRoot: string | null = null;
-  for (const comp of orchestrator.components) {
-    if (comp.type === 'ground') {
-      const gndPinKey = `${comp.id}:0`;
-      gndRoot = dsu.find(gndPinKey);
-      break;
-    }
-  }
-
-  // 4. Mapear cada raíz de grupo a un índice de nodo eléctrico único
-  const rootToNodeIdMap: Record<string, string> = {};
-  let nextNodeId = 1;
-
-  if (gndRoot) {
-    rootToNodeIdMap[gndRoot] = "0"; // Tierra siempre es 0
-  }
-
-  const extractedComponents: ExtractedComponent[] = [];
-  let netlistMutualInductances: MutualInductance[] = [];
-
-  for (const comp of orchestrator.components) {
-    const pinsKeys = compPinMapping[comp.id] || [];
-
-    if (comp.type === 'lamp') {
-      const model = parseLampActuatorModel(comp.value?.toString() ?? "");
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
-      extractedComponents.push({
-        id: comp.id,
-        type: 'resistor',
-        value: model.coldResistanceOhms,
-        pins: pinsMapped
-      });
-    }
-    else if (comp.type === 'buzzer') {
-      const model = parseBuzzerActuatorModel(comp.value?.toString() ?? "");
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
-      extractedComponents.push({
-        id: comp.id,
-        type: 'resistor',
-        value: model.inactiveResistanceOhms,
-        pins: pinsMapped
-      });
-    }
-    else if (comp.type === 'relay') {
-      const model = parseRelayActuatorModel(comp.value?.toString() ?? "");
-      const pin0Root = dsu.find(`${comp.id}:0`);
-      const pin1Root = dsu.find(`${comp.id}:1`);
-      const pin2Root = dsu.find(`${comp.id}:2`);
-      const pin3Root = dsu.find(`${comp.id}:3`);
-      const internalRoot = dsu.find(`${comp.id}:internal`);
-
-      const roots = [pin0Root, pin1Root, pin2Root, pin3Root, internalRoot];
-      roots.forEach(r => {
-        if (!rootToNodeIdMap[r]) {
-          rootToNodeIdMap[r] = nextNodeId.toString();
-          nextNodeId++;
-        }
-      });
-
-      const pin0Node = rootToNodeIdMap[pin0Root];
-      const pin1Node = rootToNodeIdMap[pin1Root];
-      const pin2Node = rootToNodeIdMap[pin2Root];
-      const pin3Node = rootToNodeIdMap[pin3Root];
-      const pinInternalNode = rootToNodeIdMap[internalRoot];
-
-      // Coil resistor
-      extractedComponents.push({
-        id: `${comp.id}__coil_res`,
-        type: 'resistor',
-        value: model.coilResistanceOhms,
-        pins: [pin0Node, pinInternalNode]
-      });
-
-      // Coil inductor
-      extractedComponents.push({
-        id: `${comp.id}__coil`,
-        type: 'inductor',
-        value: model.inductanceHenrys,
-        pins: [pinInternalNode, pin1Node]
-      });
-
-      // Contact resistor
-      const isClosed = comp.relayClosed ?? false;
-      const contactVal = isClosed ? model.contactClosedResistanceOhms : model.contactOpenResistanceOhms;
-      extractedComponents.push({
-        id: `${comp.id}__contact`,
-        type: 'resistor',
-        value: contactVal,
-        pins: [pin2Node, pin3Node]
-      });
-    }
-    else if (comp.type === 'transformer') {
-      // Transformer expands to two coupled inductors + mutual inductance entry
-      // Pins: 0,1 = primary | 2,3 = secondary
-      const pin0Root = dsu.find(`${comp.id}:0`);
-      const pin1Root = dsu.find(`${comp.id}:1`);
-      const pin2Root = dsu.find(`${comp.id}:2`);
-      const pin3Root = dsu.find(`${comp.id}:3`);
-
-      const roots = [pin0Root, pin1Root, pin2Root, pin3Root];
-      roots.forEach(r => {
-        if (!rootToNodeIdMap[r]) {
-          rootToNodeIdMap[r] = nextNodeId.toString();
-          nextNodeId++;
-        }
-      });
-
-      const priNode1 = rootToNodeIdMap[pin0Root];
-      const priNode2 = rootToNodeIdMap[pin1Root];
-      const secNode1 = rootToNodeIdMap[pin2Root];
-      const secNode2 = rootToNodeIdMap[pin3Root];
-
-      const L1 = comp.primaryInductance ?? 1e-3;
-      const L2 = comp.secondaryInductance ?? 1e-3;
-      const k = Math.max(0, Math.min(0.9999, comp.couplingCoefficient ?? 0.9));
-
-      // Primary inductor
-      extractedComponents.push({
-        id: `${comp.id}__L1`,
-        type: 'inductor',
-        value: L1,
-        pins: [priNode1, priNode2]
-      });
-
-      // Secondary inductor
-      extractedComponents.push({
-        id: `${comp.id}__L2`,
-        type: 'inductor',
-        value: L2,
-        pins: [secNode1, secNode2]
-      });
-
-      // Add mutual inductance to the netlist (handled via separate field in CircuitNetlist)
-      // Note: The MutualInductance will be added to netlist.mutual_inductances after this loop
-      if (!netlistMutualInductances) {
-        netlistMutualInductances = [];
-      }
-      netlistMutualInductances.push({
-        id: `${comp.id}__K`,
-        l1_id: `${comp.id}__L1`,
-        l2_id: `${comp.id}__L2`,
-        k_coeff: k
-      });
-    }
-    else {
-      const pinsMapped: string[] = [];
-      for (const pk of pinsKeys) {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        pinsMapped.push(rootToNodeIdMap[root]);
-      }
-
-      let subcircuitName: string | undefined;
-      if (comp.type === 'x' && comp.spiceMacro) {
-        for (const line of comp.spiceMacro.split('\n')) {
-          const t = line.trim();
-          if (t.toLowerCase().startsWith('.subckt')) {
-            const parts = t.split(/\s+/);
-            if (parts.length >= 2) subcircuitName = parts[1];
-            break;
-          }
-        }
-      }
-
-      extractedComponents.push({
-        id: comp.id,
-        type: comp.type,
-        value: Number(comp.value) || 0,
-        pins: pinsMapped,
-        waveType: comp.waveType,
-        amplitude: comp.amplitude,
-        frequency: comp.frequency,
-        offset: comp.offset,
-        dutyCycle: comp.dutyCycle,
-        switchState: comp.type === 'switch' ? (comp.switchState ?? false) : undefined,
-        switchRon: comp.switchRon,
-        switchRoff: comp.switchRoff,
-        subcircuitName,
-      });
-    }
-  }
-
-  // Mapear wires
-  const extractedWires = orchestrator.wires.map(w => {
-    const fromKey = `${w.from.componentId}:${w.from.pinIndex}`;
-    const toKey = `${w.to.componentId}:${w.to.pinIndex}`;
-    const nodeFrom = rootToNodeIdMap[dsu.find(fromKey)] || "0";
-    const nodeTo = rootToNodeIdMap[dsu.find(toKey)] || "0";
-    return {
-      id: w.id,
-      nodes: [nodeFrom, nodeTo],
-    };
-  });
-
-  // Poblar mapa de terminales a nodos eléctricos para hover interactivo y colocación de sondas
-  pinToNodeMap = {};
-  for (const comp of orchestrator.components) {
-    const pinsKeys = compPinMapping[comp.id] || [];
-    for (const pk of pinsKeys) {
-      const root = dsu.find(pk);
-      const nodeId = rootToNodeIdMap[root] || "0";
-      pinToNodeMap[pk] = nodeId;
-    }
-  }
-
-  // Concatenar todos los bloques spiceMacro de los Subcircuitos Genéricos (tipo 'x')
-  const macroBlocks: string[] = [];
-  for (const comp of orchestrator.components) {
-    if (comp.type === 'x' && comp.spiceMacro && comp.spiceMacro.trim().length > 0) {
-      macroBlocks.push(comp.spiceMacro.trim());
-    }
-  }
-  const subcircuitDefinitions = macroBlocks.length > 0 ? macroBlocks.join("\n\n") : undefined;
-
-  return {
-    components: extractedComponents,
-    wires: extractedWires,
-    mutual_inductances: netlistMutualInductances.length > 0 ? netlistMutualInductances : undefined,
-    subcircuitDefinitions
-  };
+  const result = extractElectricalNetlist(
+    orchestrator.components,
+    orchestrator.wires,
+    (c) => orchestrator!.getComponentPins(c),
+  );
+  circuitState.setPinToNodeMap(result.pinToNodeMap);
+  return result.netlist;
 }
 
-// --- SOLVER DE BACKUP EN TYPESCRIPT PARA ENTORNO DE NAVEGADOR ---
+// --- WRAPPER LOCAL PARA EL SOLVER TRANSITORIO DE RESPALDO ---
+// Extrae los firmwares del orchestrator global y los pasa como
+// parámetro explícito a la función pura de fallback_solver.
 
-interface TSResult {
-  nodeVoltages: Record<string, number>;
-  branchCurrents: Record<string, number>;
-  convergenceIterations: number;
-}
-
-function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
-  let maxNodeIdx = 0;
-  for (const comp of netlist.components) {
-    for (const pinNode of comp.pins) {
-      const idx = parseInt(pinNode);
-      if (idx > maxNodeIdx) maxNodeIdx = idx;
+function solveTransientCircuitLocal(netlist: CircuitNetlist, dt: number, tMax: number): TimeStepResult[] | string {
+  const firmware: Record<string, Uint8Array> = {};
+  if (orchestrator) {
+    for (const comp of orchestrator.components) {
+      if (comp.firmware) firmware[comp.id] = comp.firmware;
     }
   }
-
-  const n = maxNodeIdx;
-  const vSources = netlist.components.filter(c => c.type === 'vsource');
-  const m = vSources.length;
-
-  const size = n + m;
-  if (size === 0) return "El circuito no tiene nodos activos o componentes.";
-
-  const A: number[][] = Array(size).fill(0).map(() => Array(size).fill(0));
-  const Z: number[] = Array(size).fill(0);
-
-  const stampConductance = (nodeA: number, nodeB: number, G: number) => {
-    if (nodeA > 0) A[nodeA - 1][nodeA - 1] += G;
-    if (nodeB > 0) A[nodeB - 1][nodeB - 1] += G;
-    if (nodeA > 0 && nodeB > 0) {
-      A[nodeA - 1][nodeB - 1] -= G;
-      A[nodeB - 1][nodeA - 1] -= G;
-    }
-  };
-
-  const stampVoltageSource = (vsourceIdx: number, nodePos: number, nodeNeg: number, V: number) => {
-    const col = n + vsourceIdx;
-    if (nodePos > 0) {
-      A[nodePos - 1][col] += 1.0;
-      A[col][nodePos - 1] += 1.0;
-    }
-    if (nodeNeg > 0) {
-      A[nodeNeg - 1][col] -= 1.0;
-      A[col][nodeNeg - 1] -= 1.0;
-    }
-    Z[col] = V;
-  };
-
-  const vSourceMap: Record<string, number> = {};
-  vSources.forEach((vs, idx) => {
-    vSourceMap[vs.id] = idx;
-  });
-
-  for (const comp of netlist.components) {
-    if (comp.type === 'resistor') {
-      const nodeA = parseInt(comp.pins[0]);
-      const nodeB = parseInt(comp.pins[1]);
-      if (comp.value <= 1e-12) return `La resistencia del resistor [${comp.id}] es demasiado baja o cero.`;
-      const G = 1.0 / comp.value;
-      stampConductance(nodeA, nodeB, G);
-    } else if (comp.type === 'vsource') {
-      const nodePos = parseInt(comp.pins[0]);
-      const nodeNeg = parseInt(comp.pins[1]);
-      const vsIdx = vSourceMap[comp.id];
-      stampVoltageSource(vsIdx, nodePos, nodeNeg, comp.value);
-    } else if (comp.type === 'isource') {
-      const nodePos = parseInt(comp.pins[0]);
-      const nodeNeg = parseInt(comp.pins[1]);
-      // Current source: inject current into pos, extract from neg
-      if (nodePos > 0) Z[nodePos - 1] -= comp.value;
-      if (nodeNeg > 0) Z[nodeNeg - 1] += comp.value;
-    } else if (comp.type === 'diode') {
-      const nodeAnode = parseInt(comp.pins[0]);
-      const nodeCathode = parseInt(comp.pins[1]);
-      stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
-    } else if (comp.type === 'led') {
-      // LED treated as diode in fallback
-      const nodeAnode = parseInt(comp.pins[0]);
-      const nodeCathode = parseInt(comp.pins[1]);
-      stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
-    } else if (comp.type === 'nmos') {
-      const nodeGate = parseInt(comp.pins[0]);
-      const nodeDrain = parseInt(comp.pins[1]);
-      const nodeSource = parseInt(comp.pins[2]);
-      stampConductance(nodeDrain, nodeSource, 1.0 / 1e6);
-      stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
-    } else if (comp.type === 'pmos') {
-      const nodeGate = parseInt(comp.pins[0]);
-      const nodeDrain = parseInt(comp.pins[1]);
-      const nodeSource = parseInt(comp.pins[2]);
-      stampConductance(nodeSource, nodeDrain, 1.0 / 1e6);
-      stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
-    } else if (comp.type === 'npn' || comp.type === 'pnp') {
-      const nodeBase = parseInt(comp.pins[0]);
-      const nodeCollector = parseInt(comp.pins[1]);
-      const nodeEmitter = parseInt(comp.pins[2]);
-      stampConductance(nodeCollector, nodeEmitter, 1.0 / 1e6);
-      stampConductance(nodeBase, nodeEmitter, 1.0 / 1e9);
-    } else if (comp.type === 'switch') {
-      // Switch: simple on/off resistor
-      const nodeA = parseInt(comp.pins[0]);
-      const nodeB = parseInt(comp.pins[1]);
-      const isClosed = comp.switchState ?? false;
-      const ron = comp.switchRon ?? 0.01;
-      const roff = comp.switchRoff ?? 1e9;
-      const G = 1.0 / (isClosed ? ron : roff);
-      stampConductance(nodeA, nodeB, G);
-    } else if (comp.type === 'opamp') {
-      const nodeInPos = parseInt(comp.pins[0]);
-      const nodeInNeg = parseInt(comp.pins[1]);
-      const nodeOut = parseInt(comp.pins[4]);
-      stampConductance(nodeInPos, nodeInNeg, 1.0 / 1e7);
-      stampConductance(nodeOut, 0, 1.0 / 100.0);
-    } else if (comp.type === 'capacitor') {
-      const nodeA = parseInt(comp.pins[0]);
-      const nodeB = parseInt(comp.pins[1]);
-      stampConductance(nodeA, nodeB, 1.0 / 1e7);
-    } else if (comp.type === 'inductor') {
-      const nodeA = parseInt(comp.pins[0]);
-      const nodeB = parseInt(comp.pins[1]);
-      stampConductance(nodeA, nodeB, 1.0 / 0.001);
-    }
-  }
-
-  const X = solveGaussian(A, Z);
-  if (!X) {
-    return "No se pudo resolver el sistema de ecuaciones. La matriz MNA es singular.";
-  }
-
-  const voltages: Record<string, number> = { "0": 0.0 };
-  for (let i = 1; i <= n; i++) {
-    voltages[i.toString()] = X[i - 1];
-  }
-
-  const currents: Record<string, number> = {};
-  vSources.forEach((vs, idx) => {
-    currents[vs.id] = X[n + idx];
-  });
-
-  return {
-    nodeVoltages: voltages,
-    branchCurrents: currents,
-    convergenceIterations: 1,
-  };
-}
-
-// Algoritmo de eliminación de Gauss
-function solveGaussian(A: number[][], Z: number[]): number[] | null {
-  const size = A.length;
-  const M: number[][] = Array(size).fill(0).map((_, i) => [...A[i], Z[i]]);
-
-  for (let i = 0; i < size; i++) {
-    let maxRow = i;
-    for (let r = i + 1; r < size; r++) {
-      if (Math.abs(M[r][i]) > Math.abs(M[maxRow][i])) maxRow = r;
-    }
-    const temp = M[i];
-    M[i] = M[maxRow];
-    M[maxRow] = temp;
-
-    const pivot = M[i][i];
-    if (Math.abs(pivot) < 1e-12) return null;
-
-    for (let c = i; c <= size; c++) {
-      M[i][c] /= pivot;
-    }
-
-    for (let r = 0; r < size; r++) {
-      if (r !== i) {
-        const factor = M[r][i];
-        for (let c = i; c <= size; c++) {
-          M[r][c] -= factor * M[i][c];
-        }
-      }
-    }
-  }
-
-  return M.map(row => row[size]);
-}
-
-// --- SOLVER TRANSITORIO COMPLEMENTARIO EN TYPESCRIPT (FALLBACK EULER REGRESIVO) ---
-
-function solveTransientCircuitTS(netlist: CircuitNetlist, dt: number, tMax: number): TimeStepResult[] | string {
-  let maxNodeIdx = 0;
-  for (const comp of netlist.components) {
-    for (const pinNode of comp.pins) {
-      const idx = parseInt(pinNode);
-      if (idx > maxNodeIdx) maxNodeIdx = idx;
-    }
-  }
-
-  const n = maxNodeIdx;
-  const vSources = netlist.components.filter(c => c.type === 'vsource');
-  const m = vSources.length;
-  const size = n + m;
-
-  if (size === 0) return "El circuito no tiene nodos activos o componentes.";
-
-  const vSourceMap: Record<string, number> = {};
-  vSources.forEach((vs, idx) => {
-    vSourceMap[vs.id] = idx;
-  });
-
-  // Inicializar históricos de almacenamiento
-  const capStates: Record<string, number> = {};
-  const indStates: Record<string, number> = {};
-
-  for (const comp of netlist.components) {
-    if (comp.type === 'capacitor') {
-      capStates[comp.id] = 0.0; // Capacitor descargado 0V
-    } else if (comp.type === 'inductor') {
-      indStates[comp.id] = 0.0; // Bobina descargada 0A
-    }
-  }
-
-  // Inicializar MCUs para co-simulación en TS
-  const mcuRuntimes: Record<string, { runtime: any, bridge: any, type: string, pins: string[] }> = {};
-  for (const comp of netlist.components) {
-    if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
-      const origComp = orchestrator?.components.find(c => c.id === comp.id);
-      if (origComp) {
-        const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
-        const runtime = createMcuRuntime({
-          definition: def,
-          firmware: origComp.firmware
-        });
-        const bridge = createMcuSpiceBridge(runtime, comp.pins.length);
-        comp.pins.forEach((nodeId, pinIdx) => {
-          connectGpioToNode(bridge, pinIdx, nodeId);
-        });
-        mcuRuntimes[comp.id] = {
-          runtime,
-          bridge,
-          type: comp.type,
-          pins: comp.pins
-        };
-      }
-    }
-  }
-
-  const stepsCount = Math.round(tMax / dt);
-  const results: TimeStepResult[] = [];
-  const rustMcuOutputs: Record<string, Record<number, number>> = {};
-
-  for (let step = 0; step <= stepsCount; step++) {
-    const t = step * dt;
-    
-    // 1. Sincronizar voltajes del circuito al MCU y ejecutar instrucciones
-    if (step > 0 && results.length > 0) {
-      const prevVoltages = results[results.length - 1].nodeVoltages;
-      
-      // MCUs locales
-      for (const mcuId in mcuRuntimes) {
-        const item = mcuRuntimes[mcuId];
-        
-        // Cargar voltajes de los pines
-        const nodeVoltagesMap = new Map<string, number>();
-        item.pins.forEach((nodeId) => {
-          const v = parseInt(nodeId) > 0 ? (prevVoltages[nodeId] ?? 0.0) : 0.0;
-          nodeVoltagesMap.set(nodeId, v);
-        });
-        
-        item.bridge.config.spiceNodeVoltages = nodeVoltagesMap;
-        updateGpioInputs(item.bridge);
-        
-        // Ejecutar ciclos de reloj
-        const clockSpeed = item.type === 'mcu_avr' ? 16e6 : 12e6;
-        const cycles = Math.round(dt * clockSpeed);
-        runCycles(item.runtime, cycles);
-      }
-
-      // MCUs Rust (Mocked in TS solver)
-      for (const comp of netlist.components) {
-        if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
-          const vCC = comp.type === 'arduino_uno' ? 5.0 : 3.3;
-          const mode = comp.value; // comp.value es el modo
-          
-          const pinOutNode = comp.pins[1];
-          const pinAdcNode = comp.pins[2];
-          
-          const vAdc = parseInt(pinAdcNode) > 0 ? (prevVoltages[pinAdcNode] ?? 0.0) : 0.0;
-          
-          let vOut = 0.0;
-          let vDac = 0.0;
-          
-          if (mode === 1) { // Blink
-            vOut = (t % 1.0 < 0.5) ? vCC : 0.0;
-          } else if (mode === 2) { // Schmitt trigger
-            const vOutPrev = parseInt(pinOutNode) > 0 ? (prevVoltages[pinOutNode] ?? 0.0) : 0.0;
-            const wasHigh = vOutPrev > 0.5 * vCC;
-            const threshold = wasHigh ? 0.45 * vCC : 0.55 * vCC;
-            vOut = (vAdc > threshold) ? vCC : 0.0;
-          } else if (mode === 3) { // PWM
-            const period = 1e-4; // 10kHz
-            const tPhase = t % period;
-            const duty = Math.min(Math.max(vAdc / vCC, 0.0), 1.0);
-            vDac = (tPhase < duty * period) ? vCC : 0.0;
-          } else { // Mode 0: DAC matches ADC
-            vDac = Math.min(Math.max(vAdc, 0.0), vCC);
-          }
-          
-          rustMcuOutputs[comp.id] = {
-            1: vOut,
-            3: vDac
-          };
-        }
-      }
-    }
-
-    const A: number[][] = Array(size).fill(0).map(() => Array(size).fill(0));
-    const Z: number[] = Array(size).fill(0);
-
-    const stampConductance = (nodeA: number, nodeB: number, G: number) => {
-      if (nodeA > 0) A[nodeA - 1][nodeA - 1] += G;
-      if (nodeB > 0) A[nodeB - 1][nodeB - 1] += G;
-      if (nodeA > 0 && nodeB > 0) {
-        A[nodeA - 1][nodeB - 1] -= G;
-        A[nodeB - 1][nodeA - 1] -= G;
-      }
-    };
-
-    const stampVoltageSource = (vsourceIdx: number, nodePos: number, nodeNeg: number, V: number) => {
-      const col = n + vsourceIdx;
-      if (nodePos > 0) {
-        A[nodePos - 1][col] += 1.0;
-        A[col][nodePos - 1] += 1.0;
-      }
-      if (nodeNeg > 0) {
-        A[nodeNeg - 1][col] -= 1.0;
-        A[col][nodeNeg - 1] -= 1.0;
-      }
-      Z[col] = V;
-    };
-
-    // Estampar componentes lineales base
-    for (const comp of netlist.components) {
-      if (comp.type === 'resistor') {
-        const nodeA = parseInt(comp.pins[0]);
-        const nodeB = parseInt(comp.pins[1]);
-        if (comp.value <= 1e-12) return `Resistencia nula detectada.`;
-        stampConductance(nodeA, nodeB, 1.0 / comp.value);
-      } else if (comp.type === 'vsource') {
-        const nodePos = parseInt(comp.pins[0]);
-        const nodeNeg = parseInt(comp.pins[1]);
-        const vsIdx = vSourceMap[comp.id];
-        
-        let vVal = comp.value;
-        if (comp.waveType) {
-          const amp = comp.amplitude ?? 0;
-          const freq = comp.frequency ?? 1000;
-          const offset = comp.offset ?? 0;
-          const duty = comp.dutyCycle ?? 0.5;
-          
-          if (comp.waveType === 'sine') {
-            vVal = offset + amp * Math.sin(2 * Math.PI * freq * t);
-          } else if (comp.waveType === 'square') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            vVal = (tMod < duty * period) ? (offset + amp) : (offset - amp);
-          } else if (comp.waveType === 'pulse') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            vVal = (tMod < duty * period) ? (offset + amp) : offset;
-          }
-        }
-        
-        stampVoltageSource(vsIdx, nodePos, nodeNeg, vVal);
-      } else if (comp.type === 'diode') {
-        const nodeAnode = parseInt(comp.pins[0]);
-        const nodeCathode = parseInt(comp.pins[1]);
-        stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
-      } else if (comp.type === 'nmos') {
-        const nodeGate = parseInt(comp.pins[0]);
-        const nodeDrain = parseInt(comp.pins[1]);
-        const nodeSource = parseInt(comp.pins[2]);
-        stampConductance(nodeDrain, nodeSource, 1.0 / 1e6);
-        stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
-      } else if (comp.type === 'pmos') {
-        const nodeGate = parseInt(comp.pins[0]);
-        const nodeDrain = parseInt(comp.pins[1]);
-        const nodeSource = parseInt(comp.pins[2]);
-        stampConductance(nodeSource, nodeDrain, 1.0 / 1e6);
-        stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
-      } else if (comp.type === 'npn' || comp.type === 'pnp') {
-        const nodeBase = parseInt(comp.pins[0]);
-        const nodeCollector = parseInt(comp.pins[1]);
-        const nodeEmitter = parseInt(comp.pins[2]);
-        stampConductance(nodeCollector, nodeEmitter, 1.0 / 1e6);
-        stampConductance(nodeBase, nodeEmitter, 1.0 / 1e9);
-      } else if (comp.type === 'isource') {
-        const nodePos = parseInt(comp.pins[0]);
-        const nodeNeg = parseInt(comp.pins[1]);
-        
-        let iVal = comp.value;
-        if (comp.waveType) {
-          const amp = comp.amplitude ?? 0;
-          const freq = comp.frequency ?? 1000;
-          const offset = comp.offset ?? 0;
-          const duty = comp.dutyCycle ?? 0.5;
-          
-          if (comp.waveType === 'sine') {
-            iVal = offset + amp * Math.sin(2 * Math.PI * freq * t);
-          } else if (comp.waveType === 'square') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            iVal = (tMod < duty * period) ? (offset + amp) : (offset - amp);
-          } else if (comp.waveType === 'pulse') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            iVal = (tMod < duty * period) ? (offset + amp) : offset;
-          }
-        }
-        
-        // Current source: injects current into nodePos, out of nodeNeg
-        if (nodePos > 0) Z[nodePos - 1] -= iVal;
-        if (nodeNeg > 0) Z[nodeNeg - 1] += iVal;
-      } else if (comp.type === 'led') {
-        // LED modeled as diode
-        const nodeAnode = parseInt(comp.pins[0]);
-        const nodeCathode = parseInt(comp.pins[1]);
-        stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
-      } else if (comp.type === 'switch') {
-        // Switch: simple on/off resistor
-        const nodeA = parseInt(comp.pins[0]);
-        const nodeB = parseInt(comp.pins[1]);
-        const isClosed = comp.switchState ?? false;
-        const ron = comp.switchRon ?? 0.01;
-        const roff = comp.switchRoff ?? 1e9;
-        const G = 1.0 / (isClosed ? ron : roff);
-        stampConductance(nodeA, nodeB, G);
-      } else if (comp.type === 'opamp') {
-        const nodeInPos = parseInt(comp.pins[0]);
-        const nodeInNeg = parseInt(comp.pins[1]);
-        const nodeOut = parseInt(comp.pins[4]);
-        stampConductance(nodeInPos, nodeInNeg, 1.0 / 1e7);
-        stampConductance(nodeOut, 0, 1.0 / 100.0);
-      }
-    }
-
-    // Estampar MCUs locales (8051 y AVR) usando Norton
-    for (const mcuId in mcuRuntimes) {
-      const item = mcuRuntimes[mcuId];
-      item.bridge.config.gpioPins.forEach((pin: any) => {
-        const nodeStr = pin.connectedNodeId;
-        if (!nodeStr) return;
-        const nodeIdx = parseInt(nodeStr);
-        if (nodeIdx <= 0) return;
-        
-        if (pin.direction !== 'input') {
-          if (pin.state === 1) {
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
-            Z[nodeIdx - 1] += 5.0 / 50.0;
-          } else if (pin.state === 0) {
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
-          } else {
-            stampConductance(nodeIdx, 0, 1.0 / 1e6);
-          }
-        } else {
-          stampConductance(nodeIdx, 0, 1.0 / 1e6);
-        }
-      });
-    }
-
-    // Estampar MCUs Rust
-    for (const comp of netlist.components) {
-      if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
-        const vCC = comp.type === 'arduino_uno' ? 5.0 : 3.3;
-        const outputs = rustMcuOutputs[comp.id] || {};
-        
-        comp.pins.forEach((nodeId, pinIdx) => {
-          const nodeIdx = parseInt(nodeId);
-          if (nodeIdx <= 0) return;
-          
-          if (pinIdx === 1) { // OUT
-            const vOut = outputs[1] ?? 0.0;
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
-            Z[nodeIdx - 1] += vOut / 50.0;
-          } else if (pinIdx === 3) { // DAC
-            const vDac = outputs[3] ?? 0.0;
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
-            Z[nodeIdx - 1] += vDac / 50.0;
-          } else if (pinIdx === 4) { // VCC
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
-            Z[nodeIdx - 1] += vCC / 50.0;
-          } else {
-            stampConductance(nodeIdx, 0, 1.0 / 1e6);
-          }
-        });
-      }
-    }
-
-    // Estampar modelos acompañantes Euler
-    for (const comp of netlist.components) {
-      if (comp.type === 'capacitor') {
-        const nodePos = parseInt(comp.pins[0]);
-        const nodeNeg = parseInt(comp.pins[1]);
-        const prevVc = capStates[comp.id] || 0.0;
-
-        const gEq = comp.value / dt;
-        const iEq = gEq * prevVc;
-
-        stampConductance(nodePos, nodeNeg, gEq);
-        if (nodePos > 0) Z[nodePos - 1] -= iEq;
-        if (nodeNeg > 0) Z[nodeNeg - 1] += iEq;
-
-      } else if (comp.type === 'inductor') {
-        const nodePos = parseInt(comp.pins[0]);
-        const nodeNeg = parseInt(comp.pins[1]);
-        const prevIl = indStates[comp.id] || 0.0;
-
-        const gEq = dt / comp.value;
-        const iEq = prevIl;
-
-        stampConductance(nodePos, nodeNeg, gEq);
-        if (nodePos > 0) Z[nodePos - 1] -= iEq;
-        if (nodeNeg > 0) Z[nodeNeg - 1] += iEq;
-      }
-    }
-
-    // Resolver
-    const X = solveGaussian(A, Z);
-    if (!X) {
-      return `Matriz singular transitoria en t=${t.toFixed(4)}`;
-    }
-
-    // Desempaquetar
-    const stepVoltages: Record<string, number> = { "0": 0.0 };
-    for (let i = 1; i <= n; i++) {
-      stepVoltages[i.toString()] = X[i - 1];
-    }
-
-    const stepCurrents: Record<string, number> = {};
-    vSources.forEach((vs, idx) => {
-      stepCurrents[vs.id] = X[n + idx];
-    });
-
-    results.push({
-      time: t,
-      nodeVoltages: stepVoltages,
-      branchCurrents: stepCurrents,
-    });
-
-    // Actualizar estados para el siguiente paso temporal
-    for (const comp of netlist.components) {
-      if (comp.type === 'capacitor') {
-        const nodePos = parseInt(comp.pins[0]);
-        const nodeNeg = parseInt(comp.pins[1]);
-        const vPos = nodePos > 0 ? stepVoltages[nodePos.toString()] : 0.0;
-        const vNeg = nodeNeg > 0 ? stepVoltages[nodeNeg.toString()] : 0.0;
-        capStates[comp.id] = vPos - vNeg;
-
-      } else if (comp.type === 'inductor') {
-        const nodePos = parseInt(comp.pins[0]);
-        const nodeNeg = parseInt(comp.pins[1]);
-        const vPos = nodePos > 0 ? stepVoltages[nodePos.toString()] : 0.0;
-        const vNeg = nodeNeg > 0 ? stepVoltages[nodeNeg.toString()] : 0.0;
-        const newVl = vPos - vNeg;
-        
-        const prevIl = indStates[comp.id] || 0.0;
-        indStates[comp.id] = (dt / comp.value) * newVl + prevIl;
-      }
-    }
-  }
-
-  return results;
-}
-
-// --- CONTROLES DE LA SIMULACIÓN ---
-
-function initSimulationControls() {
-  analysisDcBtn = document.querySelector("#analysis-dc-btn");
-  analysisAcBtn = document.querySelector("#analysis-ac-btn");
-  analysisTranBtn = document.querySelector("#analysis-tran-btn");
-  analysisSensBtn = document.querySelector("#analysis-sens-btn");
-  analysisPssBtn = document.querySelector("#analysis-pss-btn");
-  analysisStbBtn = document.querySelector("#analysis-stb-btn");
-  analysisPvtBtn = document.querySelector("#analysis-pvt-btn");
-  analysisSparBtn = document.querySelector("#analysis-spar-btn");
-  runSimBtn = document.querySelector("#run-sim-btn");
-  stopSimBtn = document.querySelector("#stop-sim-btn");
-  ipcStatusDot = document.querySelector("#ipc-status-dot");
-  ipcStatusText = document.querySelector("#ipc-status-text");
-
-  const selectMode = (btn: HTMLButtonElement | null, mode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' | 'PVT' | 'SPAR') => {
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn, analysisPvtBtn, analysisSparBtn].forEach(b => b?.classList.remove("active"));
-      btn.classList.add("active");
-      activeAnalysisMode = mode;
-      const modoTexto = mode === 'DC' ? 'Corriente Continua (CC)' : 
-                        mode === 'AC' ? 'Barrido CA (CA)' : 
-                        mode === 'TRAN' ? 'Transitorio (TRAN)' : 
-                        mode === 'SENS' ? 'Sensibilidad y Peor Caso (SENS)' :
-                        mode === 'PSS' ? 'Régimen Permanente Periódico (PSS)' :
-                        mode === 'PVT' ? 'Análisis PVT (Process-Voltage-Temperature)' :
-                        mode === 'SPAR' ? 'Parámetros S (Touchstone)' :
-                        'Análisis de Estabilidad (STB)';
-      addLog(`Modo de Simulación: ${modoTexto}`, "system");
-      if (oscilloscopePanel) {
-        oscilloscopePanel.activeAnalysisMode = mode;
-        oscilloscopePanel.draw();
-      }
-      // Limpiar botones de perfil PVT al cambiar de modo
-      if (mode !== 'PVT') {
-        document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
-      }
-    });
-  };
-
-  selectMode(analysisDcBtn, 'DC');
-  selectMode(analysisAcBtn, 'AC');
-  selectMode(analysisTranBtn, 'TRAN');
-  selectMode(analysisSensBtn, 'SENS');
-  selectMode(analysisPssBtn, 'PSS');
-  selectMode(analysisStbBtn, 'STB');
-  selectMode(analysisPvtBtn, 'PVT');
-  selectMode(analysisSparBtn, 'SPAR');
-
-  interface ERCResult {
-    passed: boolean;
-    errors: string[];
-    warnings: string[];
-  }
-
-  function runElectricalRuleCheck(netlist: CircuitNetlist): ERCResult {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    if (!netlist || netlist.components.length === 0) {
-      return { passed: true, errors, warnings };
-    }
-
-    const hasGnd = netlist.components.some(c => c.type === 'ground');
-    if (!hasGnd) {
-      errors.push("Referencia a Tierra ausente (GND): El circuito necesita al menos un nodo de referencia de 0 V para que el motor matemático de Rust converja.");
-    }
-
-    for (const comp of netlist.components) {
-      if (comp.type === 'vsource') {
-        if (comp.pins[0] === comp.pins[1]) {
-          errors.push(`Cortocircuito Franco detectado en la fuente [${comp.id}]: Sus terminales positivo y negativo están conectados al mismo nodo eléctrico.`);
-        }
-      }
-    }
-
-    const vsourceNodes: Record<string, string> = {}; 
-    for (const comp of netlist.components) {
-      if (comp.type === 'vsource') {
-        const nodePair = [comp.pins[0], comp.pins[1]].sort().join('-');
-        if (vsourceNodes[nodePair]) {
-          warnings.push(`Fuentes en Paralelo: Las fuentes de tensión [${comp.id}] and [${vsourceNodes[nodePair]}] están en paralelo. Esto puede producir inconsistencias de simulación si sus valores nominales difieren.`);
-        } else {
-          vsourceNodes[nodePair] = comp.id;
-        }
-      }
-    }
-
-    if (orchestrator) {
-      const pinConnectionCount: Record<string, number> = {};
-      
-      for (const comp of orchestrator.components) {
-        const pins = orchestrator.getComponentPins(comp);
-        for (const pin of pins) {
-          const pinKey = `${comp.id}:${pin.pinIndex}`;
-          pinConnectionCount[pinKey] = 0;
-        }
-      }
-
-      for (const wire of orchestrator.wires) {
-        const keyFrom = `${wire.from.componentId}:${wire.from.pinIndex}`;
-        const keyTo = `${wire.to.componentId}:${wire.to.pinIndex}`;
-        if (pinConnectionCount[keyFrom] !== undefined) pinConnectionCount[keyFrom]++;
-        if (pinConnectionCount[keyTo] !== undefined) pinConnectionCount[keyTo]++;
-      }
-
-      for (const comp of orchestrator.components) {
-        const pins = orchestrator.getComponentPins(comp);
-        let unconnectedCount = 0;
-        for (const pin of pins) {
-          const pinKey = `${comp.id}:${pin.pinIndex}`;
-          if (pinConnectionCount[pinKey] === 0) {
-            unconnectedCount++;
-          }
-        }
-        
-        if (unconnectedCount === pins.length && comp.type !== 'ground') {
-          warnings.push(`Componente huérfano detectado [${comp.id}]: No tiene ninguna conexión activa de red.`);
-        } else if (unconnectedCount > 0 && comp.type !== 'ground') {
-          const firstFloatIdx = pins.findIndex(p => pinConnectionCount[`${comp.id}:${p.pinIndex}`] === 0);
-          warnings.push(`Pin flotante detectado en [${comp.id}] (terminal index ${firstFloatIdx}): Se encuentra desconectado.`);
-        }
-      }
-    }
-
-    const passed = errors.length === 0;
-    return { passed, errors, warnings };
-  }
-
-  if (runSimBtn && stopSimBtn) {
-    runSimBtn.addEventListener("click", async () => {
-      addLog(`Iniciando simulación física de análisis [${
-        activeAnalysisMode === 'DC' ? 'Corriente Continua' :
-        activeAnalysisMode === 'AC' ? 'Barrido CA' :
-        activeAnalysisMode === 'TRAN' ? 'Transitorio' :
-        activeAnalysisMode === 'PVT' ? 'PVT Corner Analysis' : 'Transitorio'
-      }]...`, "system");
-      
-      const netlist = extractElectricalNetlist();
-      if (!netlist || netlist.components.length === 0) {
-        addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
-        return;
-      }
-
-      const ercRes = runElectricalRuleCheck(netlist);
-      
-      for (const warn of ercRes.warnings) {
-        addLog(`[ERC Advertencia] ${warn}`, "error"); 
-      }
-
-      if (!ercRes.passed) {
-        addLog("----------------------------------------------------------------", "error");
-        addLog("¡ERC FALLIDO! La simulación se ha abortado para prevenir bloqueos matemáticos:", "error");
-        for (const err of ercRes.errors) {
-          addLog(`▶ [ERC Error] ${err}`, "error");
-        }
-        addLog("Corrige estos errores topológicos en el lienzo para poder simular.", "error");
-        addLog("----------------------------------------------------------------", "error");
-        return;
-      }
-
-      runSimBtn!.disabled = true;
-      stopSimBtn!.disabled = false;
-      stopSimBtn!.classList.add("btn-stop");
-      
-      if (oscilloscopePanel) {
-        oscilloscopePanel.transientResults = [];
-        oscilloscopePanel.sweepTime = 0.0;
-        if (activeAnalysisMode !== 'PVT') {
-          oscilloscopePanel.pvtMode = false;
-          oscilloscopePanel.pvtTraces = [];
-        }
-        oscilloscopePanel.start();
-      }
-
-      try {
-        if (activeAnalysisMode === 'AC') {
-          addLog("Enviando conexiones al motor de CA de Rust...", "send");
-          const settings = { fStart: 10.0, fEnd: 100000.0, pointsPerDecade: 20 };
-          const results = await invoke<any>("run_ac_sweep", { netlist, settings });
-          addLog(`¡Resultados calculados exitosamente en Rust [Respuesta en Frecuencia CA]!`, "receive");
-          
-          if (oscilloscopePanel) {
-            oscilloscopePanel.acSweepResults = results;
-          }
-
-          if (ipcStatusDot && ipcStatusText) {
-            ipcStatusDot.classList.add("active");
-            ipcStatusText.textContent = "Solucionador Rust Activo";
-            ipcStatusText.style.color = "var(--accent-cyan)";
-          }
-
-          updateCanvasRendering();
-
-        } else if (activeAnalysisMode === 'TRAN') {
-          addLog("Iniciando simulación transitoria interactiva (streaming)...", "send");
-
-          if (oscilloscopePanel) {
-            oscilloscopePanel.transientResults = [];
-          }
-
-          const settings = { dt: simSettings.dt, tMax: transientDuration };
-          await startInteractiveTransient(netlist, settings);
-
-          if (ipcStatusDot && ipcStatusText) {
-            ipcStatusDot.classList.add("active");
-            ipcStatusText.textContent = "Solucionador Rust Activo";
-            ipcStatusText.style.color = "var(--accent-cyan)";
-          }
-
-        } else if (activeAnalysisMode === 'SENS') {
-          addLog("Enviando conexiones al solucionador de sensibilidad de Rust...", "send");
-          const results = await invoke<any>("run_sensitivity_analysis", { netlist });
-          addLog(`¡Resultados de Sensibilidad calculados exitosamente en Rust!`, "receive");
-
-          liveVoltages = results.nominalVoltages || {};
-
-          addLog("----------------------------------------------------------------", "system");
-          addLog("=== RESULTADOS DEL ANÁLISIS DE SENSIBILIDAD ===", "system");
-          for (const sens of results.sensitivities) {
-            addLog(`Componente: ${sens.componentId} (${sens.parameterName} = ${sens.parameterValue})`, "receive");
-            for (const [node, absVal] of Object.entries(sens.absoluteSensitivities)) {
-              const normVal = sens.normalizedSensitivities[node] || 0;
-              addLog(`  • Nodo ${node}: Absoluta = ${(absVal as number).toFixed(6)} V/U | Normalizada = ${((normVal as number) * 100).toFixed(2)}%`, "receive");
-            }
-          }
-          addLog("=== LÍMITES DE PEOR CASO (WORST-CASE LIMITS) ===", "system");
-          for (const [node, limits] of Object.entries(results.worstCaseLimits)) {
-            const lim = limits as any;
-            addLog(`  • Nodo ${node}: Nom = ${lim.nominalValue.toFixed(4)} V | Desviación = ±${lim.maxDeviation.toFixed(4)} V | Rango = [${lim.worstCaseLow.toFixed(4)} V, ${lim.worstCaseHigh.toFixed(4)} V]`, "receive");
-          }
-          addLog("----------------------------------------------------------------", "system");
-
-          if (ipcStatusDot && ipcStatusText) {
-            ipcStatusDot.classList.add("active");
-            ipcStatusText.textContent = "Solucionador Rust Activo";
-            ipcStatusText.style.color = "var(--accent-cyan)";
-          }
-
-          updateCanvasRendering();
-
-        } else if (activeAnalysisMode === 'PSS') {
-          addLog("Enviando conexiones al motor PSS [Shooting Method] de Rust...", "send");
-          
-          let period = 1e-3;
-          const acSource = netlist.components.find(c => c.frequency && c.frequency > 0);
-          if (acSource && acSource.frequency) {
-            period = 1.0 / acSource.frequency;
-          }
-          
-          const settings = { period: period, maxShootingIters: 15, shootingTolerance: 1e-4 };
-          const results = await invoke<any>("run_pss_simulation", { netlist, settings });
-          
-          addLog(`¡Resultados calculados exitosamente en Rust [PSS Shooting Method]!`, "receive");
-          
-          if (oscilloscopePanel) {
-            oscilloscopePanel.transientResults = results || [];
-          }
-
-          const oscTransient = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
-          if (oscTransient.length > 0) {
-            liveVoltages = oscTransient[oscTransient.length - 1].nodeVoltages;
-          }
-
-          if (ipcStatusDot && ipcStatusText) {
-            ipcStatusDot.classList.add("active");
-            ipcStatusText.textContent = "Solucionador Rust Activo";
-            ipcStatusText.style.color = "var(--accent-cyan)";
-          }
-
-          updateCanvasRendering();
-
-        } else if (activeAnalysisMode === 'PVT') {
-          await runPvtAnalysis(netlist);
-
-        } else if (activeAnalysisMode === 'SPAR') {
-          await runSparamExport(netlist);
-
-        } else if (activeAnalysisMode === 'STB') {
-          addLog("Enviando conexiones al motor de análisis de Estabilidad [Polos y Ceros] de Rust...", "send");
-          const results = await invoke<any>("run_stability_analysis", { netlist });
-          addLog(`¡Resultados de Estabilidad calculados exitosamente en Rust!`, "receive");
-
-          addLog("----------------------------------------------------------------", "system");
-          addLog("=== ANÁLISIS DE ESTABILIDAD DE POLOS Y CEROS (STB) ===", "system");
-          addLog(`Estado de Estabilidad: ${results.isStable ? "✅ CIRCUITO ESTABLE" : "⚠️ CIRCUITO INESTABLE (Peligro de Oscilación)"}`, "system");
-          addLog(`Margen de Fase (Phase Margin): ${results.phaseMargin.toFixed(2)}º`, "receive");
-          addLog(`Margen de Ganancia (Gain Margin): ${results.gainMargin.toFixed(2)} dB`, "receive");
-          addLog("Lista de Polos del Sistema en el Plano de Laplace (s):", "receive");
-          results.poles.forEach((p: any, idx: number) => {
-            addLog(`  • Polo ${idx + 1}: ${p.re.toFixed(2)} ${p.im >= 0 ? "+" : "-"} ${Math.abs(p.im).toFixed(2)}j rad/s`, "receive");
-          });
-          addLog("----------------------------------------------------------------", "system");
-
-          if (ipcStatusDot && ipcStatusText) {
-            ipcStatusDot.classList.add("active");
-            ipcStatusText.textContent = "Solucionador Rust Activo";
-            ipcStatusText.style.color = "var(--accent-cyan)";
-          }
-
-          updateCanvasRendering();
-
-        } else {
-          addLog(`Enviando conexiones a Rust con ${netlist.components.length} componentes...`, "send");
-          const results = await invoke<any>("run_dc_simulation", { netlist });
-          addLog(`¡Resultados calculados exitosamente en Rust [MNA Newton-Raphson]!`, "receive");
-          
-          liveVoltages = results.nodeVoltages || {};
-          
-          for (const [node, volt] of Object.entries(liveVoltages)) {
-            addLog(`Nodo ${node}: Voltaje = ${volt.toFixed(4)} V`, "receive");
-          }
-
-          if (ipcStatusDot && ipcStatusText) {
-            ipcStatusDot.classList.add("active");
-            ipcStatusText.textContent = "Solucionador Rust Activo";
-            ipcStatusText.style.color = "var(--accent-cyan)";
-          }
-
-          updateCanvasRendering();
-        }
-
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        addLog(`Error en la comunicación con el motor de Rust: ${errorMsg}`, "error");
-
-        if (errorMsg.includes("window.__TAURI_IPC__") || errorMsg.includes("not found") || errorMsg.includes("window.__TAURI__")) {
-          addLog("Entorno de navegador detectado. Iniciando solucionador local en TypeScript...", "system");
-          
-          setTimeout(() => {
-            if (activeAnalysisMode === 'AC') {
-              addLog("Simulando respuesta en frecuencia del circuito localmente en navegador...", "receive");
-              const freqs: number[] = [];
-              const nodeAmplitudes: Record<string, number[]> = {};
-              const nodePhases: Record<string, number[]> = {};
-
-              const nodes = new Set<string>();
-              netlist.components.forEach(comp => {
-                comp.pins.forEach(pin => {
-                  if (pin !== "0") nodes.add(pin);
-                });
-              });
-
-              const logMin = Math.log10(10);
-              const logMax = Math.log10(100000);
-              for (let i = 0; i <= 100; i++) {
-                const logVal = logMin + (i / 100) * (logMax - logMin);
-                freqs.push(Math.pow(10, logVal));
-              }
-
-              nodes.forEach(nodeId => {
-                const fc = nodeId === "1" ? 1000 : nodeId === "2" ? 10000 : 5000;
-                const amps: number[] = [];
-                const phases: number[] = [];
-                freqs.forEach(f => {
-                  const ratio = f / fc;
-                  const mag = 1.0 / Math.sqrt(1 + ratio * ratio);
-                  const phase = -Math.atan(ratio) * (180 / Math.PI);
-                  const db = 20 * Math.log10(mag);
-                  amps.push(db);
-                  phases.push(phase);
-                });
-                nodeAmplitudes[nodeId] = amps;
-                nodePhases[nodeId] = phases;
-              });
-
-              if (oscilloscopePanel) {
-                oscilloscopePanel.acSweepResults = {
-                  frequencies: freqs,
-                  nodeAmplitudes,
-                  nodePhases
-                };
-              }
-
-              if (ipcStatusDot && ipcStatusText) {
-                ipcStatusDot.classList.add("active");
-                ipcStatusText.textContent = "Respaldo local Activo (Filtro Demo CA)";
-                ipcStatusText.style.color = "var(--warning)";
-              }
-
-              updateCanvasRendering();
-            } else if (activeAnalysisMode === 'TRAN') {
-              const tsRes = solveTransientCircuitTS(netlist, simSettings.dt, transientDuration);
-              if (typeof tsRes === "string") {
-                addLog(`Error del solucionador transitorio local: ${tsRes}`, "error");
-              } else {
-                if (oscilloscopePanel) {
-                  oscilloscopePanel.transientResults = tsRes;
-                  actuatorHistory.precompute(orchestrator!.components, tsRes || [], pinToNodeMap);
-                }
-                addLog(`Respaldo Transitorio local: ${tsRes.length} pasos calculados en TypeScript.`, "receive");
-                
-                if (tsRes.length > 0) {
-                  liveVoltages = tsRes[tsRes.length - 1].nodeVoltages;
-                }
-
-                if (ipcStatusDot && ipcStatusText) {
-                  ipcStatusDot.classList.add("active");
-                  ipcStatusText.textContent = "Respaldo Transitorio local";
-                  ipcStatusText.style.color = "var(--warning)";
-                }
-
-                updateCanvasRendering();
-              }
-            } else {
-              const tsRes = solveCircuitTS(netlist);
-              if (typeof tsRes === "string") {
-                addLog(`Error del solucionador local: ${tsRes}`, "error");
-              } else {
-                liveVoltages = tsRes.nodeVoltages;
-                addLog("Solucionador de respaldo: Resultados calculados en TypeScript.", "receive");
-                
-                for (const [node, volt] of Object.entries(liveVoltages)) {
-                  addLog(`Nodo ${node} (Simulado): ${volt.toFixed(4)} V`, "receive");
-                }
-
-                if (ipcStatusDot && ipcStatusText) {
-                  ipcStatusDot.classList.add("active");
-                  ipcStatusText.textContent = "Respaldo local Activo";
-                  ipcStatusText.style.color = "var(--warning)";
-                }
-
-                updateCanvasRendering();
-              }
-            }
-          }, 300);
-        }
-      }
-    });
-
-    stopSimBtn.addEventListener("click", () => {
-      addLog("Deteniendo simulación física del circuito.", "system");
-      runSimBtn!.disabled = false;
-      stopSimBtn!.disabled = true;
-      stopSimBtn!.classList.remove("btn-stop");
-
-      audioOrchestrator.stopAll();
-
-      if (oscilloscopePanel) {
-        oscilloscopePanel.stop();
-      }
-    });
-  }
+  return solveTransientCircuitTS(netlist, dt, tMax, firmware);
 }
 
 // --- INTERACTIVIDAD INTERNA DEL OSCILOSCOPIO ---
@@ -2295,7 +853,7 @@ function initOscilloscopeInterface() {
   }
 
   const handleProbeActivation = (mode: 'CH1' | 'CH2') => {
-    const netlist = extractElectricalNetlist();
+    const netlist = extractNetlist();
     if (!netlist || netlist.components.length === 0) {
       addLog("Coloca componentes en el lienzo antes de colocar una sonda.", "error");
       return;
@@ -2341,7 +899,7 @@ function initOscilloscopeInterface() {
         oscPauseBtn.classList.toggle("active");
         oscPauseBtn.textContent = oscilloscopePanel.isOscPaused ? "Reanudar" : "Pausar";
         if (oscilloscopePanel.isOscPaused) {
-          audioOrchestrator.stopAll();
+          circuitState.audioOrchestrator.stopAll();
         }
       }
     });
@@ -2391,7 +949,7 @@ function initCanvasCAD() {
       if (probePlacementMode) {
         if (orchestrator!.hoveredPin) {
           const pinKey = `${orchestrator!.hoveredPin.componentId}:${orchestrator!.hoveredPin.pinIndex}`;
-          const nodeId = pinToNodeMap[pinKey];
+          const nodeId = circuitState.getPinNode(pinKey);
           if (nodeId !== undefined) {
             if (probePlacementMode === 'CH1') {
               ch1ProbeNode = nodeId;
@@ -2410,7 +968,7 @@ function initCanvasCAD() {
       // MODO DE SELECCIÓN DE PUERTOS RF PARA PARÁMETROS S
       if (activeAnalysisMode === 'SPAR' && orchestrator!.hoveredPin) {
         const pinKey = `${orchestrator!.hoveredPin.componentId}:${orchestrator!.hoveredPin.pinIndex}`;
-        const nodeId = pinToNodeMap[pinKey];
+        const nodeId = circuitState.getPinNode(pinKey);
         if (nodeId !== undefined && !sparPorts.some(p => p.nodeId === nodeId)) {
           sparPorts.push({ nodeId, z0: 50 });
           addLog(`Puerto RF ${sparPorts.length} asignado al Nodo ${nodeId} (Z0 = 50 Ω).`, 'system');
@@ -2490,7 +1048,7 @@ function initCanvasCAD() {
     if (orchestrator!.activePinForWire) {
       if (orchestrator!.hoveredPin) {
         orchestrator!.connectPins(orchestrator!.activePinForWire, orchestrator!.hoveredPin);
-        extractElectricalNetlist();
+        extractNetlist();
         addLog(`Cable conectado: [${orchestrator!.activePinForWire.componentId}] terminal ${orchestrator!.activePinForWire.pinIndex} a [${orchestrator!.hoveredPin.componentId}] terminal ${orchestrator!.hoveredPin.pinIndex}`, "system");
         markCurrentTabAsModified();
       }
@@ -2511,7 +1069,7 @@ function initCanvasCAD() {
     }
 
     orchestrator!.stopDragging();
-    extractElectricalNetlist();
+    extractNetlist();
     isRightClickPanning = false;
     updateCanvasRendering();
   };
@@ -2531,7 +1089,7 @@ function initCanvasCAD() {
 
     if (comp && comp.type === 'switch') {
       comp.switchState = !(comp.switchState ?? false);
-      if (isSimulationActive()) {
+      if (simulationRunner?.isSimulationActive() ?? false) {
         try {
           await invoke('inject_live_mutation', {
             mutation: {
@@ -2595,7 +1153,7 @@ function initCanvasCAD() {
 
           const snapped = orchestrator!.snapPointToGrid(worldPt);
           const newComp = orchestrator!.addComponent(type, snapped.x, snapped.y, value);
-          extractElectricalNetlist();
+          extractNetlist();
           addLog(`Componente colocado: [${newComp.id}] en (X:${newComp.x}, Y:${newComp.y})`, "system");
           
           orchestrator!.selectedComponent = newComp;
@@ -2640,7 +1198,7 @@ function initCanvasCAD() {
       }
       
       orchestrator.removeSelected();
-      extractElectricalNetlist();
+      extractNetlist();
       updateCanvasRendering();
       markCurrentTabAsModified();
     }
@@ -2653,7 +1211,7 @@ function initCanvasCAD() {
       orchestrator!.components = [];
       orchestrator!.wires = [];
       orchestrator!.selectedComponent = null;
-      liveVoltages = {};
+      circuitState.clearVoltages();
       if (oscilloscopePanel) {
         oscilloscopePanel.transientResults = [];
         oscilloscopePanel.acSweepResults = null;
@@ -2712,6 +1270,41 @@ window.addEventListener("DOMContentLoaded", () => {
     addLog(`Ajustes guardados: dt=${simSettings.dt}, tol=${simSettings.tolerance}, iterMax=${simSettings.maxIterations}`, "system");
   });
 
+  // Inicializar el runner de simulación interactiva con callbacks
+  // que desacoplan el motor del DOM/UI/Canvas.
+  simulationRunner = createSimulationRunner({
+    onFrameReceived: (frame) => {
+      circuitState.setVoltagesFromFrame(frame);
+
+      if (oscilloscopePanel) {
+        oscilloscopePanel.transientResults.push({
+          time: frame.time,
+          nodeVoltages: { ...frame.nodeVoltages } as Record<string, number>,
+          branchCurrents: { ...frame.branchCurrents } as Record<string, number>,
+        });
+      }
+
+      updateCanvasRendering();
+
+      if (frame.isFinal) {
+        addLog(`Simulación interactiva completada en t = ${frame.time.toFixed(6)} s.`, 'receive');
+        if (oscilloscopePanel) {
+          circuitState.actuatorHistory.precompute(orchestrator!.components, oscilloscopePanel.transientResults, { ...circuitState.getPinToNodeMap() });
+        }
+      }
+    },
+    onSimulationError: (error) => {
+      addLog(`Error en simulación: ${error}`, 'error');
+      simulationRunner?.stopInteractiveTransient();
+    },
+    onSimulationComplete: (finalTime) => {
+      addLog(`Simulación completada en t = ${finalTime.toFixed(6)} s.`, 'receive');
+    },
+    onSimulationStateChanged: (active) => {
+      if (orchestrator) orchestrator.simulationActive = active;
+    },
+  });
+
   oscilloscopePanel = new OscilloscopePanel();
   oscilloscopePanel.onFrameUpdate = (sweepTime) => {
     if (oscilloscopePanel && orchestrator) {
@@ -2728,7 +1321,7 @@ window.addEventListener("DOMContentLoaded", () => {
         }
         const closest = results[closestIdx];
         if (closest) {
-          liveVoltages = closest.nodeVoltages;
+          circuitState.setVoltagesFromSnapshot(closest.nodeVoltages);
 
           // Sincronizar estados lógicos de los pines de MCUs y depurador en playback
           for (const comp of orchestrator.components) {
@@ -2738,9 +1331,9 @@ window.addEventListener("DOMContentLoaded", () => {
               const vCC = (comp.type === 'mcu_8051' || comp.type === 'arduino_uno') ? 5.0 : 3.3;
               
               pins.forEach((_, pinIdx) => {
-                const nodeKey = pinToNodeMap[`${comp.id}:${pinIdx}`];
+                const nodeKey = circuitState.getPinNode(`${comp.id}:${pinIdx}`);
                 if (nodeKey) {
-                  const volt = liveVoltages[nodeKey] ?? 0.0;
+                  const volt = circuitState.getNodeVoltage(nodeKey) ?? 0.0;
                   if (volt > 0.7 * vCC) {
                     pinStates[pinIdx] = 1;
                   } else if (volt < 0.3 * vCC) {
@@ -2771,7 +1364,7 @@ window.addEventListener("DOMContentLoaded", () => {
           }
 
           for (const comp of orchestrator.components) {
-            const hist = actuatorHistory.history.get(comp.id);
+            const hist = circuitState.actuatorHistory.history.get(comp.id);
             if (hist && hist[closestIdx]) {
               comp.glowLevel = hist[closestIdx].glowLevel;
               comp.relayClosed = hist[closestIdx].relayClosed;
@@ -2781,9 +1374,9 @@ window.addEventListener("DOMContentLoaded", () => {
                 const model = parseBuzzerActuatorModel(comp.value?.toString() ?? "");
                 const level = comp.buzzerLevel ?? 0;
                 if (level > 0.05) {
-                  audioOrchestrator.updateBuzzer(comp.id, model.resonantFrequencyHz, level);
+                  circuitState.audioOrchestrator.updateBuzzer(comp.id, model.resonantFrequencyHz, level);
                 } else {
-                  audioOrchestrator.stopBuzzer(comp.id);
+                  circuitState.audioOrchestrator.stopBuzzer(comp.id);
                 }
               }
             }
@@ -2803,7 +1396,122 @@ window.addEventListener("DOMContentLoaded", () => {
       updateCanvasRendering();
     });
   }
-  initSimulationControls();
+  // Inicializar referencias del DOM para indicadores de estado IPC
+  ipcStatusDot = document.querySelector("#ipc-status-dot");
+  ipcStatusText = document.querySelector("#ipc-status-text");
+
+  // Inicializar controles de simulación con handlers que
+  // encapsulan el dispatch analítico pesado evitando que el
+  // módulo simulation_controls conozca las variables globales.
+  simulationControls = initSimulationControls({
+    onRunSimulation: async (_netlist, mode) => {
+      addLog(`Iniciando simulación física de análisis [${
+        mode === 'DC' ? 'Corriente Continua' :
+        mode === 'AC' ? 'Barrido CA' :
+        mode === 'TRAN' ? 'Transitorio' :
+        mode === 'PVT' ? 'PVT Corner Analysis' : 'Transitorio'
+      }]...`, "system");
+
+      const netlist = extractNetlist();
+      if (!netlist || netlist.components.length === 0) {
+        addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
+        simulationControls?.setSimulationRunning(false);
+        return;
+      }
+
+      // ERC — Chequeo de Reglas Eléctricas (validación topológica)
+      const ercResult = runElectricalRuleCheck(
+        netlist,
+        orchestrator!.components,
+        orchestrator!.wires,
+        (c) => orchestrator!.getComponentPins(c),
+      );
+      for (const warn of ercResult.warnings) {
+        addLog(`[ERC Advertencia] ${warn}`, "error");
+      }
+      if (!ercResult.passed) {
+        addLog("----------------------------------------------------------------", "error");
+        addLog("¡ERC FALLIDO! La simulación se ha abortado para prevenir bloqueos matemáticos:", "error");
+        for (const err of ercResult.errors) {
+          addLog(`▶ [ERC Error] ${err}`, "error");
+        }
+        addLog("Corrige estos errores topológicos en el lienzo para poder simular.", "error");
+        addLog("----------------------------------------------------------------", "error");
+        simulationControls?.setSimulationRunning(false);
+        return;
+      }
+
+      // Preparar osciloscopio para nueva simulación
+      if (oscilloscopePanel) {
+        oscilloscopePanel.transientResults = [];
+        oscilloscopePanel.sweepTime = 0.0;
+        if (mode !== 'PVT') {
+          oscilloscopePanel.pvtMode = false;
+          oscilloscopePanel.pvtTraces = [];
+        }
+        oscilloscopePanel.start();
+      }
+
+      // Despachar al orquestador de solvers (Rust IPC + fallback TS)
+      await dispatchSimulation(netlist, mode, {
+        simSettings,
+        transientDuration,
+        simulationRunner,
+        solveCircuitTS,
+        solveTransientCircuitLocal,
+        onSpecialMode: async (n, m) => {
+          if (m === 'PVT') await runPvtAnalysis(n);
+          if (m === 'SPAR') await runSparamExport(n);
+        },
+      }, {
+        addLog,
+        onResultsReady: (m, results) => {
+          if (m === 'AC') {
+            if (oscilloscopePanel) oscilloscopePanel.acSweepResults = results;
+          } else if (m === 'SENS') {
+            circuitState.setVoltagesFromSnapshot(results.nominalVoltages ?? {});
+          } else if (m === 'PSS') {
+            if (oscilloscopePanel) oscilloscopePanel.transientResults = results || [];
+            const oscT = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
+            if (oscT.length > 0) circuitState.setVoltagesFromSnapshot(oscT[oscT.length - 1].nodeVoltages);
+          } else if (m === 'TRAN' && Array.isArray(results)) {
+            if (oscilloscopePanel) oscilloscopePanel.transientResults = results;
+            if (results.length > 0) circuitState.setVoltagesFromSnapshot(results[results.length - 1].nodeVoltages);
+            circuitState.actuatorHistory.precompute(orchestrator!.components, results, { ...circuitState.getPinToNodeMap() });
+          } else {
+            circuitState.setVoltagesFromSnapshot(results.nodeVoltages ?? {});
+          }
+        },
+        onIpcStatusUpdate: (text, color) => {
+          if (ipcStatusDot && ipcStatusText) {
+            ipcStatusDot.classList.add("active");
+            ipcStatusText.textContent = text;
+            ipcStatusText.style.color = color;
+          }
+        },
+        updateCanvasRendering,
+      });
+    },
+    onStopSimulation: async () => {
+      addLog("Deteniendo simulación física del circuito.", "system");
+      await simulationRunner?.stopInteractiveTransient();
+      circuitState.audioOrchestrator.stopAll();
+      if (oscilloscopePanel) oscilloscopePanel.stop();
+    },
+    setActiveAnalysisMode: (mode) => {
+      activeAnalysisMode = mode;
+      if (oscilloscopePanel) {
+        oscilloscopePanel.activeAnalysisMode = mode;
+        oscilloscopePanel.draw();
+      }
+      if (mode !== 'PVT') {
+        document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
+      }
+    },
+    addLog,
+    updateCanvasRendering,
+  });
+
   initOscilloscopeInterface();
   
   initCanvasCAD();
@@ -2855,7 +1563,7 @@ function exportarDatosCSV() {
     filename = "reporte_transitorio.csv";
   } else {
     csvContent = "Nodo,Voltaje Operacion (V)\n";
-    for (const [node, volt] of Object.entries(liveVoltages)) {
+    for (const [node, volt] of Object.entries(circuitState.getVoltageMap())) {
       csvContent += `${node},${volt.toFixed(5)}\n`;
     }
     filename = "reporte_punto_operacion_cc.csv";
@@ -3086,8 +1794,8 @@ function exportarDatosHDF5() {
     }
   } else {
     filename = "reporte_punto_operacion_cc.h5";
-    const nodes = Object.keys(liveVoltages);
-    const voltages = new Float64Array(Object.values(liveVoltages));
+    const nodes = Object.keys(circuitState.getVoltageMap());
+    const voltages = new Float64Array(Object.values(circuitState.getVoltageMap()));
     binaryArrays.push(voltages);
     metadata.nodesList = nodes;
     metadata.datasets["voltages"] = { length: voltages.length, type: "Float64", unit: "V" };
@@ -3399,7 +2107,7 @@ function deserializeCircuit(jsonStr: string): boolean {
     orchestrator.selectionStart = null;
     orchestrator.selectionEnd = null;
 
-    liveVoltages = {};
+    circuitState.clearVoltages();
     if (oscilloscopePanel) {
       oscilloscopePanel.transientResults = [];
       oscilloscopePanel.acSweepResults = null;
@@ -3452,16 +2160,7 @@ function deserializeCircuit(jsonStr: string): boolean {
     // 6. Restaurar modo de simulación
     if (data.activeAnalysisMode) {
       activeAnalysisMode = data.activeAnalysisMode;
-      const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn, analysisPvtBtn, analysisSparBtn];
-      modeButtons.forEach(btn => btn?.classList.remove('active'));
-      if (activeAnalysisMode === 'DC' && analysisDcBtn) analysisDcBtn.classList.add('active');
-      if (activeAnalysisMode === 'AC' && analysisAcBtn) analysisAcBtn.classList.add('active');
-      if (activeAnalysisMode === 'TRAN' && analysisTranBtn) analysisTranBtn.classList.add('active');
-      if (activeAnalysisMode === 'SENS' && analysisSensBtn) analysisSensBtn.classList.add('active');
-      if (activeAnalysisMode === 'PSS' && analysisPssBtn) analysisPssBtn.classList.add('active');
-      if (activeAnalysisMode === 'STB' && analysisStbBtn) analysisStbBtn.classList.add('active');
-      if (activeAnalysisMode === 'PVT' && analysisPvtBtn) analysisPvtBtn.classList.add('active');
-      if (activeAnalysisMode === 'SPAR' && analysisSparBtn) analysisSparBtn.classList.add('active');
+      simulationControls?.setActiveModeButton(activeAnalysisMode);
     }
 
     // 7. Restaurar asignaciones de osciloscopio
@@ -3475,7 +2174,7 @@ function deserializeCircuit(jsonStr: string): boolean {
     }
 
     // Actualizar renderizado y recalcular nodos eléctricos
-    extractElectricalNetlist();
+    extractNetlist();
     updateCanvasRendering();
     if (oscilloscopePanel) oscilloscopePanel.draw();
 
@@ -3623,16 +2322,7 @@ function switchTab(tabId: string) {
     ch2ProbeNode = targetTab.ch2ProbeNode;
 
     // Refrescar los botones de control de análisis en la cabecera
-    const modeButtons = [analysisDcBtn, analysisAcBtn, analysisTranBtn, analysisSensBtn, analysisPssBtn, analysisStbBtn, analysisPvtBtn, analysisSparBtn];
-    modeButtons.forEach(btn => btn?.classList.remove('active'));
-    if (activeAnalysisMode === 'DC' && analysisDcBtn) analysisDcBtn.classList.add('active');
-    if (activeAnalysisMode === 'AC' && analysisAcBtn) analysisAcBtn.classList.add('active');
-    if (activeAnalysisMode === 'TRAN' && analysisTranBtn) analysisTranBtn.classList.add('active');
-    if (activeAnalysisMode === 'SENS' && analysisSensBtn) analysisSensBtn.classList.add('active');
-    if (activeAnalysisMode === 'PSS' && analysisPssBtn) analysisPssBtn.classList.add('active');
-    if (activeAnalysisMode === 'STB' && analysisStbBtn) analysisStbBtn.classList.add('active');
-    if (activeAnalysisMode === 'PVT' && analysisPvtBtn) analysisPvtBtn.classList.add('active');
-    if (activeAnalysisMode === 'SPAR' && analysisSparBtn) analysisSparBtn.classList.add('active');
+    simulationControls?.setActiveModeButton(activeAnalysisMode);
 
     // Refrescar el Osciloscopio
     if (oscilloscopePanel) {
@@ -3650,7 +2340,7 @@ function switchTab(tabId: string) {
     document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
 
     // Actualizar netlist eléctrico y dibujo
-    extractElectricalNetlist();
+    extractNetlist();
     updateCanvasRendering();
     if (oscilloscopePanel) oscilloscopePanel.draw();
 

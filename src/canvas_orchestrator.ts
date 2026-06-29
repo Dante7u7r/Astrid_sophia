@@ -1,3 +1,6 @@
+import { type McuRuntime } from "./simulation/mcu-runtime";
+import { type McuSpiceBridge } from "./simulation/mcu-spice-bridge";
+
 export interface Point2D {
   x: number;
   y: number;
@@ -31,8 +34,8 @@ export interface ComponentInstance {
   firmwareHex?: string; // HEX content
   firmware?: Uint8Array; // compiled binary
   mcuClockSpeed?: number;
-  mcuRuntime?: any;
-  mcuBridge?: any;
+  mcuRuntime?: McuRuntime | null;
+  mcuBridge?: McuSpiceBridge | null;
   mcuPinStates?: Record<number, number | string>; // logical states (0, 1, 'X', 'Z')
   
   // Transformer properties
