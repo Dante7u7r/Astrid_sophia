@@ -20,13 +20,17 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case "get_performance_telemetry":
       return {
         cpu_usage: 8.5 + Math.random() * 5.0,
+        cpuPercent: 8.5 + Math.random() * 5.0,
         memory_used_mb: 210,
+        ramFormatted: "210 MB",
         process_memory_mb: 65,
       } as T;
 
     case "run_dc_simulation":
       return {
+        nodeVoltages: { "0": 0.0, "1": 5.0, "2": 2.5 },
         node_voltages: { "0": 0.0, "1": 5.0, "2": 2.5 },
+        branchCurrents: { "V1": -0.0025 },
         branch_currents: { "V1": -0.0025 },
         iterations: 4,
         converged: true,
@@ -35,10 +39,15 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case "run_transient_simulation":
       return {
         time: [0, 0.001, 0.002, 0.003, 0.004, 0.005],
+        nodeVoltages: {
+          "1": [5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+          "2": [0.0, 1.2, 2.5, 3.4, 4.1, 4.5],
+        },
         node_voltages: {
           "1": [5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
           "2": [0.0, 1.2, 2.5, 3.4, 4.1, 4.5],
         },
+        branchCurrents: {},
         branch_currents: {},
         converged: true,
       } as T;
@@ -48,11 +57,15 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
         frequencies: [10, 100, 1000, 10000, 100000],
         magnitude_db: { "2": [0.0, -0.04, -3.01, -20.0, -40.0] },
         phase_deg: { "2": [0.0, -5.7, -45.0, -84.3, -89.4] },
+        nodeAmplitudes: { "2": [1.0, 0.99, 0.707, 0.1, 0.01] },
+        nodePhases: { "2": [0.0, -5.7, -45.0, -84.3, -89.4] },
+        converged: true,
       } as T;
 
     case "run_sensitivity_analysis":
       return {
         sensitivities: { "R1": 0.5, "R2": -0.5 },
+        converged: true,
       } as T;
 
     case "run_pss_simulation":
@@ -64,6 +77,8 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case "run_imd_analysis":
       return {
         converged: true,
+        nodeVoltages: { "0": 0.0, "1": 5.0, "2": 2.5 },
+        node_voltages: { "0": 0.0, "1": 5.0, "2": 2.5 },
         message: "Web mock simulation completed successfully",
       } as T;
 
@@ -82,6 +97,6 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     default:
       console.warn(`[Tauri Web Mock] Comando sin mock explícito '${cmd}', devolviendo objeto vacío.`);
-      return {} as T;
+      return { converged: true } as T;
   }
 }
