@@ -22,6 +22,8 @@ import { createSimulationRunner, type SimulationRunner } from "./simulation/simu
 import { initSimulationControls, type SimulationControls } from "./ui/simulation_controls";
 import { runElectricalRuleCheck, dispatchSimulation } from "./simulation/simulation_dispatcher";
 import { createCircuitStateManager } from "./simulation/circuit_state_manager";
+import { attachCanvasInput, attachCanvasDrop } from "./canvas/canvas_input_controller";
+import { isTypingInFormField } from "./canvas/keyboard_guards";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 
@@ -99,7 +101,9 @@ let sparPPD = 20;
 let ch1ProbeNode: string | null = "1"; // Canal 1 por defecto al Nodo 1
 let ch2ProbeNode: string | null = "2"; // Canal 2 por defecto al Nodo 2
 
-function updateCanvasRendering() {
+let renderFramePending = false;
+
+function doCanvasRender(): void {
   const pinVoltageMap = circuitState.buildPinVoltageMap();
 
   let ch1PinPos: Point2D | undefined;
@@ -139,8 +143,27 @@ function updateCanvasRendering() {
         }
       }
     }
-    orchestrator.render(pinVoltageMap, { ch1: ch1PinPos, ch2: ch2PinPos }, circuitState.getPinToNodeMap(), sparMarkers.length > 0 ? sparMarkers : undefined);
+    orchestrator.render(
+      pinVoltageMap,
+      { ch1: ch1PinPos, ch2: ch2PinPos },
+      circuitState.getPinToNodeMap(),
+      sparMarkers.length > 0 ? sparMarkers : undefined,
+    );
   }
+}
+
+function updateCanvasRendering(immediate = false): void {
+  if (immediate) {
+    renderFramePending = false;
+    doCanvasRender();
+    return;
+  }
+  if (renderFramePending) return;
+  renderFramePending = true;
+  requestAnimationFrame(() => {
+    renderFramePending = false;
+    doCanvasRender();
+  });
 }
 
 // Instancia global del runner de simulación interactiva
@@ -935,273 +958,88 @@ function initCanvasCAD() {
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  let isRightClickPanning = false;
-  let lastMousePos = { x: 0, y: 0 };
-
-  canvasElement.addEventListener("mousedown", (e) => {
-    const rect = canvasElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const worldPt = orchestrator!.screenToWorld(screenX, screenY);
-
-    if (e.button === 0) { // Clic izquierdo
-      // MODO DE COLOCACIÓN DE SONDAS DEL OSCILOSCOPIO
-      if (probePlacementMode) {
-        if (orchestrator!.hoveredPin) {
-          const pinKey = `${orchestrator!.hoveredPin.componentId}:${orchestrator!.hoveredPin.pinIndex}`;
-          const nodeId = circuitState.getPinNode(pinKey);
-          if (nodeId !== undefined) {
-            if (probePlacementMode === 'CH1') {
-              ch1ProbeNode = nodeId;
-              addLog(`Sonda del Canal 1 (Cian) conectada al Nodo ${nodeId}.`, "system");
-            } else {
-              ch2ProbeNode = nodeId;
-              addLog(`Sonda del Canal 2 (Morada) conectada al Nodo ${nodeId}.`, "system");
-            }
-          }
-        }
-        probePlacementMode = null;
-        updateCanvasRendering();
-        return;
-      }
-
-      // MODO DE SELECCIÓN DE PUERTOS RF PARA PARÁMETROS S
-      if (activeAnalysisMode === 'SPAR' && orchestrator!.hoveredPin) {
-        const pinKey = `${orchestrator!.hoveredPin.componentId}:${orchestrator!.hoveredPin.pinIndex}`;
-        const nodeId = circuitState.getPinNode(pinKey);
-        if (nodeId !== undefined && !sparPorts.some(p => p.nodeId === nodeId)) {
-          sparPorts.push({ nodeId, z0: 50 });
-          addLog(`Puerto RF ${sparPorts.length} asignado al Nodo ${nodeId} (Z0 = 50 Ω).`, 'system');
-          updateCanvasRendering();
-          return;
-        } else if (nodeId !== undefined) {
-          addLog(`El Nodo ${nodeId} ya está asignado como puerto RF.`, 'system');
-          return;
-        }
-      }
-
-      // Modo normal de CAD
-      if (orchestrator!.hoveredPin) {
-        orchestrator!.activePinForWire = orchestrator!.hoveredPin;
-        orchestrator!.tempWireEnd = orchestrator!.snapPointToGrid(worldPt);
+  attachCanvasInput(canvasElement, orchestrator, {
+    requestRender: (immediate) => updateCanvasRendering(immediate),
+    onWireConnected: () => {
+      extractNetlist();
+      addLog(
+        `Cable conectado entre terminales del lienzo.`,
+        "system",
+      );
+    },
+    onCanvasModified: () => markCurrentTabAsModified(),
+    onNetlistSync: () => extractNetlist(),
+    onSelectionChanged: (comp) => {
+      if (comp) updatePropertiesPanel(comp);
+    },
+    getPinNode: (pinKey) => circuitState.getPinNode(pinKey),
+    log: (text, type = "system") => addLog(text, type),
+    getProbePlacementMode: () => probePlacementMode,
+    clearProbePlacementMode: () => { probePlacementMode = null; },
+    onProbePlaced: (channel, nodeId) => {
+      if (channel === "CH1") {
+        ch1ProbeNode = nodeId;
+        addLog(`Sonda del Canal 1 (Cian) conectada al Nodo ${nodeId}.`, "system");
       } else {
-        const isShift = e.shiftKey;
-        const comp = orchestrator!.selectComponentAt(worldPt.x, worldPt.y, isShift);
-        
-        if (comp) {
-          // Si es selección múltiple, permitir arrastrar el lote
-          orchestrator!.startDraggingSelected(worldPt.x, worldPt.y);
-          updatePropertiesPanel(comp);
-        } else {
-          // Si no golpeó ningún componente y no hay Shift, activar caja de arrastre Glassmorphic
-          if (!isShift && !orchestrator!.hoveredWire) {
-            orchestrator!.selectionStart = orchestrator!.snapPointToGrid(worldPt);
-            orchestrator!.selectionEnd = orchestrator!.snapPointToGrid(worldPt);
-            mcuDebugPanel?.hide();
-          } else if (orchestrator!.selectedWire) {
-            addLog(`Cable seleccionado: [${orchestrator!.selectedWire.id}]. Presiona Delete/Backspace para eliminarlo de forma individual.`, "system");
-          }
-        }
+        ch2ProbeNode = nodeId;
+        addLog(`Sonda del Canal 2 (Morada) conectada al Nodo ${nodeId}.`, "system");
       }
-    } else if (e.button === 1 || e.button === 2) {
-      isRightClickPanning = true;
-      lastMousePos = { x: e.clientX, y: e.clientY };
-      e.preventDefault();
-    }
-    updateCanvasRendering();
-  });
-
-  canvasElement.addEventListener("mousemove", (e) => {
-    const rect = canvasElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const worldPt = orchestrator!.screenToWorld(screenX, screenY);
-
-    orchestrator!.checkHover(worldPt.x, worldPt.y);
-
-    // Arrastre de componentes en lote
-    if (orchestrator!.isDragging) {
-      orchestrator!.handleDragging(worldPt.x, worldPt.y);
-    }
-
-    // Dibujo de la caja de selección colectiva
-    if (orchestrator!.selectionStart) {
-      orchestrator!.selectionEnd = orchestrator!.snapPointToGrid(worldPt);
-    }
-
-    if (orchestrator!.activePinForWire) {
-      orchestrator!.tempWireEnd = orchestrator!.snapPointToGrid(worldPt);
-    }
-
-    if (isRightClickPanning) {
-      const dx = e.clientX - lastMousePos.x;
-      const dy = e.clientY - lastMousePos.y;
-      orchestrator!.pan(dx, dy);
-      lastMousePos = { x: e.clientX, y: e.clientY };
-    }
-
-    updateCanvasRendering();
-  });
-
-  const completeConnection = (_e: MouseEvent) => {
-    // 1. Completar conexión de cable
-    if (orchestrator!.activePinForWire) {
-      if (orchestrator!.hoveredPin) {
-        orchestrator!.connectPins(orchestrator!.activePinForWire, orchestrator!.hoveredPin);
-        extractNetlist();
-        addLog(`Cable conectado: [${orchestrator!.activePinForWire.componentId}] terminal ${orchestrator!.activePinForWire.pinIndex} a [${orchestrator!.hoveredPin.componentId}] terminal ${orchestrator!.hoveredPin.pinIndex}`, "system");
-        markCurrentTabAsModified();
+    },
+    getActiveAnalysisMode: () => activeAnalysisMode,
+    onSparPortAssign: (nodeId) => {
+      if (sparPorts.some(p => p.nodeId === nodeId)) {
+        addLog(`El Nodo ${nodeId} ya está asignado como puerto RF.`, "system");
+        return false;
       }
-      orchestrator!.activePinForWire = null;
-      orchestrator!.tempWireEnd = null;
-    }
-
-    // 2. Completar caja de selección Glassmorphic
-    if (orchestrator!.selectionStart) {
-      orchestrator!.completeBoxSelection();
-      if (orchestrator!.selectedComponents.length > 0) {
-        addLog(`Selección en lote: ${orchestrator!.selectedComponents.length} componentes seleccionados.`, "system");
-      }
-    }
-
-    if (orchestrator!.isDragging) {
-      markCurrentTabAsModified();
-    }
-
-    orchestrator!.stopDragging();
-    extractNetlist();
-    isRightClickPanning = false;
-    updateCanvasRendering();
-  };
-
-  canvasElement.addEventListener("mouseup", completeConnection);
-  canvasElement.addEventListener("mouseleave", completeConnection);
-
-  canvasElement.addEventListener("contextmenu", (e) => e.preventDefault());
-
-  // Doble clic para interactuar con componentes en caliente (Switch)
-  canvasElement.addEventListener("dblclick", async (e) => {
-    const rect = canvasElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const worldPt = orchestrator!.screenToWorld(screenX, screenY);
-    const comp = orchestrator!.selectComponentAt(worldPt.x, worldPt.y);
-
-    if (comp && comp.type === 'switch') {
+      sparPorts.push({ nodeId, z0: 50 });
+      addLog(`Puerto RF ${sparPorts.length} asignado al Nodo ${nodeId} (Z0 = 50 Ω).`, "system");
+      return true;
+    },
+    onSwitchDoubleClick: async (comp) => {
       comp.switchState = !(comp.switchState ?? false);
       if (simulationRunner?.isSimulationActive() ?? false) {
         try {
-          await invoke('inject_live_mutation', {
+          await invoke("inject_live_mutation", {
             mutation: {
               componentId: comp.id,
-              field: 'switch_state',
+              field: "switch_state",
               value: comp.switchState ? 1.0 : 0.0,
-            }
+            },
           });
-          addLog(`Switch [${comp.id}] → ${comp.switchState ? 'Cerrado' : 'Abierto'} (mutación en caliente)`, "system");
+          addLog(
+            `Switch [${comp.id}] → ${comp.switchState ? "Cerrado" : "Abierto"} (mutación en caliente)`,
+            "system",
+          );
         } catch (err) {
           addLog(`Error al mutar switch: ${err}`, "error");
         }
       }
-      updateCanvasRendering();
-      markCurrentTabAsModified();
-    }
+    },
+    onHideMcuDebug: () => mcuDebugPanel?.hide(),
+    onComponentPlaced: (comp) => {
+      updatePropertiesPanel(comp);
+    },
   });
 
-  canvasElement.addEventListener("wheel", (e) => {
-    const rect = canvasElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    
-    orchestrator!.zoomAt(zoomFactor, screenX, screenY);
-    updateCanvasRendering();
-    e.preventDefault();
-  }, { passive: false });
+  const canvasViewport = document.querySelector("#canvas-viewport") as HTMLElement;
+  if (canvasViewport) {
+    attachCanvasDrop(canvasViewport, canvasElement, orchestrator, {
+      requestRender: (immediate) => updateCanvasRendering(immediate),
+      onNetlistSync: () => extractNetlist(),
+      onCanvasModified: () => markCurrentTabAsModified(),
+      onComponentPlaced: (comp) => updatePropertiesPanel(comp),
+      log: (text, type = "system") => addLog(text, type),
+    });
+  }
 
-  // Drag & Drop
   const toolboxCards = document.querySelectorAll(".component-card");
   toolboxCards.forEach(card => {
     card.addEventListener("dragstart", (e) => {
       const htmlEvent = e as DragEvent;
       const type = card.getAttribute("data-type") || "resistor";
       const defaultValue = card.getAttribute("data-default") || "1000";
-      
       htmlEvent.dataTransfer?.setData("text/plain", JSON.stringify({ type, value: parseFloat(defaultValue) }));
     });
-  });
-
-  const canvasViewport = document.querySelector("#canvas-viewport") as HTMLElement;
-  if (canvasViewport) {
-    canvasViewport.addEventListener("dragover", (e) => {
-      e.preventDefault();
-    });
-
-    canvasViewport.addEventListener("drop", (e) => {
-      const htmlEvent = e as DragEvent;
-      e.preventDefault();
-
-      try {
-        const rawData = htmlEvent.dataTransfer?.getData("text/plain");
-        if (rawData) {
-          const { type, value } = JSON.parse(rawData);
-          
-          const rect = canvasElement.getBoundingClientRect();
-          const screenX = htmlEvent.clientX - rect.left;
-          const screenY = htmlEvent.clientY - rect.top;
-          const worldPt = orchestrator!.screenToWorld(screenX, screenY);
-
-          const snapped = orchestrator!.snapPointToGrid(worldPt);
-          const newComp = orchestrator!.addComponent(type, snapped.x, snapped.y, value);
-          extractNetlist();
-          addLog(`Componente colocado: [${newComp.id}] en (X:${newComp.x}, Y:${newComp.y})`, "system");
-          
-          orchestrator!.selectedComponent = newComp;
-          updatePropertiesPanel(newComp);
-          updateCanvasRendering();
-          markCurrentTabAsModified();
-        }
-      } catch (err) {
-        addLog("Error al colocar componente.", "error");
-      }
-    });
-  }
-
-  // Keyboard rotation & delete (CAD en lote)
-  window.addEventListener("keydown", (e) => {
-    if (!orchestrator) return;
-    
-    const hasSelection = orchestrator.selectedComponents.length > 0 || 
-                         orchestrator.selectedComponent !== null || 
-                         orchestrator.selectedWire !== null;
-                         
-    if (!hasSelection) return;
-
-    if (document.activeElement?.tagName === "INPUT") return;
-
-    if (e.key === "r" || e.key === "R") {
-      orchestrator.rotateSelectedComponent();
-      if (orchestrator.selectedComponents.length > 0) {
-        addLog(`Lote de ${orchestrator.selectedComponents.length} componentes rotado de forma colectiva.`, "system");
-      } else if (orchestrator.selectedComponent) {
-        addLog(`Componente [${orchestrator.selectedComponent.id}] rotado a ${orchestrator.selectedComponent.rotation}°`, "system");
-      }
-      updateCanvasRendering();
-      markCurrentTabAsModified();
-    } else if (e.key === "Delete" || e.key === "Backspace") {
-      if (orchestrator.selectedWire) {
-        addLog(`Cable [${orchestrator.selectedWire.id}] eliminado de forma individual.`, "system");
-      } else if (orchestrator.selectedComponents.length > 0) {
-        addLog(`Lote de ${orchestrator.selectedComponents.length} componentes eliminado del lienzo.`, "system");
-      } else if (orchestrator.selectedComponent) {
-        addLog(`Componente [${orchestrator.selectedComponent.id}] eliminado del lienzo.`, "system");
-      }
-      
-      orchestrator.removeSelected();
-      extractNetlist();
-      updateCanvasRendering();
-      markCurrentTabAsModified();
-    }
   });
 
   // Zoom In/Out & Clear floating buttons
@@ -2193,6 +2031,36 @@ function initFilePersistence() {
     });
   }
 
+  const demoSelect = document.querySelector("#btn-open-demo") as HTMLSelectElement | null;
+  if (demoSelect) {
+    demoSelect.addEventListener("change", async () => {
+      const file = demoSelect.value;
+      demoSelect.value = "";
+      if (!file) return;
+      try {
+        addLog(`Cargando demo: ${file}…`, "system");
+        const resp = await fetch(`/demos/${file}`);
+        if (!resp.ok) {
+          addLog(`No se encontró la demo ${file}`, "error");
+          return;
+        }
+        const content = await resp.text();
+        createNewTab(file.replace(".astryd", ""), { components: [], wires: [], filePath: null });
+        if (deserializeCircuit(content)) {
+          const tab = tabs.find(t => t.id === activeTabId);
+          if (tab) {
+            tab.name = file.replace(".astryd", "");
+            tab.unsaved = false;
+          }
+          renderTabsBar();
+          addLog(`Demo [${file}] cargada correctamente.`, "receive");
+        }
+      } catch (err) {
+        addLog(`Error al cargar demo: ${err}`, "error");
+      }
+    });
+  }
+
   const btnOpenCircuit = document.querySelector("#btn-open-circuit");
   if (btnOpenCircuit) {
     btnOpenCircuit.addEventListener("click", async () => {
@@ -2588,10 +2456,7 @@ function initComponentSearch() {
 
 function initTabKeyboardShortcuts() {
   window.addEventListener("keydown", (e) => {
-    // Si estamos editando un input, no capturar atajos del workspace
-    if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "SELECT") {
-      return;
-    }
+    if (isTypingInFormField()) return;
 
     // Ctrl + N: Nueva pestaña
     if ((e.ctrlKey || e.metaKey) && e.key === "n") {

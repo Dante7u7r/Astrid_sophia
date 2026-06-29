@@ -79,6 +79,71 @@ export function wireEndpointKey(ep: WireEndpoint): string {
   return `${ep.componentId}:${ep.pinIndex}`;
 }
 
+/** Half-extents (local space, pre-rotation) aligned with render() geometry. */
+export function getComponentLocalHalfExtents(comp: ComponentInstance): { halfW: number; halfH: number } {
+  switch (comp.type) {
+    case 'mcu_8051':
+      return { halfW: 65, halfH: 225 };
+    case 'mcu_avr':
+      return { halfW: 65, halfH: 165 };
+    case 'arduino_uno':
+    case 'esp32':
+    case 'raspberry_pi_pico':
+      return { halfW: 45, halfH: 65 };
+    case 'opamp':
+      return { halfW: 45, halfH: 45 };
+    case 'relay':
+      return { halfW: 45, halfH: 25 };
+    case 'switch':
+      return { halfW: 45, halfH: 15 };
+    case 'transformer':
+      return { halfW: 45, halfH: 25 };
+    case 'nmos':
+    case 'pmos':
+    case 'npn':
+    case 'pnp':
+      return { halfW: 45, halfH: 45 };
+    case 'x': {
+      const pinsLeft = Math.ceil((comp.pinCount ?? 4) / 2);
+      const totalHeight = Math.max(pinsLeft * 40, 60);
+      return { halfW: 65, halfH: totalHeight / 2 + 5 };
+    }
+    default:
+      return { halfW: 40, halfH: 40 };
+  }
+}
+
+export function getComponentBounds(comp: ComponentInstance): BoundingBox {
+  const { halfW, halfH } = getComponentLocalHalfExtents(comp);
+  const rad = (comp.rotation * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const worldHalfW = halfW * cos + halfH * sin;
+  const worldHalfH = halfW * sin + halfH * cos;
+  return {
+    x: comp.x - worldHalfW,
+    y: comp.y - worldHalfH,
+    width: worldHalfW * 2,
+    height: worldHalfH * 2,
+  };
+}
+
+export function hitTestComponentAt(
+  comp: ComponentInstance,
+  worldX: number,
+  worldY: number,
+): boolean {
+  const { halfW, halfH } = getComponentLocalHalfExtents(comp);
+  const rad = (-comp.rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = worldX - comp.x;
+  const dy = worldY - comp.y;
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+  return localX >= -halfW && localX <= halfW && localY >= -halfH && localY <= halfH;
+}
+
 export class CanvasOrchestrator {
   private canvas: HTMLCanvasElement;
   public simulationActive: boolean = false;
@@ -1571,13 +1636,19 @@ export class CanvasOrchestrator {
     this.ctx.restore();
   }
 
-  public hitTestPin(worldX: number, worldY: number, threshold = 8): { pin: PinInstance; comp: ComponentInstance } | null {
+  /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel. */
+  public getPinHitThreshold(): number {
+    return Math.max(6, 12 / this.zoom);
+  }
+
+  public hitTestPin(worldX: number, worldY: number, threshold?: number): { pin: PinInstance; comp: ComponentInstance } | null {
+    const t = threshold ?? this.getPinHitThreshold();
     for (const comp of this.components) {
       const pins = this.getComponentPins(comp);
       for (const pin of pins) {
         const dx = worldX - pin.x;
         const dy = worldY - pin.y;
-        if (dx * dx + dy * dy <= threshold * threshold) {
+        if (dx * dx + dy * dy <= t * t) {
           return { pin, comp };
         }
       }
@@ -1638,28 +1709,25 @@ export class CanvasOrchestrator {
     this.hoveredWire = null;
 
     // 1. Check pin hover first (takes priority)
-    const hit = this.hitTestPin(worldX, worldY, 8);
+    const hit = this.hitTestPin(worldX, worldY);
     if (hit) {
       this.hoveredPin = hit.pin;
-      this.canvas.style.cursor = 'pointer';
+      this.canvas.style.cursor = this.activePinForWire ? 'crosshair' : 'pointer';
       return;
     }
 
     // 2. Check component bounds hover
     for (const comp of this.components) {
-      const size = 30; // standard hover bound
-      if (
-        worldX >= comp.x - size &&
-        worldX <= comp.x + size &&
-        worldY >= comp.y - size &&
-        worldY <= comp.y + size
-      ) {
+      if (hitTestComponentAt(comp, worldX, worldY)) {
         this.hoveredComponent = comp;
-        // Cambiar cursor si es un componente interactivo
-        if (this.simulationActive && (comp.type === 'switch')) {
+        if (this.isDragging) {
+          this.canvas.style.cursor = 'grabbing';
+        } else if (this.activePinForWire) {
+          this.canvas.style.cursor = 'crosshair';
+        } else if (this.simulationActive && comp.type === 'switch') {
           this.canvas.style.cursor = 'pointer';
         } else {
-          this.canvas.style.cursor = 'default';
+          this.canvas.style.cursor = 'grab';
         }
         return;
       }
@@ -1699,14 +1767,9 @@ export class CanvasOrchestrator {
 
   public selectComponentAt(worldX: number, worldY: number, isShift: boolean = false): ComponentInstance | null {
     let hitComp: ComponentInstance | null = null;
-    for (const comp of this.components) {
-      const size = 35;
-      if (
-        worldX >= comp.x - size &&
-        worldX <= comp.x + size &&
-        worldY >= comp.y - size &&
-        worldY <= comp.y + size
-      ) {
+    for (let i = this.components.length - 1; i >= 0; i--) {
+      const comp = this.components[i];
+      if (hitTestComponentAt(comp, worldX, worldY)) {
         hitComp = comp;
         break;
       }
@@ -1773,13 +1836,10 @@ export class CanvasOrchestrator {
     this.selectedWire = null;
     
     for (const comp of this.components) {
-      // Verificar si el centro del componente está dentro de la ventana de selección
-      if (
-        comp.x >= x - 15 &&
-        comp.x <= x + w + 15 &&
-        comp.y >= y - 15 &&
-        comp.y <= y + h + 15
-      ) {
+      const bounds = getComponentBounds(comp);
+      const cx = bounds.x + bounds.width / 2;
+      const cy = bounds.y + bounds.height / 2;
+      if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) {
         this.selectedComponents.push(comp);
       }
     }
@@ -1796,6 +1856,7 @@ export class CanvasOrchestrator {
 
   public startDraggingSelected(worldX: number, worldY: number): void {
     this.isDragging = true;
+    this.canvas.style.cursor = 'grabbing';
     this.dragStartOffsets = {};
     
     if (this.selectedComponents.length > 0) {
@@ -1834,6 +1895,7 @@ export class CanvasOrchestrator {
 
   public stopDragging(): void {
     this.isDragging = false;
+    this.canvas.style.cursor = 'default';
   }
 
   public syncWireConnections(): void {

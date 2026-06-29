@@ -1,6 +1,60 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use crate::solver::CircuitNetlist;
 
+/// Índice máximo de nodo activo (excluye Tierra "0").
+pub fn max_node_index(netlist: &CircuitNetlist) -> usize {
+    let mut max_node = 0usize;
+    for comp in &netlist.components {
+        for pin in &comp.pins {
+            if let Ok(node_idx) = pin.parse::<usize>() {
+                max_node = max_node.max(node_idx);
+            }
+        }
+    }
+    max_node
+}
+
+/// Validación topológica previa a simulación (mensajes accionables en español).
+/// `strict_floating`: si es true, rechaza nodos sin ruta DC a Tierra.
+pub fn validate_netlist_topology(
+    netlist: &CircuitNetlist,
+    strict_floating: bool,
+) -> Result<usize, String> {
+    let n = max_node_index(netlist);
+
+    if netlist.components.is_empty() {
+        return Err("El circuito no contiene componentes.".to_string());
+    }
+
+    let has_gnd = netlist.components.iter().any(|c| c.comp_type == "ground")
+        || netlist
+            .components
+            .iter()
+            .flat_map(|c| c.pins.iter())
+            .any(|p| p == "0");
+    if !has_gnd {
+        return Err(
+            "Referencia a Tierra ausente (GND): agregue al menos un componente GND al esquema."
+                .to_string(),
+        );
+    }
+
+    detect_ideal_voltage_loops(netlist, n)?;
+
+    if strict_floating {
+        let floating = find_floating_nodes(netlist, n);
+        if !floating.is_empty() {
+            let nodes: Vec<String> = floating.iter().map(|i| i.to_string()).collect();
+            return Err(format!(
+                "Nodos flotantes (sin ruta DC a Tierra): {}. Conecte cada subred a GND o revise cables sueltos.",
+                nodes.join(", ")
+            ));
+        }
+    }
+
+    Ok(n)
+}
+
 /// Diagnóstica la red mediante teoría de grafos para identificar nodos
 /// que carecen de una ruta DC hacia la referencia de Tierra (nodos flotantes).
 /// Omitimos capacitores ya que actúan como circuitos abiertos en DC.
