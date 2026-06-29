@@ -135,6 +135,9 @@ npm run dev
 # Run unit tests (12 tests: DSU, Gaussian elimination, DC solver)
 npm test
 
+# Run integration tests (end-to-end simulation flow)
+npm run test:integration
+
 # Watch mode for TDD
 npm run test:watch
 
@@ -143,6 +146,12 @@ npm run build
 
 # Build Tauri desktop bundle
 npm run empaquetar
+
+# Cross-platform build scripts (recommended)
+./build.sh          # Linux/macOS
+build.bat           # Windows
+./build.sh --clean  # Clean build
+./build.sh --debug  # Debug build
 
 # Rust checks (from src-tauri/)
 cargo check
