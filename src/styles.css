@@ -1,47 +1,72 @@
 @import './components.css';
 
-/* --- SISTEMA DE DISEÑO PREMIUM ASTRYD SOPHIA --- */
+/* ═══════════════════════════════════════════════════
+   ASTRYD SOPHIA — SISTEMA DE DISEÑO PREMIUM v3.1
+   ═══════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  /* Paleta de colores HSL Premium */
-  --bg-primary: hsl(224, 25%, 8%);
-  --bg-secondary: hsl(224, 25%, 12%);
-  --bg-glass: rgba(10, 14, 23, 0.7);
-  --bg-card: rgba(20, 26, 42, 0.45);
-  
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(102, 252, 241, 0.15);
-  
-  --accent-cyan: hsl(174, 97%, 69%);
-  --accent-blue: hsl(210, 100%, 56%);
-  --accent-purple: hsl(270, 89%, 65%);
-  
-  --text-main: hsl(210, 17%, 82%);
-  --text-muted: hsl(210, 10%, 55%);
+  /* ── Paleta Cromática Principal ── */
+  --bg-void:     hsl(225, 28%, 5%);
+  --bg-deep:     hsl(225, 25%, 7%);
+  --bg-primary:  hsl(225, 22%, 9%);
+  --bg-elevated: hsl(225, 20%, 12%);
+  --bg-glass:    rgba(8, 12, 22, 0.72);
+  --bg-card:     rgba(16, 22, 38, 0.55);
+
+  /* ── Bordes ── */
+  --border-subtle:  rgba(255, 255, 255, 0.055);
+  --border-color:   rgba(255, 255, 255, 0.09);
+  --border-mid:     rgba(255, 255, 255, 0.14);
+  --border-glow:    rgba(91, 243, 228, 0.22);
+
+  /* ── Acentos Neón ── */
+  --cyan:        hsl(174, 95%, 67%);
+  --cyan-dim:    hsl(174, 60%, 40%);
+  --cyan-glow:   rgba(91, 243, 228, 0.18);
+  --blue:        hsl(214, 100%, 60%);
+  --purple:      hsl(266, 85%, 68%);
+  --purple-glow: rgba(155, 100, 255, 0.18);
+  --green:       hsl(148, 82%, 50%);
+  --red:         hsl(354, 82%, 60%);
+  --amber:       hsl(40, 100%, 58%);
+
+  /* Aliases legados */
+  --accent-cyan:   var(--cyan);
+  --accent-blue:   var(--blue);
+  --accent-purple: var(--purple);
+  --success:       var(--green);
+  --danger:        var(--red);
+  --warning:       var(--amber);
+
+  /* ── Tipografía ── */
   --text-bright: hsl(0, 0%, 100%);
-  
-  --success: hsl(145, 80%, 45%);
-  --danger: hsl(355, 80%, 55%);
-  --warning: hsl(45, 100%, 55%);
-  
-  /* Fuentes */
+  --text-main:   hsl(215, 20%, 82%);
+  --text-sub:    hsl(215, 14%, 62%);
+  --text-muted:  hsl(215, 10%, 45%);
+
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  
-  /* Layout y Dimensiones */
-  --left-panel-width: 280px;
-  --right-panel-width: 320px;
-  --osc-panel-height: 220px;
-  
-  /* Sombras y transiciones */
-  --shadow-premium: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
-  --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  --transition-fast: all 0.15s ease-out;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+
+  /* ── Dimensiones de Layout ── */
+  --header-h:          52px;
+  --footer-h:          26px;
+  --left-panel-width:  272px;
+  --right-panel-width: 300px;
+  --osc-panel-height:  210px;
+  --tabs-h:            36px;
+
+  /* ── Efectos ── */
+  --glass-blur:       blur(20px) saturate(180%);
+  --shadow-depth:     0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-glow-cyan: 0 0 20px rgba(91, 243, 228, 0.15), 0 0 40px rgba(91, 243, 228, 0.06);
+  --transition:       all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-fast:  all 0.15s ease-out;
 }
 
-/* --- RESET & LAYOUT BASE --- */
-
-* {
+/* ══ RESET BASE ══════════════════════════════════ */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -49,110 +74,112 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--bg-primary);
-  background-image: 
-    radial-gradient(circle at 10% 20%, hsla(253, 20%, 6%, 1) 0%, transparent 60%), 
-    radial-gradient(circle at 90% 10%, hsla(210, 45%, 10%, 1) 0%, transparent 50%),
-    radial-gradient(circle at 50% 80%, hsla(174, 50%, 8%, 0.15) 0%, transparent 70%),
-    radial-gradient(circle at 80% 90%, hsla(270, 95%, 65%, 0.05) 0%, transparent 40%);
+  background: var(--bg-void);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 15% 10%,  hsla(225, 45%, 12%, 0.9) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90%  5%,  hsla(214, 60%, 10%, 0.8) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 90%,  hsla(174, 50%, 8%,  0.4) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 35% at 85% 85%,  hsla(266, 60%, 10%, 0.4) 0%, transparent 50%);
   background-size: 200% 200%;
-  animation: wave-bg 25s ease infinite alternate;
+  animation: bg-drift 30s ease-in-out infinite alternate;
   color: var(--text-main);
   width: 100vw;
   height: 100vh;
-  margin: 0;
-  padding: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@keyframes wave-bg {
-  0% {
-    background-position: 0% 0%;
-  }
-  100% {
-    background-position: 100% 100%;
-  }
+@keyframes bg-drift {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
 }
 
+/* ══ CONTAINER PRINCIPAL ═════════════════════════ */
 .app-container {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-rows: 56px 1fr 28px;
-  background: rgba(8, 12, 20, 0.85);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
+  grid-template-rows: var(--header-h) 1fr var(--footer-h);
+  background: rgba(6, 9, 16, 0.7);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   overflow: hidden;
 }
 
-/* --- ESTRUCTURA GENERAL DEL DASHBOARD (CSS GRID) --- */
-
+/* ══ GRID GENERAL DASHBOARD ══════════════════════ */
 .dashboard {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  overflow: hidden;
-  position: relative;
-  background: rgba(0, 0, 0, 0.1);
   height: 100%;
   min-height: 0;
+  overflow: hidden;
+  position: relative;
 }
 
-/* Paneles Laterales (Sidebars) */
+/* ══ PANELES LATERALES ═══════════════════════════ */
 .sidebar-panel {
   height: 100%;
-  background: rgba(8, 11, 18, 0.4);
-  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: var(--transition-smooth);
+  background: rgba(6, 9, 16, 0.5);
+  backdrop-filter: blur(8px);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease;
 }
 
 .sidebar-left {
   width: var(--left-panel-width);
+  border-right: 1px solid var(--border-subtle);
 }
 
 .sidebar-right {
   width: var(--right-panel-width);
-  border-right: none;
-  border-left: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-subtle);
 }
 
-/* Clases de colapsado (Cero desplazamientos bruscos) */
-.sidebar-left.collapsed {
-  width: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
+.sidebar-left.collapsed,
 .sidebar-right.collapsed {
   width: 0;
   opacity: 0;
   pointer-events: none;
 }
 
-/* Área Central Principal */
+/* ══ WORKSPACE CENTRAL ════════════════════════════ */
 .workspace-center {
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  overflow: hidden;
+  grid-template-rows: var(--tabs-h) 1fr auto;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
-/* Lienzo de Simulación */
+/* ══ LIENZO DE CIRCUITO ══════════════════════════ */
 .canvas-viewport {
   position: relative;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle, rgba(255,255,255,0.015) 1px, transparent 1px);
-  background-size: 20px 20px;
-  background-color: rgba(3, 4, 7, 0.4);
+  min-height: 0;
+  /* Cuadrícula sutil de puntos */
+  background-image:
+    radial-gradient(circle, rgba(91, 243, 228, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-color: hsl(225, 28%, 6%);
   overflow: hidden;
+}
+
+/* Líneas de eje central sutiles */
+.canvas-viewport::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(91, 243, 228, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 243, 228, 0.04) 1px, transparent 1px);
+  background-size: 120px 120px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 #circuit-canvas {
@@ -162,198 +189,207 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  z-index: 1;
 }
 
-/* Panel Inferior (Osciloscopio / Logs) */
+/* ══ DOCK INFERIOR ═══════════════════════════════ */
 .bottom-dock {
   height: var(--osc-panel-height);
-  background: rgba(6, 8, 14, 0.6);
-  border-top: 1px solid var(--border-color);
+  background: rgba(4, 6, 12, 0.75);
+  border-top: 1px solid var(--border-subtle);
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: 1.6fr 1fr;
   overflow: hidden;
-  transition: var(--transition-smooth);
+  transition: var(--transition);
 }
 
 .bottom-dock.collapsed {
   height: 0;
-  border-top: 1px solid transparent;
   opacity: 0;
   pointer-events: none;
 }
 
-/* Utilidades de Diseño Comunes */
+/* ══ PANELES GENÉRICOS ════════════════════════════ */
 .glass-panel {
   background: var(--bg-glass);
-  backdrop-filter: blur(12px) saturate(180%);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border-color);
 }
 
 .panel-header {
-  height: 48px;
-  min-height: 48px;
+  height: 44px;
+  min-height: 44px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 16px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid var(--border-color);
+  justify-content: space-between;
+  padding: 0 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.panel-header h2, .panel-header h3 {
-  font-size: 0.85rem;
+.panel-header h2,
+.panel-header h3 {
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.8px;
   text-transform: uppercase;
-  color: var(--text-bright);
+  color: var(--text-sub);
+  background: linear-gradient(90deg, var(--text-bright) 0%, var(--text-sub) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .panel-body {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 243, 228, 0.2) transparent;
 }
 
-/* --- BOTONES PREMIUM DE EXPORTACIÓN (FASE 7/31) --- */
+.panel-body::-webkit-scrollbar {
+  width: 4px;
+}
+.panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panel-body::-webkit-scrollbar-thumb {
+  background: rgba(91, 243, 228, 0.18);
+  border-radius: 2px;
+}
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(91, 243, 228, 0.38);
+}
+
+/* ══ EXPORT BUTTONS ══════════════════════════════ */
 #export-csv-btn, #export-svg-btn, #export-s2p-btn, #export-h5-btn, #export-pdf-btn {
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+  transition: var(--transition);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 #export-csv-btn:hover, #export-h5-btn:hover {
-  color: var(--accent-cyan) !important;
-  background: rgba(102, 252, 241, 0.08) !important;
-  border-color: rgba(102, 252, 241, 0.25) !important;
-  box-shadow: 0 0 10px rgba(102, 252, 241, 0.2);
+  color: var(--cyan) !important;
+  background: var(--cyan-glow) !important;
+  border-color: rgba(91, 243, 228, 0.3) !important;
+  box-shadow: 0 0 12px rgba(91, 243, 228, 0.2);
   transform: translateY(-1px);
 }
 
 #export-svg-btn:hover, #export-pdf-btn:hover {
-  color: var(--accent-purple) !important;
-  background: rgba(168, 85, 247, 0.08) !important;
-  border-color: rgba(168, 85, 247, 0.25) !important;
-  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+  color: var(--purple) !important;
+  background: var(--purple-glow) !important;
+  border-color: rgba(155, 100, 255, 0.3) !important;
+  box-shadow: 0 0 12px rgba(155, 100, 255, 0.2);
   transform: translateY(-1px);
 }
 
 #export-s2p-btn:hover {
-  color: var(--accent-blue) !important;
-  background: rgba(59, 130, 246, 0.08) !important;
-  border-color: rgba(59, 130, 246, 0.25) !important;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+  color: var(--blue) !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
   transform: translateY(-1px);
 }
 
-#export-csv-btn:active, #export-svg-btn:active, #export-s2p-btn:active, #export-h5-btn:active, #export-pdf-btn:active {
-  transform: translateY(1px);
-}
-
-/* ==========================================
-   10. BUSCADOR Y CATEGORÍAS (FASE 4)
-   ========================================== */
+/* ══ BUSCADOR Y CATEGORÍAS ════════════════════════ */
 .search-box {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   position: relative;
-  width: 100%;
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 14px 10px 14px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  padding: 9px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
   color: var(--text-bright);
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: inset 0 1px 0 rgba(0,0,0,0.2);
+  font-size: 0.82rem;
+  transition: var(--transition);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: var(--accent-cyan);
-  box-shadow: 
-    0 0 12px rgba(102, 252, 241, 0.15),
-    inset 0 1px 0 rgba(0,0,0,0.2);
+  border-color: var(--cyan-dim);
+  box-shadow: 0 0 0 3px rgba(91, 243, 228, 0.1), 0 0 16px rgba(91, 243, 228, 0.08);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .components-categories {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
 }
 
 .category-group {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  padding-bottom: 10px;
-}
-
-.category-group:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .category-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 6px;
+  padding: 8px 10px;
   cursor: pointer;
   user-select: none;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
   color: var(--text-muted);
-  transition: color 0.2s ease;
+  border-radius: 6px;
+  transition: var(--transition-fast);
 }
 
 .category-header:hover {
-  color: var(--accent-cyan);
+  color: var(--cyan);
+  background: rgba(91, 243, 228, 0.05);
 }
 
 .category-header .category-arrow {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   transition: transform 0.25s ease;
-  transform: rotate(-90deg); /* Apunta a la derecha cuando cerrado */
+  transform: rotate(-90deg);
+  opacity: 0.6;
 }
 
 .category-header.active {
-  color: var(--text-bright);
+  color: var(--text-main);
 }
 
 .category-header.active .category-arrow {
-  transform: rotate(0deg); /* Apunta abajo cuando abierto */
+  transform: rotate(0deg);
+  opacity: 1;
+  color: var(--cyan);
 }
 
 .category-content {
   display: none;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-  padding-left: 2px;
-  padding-right: 2px;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0 2px;
 }
 
 .category-content.open {
   display: flex;
 }
 
-/* ==========================================
-   11. WORKSPACE TABS BAR (FASE 4)
-   ========================================== */
+/* ══ TABS BAR ════════════════════════════════════ */
 .tabs-bar {
   display: flex;
-  height: 38px;
-  min-height: 38px;
-  background: rgba(5, 7, 12, 0.6);
-  border-bottom: 1px solid var(--border-color);
+  height: var(--tabs-h);
+  min-height: var(--tabs-h);
+  background: rgba(4, 6, 12, 0.8);
+  border-bottom: 1px solid var(--border-subtle);
   align-items: center;
-  justify-content: space-between;
   user-select: none;
   overflow: hidden;
 }
@@ -361,30 +397,37 @@ body {
 .btn-tab-toggle {
   height: 100%;
   padding: 0 14px;
-  background: rgba(10, 14, 23, 0.4);
+  background: transparent;
   border: none;
-  border-right: 1px solid var(--border-color);
-  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-subtle);
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+
+#btn-dock-toggle-right {
+  border-right: none;
+  border-left: 1px solid var(--border-subtle);
 }
 
 .btn-tab-toggle:hover {
-  background: rgba(102, 252, 241, 0.08);
-  color: var(--accent-cyan);
+  background: rgba(91, 243, 228, 0.06);
+  color: var(--cyan);
 }
 
 .btn-tab-toggle.active {
-  color: var(--accent-cyan);
-  background: rgba(102, 252, 241, 0.12);
+  color: var(--cyan);
+  background: rgba(91, 243, 228, 0.08);
+  box-shadow: inset 0 -2px 0 var(--cyan);
 }
 
 .tabs-container {
@@ -392,11 +435,11 @@ body {
   flex-grow: 1;
   height: 100%;
   overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
 }
 
 .tabs-container::-webkit-scrollbar {
-  display: none; /* Safari/Chrome */
+  display: none;
 }
 
 .tab-item {
@@ -405,25 +448,26 @@ body {
   gap: 8px;
   padding: 0 16px;
   height: 100%;
-  background: rgba(0, 0, 0, 0.2);
-  border-right: 1px solid var(--border-color);
+  background: transparent;
+  border-right: 1px solid var(--border-subtle);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
-  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: var(--transition-fast);
   position: relative;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-item:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-main);
 }
 
 .tab-item.active {
-  background: rgba(10, 14, 23, 0.35);
-  color: var(--accent-cyan);
-  text-shadow: 0 0 6px rgba(102, 252, 241, 0.25);
+  background: rgba(91, 243, 228, 0.06);
+  color: var(--cyan);
 }
 
 .tab-item.active::after {
@@ -433,8 +477,8 @@ body {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
-  box-shadow: 0 -1px 6px rgba(102, 252, 241, 0.4);
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 100%);
+  box-shadow: 0 0 8px rgba(91, 243, 228, 0.5);
 }
 
 .tab-close {
@@ -444,53 +488,48 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  font-size: 0.8rem;
-  line-height: 1;
+  font-size: 0.75rem;
   color: var(--text-muted);
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
-  margin-left: 4px;
+  transition: var(--transition-fast);
 }
 
 .tab-close:hover {
-  background: rgba(255, 71, 87, 0.15);
-  color: var(--danger);
+  background: rgba(255, 71, 87, 0.18);
+  color: var(--red);
 }
 
 .tab-unsaved {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--warning);
-  box-shadow: 0 0 6px var(--warning);
-  margin-left: 2px;
+  background: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
 }
 
 .btn-add-tab {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   display: flex;
   justify-content: center;
   align-items: center;
   background: transparent;
   border: none;
-  border-left: 1px solid var(--border-color);
   color: var(--text-muted);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 300;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition-fast);
 }
 
 .btn-add-tab:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--accent-cyan);
+  color: var(--cyan);
+  background: rgba(91, 243, 228, 0.06);
 }
 
 .btn-add-tab:active {
-  transform: scale(0.95);
+  transform: scale(0.9);
 }
-
