@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke as invoke } from "./simulation/tauri_mock";
 import { listen } from "@tauri-apps/api/event";
 import { CanvasOrchestrator, ComponentInstance, Point2D } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";

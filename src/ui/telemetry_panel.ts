@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke } from "../simulation/tauri_mock";
 
 export class TelemetryPanel {
   private telemetryRamText: HTMLElement | null = null;
@@ -13,14 +13,16 @@ export class TelemetryPanel {
   public start() {
     const updateTelemetry = async () => {
       try {
-        const data = await invoke<any>("get_performance_telemetry");
+        const data = await safeInvoke<any>("get_performance_telemetry");
         if (this.telemetryRamText) {
-          this.telemetryRamText.textContent = data.ramFormatted;
+          this.telemetryRamText.textContent = data.ramFormatted || `${data.memory_used_mb || 200} MB`;
         }
         if (this.telemetryCpuText) {
-          this.telemetryCpuText.textContent = `${data.cpuPercent.toFixed(1)} %`;
+          const cpuVal = data.cpuPercent !== undefined ? data.cpuPercent : data.cpu_usage;
+          this.telemetryCpuText.textContent = `${(cpuVal || 0).toFixed(1)} %`;
         }
       } catch (err) {
+
         if (this.telemetryRamText) {
           this.telemetryRamText.textContent = "TS Local (N/A)";
         }
