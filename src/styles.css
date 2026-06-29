@@ -51,18 +51,17 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-primary);
   background-image: 
-    radial-gradient(circle at 10% 20%, hsla(253, 16%, 7%, 1) 0%, transparent 60%), 
-    radial-gradient(circle at 90% 10%, hsla(210, 38%, 11%, 1) 0%, transparent 50%),
-    radial-gradient(circle at 50% 80%, hsla(174, 40%, 6%, 0.12) 0%, transparent 70%),
-    radial-gradient(circle at 80% 90%, hsla(270, 89%, 65%, 0.03) 0%, transparent 40%);
+    radial-gradient(circle at 10% 20%, hsla(253, 20%, 6%, 1) 0%, transparent 60%), 
+    radial-gradient(circle at 90% 10%, hsla(210, 45%, 10%, 1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 80%, hsla(174, 50%, 8%, 0.15) 0%, transparent 70%),
+    radial-gradient(circle at 80% 90%, hsla(270, 95%, 65%, 0.05) 0%, transparent 40%);
   background-size: 200% 200%;
   animation: wave-bg 25s ease infinite alternate;
-  background-attachment: fixed;
   color: var(--text-main);
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -77,21 +76,16 @@ body {
 }
 
 .app-container {
-  width: 98vw;
-  max-width: 1550px;
-  height: 96vh;
-  min-height: 700px;
+  width: 100vw;
+  height: 100vh;
   display: grid;
-  grid-template-rows: 64px 1fr 32px;
-  background: linear-gradient(135deg, rgba(10, 14, 23, 0.75) 0%, rgba(6, 9, 15, 0.8) 100%);
+  grid-template-rows: 56px 1fr 28px;
+  background: rgba(8, 12, 20, 0.85);
   backdrop-filter: blur(24px) saturate(190%);
   -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 16px;
-  box-shadow: 
-    var(--shadow-premium),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 40px rgba(102, 252, 241, 0.03);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 
