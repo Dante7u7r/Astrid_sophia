@@ -2680,6 +2680,19 @@ function initCanvasCAD() {
       updateCanvasRendering();
     });
   }
+
+  const btnSnapGrid = document.querySelector("#btn-snap-grid") as HTMLButtonElement | null;
+  if (btnSnapGrid && orchestrator) {
+    // snapEnabled: true by default (matches btn-active class in HTML)
+    let snapEnabled = true;
+    btnSnapGrid.addEventListener("click", () => {
+      snapEnabled = !snapEnabled;
+      btnSnapGrid.classList.toggle("btn-active", snapEnabled);
+      // Override gridSize to 1 (no snap) or 20 (full snap)
+      (orchestrator as any).gridSize = snapEnabled ? 20 : 1;
+      addLog(snapEnabled ? "Alineación a rejilla activada." : "Alineación a rejilla desactivada.", "system");
+    });
+  }
 }
 
 // --- CARGA GENERAL DEL DOM ---
