@@ -305,6 +305,46 @@
   z-index: 10;
 }
 
+.btn-sidebar-edge-toggle {
+  position: absolute;
+  top: 16px;
+  z-index: 20;
+  background: rgba(10, 14, 23, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(102, 252, 241, 0.25);
+  color: var(--accent-cyan);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(102, 252, 241, 0.15);
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.btn-sidebar-edge-toggle.left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
+}
+
+.btn-sidebar-edge-toggle.right {
+  right: 0;
+  border-right: none;
+  border-radius: 20px 0 0 20px;
+}
+
+.btn-sidebar-edge-toggle:hover {
+  background: rgba(20, 28, 45, 0.95);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(102, 252, 241, 0.3);
+  transform: scale(1.05);
+}
+
+.btn-sidebar-edge-toggle:active {
+  transform: scale(0.98);
+}
+
 .btn-floating {
   width: 36px;
   height: 36px;

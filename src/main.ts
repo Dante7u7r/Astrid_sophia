@@ -547,22 +547,29 @@ function initSidebars() {
   sidebarRight = document.querySelector("#sidebar-right");
   btnToggleLeft = document.querySelector("#btn-toggle-left");
   btnToggleRight = document.querySelector("#btn-toggle-right");
+  const btnExpandLeft = document.querySelector("#btn-expand-left") as HTMLButtonElement | null;
+  const btnExpandRight = document.querySelector("#btn-expand-right") as HTMLButtonElement | null;
 
-  if (btnToggleLeft && sidebarLeft) {
-    btnToggleLeft.addEventListener("click", () => {
-      sidebarLeft?.classList.toggle("collapsed");
-      const isCollapsed = sidebarLeft?.classList.contains("collapsed");
-      btnToggleLeft!.textContent = isCollapsed ? "Componentes ▶" : "◀ Colapsar";
-    });
-  }
+  const toggleLeft = () => {
+    if (!sidebarLeft) return;
+    sidebarLeft.classList.toggle("collapsed");
+    const isCollapsed = sidebarLeft.classList.contains("collapsed");
+    if (btnToggleLeft) btnToggleLeft.textContent = isCollapsed ? "Componentes ▶" : "◀ Colapsar";
+    if (btnExpandLeft) btnExpandLeft.style.display = isCollapsed ? "block" : "none";
+  };
 
-  if (btnToggleRight && sidebarRight) {
-    btnToggleRight.addEventListener("click", () => {
-      sidebarRight?.classList.toggle("collapsed");
-      const isCollapsed = sidebarRight?.classList.contains("collapsed");
-      btnToggleRight!.textContent = isCollapsed ? "◀ Propiedades" : "Expandir ▶";
-    });
-  }
+  const toggleRight = () => {
+    if (!sidebarRight) return;
+    sidebarRight.classList.toggle("collapsed");
+    const isCollapsed = sidebarRight.classList.contains("collapsed");
+    if (btnToggleRight) btnToggleRight.textContent = isCollapsed ? "◀ Propiedades" : "Expandir ▶";
+    if (btnExpandRight) btnExpandRight.style.display = isCollapsed ? "block" : "none";
+  };
+
+  if (btnToggleLeft) btnToggleLeft.addEventListener("click", toggleLeft);
+  if (btnExpandLeft) btnExpandLeft.addEventListener("click", toggleLeft);
+  if (btnToggleRight) btnToggleRight.addEventListener("click", toggleRight);
+  if (btnExpandRight) btnExpandRight.addEventListener("click", toggleRight);
 }
 
 // --- ACTUALIZACIÓN DE PROPIEDADES EN EL PANEL DERECHO ---
