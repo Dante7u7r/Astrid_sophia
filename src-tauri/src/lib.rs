@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 pub mod solver;
 mod telemetry;
 pub mod parser;
