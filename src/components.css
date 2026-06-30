@@ -752,6 +752,60 @@
   100% { filter: drop-shadow(0 0 12px var(--cyan)); transform: scale(1.07); }
 }
 
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px #ff4757, 0 0 8px rgba(255, 71, 87, 0.5); }
+  50%      { opacity: 0.3; box-shadow: 0 0 2px #ff4757; }
+}
+
+@keyframes sim-btn-breathe {
+  0%, 100% { box-shadow: 0 3px 12px rgba(46, 213, 115, 0.4), 0 0 16px rgba(46, 213, 115, 0.25); }
+  50%      { box-shadow: 0 3px 18px rgba(46, 213, 115, 0.7), 0 0 28px rgba(46, 213, 115, 0.45); }
+}
+
+/* --- Botón Play activo (simulación en curso) --- */
+.btn-run.sim-active {
+  background: linear-gradient(135deg, hsl(148, 90%, 42%) 0%, hsl(148, 95%, 55%) 100%);
+  border-color: rgba(46, 213, 115, 0.6);
+  animation: sim-btn-breathe 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+
+/* --- Indicador REC (punto parpadeante en telemetría) --- */
+.sim-rec-indicator {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  margin-left: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ff4757;
+  text-transform: uppercase;
+}
+
+.sim-rec-indicator.active {
+  display: flex;
+}
+
+.sim-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff4757;
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+/* --- Botones de archivo deshabilitados durante simulación --- */
+.btn-text-only.sim-locked,
+select.btn-text-only.sim-locked {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
 /* ══ 10. PROPIEDADES AVANZADAS ═══════════════════ */
 
 #wave-properties-container {
@@ -810,4 +864,109 @@
 
 #wave-properties-container .property-group:focus-within .property-label {
   color: var(--cyan);
+}
+
+/* ══ 11. SISTEMA DE TOASTS / ALERTAS FLOTANTES ════ */
+
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  width: calc(100% - 48px);
+  pointer-events: none;
+}
+
+.toast-card {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(13, 17, 28, 0.85);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-main, #e2e8f0);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  transform: translateX(120%);
+  opacity: 0;
+  animation: toast-slide-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transition: all 0.3s ease;
+}
+
+@keyframes toast-slide-in {
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-card.toast-closing {
+  transform: translateX(120%) scale(0.9);
+  opacity: 0;
+}
+
+/* Tipos de alertas */
+.toast-card.toast-error {
+  border-left: 4px solid #ff4757;
+  box-shadow: 0 8px 32px 0 rgba(255, 71, 87, 0.25), 0 0 0 1px rgba(255, 71, 87, 0.1);
+}
+.toast-card.toast-warning {
+  border-left: 4px solid #ffa502;
+  box-shadow: 0 8px 32px 0 rgba(255, 165, 2, 0.25), 0 0 0 1px rgba(255, 165, 2, 0.1);
+}
+.toast-card.toast-success {
+  border-left: 4px solid #2ed573;
+  box-shadow: 0 8px 32px 0 rgba(46, 213, 115, 0.25), 0 0 0 1px rgba(46, 213, 115, 0.1);
+}
+.toast-card.toast-info {
+  border-left: 4px solid #1e90ff;
+  box-shadow: 0 8px 32px 0 rgba(30, 144, 255, 0.25), 0 0 0 1px rgba(30, 144, 255, 0.1);
+}
+
+.toast-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.toast-content {
+  flex-grow: 1;
+}
+
+.toast-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: var(--text-bright, #fff);
+  font-size: 0.85rem;
+}
+
+.toast-message {
+  opacity: 0.85;
+}
+
+.toast-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 0 0 0 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+  align-self: center;
+}
+
+.toast-close-btn:hover {
+  color: var(--text-bright, #fff);
 }

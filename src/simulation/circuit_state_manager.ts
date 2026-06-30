@@ -28,6 +28,7 @@
 import { ActuatorHistoryManager } from "../ui/actuator_helpers";
 import { AudioOrchestrator } from "../ui/audio_orchestrator";
 import { type SimulationFrame } from "./simulation_runner";
+import { resetRuntime } from "./mcu-runtime";
 
 // ==========================================================================
 // VoltageSnapshot — Instantánea de voltajes para el inspector de tiempo
@@ -121,6 +122,51 @@ export class CircuitStateManager {
     this._pinToNodeMap = {};
     this.actuatorHistory.clear();
     this.audioOrchestrator.stopAll();
+  }
+
+  /**
+   * Limpia de forma explícita y absoluta todo el historial del osciloscopio,
+   * resetea los estados de los pines de todos los microcontroladores,
+   * limpia el netlist extraído y pone a cero todos los vectores de voltaje.
+   */
+  prepareForDemoLoad(oscilloscopePanel: any, orchestrator: any): void {
+    // 1. Limpiar de forma explícita y absoluta todo el historial del osciloscopio
+    if (oscilloscopePanel) {
+      oscilloscopePanel.transientResults = [];
+      oscilloscopePanel.acSweepResults = null;
+      oscilloscopePanel.sweepTime = 0.0;
+      if (typeof oscilloscopePanel.draw === "function") {
+        oscilloscopePanel.draw();
+      }
+    }
+
+    // 2. Resetear los estados de los pines/registros del microcontrolador
+    if (orchestrator && Array.isArray(orchestrator.components)) {
+      for (const comp of orchestrator.components) {
+        if (comp.mcuRuntime) {
+          resetRuntime(comp.mcuRuntime);
+        }
+      }
+    }
+
+    // 3. Poner a cero todos los vectores de voltaje y configuraciones
+    this._liveVoltages = {};
+    this._pinToNodeMap = {};
+    this.actuatorHistory.clear();
+    this.audioOrchestrator.stopAll();
+
+    // 4. Limpiar el netlist extraído vaciando componentes y cables del orchestrator
+    if (orchestrator) {
+      orchestrator.components = [];
+      orchestrator.wires = [];
+      orchestrator.selectedComponent = null;
+      orchestrator.selectedComponents = [];
+      orchestrator.selectedWire = null;
+      orchestrator.activePinForWire = null;
+      orchestrator.tempWireEnd = null;
+      orchestrator.selectionStart = null;
+      orchestrator.selectionEnd = null;
+    }
   }
 
   // ========================================================================

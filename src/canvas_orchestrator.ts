@@ -386,6 +386,48 @@ export class CanvasOrchestrator {
 
   // --- CAMERA OPERATIONS ---
 
+  /** Calculates the geometric center of all components in world coordinates.
+   * Defaults to (0, 0) if the circuit is empty. */
+  public getCircuitGeometricCenter(): Point2D {
+    if (this.components.length === 0) {
+      return { x: 0, y: 0 };
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const comp of this.components) {
+      const bounds = getComponentBounds(comp);
+      minX = Math.min(minX, bounds.x);
+      maxX = Math.max(maxX, bounds.x + bounds.width);
+      minY = Math.min(minY, bounds.y);
+      maxY = Math.max(maxY, bounds.y + bounds.height);
+    }
+    return {
+      x: (minX + maxX) / 2,
+      y: (minY + maxY) / 2,
+    };
+  }
+
+  /** Keeps the circuit geometric center within the visible screen area. */
+  public clampCameraOffsets(): void {
+    const center = this.getCircuitGeometricCenter();
+    const Gx = center.x;
+    const Gy = center.y;
+    const canvasWidth = this.canvas.width;
+    const canvasHeight = this.canvas.height;
+
+    // Offset required to place Gx at screen coordinate X is: screenX - Gx * zoom
+    // We constrain screenX between [0, canvasWidth]
+    const minOffsetX = -Gx * this.zoom;
+    const maxOffsetX = canvasWidth - Gx * this.zoom;
+    const minOffsetY = -Gy * this.zoom;
+    const maxOffsetY = canvasHeight - Gy * this.zoom;
+
+    this.offsetX = Math.min(Math.max(this.offsetX, minOffsetX), maxOffsetX);
+    this.offsetY = Math.min(Math.max(this.offsetY, minOffsetY), maxOffsetY);
+  }
+
   public zoomAt(zoomFactor: number, screenTargetX: number, screenTargetY: number): void {
     const worldTarget = this.screenToWorld(screenTargetX, screenTargetY);
     const nextZoom = Math.min(Math.max(this.zoom * zoomFactor, this.minZoom), this.maxZoom);
@@ -394,11 +436,13 @@ export class CanvasOrchestrator {
     this.zoom = nextZoom;
     this.offsetX = screenTargetX - worldTarget.x * this.zoom;
     this.offsetY = screenTargetY - worldTarget.y * this.zoom;
+    this.clampCameraOffsets();
   }
 
   public pan(dx: number, dy: number): void {
     this.offsetX += dx;
     this.offsetY += dy;
+    this.clampCameraOffsets();
   }
 
   // --- DRAWING / RENDERING ---
@@ -411,6 +455,8 @@ export class CanvasOrchestrator {
       this.canvas.width = this.canvas.clientWidth;
       this.canvas.height = this.canvas.clientHeight;
     }
+
+    this.clampCameraOffsets();
 
     this.ctx.clearRect(0, 0, width, height);
     this.ctx.save();

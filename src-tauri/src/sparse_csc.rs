@@ -144,6 +144,10 @@ impl SparseMatrixCSC {
                 0.0
             };
             
+            if u_diag_val.abs() < 1e-30 {
+                return Err("Error de convergencia o circuito mal condicionado".to_string());
+            }
+            
             if u_diag_val.abs() < 1e-13 {
                 // Reemplazo Estático de Pivote (Static Pivoting)
                 let sign = if u_diag_val >= 0.0 { 1.0 } else { -1.0 };
@@ -299,6 +303,10 @@ impl ComplexSparseMatrixCSC {
             } else {
                 Complex::new(0.0, 0.0)
             };
+
+            if u_diag_val.norm() < 1e-30 {
+                return Err("Error de convergencia o circuito mal condicionado".to_string());
+            }
 
             if u_diag_val.norm() < 1e-13 {
                 // Reemplazo Estático de Pivote Complejo

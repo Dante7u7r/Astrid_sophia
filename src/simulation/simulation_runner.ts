@@ -22,6 +22,7 @@
 
 import { safeInvoke as invoke } from "./tauri_mock";
 import { listen } from "@tauri-apps/api/event";
+import { TelemetryPanel } from "../ui/telemetry_panel";
 import { createMcuRuntime, runCycles, type McuRuntime } from "./mcu-runtime";
 import { dispatchAnalogTrigger } from "./mcu-spice-bridge";
 import { STANDARD_8051_DEFINITION } from "./mcu-8051";
@@ -79,7 +80,7 @@ export interface SimulationRunner {
   /** Retorna true si hay un listener IPC activo. */
   isSimulationActive(): boolean;
   /** Libera todos los recursos: stop + limpieza de runtimes. */
-  destroy(): void;
+  destroy(): Promise<void>;
   /** Expone el mapa de runtimes MCU activos para consulta externa
    *  (ej. dispatch de interrupciones desde el callback). */
   getInteractiveMcuRuntimes():
@@ -197,18 +198,32 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       });
 
       // Arrancar el backend Rust
-      await invoke('start_interactive_transient', { netlist, settings });
+      try {
+        await invoke('start_interactive_transient', { netlist, settings });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(errorMsg);
+        callbacks.onSimulationStateChanged(false);
+        callbacks.onSimulationError(errorMsg);
+        throw err;
+      }
     },
 
     async stopInteractiveTransient(): Promise<void> {
-      await invoke('stop_interactive_transient');
-      callbacks.onSimulationStateChanged(false);
+      try {
+        await invoke('stop_interactive_transient');
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(errorMsg);
+      } finally {
+        callbacks.onSimulationStateChanged(false);
 
-      // ENMIENDA 3: Limpiar runtimes y desregistrar stream
-      interactiveMcuRuntimes = null;
-      if (unlistenStream) {
-        unlistenStream();
-        unlistenStream = null;
+        // ENMIENDA 3: Limpiar runtimes y desregistrar stream
+        interactiveMcuRuntimes = null;
+        if (unlistenStream) {
+          unlistenStream();
+          unlistenStream = null;
+        }
       }
     },
 
@@ -216,14 +231,8 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       return unlistenStream !== null;
     },
 
-    destroy(): void {
-      if (unlistenStream) {
-        invoke('stop_interactive_transient').catch(() => {});
-        unlistenStream();
-        unlistenStream = null;
-      }
-      interactiveMcuRuntimes = null;
-      callbacks.onSimulationStateChanged(false);
+    async destroy(): Promise<void> {
+      await this.stopInteractiveTransient();
     },
 
     getInteractiveMcuRuntimes() {

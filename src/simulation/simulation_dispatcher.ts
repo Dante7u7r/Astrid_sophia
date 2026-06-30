@@ -24,10 +24,20 @@
 import { safeInvoke as invoke } from "./tauri_mock";
 import { type CircuitNetlist } from "./netlist_extractor";
 import { type SimulationRunner } from "./simulation_runner";
+import { TelemetryPanel } from "../ui/telemetry_panel";
 import { type ComponentInstance, type PinInstance, type WireInstance } from "../canvas_orchestrator";
 import { type AnalysisMode } from "../ui/simulation_controls";
 import { type TSResult } from "./fallback_solver";
 import { type TimeStepResult } from "../ui/oscilloscope_panel";
+
+let fallbackTimeoutId: any = null;
+
+export function clearPendingTimeouts(): void {
+  if (fallbackTimeoutId !== null) {
+    clearTimeout(fallbackTimeoutId);
+    fallbackTimeoutId = null;
+  }
+}
 
 // ==========================================================================
 // ERC — ELECTRICAL RULE CHECK
@@ -154,6 +164,7 @@ export interface DispatchCallbacks {
   /** Actualiza el indicador de estado IPC en la barra de herramientas */
   onIpcStatusUpdate: (text: string, color: string) => void;
   updateCanvasRendering: () => void;
+  onSimulationFinished?: () => void;
 }
 
 // ==========================================================================
@@ -179,6 +190,7 @@ export async function dispatchSimulation(
   config: DispatchConfig,
   callbacks: DispatchCallbacks,
 ): Promise<void> {
+  clearPendingTimeouts();
   // --- Modos especiales (PVT, SPAR) — delegan a main.ts ---
   if (mode === 'PVT' || mode === 'SPAR') {
     if (config.onSpecialMode) {
@@ -295,9 +307,13 @@ export async function dispatchSimulation(
         break;
       }
     }
+    if (mode !== 'TRAN' && callbacks.onSimulationFinished) {
+      callbacks.onSimulationFinished();
+    }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     callbacks.addLog(`Error en la comunicación con el motor de Rust: ${errorMsg}`, "error");
+    TelemetryPanel.logError(errorMsg);
 
     // Fallback a solvers TypeScript si Tauri IPC no está disponible
     // (entorno de navegador estándar sin objeto window.__TAURI__)
@@ -306,7 +322,8 @@ export async function dispatchSimulation(
 
       // Retardo estratégico de 300ms para emular latencia de red
       // y permitir que la UI termine de renderizar el estado de carga.
-      setTimeout(() => {
+      fallbackTimeoutId = setTimeout(() => {
+        fallbackTimeoutId = null;
         if (mode === 'AC') {
           // Filtro pasa-bajos demo para respuesta en frecuencia
           callbacks.addLog("Simulando respuesta en frecuencia del circuito localmente en navegador...", "receive");
@@ -347,10 +364,16 @@ export async function dispatchSimulation(
           callbacks.onResultsReady(mode, acResults);
           callbacks.onIpcStatusUpdate("Respaldo local Activo (Filtro Demo CA)", "var(--warning)");
           callbacks.updateCanvasRendering();
+          if (callbacks.onSimulationFinished) {
+            callbacks.onSimulationFinished();
+          }
 
         } else if (mode === 'TRAN') {
           if (!config.solveTransientCircuitLocal) {
             callbacks.addLog("Error: Solver transitorio local no disponible.", "error");
+            if (callbacks.onSimulationFinished) {
+              callbacks.onSimulationFinished();
+            }
             return;
           }
           const tsRes = config.solveTransientCircuitLocal(netlist, config.simSettings.dt, config.transientDuration);
@@ -361,9 +384,15 @@ export async function dispatchSimulation(
             callbacks.onIpcStatusUpdate("Respaldo Transitorio local", "var(--warning)");
             callbacks.updateCanvasRendering();
           }
+          if (callbacks.onSimulationFinished) {
+            callbacks.onSimulationFinished();
+          }
         } else {
           if (!config.solveCircuitTS) {
             callbacks.addLog("Error: Solver DC local no disponible.", "error");
+            if (callbacks.onSimulationFinished) {
+              callbacks.onSimulationFinished();
+            }
             return;
           }
           const tsRes = config.solveCircuitTS(netlist);
@@ -381,8 +410,16 @@ export async function dispatchSimulation(
             callbacks.onIpcStatusUpdate("Respaldo local Activo", "var(--warning)");
             callbacks.updateCanvasRendering();
           }
+          if (callbacks.onSimulationFinished) {
+            callbacks.onSimulationFinished();
+          }
         }
       }, 300);
+    } else {
+      callbacks.onIpcStatusUpdate("Error de simulación", "var(--accent-red)");
+      if (callbacks.onSimulationFinished) {
+        callbacks.onSimulationFinished();
+      }
     }
   }
 }

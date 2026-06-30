@@ -583,8 +583,8 @@ export function solveTransientCircuitTS(
         const iEq = gEq * prevVc;
 
         stampConductance(nodePos, nodeNeg, gEq);
-        if (nodePos > 0) Z[nodePos - 1] -= iEq;
-        if (nodeNeg > 0) Z[nodeNeg - 1] += iEq;
+        if (nodePos > 0) Z[nodePos - 1] += iEq;
+        if (nodeNeg > 0) Z[nodeNeg - 1] -= iEq;
 
       } else if (comp.type === 'inductor') {
         const nodePos = parseInt(comp.pins[0]);

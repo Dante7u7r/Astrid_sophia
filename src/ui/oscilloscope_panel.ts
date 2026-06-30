@@ -27,6 +27,61 @@ export interface AcSweepResult {
   errorLog?: string;
 }
 
+function downsamplePoints(points: readonly TimeStepResult[], maxPoints: number, chNode: string): TimeStepResult[] {
+  if (points.length <= maxPoints) {
+    return [...points];
+  }
+
+  const result: TimeStepResult[] = [];
+  const len = points.length;
+  result.push(points[0]);
+
+  const numBuckets = Math.floor(maxPoints / 2);
+  const bucketSize = (len - 2) / numBuckets;
+
+  for (let i = 0; i < numBuckets; i++) {
+    const start = Math.floor(1 + i * bucketSize);
+    const end = Math.floor(1 + (i + 1) * bucketSize);
+    if (start >= len - 1) break;
+
+    let minPt = points[start];
+    let maxPt = points[start];
+    let minVal = minPt.nodeVoltages[chNode] || 0;
+    let maxVal = minVal;
+
+    for (let j = start + 1; j < end && j < len - 1; j++) {
+      const pt = points[j];
+      const val = pt.nodeVoltages[chNode] || 0;
+      if (val < minVal) {
+        minVal = val;
+        minPt = pt;
+      }
+      if (val > maxVal) {
+        maxVal = val;
+        maxPt = pt;
+      }
+    }
+
+    if (minPt.time < maxPt.time) {
+      result.push(minPt);
+      if (minPt !== maxPt) {
+        result.push(maxPt);
+      }
+    } else {
+      result.push(maxPt);
+      if (minPt !== maxPt) {
+        result.push(minPt);
+      }
+    }
+  }
+
+  if (len > 1) {
+    result.push(points[len - 1]);
+  }
+
+  return result;
+}
+
 export class OscilloscopePanel {
   private oscCanvas: HTMLCanvasElement | null = null;
   private oscCtx: CanvasRenderingContext2D | null = null;
@@ -511,12 +566,15 @@ export class OscilloscopePanel {
           this.oscCtx.shadowBlur = 6;
           this.oscCtx.beginPath();
 
-          let isFirst = true;
-          for (const pt of this.transientResults) {
-            if (pt.time > this.sweepTime) {
-              break;
-            }
+          let splitIdx = 0;
+          while (splitIdx < this.transientResults.length && this.transientResults[splitIdx].time <= this.sweepTime) {
+            splitIdx++;
+          }
+          const activePoints = this.transientResults.slice(0, splitIdx);
+          const drawPoints = downsamplePoints(activePoints, 500, this.ch1ProbeNode);
 
+          let isFirst = true;
+          for (const pt of drawPoints) {
             const x = (pt.time / this.transientDuration) * width;
             const v = pt.nodeVoltages[this.ch1ProbeNode] || 0.0;
             const y = centerY - v * scaleY;
@@ -551,12 +609,15 @@ export class OscilloscopePanel {
           this.oscCtx.shadowBlur = 4;
           this.oscCtx.beginPath();
 
-          let isFirst = true;
-          for (const pt of this.transientResults) {
-            if (pt.time > this.sweepTime) {
-              break;
-            }
+          let splitIdx = 0;
+          while (splitIdx < this.transientResults.length && this.transientResults[splitIdx].time <= this.sweepTime) {
+            splitIdx++;
+          }
+          const activePoints = this.transientResults.slice(0, splitIdx);
+          const drawPoints = downsamplePoints(activePoints, 500, this.ch2ProbeNode);
 
+          let isFirst = true;
+          for (const pt of drawPoints) {
             const x = (pt.time / this.transientDuration) * width;
             const v = pt.nodeVoltages[this.ch2ProbeNode] || 0.0;
             const y = centerY - v * scaleY;
@@ -603,9 +664,15 @@ export class OscilloscopePanel {
             }
 
             this.oscCtx.beginPath();
+            let splitIdx = 0;
+            while (splitIdx < trace.results.length && trace.results[splitIdx].time <= this.sweepTime) {
+              splitIdx++;
+            }
+            const activePoints = trace.results.slice(0, splitIdx);
+            const drawPoints = downsamplePoints(activePoints, 500, nodeId);
+
             let isFirst = true;
-            for (const pt of trace.results) {
-              if (pt.time > this.sweepTime) break;
+            for (const pt of drawPoints) {
               const x = (pt.time / this.transientDuration) * width;
               const v = pt.nodeVoltages[nodeId] ?? 0.0;
               const y = centerY - v * scaleY;
@@ -708,8 +775,23 @@ export class OscilloscopePanel {
       }
     }
 
-    if (this.isSimulating) {
+    if (this.isSimulating && !this.isOscPaused) {
       this.animationFrameId = requestAnimationFrame(() => this.draw());
+    }
+  }
+
+  public pause() {
+    this.isOscPaused = true;
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  public resume() {
+    this.isOscPaused = false;
+    if (!this.animationFrameId && this.isSimulating) {
+      this.draw();
     }
   }
 
@@ -718,6 +800,7 @@ export class OscilloscopePanel {
       cancelAnimationFrame(this.animationFrameId);
     }
     this.isSimulating = true;
+    this.isOscPaused = false;
     this.draw();
   }
 
@@ -727,6 +810,9 @@ export class OscilloscopePanel {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+    this.transientResults = [];
+    this.acSweepResults = null;
+    this.pvtTraces = [];
     this.draw();
   }
 }

@@ -43,6 +43,7 @@ export interface CircuitNetlist {
 export interface NetlistExtractionResult {
   readonly netlist: CircuitNetlist;
   readonly pinToNodeMap: Readonly<Record<string, string>>;
+  readonly error?: string;
 }
 
 // ==========================================================================
@@ -365,7 +366,33 @@ export function extractElectricalNetlist(
     subcircuitDefinitions,
   };
 
-  return { netlist, pinToNodeMap };
+  // Pre-flight ERC
+  let ercError: string | undefined;
+  const node0Exists = Object.values(pinToNodeMap).includes("0");
+
+  if (!node0Exists) {
+    ercError = "Referencia a Tierra (GND / Nodo 0) no encontrada. Agrega un componente de Tierra.";
+  } else {
+    const nodeCounts: Record<string, number> = {};
+    for (const comp of extractedComponents) {
+      for (const pinNode of comp.pins) {
+        nodeCounts[pinNode] = (nodeCounts[pinNode] || 0) + 1;
+      }
+    }
+
+    const lowDegreeNodes: string[] = [];
+    for (const [nodeId, count] of Object.entries(nodeCounts)) {
+      if (nodeId !== "0" && count < 2) {
+        lowDegreeNodes.push(nodeId);
+      }
+    }
+
+    if (lowDegreeNodes.length > 0) {
+      ercError = `Pre-flight ERC fallido: Nodo huérfano detectado (Nodo ${lowDegreeNodes.join(", ")} tiene grado de conexión < 2). Verifica que no haya cables flotantes o componentes desconectados.`;
+    }
+  }
+
+  return { netlist, pinToNodeMap, error: ercError };
 }
 
 /** @internal — Exportado exclusivamente para pruebas unitarias de caja blanca */

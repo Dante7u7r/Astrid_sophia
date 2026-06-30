@@ -20,10 +20,10 @@ import {
 import { solveCircuitTS, solveTransientCircuitTS } from "./simulation/fallback_solver";
 import { createSimulationRunner, type SimulationRunner } from "./simulation/simulation_runner";
 import { initSimulationControls, type SimulationControls } from "./ui/simulation_controls";
-import { runElectricalRuleCheck, dispatchSimulation } from "./simulation/simulation_dispatcher";
+import { runElectricalRuleCheck, dispatchSimulation, clearPendingTimeouts } from "./simulation/simulation_dispatcher";
 import { createCircuitStateManager } from "./simulation/circuit_state_manager";
 import { attachCanvasInput, attachCanvasDrop } from "./canvas/canvas_input_controller";
-import { isTypingInFormField } from "./canvas/keyboard_guards";
+import { isTypingInFormField, installWebviewKeyGuards } from "./canvas/keyboard_guards";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 
@@ -815,6 +815,13 @@ function extractNetlist(): CircuitNetlist | null {
     orchestrator.wires,
     (c) => orchestrator!.getComponentPins(c),
   );
+
+  if (result.error) {
+    TelemetryPanel.logError(result.error);
+    addLog(`[Pre-flight ERC] ${result.error}`, "error");
+    return null;
+  }
+
   circuitState.setPinToNodeMap(result.pinToNodeMap);
   return result.netlist;
 }
@@ -918,12 +925,14 @@ function initOscilloscopeInterface() {
   if (oscPauseBtn) {
     oscPauseBtn.addEventListener("click", () => {
       if (oscilloscopePanel) {
-        oscilloscopePanel.isOscPaused = !oscilloscopePanel.isOscPaused;
+        if (!oscilloscopePanel.isOscPaused) {
+          oscilloscopePanel.pause();
+          circuitState.audioOrchestrator.stopAll();
+        } else {
+          oscilloscopePanel.resume();
+        }
         oscPauseBtn.classList.toggle("active");
         oscPauseBtn.textContent = oscilloscopePanel.isOscPaused ? "Reanudar" : "Pausar";
-        if (oscilloscopePanel.isOscPaused) {
-          circuitState.audioOrchestrator.stopAll();
-        }
       }
     });
   }
@@ -1096,6 +1105,9 @@ function initCanvasCAD() {
 
 
 window.addEventListener("DOMContentLoaded", () => {
+  // Instalar protectores de teclado del WebView contra recarga accidental
+  installWebviewKeyGuards(!!(import.meta as any).env?.DEV);
+
   consoleOutput = document.querySelector("#console-output");
   clearConsoleBtn = document.querySelector("#clear-console-btn");
 
@@ -1134,12 +1146,14 @@ window.addEventListener("DOMContentLoaded", () => {
     onSimulationError: (error) => {
       addLog(`Error en simulación: ${error}`, 'error');
       simulationRunner?.stopInteractiveTransient();
+      TelemetryPanel.logError(`Error en simulación transitoria: ${error}`);
     },
     onSimulationComplete: (finalTime) => {
       addLog(`Simulación completada en t = ${finalTime.toFixed(6)} s.`, 'receive');
     },
     onSimulationStateChanged: (active) => {
       if (orchestrator) orchestrator.simulationActive = active;
+      simulationControls?.setSimulationRunning(active);
     },
   });
 
@@ -1328,13 +1342,18 @@ window.addEventListener("DOMContentLoaded", () => {
           }
         },
         updateCanvasRendering,
+        onSimulationFinished: () => {
+          simulationControls?.setSimulationRunning(false);
+        },
       });
     },
     onStopSimulation: async () => {
       addLog("Deteniendo simulación física del circuito.", "system");
+      clearPendingTimeouts();
       await simulationRunner?.stopInteractiveTransient();
       circuitState.audioOrchestrator.stopAll();
       if (oscilloscopePanel) oscilloscopePanel.stop();
+      circuitState.resetAll();
     },
     setActiveAnalysisMode: (mode) => {
       activeAnalysisMode = mode;
@@ -2037,6 +2056,10 @@ function initFilePersistence() {
       const file = demoSelect.value;
       demoSelect.value = "";
       if (!file) return;
+      
+      // Limpiar explícitamente todo el estado (osciloscopio, MCU, netlist, voltajes) antes de cargar la demo
+      circuitState.prepareForDemoLoad(oscilloscopePanel, orchestrator);
+
       try {
         addLog(`Cargando demo: ${file}…`, "system");
         const resp = await fetch(`/demos/${file}`);

@@ -178,7 +178,19 @@ export function attachCanvasInput(
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    orchestrator.zoomAt(zoomFactor, screenX, screenY);
+    
+    // Zoom factor bounding guard check
+    const currentZoom = orchestrator.zoom;
+    const nextZoom = currentZoom * zoomFactor;
+    if (nextZoom >= orchestrator.minZoom && nextZoom <= orchestrator.maxZoom) {
+      orchestrator.zoomAt(zoomFactor, screenX, screenY);
+    } else {
+      // Clamp to exactly the min/max boundary
+      const clampedZoom = Math.min(Math.max(nextZoom, orchestrator.minZoom), orchestrator.maxZoom);
+      const clampedFactor = clampedZoom / currentZoom;
+      orchestrator.zoomAt(clampedFactor, screenX, screenY);
+    }
+    
     callbacks.requestRender(true);
     e.preventDefault();
   };

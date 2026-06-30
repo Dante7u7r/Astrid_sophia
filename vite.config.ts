@@ -28,9 +28,9 @@ export default defineConfig(async () => ({
     },
   },
 
-  // Vitest — pruebas unitarias de módulos puros (sin DOM, sin Tauri)
+  // Vitest — pruebas unitarias de módulos puros (sin DOM, sin Tauri) y tests de integración
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     environment: "node",
   },
 }));

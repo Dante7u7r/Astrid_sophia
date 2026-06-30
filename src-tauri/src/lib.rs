@@ -41,8 +41,8 @@ pub struct SimulationFrame {
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
-fn ping() -> String {
-    "pong".to_string()
+fn ping() -> Result<String, String> {
+    Ok("pong".to_string())
 }
 
 #[tauri::command]
@@ -125,15 +125,15 @@ async fn run_noise_sweep(
 async fn evaluate_measures(
     time_steps: Vec<solver::TimeStepResult>,
     directives: Vec<solver::MeasureDirective>,
-) -> solver::MeasureResult {
-    solver::evaluate_measures(&time_steps, &directives)
+) -> Result<solver::MeasureResult, String> {
+    Ok(solver::evaluate_measures(&time_steps, &directives))
 }
 
 #[tauri::command]
 async fn expand_transmission_line(
     params: solver::TransmissionLineParams,
-) -> Vec<solver::ComponentData> {
-    solver::expand_transmission_line(&params)
+) -> Result<Vec<solver::ComponentData>, String> {
+    Ok(solver::expand_transmission_line(&params))
 }
 
 #[tauri::command]
@@ -247,13 +247,14 @@ async fn start_interactive_transient(
 }
 
 #[tauri::command]
-fn stop_interactive_transient(state: tauri::State<'_, SimulationControlState>) {
+fn stop_interactive_transient(state: tauri::State<'_, SimulationControlState>) -> Result<(), String> {
     state.is_running.store(false, Ordering::SeqCst);
+    Ok(())
 }
 
 #[tauri::command]
-fn get_performance_telemetry() -> telemetry::TelemetryData {
-    telemetry::get_system_telemetry()
+fn get_performance_telemetry() -> Result<telemetry::TelemetryData, String> {
+    Ok(telemetry::get_system_telemetry())
 }
 
 #[tauri::command]

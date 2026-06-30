@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use crate::ad_value::AdValue;
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex;
@@ -902,9 +901,9 @@ pub fn solve_dc_circuit_with_guess(
 
     // Resolver A * x = z de forma directa dispersa con Markowitz
     let lu = SparseLU::factorize(matrix_a)
-        .map_err(|_| "Error al resolver sistema lineal. La matriz MNA es singular. Verifica que el circuito esté conectado a Tierra (GND) y no tenga ramas flotantes.".to_string())?;
+        .map_err(|_| "Error de convergencia o circuito mal condicionado".to_string())?;
     let solution = lu.solve(&vector_z)
-        .ok_or_else(|| "Error al resolver sistema lineal. La matriz MNA es singular. Verifica que el circuito esté conectado a Tierra (GND) y no tenga ramas flotantes.".to_string())?;
+        .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())?;
 
     // Desempaquetar voltajes de nodos
     let mut node_voltages = HashMap::new();
@@ -1171,7 +1170,7 @@ fn solve_newton_raphson_core(
 ) -> Result<DVector<f64>, String> {
     let (vt, is_temp) = get_thermal_parameters(netlist.temperature, None);
     let size = n + m;
-    let max_iter = 120;
+    let max_iter = 100;
     let tolerance = 1e-6;
 
     let mut prev_voltages = initial_guess.clone();
@@ -2208,15 +2207,15 @@ fn solve_newton_raphson_core(
 
             matrix_csc.update_from_sparse(&matrix_a);
             matrix_csc.left_looking_factorize(symbolic, workspace)
-                .map_err(|_| "Error al resolver sistema no lineal de circuito (Diodos/MOSFETs) en Newton-Raphson. La matriz MNA es singular. Verifica que el circuito esté conectado a Tierra (GND) y no tenga ramas flotantes.".to_string())?;
+                .map_err(|_| "Error de convergencia o circuito mal condicionado".to_string())?;
             new_solution = symbolic.solve(workspace, &vector_z)
-                .ok_or_else(|| "Error al resolver sistema no lineal de circuito (Diodos/MOSFETs) en Newton-Raphson. La matriz MNA es singular. Verifica que el circuito esté conectado a Tierra (GND) y no tenga ramas flotantes.".to_string())?;
+                .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())?;
         }
 
         // Comprobar si hay NaN en la solución
         for i in 1..=n {
             if new_solution[i - 1].is_nan() {
-                return Err("Divergencia por NaN detectada en voltajes nodales durante Newton-Raphson".to_string());
+                return Err("Error de convergencia o circuito mal condicionado".to_string());
             }
         }
 
@@ -2291,7 +2290,7 @@ fn solve_newton_raphson_core(
     if converged {
         Ok(solution)
     } else {
-        Err(format!("Newton-Raphson divergió en core. (alpha={}, gmin={:.2e})", alpha, gmin))
+        Err("Error de convergencia o circuito mal condicionado".to_string())
     }
 
 }
@@ -2310,7 +2309,7 @@ fn solve_homotopy_core(
 ) -> Result<DVector<f64>, String> {
     let (vt, is_temp) = get_thermal_parameters(netlist.temperature, None);
     let size = n + m;
-    let max_iter = 120;
+    let max_iter = 100;
     let tolerance = 1e-6;
 
     let mut prev_voltages = initial_guess.clone();
@@ -2776,7 +2775,7 @@ fn solve_homotopy_core(
             for i in 1..=n {
                 let diff = (new_solution[i - 1] - prev_voltages[i]).abs();
                 if diff.is_nan() {
-                    return Err("Divergencia por NaN detectada en voltajes nodales durante Homotopía".to_string());
+                    return Err("Error de convergencia o circuito mal condicionado".to_string());
                 }
                 if diff > max_diff {
                     max_diff = diff;
@@ -2818,7 +2817,7 @@ fn solve_homotopy_core(
     if converged {
         Ok(solution)
     } else {
-        Err(format!("Homotopía divergió localmente para lambda = {}", lambda))
+        Err("Error de convergencia o circuito mal condicionado".to_string())
     }
 
 }
@@ -3172,10 +3171,10 @@ fn solve_newton_raphson(
         }
 
         // Si ningún mecanismo de recuperación funcionó, retornar error
-        return Err("Divergencia matemática insuperable. El circuito no converge con Newton-Raphson regular amortiguado, Gmin Stepping logarítmico, Source Stepping adaptativo, Homotopía de Continuación de Punto Fijo ni Pseudo-Transient Analysis (PTA). Verifica que no existan bucles de retroalimentación positiva infinitos o singularidades insalvables.".to_string());
+        return Err("Error de convergencia o circuito mal condicionado".to_string());
     }
 
-    Err("No se pudo encontrar un estado estable del interruptor después de múltiples reintentos de convergencia.".to_string())
+    Err("Error de convergencia o circuito mal condicionado".to_string())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -4681,7 +4680,7 @@ where
                         break;
                     }
                 } else {
-                    solve_err = Some("Divergencia de Jacobiano en Newton-Raphson transitorio.".to_string());
+                    solve_err = Some("Error de convergencia o circuito mal condicionado".to_string());
                     break;
                 }
             }
@@ -4689,11 +4688,11 @@ where
             if converged {
                 Ok(solution_iter)
             } else {
-                Err(solve_err.unwrap_or_else(|| "Fallo de convergencia en Newton-Raphson transitorio.".to_string()))
+                Err(solve_err.unwrap_or_else(|| "Error de convergencia o circuito mal condicionado".to_string()))
             }
         } else {
             solve_sparse(&matrix_a, &vector_z)
-                .ok_or_else(|| "La matriz del circuito lineal es singular en simulación transitoria.".to_string())
+                .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())
         };
 
         // Si convergió, evaluamos el LTE (Error de Truncamiento Local)
@@ -5449,7 +5448,7 @@ where
                 dt = (dt / 2.0).max(dt_min);
                 continue;
             } else {
-                return Err(format!("Divergencia matemática absoluta de simulación en t = {} s (Paso mínimo alcanzado sin convergencia).", t));
+                return Err("Error de convergencia o circuito mal condicionado".to_string());
             }
         }
     }

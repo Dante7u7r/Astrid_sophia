@@ -143,6 +143,49 @@ export function initSimulationControls(
   runSimBtn = document.querySelector('#run-sim-btn') as HTMLButtonElement | null;
   stopSimBtn = document.querySelector('#stop-sim-btn') as HTMLButtonElement | null;
 
+  // =======================================================================
+  // Helper centralizado: aplica TODOS los cambios visuales de estado
+  // de simulación activa/inactiva en un solo punto.
+  // =======================================================================
+  function applySimulationVisualState(running: boolean): void {
+    if (!runSimBtn || !stopSimBtn) return;
+
+    runSimBtn.disabled = running;
+    stopSimBtn.disabled = !running;
+
+    // --- Play button: verde brillante + animación de respiración ---
+    if (running) {
+      runSimBtn.classList.add('sim-active');
+      stopSimBtn.classList.add('btn-stop');
+      // Cambiar ícono ▶ → ⏸
+      const icon = runSimBtn.querySelector('.btn-icon');
+      if (icon) icon.textContent = '⏸';
+    } else {
+      runSimBtn.classList.remove('sim-active');
+      stopSimBtn.classList.remove('btn-stop');
+      // Restaurar ícono ⏸ → ▶
+      const icon = runSimBtn.querySelector('.btn-icon');
+      if (icon) icon.textContent = '▶';
+    }
+
+    // --- Indicador REC parpadeante en panel de telemetría ---
+    const recIndicator = document.getElementById('sim-rec-indicator');
+    if (recIndicator) {
+      recIndicator.classList.toggle('active', running);
+    }
+
+    // --- Bloquear/desbloquear botones de carga de archivos ---
+    const fileButtons = [
+      document.getElementById('btn-new-circuit'),
+      document.getElementById('btn-open-circuit'),
+      document.getElementById('btn-open-demo'),
+    ];
+    for (const btn of fileButtons) {
+      if (!btn) continue;
+      btn.classList.toggle('sim-locked', running);
+    }
+  }
+
   // --- Registrar selectores de modo ---
   selectMode(analysisDcBtn, 'DC', handlers);
   selectMode(analysisAcBtn, 'AC', handlers);
@@ -153,12 +196,10 @@ export function initSimulationControls(
   selectMode(analysisPvtBtn, 'PVT', handlers);
   selectMode(analysisSparBtn, 'SPAR', handlers);
 
-  // --- Botón Run: solo mutación visual + delegación ---
+  // --- Botón Run: mutación visual inmediata + delegación ---
   if (runSimBtn && stopSimBtn) {
     runSimBtn.addEventListener('click', async () => {
-      runSimBtn!.disabled = true;
-      stopSimBtn!.disabled = false;
-      stopSimBtn!.classList.add('btn-stop');
+      applySimulationVisualState(true);
 
       // ACTUAL: el handler recibe el netlist ya extraído.
       // El módulo NO extrae netlist ni ejecuta ERC.
@@ -170,10 +211,7 @@ export function initSimulationControls(
 
     // --- Botón Stop: restauración visual + delegación ---
     stopSimBtn.addEventListener('click', async () => {
-      runSimBtn!.disabled = false;
-      stopSimBtn!.disabled = true;
-      stopSimBtn!.classList.remove('btn-stop');
-
+      applySimulationVisualState(false);
       await handlers.onStopSimulation();
     });
   }
@@ -181,14 +219,7 @@ export function initSimulationControls(
   // --- Objeto público retornado ---
   return {
     setSimulationRunning(running: boolean): void {
-      if (!runSimBtn || !stopSimBtn) return;
-      runSimBtn.disabled = running;
-      stopSimBtn.disabled = !running;
-      if (running) {
-        stopSimBtn.classList.add('btn-stop');
-      } else {
-        stopSimBtn.classList.remove('btn-stop');
-      }
+      applySimulationVisualState(running);
     },
 
     setActiveModeButton(mode: AnalysisMode): void {
