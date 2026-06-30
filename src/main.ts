@@ -2479,6 +2479,21 @@ function initComponentSearch() {
 
 function initTabKeyboardShortcuts() {
   window.addEventListener("keydown", (e) => {
+    // Evitar recarga y navegación accidental en el WebView de Tauri
+    if (!isTypingInFormField()) {
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      if (e.key === "F5") {
+        e.preventDefault();
+      }
+      if (ctrl && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+      }
+      if (e.key === "Backspace") {
+        e.preventDefault();
+      }
+    }
+
     if (isTypingInFormField()) return;
 
     // Ctrl + N: Nueva pestaña
