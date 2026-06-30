@@ -139,6 +139,127 @@ export function runElectricalRuleCheck(
     }
   }
 
+  // 6. Conectividad a Tierra (subcircuitos aislados)
+  const allNodes = new Set<string>();
+  for (const comp of netlist.components) {
+    for (const node of comp.pins) {
+      allNodes.add(node);
+    }
+  }
+
+  const adjacencyList: Record<string, Set<string>> = {};
+  for (const node of allNodes) {
+    adjacencyList[node] = new Set<string>();
+  }
+  for (const comp of netlist.components) {
+    for (let i = 0; i < comp.pins.length; i++) {
+      for (let j = i + 1; j < comp.pins.length; j++) {
+        const nodeA = comp.pins[i];
+        const nodeB = comp.pins[j];
+        if (nodeA && nodeB && nodeA !== nodeB) {
+          adjacencyList[nodeA].add(nodeB);
+          adjacencyList[nodeB].add(nodeA);
+        }
+      }
+    }
+  }
+
+  const visited = new Set<string>();
+  if (allNodes.has("0")) {
+    const queue: string[] = ["0"];
+    visited.add("0");
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      const neighbors = adjacencyList[curr];
+      if (neighbors) {
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push(neighbor);
+          }
+        }
+      }
+    }
+  }
+
+  const activeNodes = new Set<string>();
+  activeNodes.add("0");
+  if (netlist.wires) {
+    for (const w of netlist.wires) {
+      for (const n of w.nodes) {
+        activeNodes.add(n);
+      }
+    }
+  }
+
+  const isolatedNodes: string[] = [];
+  for (const node of allNodes) {
+    if (!visited.has(node) && activeNodes.has(node)) {
+      isolatedNodes.push(node);
+    }
+  }
+
+  if (isolatedNodes.length > 0) {
+    const isolatedComps = new Set<string>();
+    for (const comp of netlist.components) {
+      if (comp.pins.some(pin => isolatedNodes.includes(pin))) {
+        if (comp.type !== 'ground') {
+          isolatedComps.add(comp.id);
+        }
+      }
+    }
+    if (isolatedComps.size > 0) {
+      errors.push(`Subcircuito aislado detectado: Los componentes [${Array.from(isolatedComps).join(', ')}] están conectados a nodos sin ruta de corriente continua (DC) a Tierra (GND).`);
+    }
+  }
+
+  // 7. Bucle de fuentes de tensión ideales
+  const vsourceAdjacency: Record<string, string[]> = {};
+  for (const node of allNodes) {
+    vsourceAdjacency[node] = [];
+  }
+  for (const comp of netlist.components) {
+    if (comp.type === 'vsource') {
+      const nodeA = comp.pins[0];
+      const nodeB = comp.pins[1];
+      if (nodeA && nodeB && nodeA !== nodeB) {
+        vsourceAdjacency[nodeA].push(nodeB);
+        vsourceAdjacency[nodeB].push(nodeA);
+      }
+    }
+  }
+
+  const cycleVisited = new Set<string>();
+  let hasVsourceCycle = false;
+  
+  function dfsDetectCycle(node: string, parent: string | null): boolean {
+    cycleVisited.add(node);
+    const neighbors = vsourceAdjacency[node] || [];
+    for (const neighbor of neighbors) {
+      if (!cycleVisited.has(neighbor)) {
+        if (dfsDetectCycle(neighbor, node)) {
+          return true;
+        }
+      } else if (neighbor !== parent) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  for (const node of allNodes) {
+    if (!cycleVisited.has(node)) {
+      if (dfsDetectCycle(node, null)) {
+        hasVsourceCycle = true;
+        break;
+      }
+    }
+  }
+  
+  if (hasVsourceCycle) {
+    errors.push("Bucle de fuentes de tensión detectado: Hay un lazo cerrado compuesto únicamente por fuentes de tensión ideales. Esto produce una corriente indeterminada (matriz singular).");
+  }
+
   return { passed: errors.length === 0, errors, warnings };
 }
 

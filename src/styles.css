@@ -376,10 +376,26 @@ body {
   gap: 4px;
   margin-top: 4px;
   padding: 0 2px;
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .category-content.open {
   display: flex;
+  opacity: 1;
+  transform: translateY(0);
+  animation: categorySlideDown 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes categorySlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ══ TABS BAR ════════════════════════════════════ */

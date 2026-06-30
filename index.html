@@ -48,27 +48,27 @@
             <span class="btn-icon">📡</span> S-Param
           </button>
           <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
-          <button id="run-sim-btn" class="btn-ctrl btn-run" type="button">
+          <button id="run-sim-btn" class="btn-ctrl btn-run" type="button" data-tooltip="Iniciar simulación activa">
             <span class="btn-icon">▶</span> Simular
           </button>
-          <button id="stop-sim-btn" class="btn-ctrl" type="button" disabled>
+          <button id="stop-sim-btn" class="btn-ctrl" type="button" disabled data-tooltip="Detener simulación activa">
             <span class="btn-icon">■</span> Detener
           </button>
         </div>
 
         <div class="system-status" id="app-status-bar">
-          <button id="btn-new-circuit" class="btn-text-only" style="margin-right: 8px;" type="button">📄 Nuevo</button>
-          <button id="btn-open-circuit" class="btn-text-only" style="margin-right: 8px;" type="button">📂 Abrir</button>
-          <select id="btn-open-demo" class="btn-text-only" style="margin-right: 8px;" title="Circuitos de demostración">
+          <button id="btn-new-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Nuevo circuito">📄 Nuevo</button>
+          <button id="btn-open-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Abrir circuito (.astryd o .spice)">📂 Abrir</button>
+          <select id="btn-open-demo" class="btn-text-only" style="margin-right: 8px;" data-tooltip="Cargar circuitos de ejemplo">
             <option value="">📋 Demos…</option>
             <option value="01_divisor_rc.astryd">Divisor RC</option>
             <option value="02_puente_rectificador.astryd">Puente rectificador</option>
             <option value="03_blink_8051.astryd">Blink Arduino</option>
             <option value="04_amp_bjt_bode.astryd">Amp BJT (Bode)</option>
           </select>
-          <button id="btn-save-circuit" class="btn-text-only" style="margin-right: 8px;" type="button">💾 Guardar</button>
+          <button id="btn-save-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Guardar circuito actual">💾 Guardar</button>
           <div style="width: 1px; height: 16px; background: var(--border-color); margin-right: 8px;"></div>
-          <button id="settings-trigger-btn" class="btn-text-only" style="margin-right: 8px;" type="button">⚙️ Ajustes</button>
+          <button id="settings-trigger-btn" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Configuración de simulación">⚙️ Ajustes</button>
           <span class="status-indicator active" id="ipc-status-dot"></span>
           <span class="status-text" id="ipc-status-text">Conexión Lista</span>
         </div>
@@ -517,24 +517,24 @@
         <div class="workspace-center" id="workspace-center">
           <!-- BARRA DE PESTAÑAS (TAB MANAGER) -->
           <div class="tabs-bar" id="tabs-bar">
-            <button id="btn-dock-toggle-left" class="btn-tab-toggle" title="Alternar Panel de Componentes" type="button">◧ Componentes</button>
+            <button id="btn-dock-toggle-left" class="btn-tab-toggle" data-tooltip="Alternar Panel de Componentes" type="button">◧ Componentes</button>
             <div class="tabs-container" id="tabs-container">
               <!-- Renderizado dinámico de pestañas -->
             </div>
-            <button id="btn-add-tab" class="btn-add-tab" title="Nueva Pestaña" type="button">+</button>
-            <button id="btn-dock-toggle-right" class="btn-tab-toggle" title="Alternar Panel de Propiedades" type="button">Propiedades ◨</button>
+            <button id="btn-add-tab" class="btn-add-tab" data-tooltip="Nueva Pestaña" type="button">+</button>
+            <button id="btn-dock-toggle-right" class="btn-tab-toggle" data-tooltip="Alternar Panel de Propiedades" type="button">Propiedades ◨</button>
           </div>
 
           <!-- LIENZO DE CIRCUITO -->
           <section class="canvas-viewport" id="canvas-viewport">
-            <button id="btn-expand-left" class="btn-sidebar-edge-toggle left" title="Mostrar Componentes" type="button" style="display: none;">📦 Componentes ▶</button>
-            <button id="btn-expand-right" class="btn-sidebar-edge-toggle right" title="Mostrar Propiedades" type="button" style="display: none;">◀ Propiedades ⚙️</button>
+            <button id="btn-expand-left" class="btn-sidebar-edge-toggle left" data-tooltip="Mostrar Componentes" type="button" style="display: none;">📦 Componentes ▶</button>
+            <button id="btn-expand-right" class="btn-sidebar-edge-toggle right" data-tooltip="Mostrar Propiedades" type="button" style="display: none;">◀ Propiedades ⚙️</button>
 
             <div class="canvas-controls-floating" id="canvas-floater-menu">
-              <button id="btn-zoom-in" class="btn-floating" title="Aumentar Zoom" type="button">+</button>
-              <button id="btn-zoom-out" class="btn-floating" title="Disminuir Zoom" type="button">-</button>
-              <button id="btn-snap-grid" class="btn-floating btn-active" title="Alinear a Rejilla" type="button">🌐</button>
-              <button id="btn-clear-canvas" class="btn-floating" title="Limpiar Todo" style="color: var(--danger);" type="button">🗑️</button>
+              <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" type="button">+</button>
+              <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" type="button">-</button>
+              <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" type="button">🌐</button>
+              <button id="btn-clear-canvas" class="btn-floating" data-tooltip="Limpiar Todo" style="color: var(--danger);" type="button">🗑️</button>
             </div>
             
             <!-- Canvas Interactivo Principal -->
@@ -556,11 +556,11 @@
                   <button id="osc-ch2-btn" class="btn-osc-mini" type="button">Canal 2</button>
                   <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
                   <div style="width: 1px; height: 14px; background: var(--border-color); margin: 0 4px;"></div>
-                  <button id="export-csv-btn" class="btn-osc-mini" type="button">📥 CSV</button>
-                  <button id="export-svg-btn" class="btn-osc-mini" type="button">📊 SVG</button>
-                  <button id="export-s2p-btn" class="btn-osc-mini" type="button" title="Touchstone 2-Port Parameters">📈 s2p</button>
-                  <button id="export-h5-btn" class="btn-osc-mini" type="button" title="Datos Binarios HDF5 Lite">📦 HDF5</button>
-                  <button id="export-pdf-btn" class="btn-osc-mini" type="button" title="Reporte PDF con Gráficos">📋 PDF</button>
+                  <button id="export-csv-btn" class="btn-osc-mini" type="button" data-tooltip="Exportar datos a CSV">📥 CSV</button>
+                  <button id="export-svg-btn" class="btn-osc-mini" type="button" data-tooltip="Exportar gráfico a SVG">📊 SVG</button>
+                  <button id="export-s2p-btn" class="btn-osc-mini" type="button" data-tooltip="Touchstone 2-Port Parameters">📈 s2p</button>
+                  <button id="export-h5-btn" class="btn-osc-mini" type="button" data-tooltip="Datos Binarios HDF5 Lite">📦 HDF5</button>
+                  <button id="export-pdf-btn" class="btn-osc-mini" type="button" data-tooltip="Reporte PDF con Gráficos">📋 PDF</button>
                 </div>
               </div>
               <div class="osc-viewport" id="osc-viewport">

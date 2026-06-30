@@ -24,6 +24,7 @@ import { runElectricalRuleCheck, dispatchSimulation, clearPendingTimeouts } from
 import { createCircuitStateManager } from "./simulation/circuit_state_manager";
 import { attachCanvasInput, attachCanvasDrop } from "./canvas/canvas_input_controller";
 import { isTypingInFormField, installWebviewKeyGuards } from "./canvas/keyboard_guards";
+import { TooltipManager } from "./ui/tooltip_manager";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 
@@ -1107,6 +1108,9 @@ function initCanvasCAD() {
 window.addEventListener("DOMContentLoaded", () => {
   // Instalar protectores de teclado del WebView contra recarga accidental
   installWebviewKeyGuards(!!(import.meta as any).env?.DEV);
+
+  // Inicializar gestor de tooltips premium
+  TooltipManager.init();
 
   consoleOutput = document.querySelector("#console-output");
   clearConsoleBtn = document.querySelector("#clear-console-btn");

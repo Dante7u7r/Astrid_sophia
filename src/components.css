@@ -970,3 +970,33 @@ select.btn-text-only.sim-locked {
 .toast-close-btn:hover {
   color: var(--text-bright, #fff);
 }
+
+/* ==========================================================================
+   PREMIUM TOOLTIP STYLE
+   ========================================================================== */
+.premium-tooltip {
+  position: absolute;
+  z-index: 10000;
+  pointer-events: none;
+  background: rgba(10, 15, 30, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(91, 243, 228, 0.15);
+  color: var(--text-bright, #f8fafc);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(0.95) translateY(4px);
+  transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-tooltip.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
