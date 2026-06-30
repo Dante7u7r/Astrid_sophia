@@ -192,52 +192,64 @@ async fn start_interactive_transient(
     let is_running = state.is_running.clone();
     let hot_mutations = state.hot_mutations.clone();
 
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut last_emit = std::time::Instant::now();
-        let frame_interval = std::time::Duration::from_millis(16);
-        let mut frame_index = 0u64;
+  tauri::async_runtime::spawn_blocking(move || {
+        let window_inner = window.clone();
+        let is_running_inner = is_running.clone();
 
-        let result = solver::solve_transient_circuit_inner(
-            &netlist,
-            &settings,
-            HashMap::new(),
-            HashMap::new(),
-            Some(hot_mutations),
-            Some(|step: &solver::TimeStepResult| -> bool {
-                if !is_running.load(Ordering::SeqCst) {
-                    return false;
-                }
-                let now = std::time::Instant::now();
-                if now - last_emit >= frame_interval {
+        let catch_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let mut last_emit = std::time::Instant::now();
+            let frame_interval = std::time::Duration::from_millis(16);
+            let mut frame_index = 0u64;
+
+            let result = solver::solve_transient_circuit_inner(
+                &netlist,
+                &settings,
+                HashMap::new(),
+                HashMap::new(),
+                Some(hot_mutations),
+                Some(|step: &solver::TimeStepResult| -> bool {
+                    if !is_running_inner.load(Ordering::SeqCst) {
+                        return false;
+                    }
+                    let now = std::time::Instant::now();
+                    if now - last_emit >= frame_interval {
+                        let packet = SimulationFrame {
+                            time: step.time,
+                            node_voltages: step.node_voltages.clone(),
+                            branch_currents: step.branch_currents.clone(),
+                            frame_index,
+                            is_final: false,
+                        };
+                        window_inner.emit("sim-frame-update", &packet).ok();
+                        last_emit = now;
+                        frame_index += 1;
+                    }
+                    true
+                }),
+            );
+
+            if let Ok((ref results, _, _)) = result {
+                if let Some(last) = results.last() {
                     let packet = SimulationFrame {
-                        time: step.time,
-                        node_voltages: step.node_voltages.clone(),
-                        branch_currents: step.branch_currents.clone(),
+                        time: last.time,
+                        node_voltages: last.node_voltages.clone(),
+                        branch_currents: last.branch_currents.clone(),
                         frame_index,
-                        is_final: false,
+                        is_final: true,
                     };
-                    window.emit("sim-frame-update", &packet).ok();
-                    last_emit = now;
-                    frame_index += 1;
+                    window_inner.emit("sim-frame-update", &packet).ok();
                 }
-                true
-            }),
-        );
-
-        if let Ok((ref results, _, _)) = result {
-            if let Some(last) = results.last() {
-                let packet = SimulationFrame {
-                    time: last.time,
-                    node_voltages: last.node_voltages.clone(),
-                    branch_currents: last.branch_currents.clone(),
-                    frame_index,
-                    is_final: true,
-                };
-                window.emit("sim-frame-update", &packet).ok();
             }
-        }
-        if let Err(ref e) = result {
-            window.emit("sim-frame-error", e).ok();
+            if let Err(ref e) = result {
+                window_inner.emit("sim-frame-error", e).ok();
+            }
+        }));
+
+        if catch_result.is_err() {
+            window.emit(
+                "sim-frame-error",
+                &"Pánico inesperado en el motor de simulación de Rust".to_string()
+            ).ok();
         }
 
         is_running.store(false, Ordering::SeqCst);
