@@ -24,6 +24,7 @@ export interface ComponentInstance {
   y: number;
   rotation: number; // 0, 90, 180, 270 degrees
   selected?: boolean;
+  mirror?: boolean;
   waveType?: string;
   amplitude?: number;
   frequency?: number;
@@ -255,9 +256,10 @@ export class CanvasOrchestrator {
     const sin = Math.sin(rad);
 
     const getRotatedOffset = (lx: number, ly: number): Point2D => {
+      const finalLx = comp.mirror ? -lx : lx;
       return {
-        x: comp.x + (lx * cos - ly * sin),
-        y: comp.y + (lx * sin + ly * cos),
+        x: comp.x + (finalLx * cos - ly * sin),
+        y: comp.y + (finalLx * sin + ly * cos),
       };
     };
 
@@ -607,6 +609,9 @@ export class CanvasOrchestrator {
     this.ctx.save();
     this.ctx.translate(comp.x, comp.y);
     this.ctx.rotate((comp.rotation * Math.PI) / 180);
+    if (comp.mirror) {
+      this.ctx.scale(-1, 1);
+    }
 
     // Color systems
     const isSelected = comp.selected || 
@@ -1574,6 +1579,9 @@ export class CanvasOrchestrator {
 
     // 3. Draw text value and label
     this.ctx.shadowBlur = 0;
+    if (comp.mirror) {
+      this.ctx.scale(-1, 1);
+    }
     this.ctx.rotate(-(comp.rotation * Math.PI) / 180); // Un-rotate text so it stays horizontal
 
     let idY = -24;
@@ -2093,6 +2101,59 @@ export class CanvasOrchestrator {
       }
     } else if (this.selectedComponent) {
       this.selectedComponent.rotation = (this.selectedComponent.rotation + 90) % 360;
+    }
+    this.syncWireConnections();
+  }
+
+  public mirrorSelectedComponent(): void {
+    if (this.selectedComponents.length > 0) {
+      for (const comp of this.selectedComponents) {
+        comp.mirror = !comp.mirror;
+      }
+    } else if (this.selectedComponent) {
+      this.selectedComponent.mirror = !this.selectedComponent.mirror;
+    }
+    this.syncWireConnections();
+  }
+
+  public duplicateSelected(): void {
+    if (this.selectedComponents.length > 0) {
+      const newSelection: ComponentInstance[] = [];
+      for (const comp of this.selectedComponents) {
+        const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, Number(comp.value) || 0);
+        dup.rotation = comp.rotation;
+        dup.mirror = comp.mirror;
+        dup.wiperPosition = comp.wiperPosition;
+        dup.lux = comp.lux;
+        dup.temperatureCelsius = comp.temperatureCelsius;
+        dup.waveType = comp.waveType;
+        dup.amplitude = comp.amplitude;
+        dup.frequency = comp.frequency;
+        dup.offset = comp.offset;
+        dup.dutyCycle = comp.dutyCycle;
+        newSelection.push(dup);
+      }
+      for (const comp of this.selectedComponents) {
+        comp.selected = false;
+      }
+      this.selectedComponents = newSelection;
+      for (const comp of this.selectedComponents) {
+        comp.selected = true;
+      }
+    } else if (this.selectedComponent) {
+      const comp = this.selectedComponent;
+      const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, Number(comp.value) || 0);
+      dup.rotation = comp.rotation;
+      dup.mirror = comp.mirror;
+      dup.wiperPosition = comp.wiperPosition;
+      dup.lux = comp.lux;
+      dup.temperatureCelsius = comp.temperatureCelsius;
+      dup.waveType = comp.waveType;
+      dup.amplitude = comp.amplitude;
+      dup.frequency = comp.frequency;
+      dup.offset = comp.offset;
+      dup.dutyCycle = comp.dutyCycle;
+      this.selectedComponent = dup;
     }
   }
 
