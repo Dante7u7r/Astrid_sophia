@@ -73,7 +73,7 @@ impl From<String> for SimulationError {
                 message: "El solucionador Newton-Raphson no convergió al punto de operación.".to_string(),
                 component,
             }
-        } else if err.contains("invalid") || err.contains("netlist") || err.contains("missing") {
+        } else if err.contains("invalid") || err.contains("inválido") || err.contains("netlist") || err.contains("missing") || err.contains("Tierra") {
             SimulationError::InvalidCircuit {
                 message: "Circuito o netlist inválida.".to_string(),
                 reason: err.clone(),

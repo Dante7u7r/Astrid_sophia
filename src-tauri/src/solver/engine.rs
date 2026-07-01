@@ -917,7 +917,7 @@ pub fn solve_dc_circuit_with_guess(
     // Desempaquetar corrientes de fuentes
     let mut branch_currents = HashMap::new();
     for vs in &v_sources {
-        let vs_idx = *vsource_map.get(&vs.id).unwrap();
+        let vs_idx = *vsource_map.get(&vs.id).ok_or_else(|| format!("Fuente {} no encontrada en el mapa de mapeo MNA.", vs.id))?;
         branch_currents.insert(vs.id.clone(), solution[n + vs_idx]);
     }
 
@@ -2212,11 +2212,10 @@ fn solve_newton_raphson_core(
                 .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())?;
         }
 
-        // Comprobar si hay NaN en la solución
-        for i in 1..=n {
-            if new_solution[i - 1].is_nan() {
-                return Err("Error de convergencia o circuito mal condicionado".to_string());
-            }
+        // Comprobar si hay NaN, infinitos o divergencia extrema en la solución (> 1e9)
+        let max_val = new_solution.iter().map(|x| x.abs()).fold(0.0, f64::max);
+        if max_val.is_nan() || max_val.is_infinite() || max_val > 1e9 {
+            return Err("Divergencia detectada: voltajes o corrientes fuera de rango (>1e9 V/A o NaN/Inf)".to_string());
         }
 
         // Calcular la norma del residuo real E_0 en el punto actual (sin pnjlim para evaluar el residuo físico real)
@@ -2771,6 +2770,12 @@ fn solve_homotopy_core(
 
 
         if let Some(new_solution) = new_solution_res {
+            // Comprobar si hay NaN, infinitos o divergencia extrema en la solución (> 1e9)
+            let max_val = new_solution.iter().map(|x| x.abs()).fold(0.0, f64::max);
+            if max_val.is_nan() || max_val.is_infinite() || max_val > 1e9 {
+                return Err("Divergencia detectada: voltajes o corrientes fuera de rango (>1e9 V/A o NaN/Inf) en Homotopía".to_string());
+            }
+
             let mut max_diff = 0.0;
             for i in 1..=n {
                 let diff = (new_solution[i - 1] - prev_voltages[i]).abs();

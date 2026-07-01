@@ -20,6 +20,18 @@ pub fn validate_netlist_topology(
     netlist: &CircuitNetlist,
     strict_floating: bool,
 ) -> Result<usize, String> {
+    // 1. Validar que todos los pines de todos los componentes sean enteros válidos
+    for comp in &netlist.components {
+        for (i, pin) in comp.pins.iter().enumerate() {
+            if pin.parse::<usize>().is_err() {
+                return Err(format!(
+                    "El componente '{}' (tipo '{}') tiene un pin inválido en la posición {} ('{}'). Todos los pines deben estar conectados a nodos numéricos válidos.",
+                    comp.id, comp.comp_type, i, pin
+                ));
+            }
+        }
+    }
+
     let n = max_node_index(netlist);
 
     if netlist.components.is_empty() {
