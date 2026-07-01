@@ -178,6 +178,7 @@ export class CanvasOrchestrator {
   
   public activePinForWire: PinInstance | null = null;
   public tempWireEnd: Point2D | null = null;
+  public ercIssues: { componentId: string; type: "error" | "warning"; message: string; pinIndex?: number }[] = [];
   
   public isDragging: boolean = false;
   private dragStartOffset: Point2D = { x: 0, y: 0 };
@@ -508,6 +509,9 @@ export class CanvasOrchestrator {
 
     // 6. Draw Highlights & Pins
     this.drawPins(_voltageMap, nodeMap);
+
+    // 6b. Draw Visual ERC Issues
+    this.drawERCIssues();
 
     // 7. Draw Oscilloscope Probe Badges
     if (probes.ch1) {
@@ -1791,6 +1795,70 @@ export class CanvasOrchestrator {
     }
 
     this.ctx.restore();
+  }
+
+  private drawERCIssues(): void {
+    if (this.ercIssues.length === 0) return;
+
+    const pulseRadius = 10 + Math.sin(Date.now() / 150) * 3;
+
+    for (const issue of this.ercIssues) {
+      const comp = this.components.find(c => c.id === issue.componentId);
+      if (!comp) continue;
+
+      const isError = issue.type === "error";
+      const ringColor = isError ? "hsl(0, 84%, 60%)" : "hsl(35, 92%, 55%)";
+      const fillColor = isError ? "rgba(239, 68, 68, 0.2)" : "rgba(245, 158, 11, 0.2)";
+
+      if (issue.pinIndex !== undefined) {
+        // Alerta específica en un pin
+        const pins = this.getComponentPins(comp);
+        const pin = pins.find(p => p.pinIndex === issue.pinIndex);
+        if (pin) {
+          this.ctx.save();
+          this.ctx.beginPath();
+          this.ctx.arc(pin.x, pin.y, pulseRadius, 0, Math.PI * 2);
+          this.ctx.strokeStyle = ringColor;
+          this.ctx.lineWidth = 1.5;
+          this.ctx.stroke();
+          this.ctx.fillStyle = fillColor;
+          this.ctx.fill();
+          
+          this.ctx.beginPath();
+          this.ctx.arc(pin.x, pin.y, 4, 0, Math.PI * 2);
+          this.ctx.fillStyle = ringColor;
+          this.ctx.fill();
+          this.ctx.restore();
+        }
+      } else {
+        // Alerta en todo el componente
+        this.ctx.save();
+        this.ctx.beginPath();
+        const compRadius = 25 + Math.sin(Date.now() / 150) * 5;
+        this.ctx.arc(comp.x, comp.y, compRadius, 0, Math.PI * 2);
+        this.ctx.strokeStyle = ringColor;
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        this.ctx.fillStyle = fillColor;
+        this.ctx.fill();
+
+        // Cartel de advertencia arriba del componente
+        const badgeY = comp.y - 32;
+        this.ctx.beginPath();
+        this.ctx.moveTo(comp.x - 7, badgeY + 4);
+        this.ctx.lineTo(comp.x + 7, badgeY + 4);
+        this.ctx.lineTo(comp.x, badgeY - 8);
+        this.ctx.closePath();
+        this.ctx.fillStyle = ringColor;
+        this.ctx.fill();
+        
+        this.ctx.fillStyle = "white";
+        this.ctx.font = "bold 8px var(--font-sans)";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText("!", comp.x, badgeY + 2);
+        this.ctx.restore();
+      }
+    }
   }
 
   /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel. */

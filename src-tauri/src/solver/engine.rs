@@ -1151,7 +1151,65 @@ fn multiply_sparse_matrix_vector(matrix: &SparseMatrix, x: &DVector<f64>) -> DVe
         y[r] = sum;
     }
     y
+}
 
+fn diagnose_convergence_failure(
+    netlist: &CircuitNetlist,
+    n: usize,
+    _m: usize,
+    vsource_map: &HashMap<String, usize>,
+    solution: &DVector<f64>,
+    matrix_a: &SparseMatrix,
+    vector_z: &DVector<f64>,
+) -> String {
+    let f_k = multiply_sparse_matrix_vector(matrix_a, solution) - vector_z;
+    let mut max_err = -1.0;
+    let mut max_idx = 0;
+    for (i, val) in f_k.iter().enumerate() {
+        let abs_val = val.abs();
+        if abs_val > max_err {
+            max_err = abs_val;
+            max_idx = i;
+        }
+    }
+
+    if max_idx < n {
+        let node_num = max_idx + 1;
+        let mut connected_comps = Vec::new();
+        for comp in &netlist.components {
+            for pin in &comp.pins {
+                if let Ok(p_num) = pin.parse::<usize>() {
+                    if p_num == node_num {
+                        connected_comps.push(format!("{} [{}]", comp.id, comp.comp_type));
+                    }
+                }
+            }
+        }
+        if !connected_comps.is_empty() {
+            format!(
+                "Error de convergencia en el Nodo {} (error residual: {:.2e}). Componentes sospechosos conectados: {}. Sugerencia: Verifique los valores nominales o agregue una resistencia en paralelo si el circuito no tiene retorno de CC.",
+                node_num, max_err, connected_comps.join(", ")
+            )
+        } else {
+            format!(
+                "Error de convergencia en el Nodo {} (error residual: {:.2e}).",
+                node_num, max_err
+            )
+        }
+    } else {
+        let vs_idx = max_idx - n;
+        let mut vs_id = "Desconocida".to_string();
+        for (id, &idx) in vsource_map {
+            if idx == vs_idx {
+                vs_id = id.clone();
+                break;
+            }
+        }
+        format!(
+            "Error de convergencia en la ecuación de corriente de la fuente de tensión {} (error residual: {:.2e}). Sugerencia: Verifique que no haya lazos de fuentes ideales o cortocircuitos.",
+            vs_id, max_err
+        )
+    }
 }
 
 // CORES MATEMÁTICOS AVANZADOS: CORE DE NEWTON-RAPHSON CON AMORTIGUAMIENTO Y GMIN DINÁMICO (Fases 14 y 15)
@@ -2289,7 +2347,11 @@ fn solve_newton_raphson_core(
     if converged {
         Ok(solution)
     } else {
-        Err("Error de convergencia o circuito mal condicionado".to_string())
+        if let Some((matrix_a_accepted, vector_z_accepted)) = stamped_matrix_and_vector {
+            Err(diagnose_convergence_failure(netlist, n, m, vsource_map, &solution, &matrix_a_accepted, &vector_z_accepted))
+        } else {
+            Err("Error de convergencia o circuito mal condicionado".to_string())
+        }
     }
 
 }
@@ -2319,6 +2381,8 @@ fn solve_homotopy_core(
     let mut csc_solver: Option<(crate::sparse_csc::SymbolicLU, crate::sparse_csc::NumericLUWorkspace, crate::sparse_csc::SparseMatrixCSC)> = None;
     let mut parallel_solver: Option<crate::sparse_parallel::SchurParallelSolver> = None;
 
+    let mut last_matrix_a = SparseMatrix::new(size);
+    let mut last_vector_z = DVector::<f64>::zeros(size);
 
     // 1. Armar matrices base lineales estáticas que no cambian en este NR
     let mut matrix_a_linear = SparseMatrix::new(size);
@@ -2734,6 +2798,9 @@ fn solve_homotopy_core(
             vector_z[i - 1] += g_hom * x_init[i];
         }
 
+        last_matrix_a = matrix_a.clone();
+        last_vector_z = vector_z.clone();
+
         // Resolver el sistema MNA lineal para este paso de Newton usando Aritmética Plana CSC Left-Looking o Schur en paralelo (BBDF)
         let is_parallel = size >= 40;
         let mut solved_ok = false;
@@ -2822,7 +2889,7 @@ fn solve_homotopy_core(
     if converged {
         Ok(solution)
     } else {
-        Err("Error de convergencia o circuito mal condicionado".to_string())
+        Err(diagnose_convergence_failure(netlist, n, m, vsource_map, &solution, &last_matrix_a, &last_vector_z))
     }
 
 }

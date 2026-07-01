@@ -638,7 +638,12 @@ function initCanvasCAD() {
         "system",
       );
     },
-    onCanvasModified: () => markCurrentTabAsModified(),
+    onCanvasModified: () => {
+      markCurrentTabAsModified();
+      if (orchestrator) {
+        orchestrator.ercIssues = [];
+      }
+    },
     onNetlistSync: () => extractNetlist(),
     onSelectionChanged: (comp) => {
       if (comp) updatePropertiesPanel(comp);
@@ -703,7 +708,12 @@ function initCanvasCAD() {
     attachCanvasDrop(canvasViewport, canvasElement, orchestrator, {
       requestRender: (immediate) => updateCanvasRendering(immediate),
       onNetlistSync: () => extractNetlist(),
-      onCanvasModified: () => markCurrentTabAsModified(),
+      onCanvasModified: () => {
+        markCurrentTabAsModified();
+        if (orchestrator) {
+          orchestrator.ercIssues = [];
+        }
+      },
       onComponentPlaced: (comp) => updatePropertiesPanel(comp),
       log: (text, type = "system") => addLog(text, type),
     });
@@ -985,9 +995,38 @@ window.addEventListener("DOMContentLoaded", () => {
         orchestrator!.wires,
         (c) => orchestrator!.getComponentPins(c),
       );
+
+      const ercIssues: { componentId: string; type: "error" | "warning"; message: string; pinIndex?: number }[] = [];
+
       for (const warn of ercResult.warnings) {
         addLog(`[ERC Advertencia] ${warn}`, "error");
+        const compMatch = warn.match(/\[([a-zA-Z0-9_]+)\]/);
+        if (compMatch) {
+          const componentId = compMatch[1];
+          let pinIndex: number | undefined = undefined;
+          const pinMatch = warn.match(/terminal index (\d+)/);
+          if (pinMatch) {
+            pinIndex = parseInt(pinMatch[1], 10);
+          }
+          ercIssues.push({ componentId, type: "warning", message: warn, pinIndex });
+        }
       }
+
+      for (const err of ercResult.errors) {
+        const compMatch = err.match(/\[([a-zA-Z0-9_,\s]+)\]/);
+        if (compMatch) {
+          const compList = compMatch[1].split(',').map(s => s.trim());
+          for (const componentId of compList) {
+            ercIssues.push({ componentId, type: "error", message: err });
+          }
+        }
+      }
+
+      if (orchestrator) {
+        orchestrator.ercIssues = ercIssues;
+        orchestrator.render();
+      }
+
       if (!ercResult.passed) {
         addLog("----------------------------------------------------------------", "error");
         addLog("¡ERC FALLIDO! La simulación se ha abortado para prevenir bloqueos matemáticos:", "error");
