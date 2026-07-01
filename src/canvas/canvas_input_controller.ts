@@ -14,9 +14,9 @@ export interface CanvasInputCallbacks {
   onSelectionChanged: (comp: ComponentInstance | null) => void;
   getPinNode: (pinKey: string) => string | undefined;
   log: (text: string, type?: "system" | "error") => void;
-  getProbePlacementMode: () => "CH1" | "CH2" | null;
+  getProbePlacementMode: () => "CH1" | "CH2" | "CH3" | "CH4" | null;
   clearProbePlacementMode: () => void;
-  onProbePlaced: (channel: "CH1" | "CH2", nodeId: string) => void;
+  onProbePlaced: (channel: "CH1" | "CH2" | "CH3" | "CH4", nodeId: string) => void;
   getActiveAnalysisMode: () => AnalysisMode;
   onSparPortAssign: (nodeId: string) => boolean;
   onSwitchDoubleClick: (comp: ComponentInstance) => Promise<void>;

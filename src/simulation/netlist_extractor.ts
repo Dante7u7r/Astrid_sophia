@@ -218,6 +218,28 @@ export function extractElectricalNetlist(
         value: rVal,
         pins: [pin0Node, pin1Node],
       });
+    } else if (comp.type === 'dmm') {
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+
+      const pin0Node = pinsMapped[0] || "0";
+      const pin1Node = pinsMapped[1] || "0";
+
+      const mode = comp.value?.toString() ?? "V";
+      const rVal = mode === "A" ? 0.01 : 10e6;
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: rVal,
+        pins: [pin0Node, pin1Node],
+      });
     } else if (comp.type === 'thermistor') {
       const pinsMapped = pinsKeys.map(pk => {
         const root = dsu.find(pk);
@@ -365,6 +387,49 @@ export function extractElectricalNetlist(
         l1_id: `${comp.id}__L1`,
         l2_id: `${comp.id}__L2`,
         k_coeff: k,
+      });
+    } else if (comp.type === 'opamp') {
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+
+      const pin0Node = pinsMapped[0] || "0"; // In+
+      const pin1Node = pinsMapped[1] || "0"; // In-
+      const pin2Node = pinsMapped[2] || "0"; // V+
+      const pin3Node = pinsMapped[3] || "0"; // V-
+      const pin4Node = pinsMapped[4] || "0"; // Out
+
+      // Crear nodo interno para insertar la tensión offset en serie
+      const internalOffsetNode = `${comp.id}__offset_node`;
+      if (!rootToNodeIdMap[internalOffsetNode]) {
+        rootToNodeIdMap[internalOffsetNode] = nextNodeId.toString();
+        nextNodeId++;
+      }
+      const offsetNodeId = rootToNodeIdMap[internalOffsetNode];
+
+      const vos = comp.offsetVoltage !== undefined ? Number(comp.offsetVoltage) : 0.002;
+      const aol = comp.openLoopGain !== undefined ? Number(comp.openLoopGain) : 100000.0;
+
+      // 1. Fuente de tensión offset en serie
+      extractedComponents.push({
+        id: `${comp.id}__vos`,
+        type: 'vsource',
+        value: vos,
+        pins: [pin0Node, offsetNodeId],
+        waveType: 'dc',
+      });
+
+      // 2. Elemento opamp primitivo
+      extractedComponents.push({
+        id: comp.id,
+        type: 'opamp',
+        value: aol,
+        pins: [offsetNodeId, pin1Node, pin2Node, pin3Node, pin4Node],
       });
     } else {
       const pinsMapped: string[] = [];

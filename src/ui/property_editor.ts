@@ -164,7 +164,35 @@ export class PropertyEditor {
       }
     }
 
-    if (comp.type === 'x' || comp.type === 'ldr' || comp.type === 'thermistor') {
+    const dmmContainer = document.querySelector("#dmm-properties-container") as HTMLElement;
+    const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
+    if (dmmContainer && dmmModeSelect) {
+      if (comp.type === 'dmm') {
+        dmmContainer.style.display = "flex";
+        dmmModeSelect.value = comp.value?.toString() ?? "V";
+      } else {
+        dmmContainer.style.display = "none";
+      }
+    }
+
+    const opampContainer = document.querySelector("#opamp-properties-container") as HTMLElement;
+    const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
+    const opampVosDisplay = document.querySelector("#prop-opamp-vos-display") as HTMLElement;
+    const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
+
+    if (opampContainer && opampVosSlider && opampVosDisplay && opampGainSelect) {
+      if (comp.type === 'opamp') {
+        opampContainer.style.display = "flex";
+        const vosMilli = (comp.offsetVoltage !== undefined ? comp.offsetVoltage : 0.002) * 1000;
+        opampVosSlider.value = vosMilli.toString();
+        opampVosDisplay.textContent = `${vosMilli.toFixed(1)} mV`;
+        opampGainSelect.value = (comp.openLoopGain !== undefined ? comp.openLoopGain : 100000).toString();
+      } else {
+        opampContainer.style.display = "none";
+      }
+    }
+
+    if (comp.type === 'x' || comp.type === 'ldr' || comp.type === 'thermistor' || comp.type === 'dmm' || comp.type === 'opamp') {
       if (valGroup) valGroup.style.display = "none";
       if (unitGroup) unitGroup.style.display = "none";
     }
@@ -268,6 +296,54 @@ export class PropertyEditor {
       tempSlider.addEventListener("input", (e) => {
         const val = parseInt((e.target as HTMLInputElement).value) || 25;
         tempDisplay.textContent = `${val} ºC`;
+      });
+    }
+
+    const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement | null;
+    if (dmmModeSelect) {
+      dmmModeSelect.addEventListener("change", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        const selected = orchestrator ? orchestrator.selectedComponent : null;
+        if (selected && selected.type === 'dmm') {
+          selected.value = dmmModeSelect.value;
+          selected.dmmValue = undefined; // reset screen
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+          if (this.btnApplyProperties) {
+            this.btnApplyProperties.click();
+          }
+        }
+      });
+    }
+
+    const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
+    const opampVosDisplay = document.querySelector("#prop-opamp-vos-display") as HTMLElement;
+    const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
+
+    if (opampVosSlider && opampVosDisplay) {
+      opampVosSlider.addEventListener("input", (e) => {
+        const val = parseFloat((e.target as HTMLInputElement).value) || 2.0;
+        opampVosDisplay.textContent = `${val.toFixed(1)} mV`;
+        const orchestrator = this.callbacks.getOrchestrator();
+        const selected = orchestrator ? orchestrator.selectedComponent : null;
+        if (selected && selected.type === 'opamp') {
+          selected.offsetVoltage = val / 1000.0;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
+      });
+    }
+
+    if (opampGainSelect) {
+      opampGainSelect.addEventListener("change", () => {
+        const val = parseFloat(opampGainSelect.value) || 100000.0;
+        const orchestrator = this.callbacks.getOrchestrator();
+        const selected = orchestrator ? orchestrator.selectedComponent : null;
+        if (selected && selected.type === 'opamp') {
+          selected.openLoopGain = val;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
       });
     }
 
@@ -385,6 +461,17 @@ export class PropertyEditor {
             }
           }
 
+          if (selected.type === 'opamp') {
+            const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
+            const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
+            if (opampVosSlider) {
+              selected.offsetVoltage = (parseFloat(opampVosSlider.value) || 2.0) / 1000.0;
+            }
+            if (opampGainSelect) {
+              selected.openLoopGain = parseFloat(opampGainSelect.value) || 100000.0;
+            }
+          }
+
           const simulationRunner = this.callbacks.getSimulationRunner();
           if (simulationRunner?.isSimulationActive() ?? false) {
             const mutations: { componentId: string; field: string; value: number }[] = [];
@@ -406,6 +493,10 @@ export class PropertyEditor {
             }
             if (selected.switchRoff !== undefined) {
               mutations.push({ componentId: selected.id, field: 'switch_roff', value: selected.switchRoff });
+            }
+            if (selected.type === 'opamp') {
+              mutations.push({ componentId: `${selected.id}__vos`, field: 'value', value: selected.offsetVoltage ?? 0.002 });
+              mutations.push({ componentId: selected.id, field: 'value', value: selected.openLoopGain ?? 100000.0 });
             }
             for (const m of mutations) {
               this.callbacks.invokeTauri('inject_live_mutation', { mutation: m }).catch((err: unknown) => {

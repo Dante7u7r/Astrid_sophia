@@ -222,6 +222,21 @@
                       <span class="comp-desc">Referencia Eléctrica (0V)</span>
                     </div>
                   </div>
+                  <!-- Multimetro Digital (DMM) -->
+                  <div class="component-card" draggable="true" id="comp-dmm" data-type="dmm" data-default="V">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="8" y="4" width="24" height="32" rx="3" />
+                        <rect x="12" y="8" width="16" height="10" rx="1" fill="currentColor" fill-opacity="0.15" />
+                        <circle cx="20" cy="26" r="4" />
+                        <path d="M 20 26 L 20 23" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Multímetro</span>
+                      <span class="comp-desc">Voltímetro/Amperímetro DMM</span>
+                    </div>
+                  </div>
                   <!-- VSource -->
                   <div class="component-card" draggable="true" id="comp-vsource" data-type="vsource" data-default="5">
                     <div class="comp-icon-box">
@@ -620,29 +635,188 @@
 
           <!-- DOCK INFERIOR (OSCILOSCOPIO + CONSOLA) -->
           <section class="bottom-dock" id="bottom-dock">
-            <!-- Canal de visualización gráfica (Osciloscopio) -->
-            <div class="osc-container" id="osc-container">
-              <div class="panel-header" id="osc-header">
-                <h3>Osciloscopio en Tiempo Real</h3>
-                <div class="osc-panel-controls" id="osc-controls">
-                  <button id="osc-ch1-btn" class="btn-osc-mini active" type="button">Canal 1</button>
-                  <button id="osc-ch2-btn" class="btn-osc-mini" type="button">Canal 2</button>
-                  <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
-                </div>
+            <!-- Columna Izquierda: Panel de Instrumentación con Pestañas -->
+            <div class="instruments-panel" id="instruments-panel" style="display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.05); width: 62%;">
+              <!-- Barra de pestañas de Instrumentos -->
+              <div class="instruments-tabs-bar" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid var(--border-color); height: 32px; align-items: center; padding: 0 10px; gap: 4px; flex-shrink: 0;">
+                <button class="inst-tab active" data-tab="oscilloscope" style="background: none; border: none; color: var(--cyan); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📊 Osciloscopio</button>
+                <button class="inst-tab" data-tab="generator" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⚡ Generador</button>
+                <button class="inst-tab" data-tab="logic" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⌗ Lógico</button>
+                <button class="inst-tab" data-tab="fft" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
+                <button class="inst-tab" data-tab="tracer" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">🔬 Trazador I-V</button>
               </div>
-              <div class="osc-viewport" id="osc-viewport">
-                <canvas class="osc-canvas" id="osc-canvas"></canvas>
-                <div class="osc-grid-overlay"></div>
+
+              <!-- Contenedores de cada instrumento -->
+              <div class="instruments-content-area" style="flex-grow: 1; position: relative; overflow: hidden; display: flex; flex-direction: column;">
+                <!-- 1. Osciloscopio -->
+                <div class="inst-content-box" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%;">
+                  <div class="panel-header" id="osc-header" style="height: 36px; min-height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid var(--border-subtle);">
+                    <h3 style="font-size: 0.68rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">Osciloscopio Digital de 4 Canales</h3>
+                    <div class="osc-panel-controls" id="osc-controls" style="display: flex; gap: 4px; align-items: center;">
+                      <button id="osc-ch1-btn" class="btn-osc-mini active" style="border-color: #66fcf1; color: #66fcf1;" type="button">CH1</button>
+                      <button id="osc-ch2-btn" class="btn-osc-mini" style="border-color: #a855f7; color: #a855f7;" type="button">CH2</button>
+                      <button id="osc-ch3-btn" class="btn-osc-mini" style="border-color: #f97316; color: #f97316;" type="button">CH3</button>
+                      <button id="osc-ch4-btn" class="btn-osc-mini" style="border-color: #22c55e; color: #22c55e;" type="button">CH4</button>
+                      <span style="width: 1px; height: 16px; background: rgba(255,255,255,0.15); margin: 0 4px;"></span>
+                      <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
+                    </div>
+                  </div>
+                  <div class="osc-main-layout" style="display: flex; flex-grow: 1; overflow: hidden; position: relative; width: 100%; height: calc(100% - 36px);">
+                    <!-- Canvas Area -->
+                    <div class="osc-viewport" id="osc-viewport" style="flex-grow: 1; position: relative; background: rgba(2, 3, 8, 0.95); display: flex; flex-direction: column; overflow: hidden;">
+                      <canvas class="osc-canvas" id="osc-canvas" style="flex-grow: 1; width: 100%; display: block;"></canvas>
+                      <div class="osc-grid-overlay"></div>
+                      
+                      <!-- Mediciones Automáticas Bottom Bar -->
+                      <div class="osc-measurements-bar" style="height: 24px; min-height: 24px; background: rgba(0, 0, 0, 0.4); border-top: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-around; font-size: 0.65rem; color: var(--text-muted); font-family: var(--font-mono); flex-shrink: 0; overflow-x: auto; white-space: nowrap; gap: 10px; padding: 0 10px;">
+                        <div id="osc-meas-ch1" style="color: #66fcf1;">CH1: --</div>
+                        <div id="osc-meas-ch2" style="color: #a855f7;">CH2: --</div>
+                        <div id="osc-meas-ch3" style="color: #f97316;">CH3: --</div>
+                        <div id="osc-meas-ch4" style="color: #22c55e;">CH4: --</div>
+                      </div>
+                    </div>
+                    
+                    <!-- Sidebar Controls (Panel Analógico de Mandos) -->
+                    <div class="osc-sidebar-controls" style="width: 175px; min-width: 175px; border-left: 1px solid var(--border-color); background: rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow-y: auto; font-family: var(--font-sans); flex-shrink: 0; box-sizing: border-box;">
+                      <!-- Mode and Cursors -->
+                      <div style="display: flex; gap: 4px;">
+                        <button id="osc-mode-ty" class="btn-osc-mini active" style="flex-grow: 1; justify-content: center;" type="button">T-Y</button>
+                        <button id="osc-mode-xy" class="btn-osc-mini" style="flex-grow: 1; justify-content: center;" type="button">X-Y</button>
+                      </div>
+                      <button id="osc-cursors-btn" class="btn-osc-mini" style="width: 100%; justify-content: center; display: flex;" type="button">📏 Cursores: OFF</button>
+                      
+                      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 2px;"></div>
+                      
+                      <!-- Time/Div -->
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <label style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Tiempo / Div</label>
+                        <select id="osc-time-div" class="prop-input" style="font-size: 0.68rem; padding: 3px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; cursor: pointer; width: 100%;">
+                          <option value="0.005">5 ms/div</option>
+                          <option value="0.01">10 ms/div</option>
+                          <option value="0.02" selected>20 ms/div</option>
+                          <option value="0.05">50 ms/div</option>
+                          <option value="0.1">100 ms/div</option>
+                        </select>
+                      </div>
+                      
+                      <!-- Volts/Div and Offset -->
+                      <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Tensión / Div y Offset</label>
+                        
+                        <!-- CH1 -->
+                        <div style="background: rgba(102, 252, 241, 0.04); border: 1px solid rgba(102, 252, 241, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
+                          <div style="font-size: 0.65rem; color: #66fcf1; font-weight: bold;">Canal 1</div>
+                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                            <select id="osc-volts-ch1" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                              <option value="0.2">0.2 V/div</option>
+                              <option value="0.5">0.5 V/div</option>
+                              <option value="1.0" selected>1.0 V/div</option>
+                              <option value="2.0">2.0 V/div</option>
+                              <option value="5.0">5.0 V/div</option>
+                            </select>
+                            <input id="osc-offset-ch1" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                          </div>
+                        </div>
+                        
+                        <!-- CH2 -->
+                        <div style="background: rgba(168, 85, 247, 0.04); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
+                          <div style="font-size: 0.65rem; color: #a855f7; font-weight: bold;">Canal 2</div>
+                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                            <select id="osc-volts-ch2" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                              <option value="0.2">0.2 V/div</option>
+                              <option value="0.5">0.5 V/div</option>
+                              <option value="1.0" selected>1.0 V/div</option>
+                              <option value="2.0">2.0 V/div</option>
+                              <option value="5.0">5.0 V/div</option>
+                            </select>
+                            <input id="osc-offset-ch2" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                          </div>
+                        </div>
+                        
+                        <!-- CH3 -->
+                        <div style="background: rgba(249, 115, 22, 0.04); border: 1px solid rgba(249, 115, 22, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
+                          <div style="font-size: 0.65rem; color: #f97316; font-weight: bold;">Canal 3</div>
+                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                            <select id="osc-volts-ch3" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                              <option value="0.2">0.2 V/div</option>
+                              <option value="0.5">0.5 V/div</option>
+                              <option value="1.0" selected>1.0 V/div</option>
+                              <option value="2.0">2.0 V/div</option>
+                              <option value="5.0">5.0 V/div</option>
+                            </select>
+                            <input id="osc-offset-ch3" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                          </div>
+                        </div>
+
+                        <!-- CH4 -->
+                        <div style="background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
+                          <div style="font-size: 0.65rem; color: #22c55e; font-weight: bold;">Canal 4</div>
+                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                            <select id="osc-volts-ch4" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                              <option value="0.2">0.2 V/div</option>
+                              <option value="0.5">0.5 V/div</option>
+                              <option value="1.0" selected>1.0 V/div</option>
+                              <option value="2.0">2.0 V/div</option>
+                              <option value="5.0">5.0 V/div</option>
+                            </select>
+                            <input id="osc-offset-ch4" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Trigger Section -->
+                      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 2px; display: flex; flex-direction: column; gap: 3px;">
+                        <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold;">Disparo (Trigger)</div>
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                          <select id="osc-trigger-mode" class="prop-input" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                            <option value="ch1">CH1</option>
+                            <option value="ch2">CH2</option>
+                            <option value="ch3">CH3</option>
+                            <option value="ch4">CH4</option>
+                          </select>
+                          <select id="osc-trigger-edge" class="prop-input" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                            <option value="rising">↑ Subida</option>
+                            <option value="falling">↓ Bajada</option>
+                          </select>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 0.6rem; color: var(--text-muted);">
+                          <span>Nivel:</span>
+                          <input id="osc-trigger-level" type="range" min="-150" max="150" value="0" style="width: 100px; height: 12px;" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. Generador de Funciones -->
+                <div class="inst-content-box" id="inst-generator" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9); overflow-y: auto;">
+                  <!-- Contenido dinámico del generador -->
+                </div>
+
+                <!-- 3. Analizador Lógico -->
+                <div class="inst-content-box" id="inst-logic" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9);">
+                  <!-- Contenido dinámico del analizador lógico -->
+                </div>
+
+                <!-- 4. Analizador de Espectro (FFT) -->
+                <div class="inst-content-box" id="inst-fft" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9);">
+                  <!-- Contenido dinámico del analizador de espectro -->
+                </div>
+
+                <!-- 5. Trazador de Curvas I-V -->
+                <div class="inst-content-box" id="inst-tracer" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9); overflow-y: auto;">
+                  <!-- Contenido dinámico del trazador de curvas -->
+                </div>
               </div>
             </div>
 
-            <!-- Consola de logs de la aplicación -->
-            <div class="console-panel" id="console-panel">
-              <div class="panel-header" id="console-header">
-                <h3>Logs del Sistema</h3>
+            <!-- Columna Derecha: Consola de logs de la aplicación -->
+            <div class="console-panel" id="console-panel" style="width: 38%; display: flex; flex-direction: column; overflow: hidden;">
+              <div class="panel-header" id="console-header" style="height: 36px; min-height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;">
+                <h3 style="font-size: 0.68rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">Logs del Sistema</h3>
                 <button id="clear-console-btn" class="btn-clear-console" type="button">Limpiar</button>
               </div>
-              <div class="console-output" id="console-output">
+              <div class="console-output" id="console-output" style="flex-grow: 1; padding: 8px 12px;">
                 <div class="log-line system-msg">> Inicializando consola virtual en PC local...</div>
                 <div class="log-line system-msg">> Entorno de renderizado WebGL/Canvas conectado.</div>
                 <div class="log-line system-msg">> Escáner de dependencias ARGON v9.0 verificado y enlazado.</div>
@@ -742,6 +916,38 @@
                     <input id="prop-temp-slider" type="range" min="-50" max="150" step="1" value="25" style="flex-grow: 1;" />
                     <span id="prop-temp-display" style="min-width: 50px; font-weight: bold; color: var(--accent-color);">25 ºC</span>
                   </div>
+                </div>
+              </div>
+
+              <!-- Contenedor del Multímetro (DMM) -->
+              <div id="dmm-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label">Modo de Medición del Multímetro</label>
+                  <select id="prop-dmm-mode" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                    <option value="V">⚖️ Voltímetro (V)</option>
+                    <option value="A">⚡ Amperímetro (A)</option>
+                    <option value="R">Ω Ohmiómetro (Ω)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Contenedor del Op-Amp -->
+              <div id="opamp-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label">Tensión de Offset de Entrada (Vos, mV)</label>
+                  <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                    <input id="prop-opamp-vos" type="range" min="0" max="20" step="0.1" value="2.0" style="flex-grow: 1;" />
+                    <span id="prop-opamp-vos-display" style="min-width: 60px; font-weight: bold; color: var(--accent-color);">2.0 mV</span>
+                  </div>
+                </div>
+                <div class="property-group">
+                  <label class="property-label">Ganancia de Lazo Abierto (Aol)</label>
+                  <select id="prop-opamp-gain" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                    <option value="10000">10k (Bajo / Pruebas)</option>
+                    <option value="100000" selected>100k (Estándar LM741)</option>
+                    <option value="200000">200k (Alta ganancia)</option>
+                    <option value="1000000">1M (Casi Ideal)</option>
+                  </select>
                 </div>
               </div>
 

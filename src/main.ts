@@ -30,6 +30,7 @@ import { PropertyEditor } from "./ui/property_editor";
 import { ExporterPanel } from "./ui/exporter_panel";
 import { CommandHistory } from "./canvas/command_history";
 import { PanelLayoutManager } from "./ui/panel_layout_manager";
+import { InstrumentsDock } from "./ui/instruments_dock";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 
@@ -49,6 +50,7 @@ let sidebarRight: HTMLElement | null = null;
 let btnToggleLeft: HTMLButtonElement | null = null;
 let btnToggleRight: HTMLButtonElement | null = null;
 let panelLayoutManager: PanelLayoutManager | null = null;
+let instrumentsDock: InstrumentsDock | null = null;
 
 
 
@@ -79,7 +81,7 @@ const commandHistory = new CommandHistory({ maxHistorySize: 200 });
 // (centralizado en circuitState.getPinToNodeMap())
 
 // --- ESTADOS DE SONDAS E INSTRUMENTACIÓN DEL OSCILOSCOPIO ---
-let probePlacementMode: 'CH1' | 'CH2' | null = null;
+let probePlacementMode: 'CH1' | 'CH2' | 'CH3' | 'CH4' | null = null;
 
 // --- ESTADO DE SELECCIÓN DE PUERTOS RF PARA PARÁMETROS S ---
 let sparPorts: { nodeId: string; z0: number }[] = [];
@@ -88,6 +90,8 @@ let sparFEnd = 100000.0;
 let sparPPD = 20;
 let ch1ProbeNode: string | null = "1"; // Canal 1 por defecto al Nodo 1
 let ch2ProbeNode: string | null = "2"; // Canal 2 por defecto al Nodo 2
+let ch3ProbeNode: string | null = "3";
+let ch4ProbeNode: string | null = "4";
 
 let renderFramePending = false;
 
@@ -96,9 +100,13 @@ function doCanvasRender(): void {
 
   let ch1PinPos: Point2D | undefined;
   let ch2PinPos: Point2D | undefined;
+  let ch3PinPos: Point2D | undefined;
+  let ch4PinPos: Point2D | undefined;
 
   const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
   const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
+  const ch3Node = oscilloscopePanel ? oscilloscopePanel.ch3ProbeNode : ch3ProbeNode;
+  const ch4Node = oscilloscopePanel ? oscilloscopePanel.ch4ProbeNode : ch4ProbeNode;
 
   if (orchestrator) {
     const sparMarkers: { index: number; x: number; y: number }[] = [];
@@ -129,11 +137,17 @@ function doCanvasRender(): void {
         if (nodeId === ch2Node && !ch2PinPos) {
           ch2PinPos = { x: pin.x, y: pin.y };
         }
+        if (nodeId === ch3Node && !ch3PinPos) {
+          ch3PinPos = { x: pin.x, y: pin.y };
+        }
+        if (nodeId === ch4Node && !ch4PinPos) {
+          ch4PinPos = { x: pin.x, y: pin.y };
+        }
       }
     }
     orchestrator.render(
       pinVoltageMap,
-      { ch1: ch1PinPos, ch2: ch2PinPos },
+      { ch1: ch1PinPos, ch2: ch2PinPos, ch3: ch3PinPos, ch4: ch4PinPos },
       circuitState.getPinToNodeMap(),
       sparMarkers.length > 0 ? sparMarkers : undefined,
     );
@@ -215,6 +229,8 @@ async function executePvtAnalysisMatrix(netlist: CircuitNetlist, pvtConfigs: Pvt
   const monitoredNodes: string[] = [];
   if (oscilloscopePanel.ch1ProbeNode) monitoredNodes.push(oscilloscopePanel.ch1ProbeNode);
   if (oscilloscopePanel.ch2ProbeNode) monitoredNodes.push(oscilloscopePanel.ch2ProbeNode);
+  if (oscilloscopePanel.ch3ProbeNode) monitoredNodes.push(oscilloscopePanel.ch3ProbeNode);
+  if (oscilloscopePanel.ch4ProbeNode) monitoredNodes.push(oscilloscopePanel.ch4ProbeNode);
 
   const settings = { dt: simSettings.dt, tMax: 0.05 };
 
@@ -550,49 +566,40 @@ async function solveTransientCircuitLocal(netlist: CircuitNetlist, dt: number, t
 function initOscilloscopeInterface() {
   const oscCh1Btn = document.querySelector("#osc-ch1-btn") as HTMLButtonElement | null;
   const oscCh2Btn = document.querySelector("#osc-ch2-btn") as HTMLButtonElement | null;
+  const oscCh3Btn = document.querySelector("#osc-ch3-btn") as HTMLButtonElement | null;
+  const oscCh4Btn = document.querySelector("#osc-ch4-btn") as HTMLButtonElement | null;
   const oscPauseBtn = document.querySelector("#osc-pause-btn") as HTMLButtonElement | null;
 
-
-
-  const handleProbeActivation = (mode: 'CH1' | 'CH2') => {
+  const handleProbeActivation = (mode: 'CH1' | 'CH2' | 'CH3' | 'CH4') => {
     const netlist = extractNetlist();
     if (!netlist || netlist.components.length === 0) {
       addLog("Coloca componentes en el lienzo antes de colocar una sonda.", "error");
       return;
     }
     probePlacementMode = mode;
-    addLog(`[Osciloscopio] Modo colocación de sonda del ${mode === 'CH1' ? 'Canal 1' : 'Canal 2'} activo. Haz clic sobre un terminal del componente en el lienzo para conectar la sonda.`, "system");
+    addLog(`[Osciloscopio] Modo colocación de sonda del ${mode} activo. Haz clic sobre un terminal del componente en el lienzo para conectar la sonda.`, "system");
   };
 
-  if (oscCh1Btn) {
-    oscCh1Btn.addEventListener("click", (e) => {
+  const setupChBtn = (btn: HTMLButtonElement | null, channel: 'CH1' | 'CH2' | 'CH3' | 'CH4', getProbe: () => string | null, colorName: string) => {
+    if (!btn) return;
+    btn.addEventListener("click", (e) => {
       if (e.shiftKey) {
-        handleProbeActivation('CH1');
+        handleProbeActivation(channel);
       } else {
-        oscCh1Btn.classList.toggle("active");
-        const node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode;
-        addLog(`Canal 1 (Sonda en Nodo ${node}) ${oscCh1Btn.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
+        btn.classList.toggle("active");
+        const node = getProbe();
+        addLog(`Canal ${channel.replace("CH", "")} (Sonda en Nodo ${node}, color ${colorName}) ${btn.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
         if (oscilloscopePanel && !oscilloscopePanel.isSimulating) {
           oscilloscopePanel.draw();
         }
       }
     });
-  }
+  };
 
-  if (oscCh2Btn) {
-    oscCh2Btn.addEventListener("click", (e) => {
-      if (e.shiftKey) {
-        handleProbeActivation('CH2');
-      } else {
-        oscCh2Btn.classList.toggle("active");
-        const node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode;
-        addLog(`Canal 2 (Sonda en Nodo ${node}) ${oscCh2Btn.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
-        if (oscilloscopePanel && !oscilloscopePanel.isSimulating) {
-          oscilloscopePanel.draw();
-        }
-      }
-    });
-  }
+  setupChBtn(oscCh1Btn, 'CH1', () => oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : ch1ProbeNode, 'Cian');
+  setupChBtn(oscCh2Btn, 'CH2', () => oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : ch2ProbeNode, 'Morado');
+  setupChBtn(oscCh3Btn, 'CH3', () => oscilloscopePanel ? oscilloscopePanel.ch3ProbeNode : ch3ProbeNode, 'Naranja');
+  setupChBtn(oscCh4Btn, 'CH4', () => oscilloscopePanel ? oscilloscopePanel.ch4ProbeNode : ch4ProbeNode, 'Verde');
 
   if (oscPauseBtn) {
     oscPauseBtn.addEventListener("click", () => {
@@ -645,6 +652,20 @@ function initCanvasCAD() {
     panelLayoutManager = new PanelLayoutManager(appRoot, resizeCanvas);
   }
 
+  const bottomDock = document.querySelector("#bottom-dock") as HTMLElement;
+  if (bottomDock && orchestrator) {
+    instrumentsDock = new InstrumentsDock(bottomDock, orchestrator, {
+      onCanvasModified: () => {
+        markCurrentTabAsModified();
+        if (orchestrator) orchestrator.ercIssues = [];
+      },
+      onNetlistSync: () => extractNetlist(),
+      requestRender: (immediate: boolean) => updateCanvasRendering(immediate),
+      getPinNode: (pinKey: string) => circuitState.getPinNode(pinKey),
+      log: (text: string, type: "system" | "error" = "system") => addLog(text, type),
+    });
+  }
+
   attachCanvasInput(canvasElement, orchestrator, {
     requestRender: (immediate) => updateCanvasRendering(immediate),
     onWireConnected: () => {
@@ -680,10 +701,20 @@ function initCanvasCAD() {
     onProbePlaced: (channel, nodeId) => {
       if (channel === "CH1") {
         ch1ProbeNode = nodeId;
+        if (oscilloscopePanel) oscilloscopePanel.ch1ProbeNode = nodeId;
         addLog(`Sonda del Canal 1 (Cian) conectada al Nodo ${nodeId}.`, "system");
-      } else {
+      } else if (channel === "CH2") {
         ch2ProbeNode = nodeId;
+        if (oscilloscopePanel) oscilloscopePanel.ch2ProbeNode = nodeId;
         addLog(`Sonda del Canal 2 (Morada) conectada al Nodo ${nodeId}.`, "system");
+      } else if (channel === "CH3") {
+        ch3ProbeNode = nodeId;
+        if (oscilloscopePanel) oscilloscopePanel.ch3ProbeNode = nodeId;
+        addLog(`Sonda del Canal 3 (Naranja) conectada al Nodo ${nodeId}.`, "system");
+      } else if (channel === "CH4") {
+        ch4ProbeNode = nodeId;
+        if (oscilloscopePanel) oscilloscopePanel.ch4ProbeNode = nodeId;
+        addLog(`Sonda del Canal 4 (Verde) conectada al Nodo ${nodeId}.`, "system");
       }
     },
     getActiveAnalysisMode: () => activeAnalysisMode,
@@ -954,6 +985,59 @@ window.addEventListener("DOMContentLoaded", () => {
                 mcuDebugPanel?.updateData();
               }
             }
+          }
+
+          // ─── 5 INSTRUMENTOS VIRTUALES DATA FEED ───
+
+          // 1. Multímetros digitales (DMM)
+          for (const comp of orchestrator.components) {
+            if (comp.type === 'dmm') {
+              const pin0Node = circuitState.getPinNode(`${comp.id}:0`);
+              const pin1Node = circuitState.getPinNode(`${comp.id}:1`);
+              if (pin0Node !== undefined && pin1Node !== undefined) {
+                const v0 = closest.nodeVoltages[pin0Node] ?? 0.0;
+                const v1 = closest.nodeVoltages[pin1Node] ?? 0.0;
+                const mode = comp.value?.toString() ?? "V";
+
+                if (mode === "V") {
+                  const diff = v0 - v1;
+                  comp.dmmValue = diff.toFixed(3) + " V";
+                } else if (mode === "A") {
+                  const diff = v0 - v1;
+                  const iVal = diff / 0.01; // Ley de Ohm a través del shunt de 10mOhm
+                  if (Math.abs(iVal) < 1e-3) {
+                    comp.dmmValue = (iVal * 1e6).toFixed(1) + " uA";
+                  } else if (Math.abs(iVal) < 1) {
+                    comp.dmmValue = (iVal * 1e3).toFixed(2) + " mA";
+                  } else {
+                    comp.dmmValue = iVal.toFixed(3) + " A";
+                  }
+                } else {
+                  // Modo ohmiómetro: aproximación local
+                  comp.dmmValue = "-- Ω";
+                }
+              } else {
+                comp.dmmValue = "OPEN";
+              }
+            }
+          }
+
+          // 2. Analizador lógico
+          if (instrumentsDock && instrumentsDock.logicAnalyzer) {
+            instrumentsDock.logicAnalyzer.recordTimeStep(closest.time, closest.nodeVoltages);
+          }
+
+          // 3. Analizador de Espectro (FFT)
+          if (instrumentsDock && instrumentsDock.fftAnalyzer && oscilloscopePanel) {
+            const ch1Data = oscilloscopePanel.transientResults.map(r => ({
+              time: r.time,
+              val: r.nodeVoltages[oscilloscopePanel!.ch1ProbeNode || ""] ?? 0
+            }));
+            const ch2Data = oscilloscopePanel.transientResults.map(r => ({
+              time: r.time,
+              val: r.nodeVoltages[oscilloscopePanel!.ch2ProbeNode || ""] ?? 0
+            }));
+            instrumentsDock.fftAnalyzer.setTimeData(ch1Data, ch2Data);
           }
 
           for (const comp of orchestrator.components) {
