@@ -29,6 +29,7 @@ import { TabManager, type Tab } from "./ui/tab_manager";
 import { PropertyEditor } from "./ui/property_editor";
 import { ExporterPanel } from "./ui/exporter_panel";
 import { CommandHistory } from "./canvas/command_history";
+import { PanelLayoutManager } from "./ui/panel_layout_manager";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 
@@ -47,6 +48,7 @@ let sidebarLeft: HTMLElement | null = null;
 let sidebarRight: HTMLElement | null = null;
 let btnToggleLeft: HTMLButtonElement | null = null;
 let btnToggleRight: HTMLButtonElement | null = null;
+let panelLayoutManager: PanelLayoutManager | null = null;
 
 
 
@@ -442,6 +444,10 @@ function initSidebars() {
   const btnExpandRight = document.querySelector("#btn-expand-right") as HTMLButtonElement | null;
 
   const toggleLeft = () => {
+    if (panelLayoutManager) {
+      panelLayoutManager.togglePanel("left");
+      return;
+    }
     if (!sidebarLeft) return;
     sidebarLeft.classList.toggle("collapsed");
     const isCollapsed = sidebarLeft.classList.contains("collapsed");
@@ -451,6 +457,10 @@ function initSidebars() {
   };
 
   const toggleRight = () => {
+    if (panelLayoutManager) {
+      panelLayoutManager.togglePanel("right");
+      return;
+    }
     if (!sidebarRight) return;
     sidebarRight.classList.toggle("collapsed");
     const isCollapsed = sidebarRight.classList.contains("collapsed");
@@ -628,6 +638,12 @@ function initCanvasCAD() {
   };
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
+
+  // Inicializar PanelLayoutManager con callback de resize del canvas
+  const appRoot = document.querySelector("#app-viewport") as HTMLElement;
+  if (appRoot) {
+    panelLayoutManager = new PanelLayoutManager(appRoot, resizeCanvas);
+  }
 
   attachCanvasInput(canvasElement, orchestrator, {
     requestRender: (immediate) => updateCanvasRendering(immediate),
