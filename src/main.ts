@@ -1349,6 +1349,16 @@ window.addEventListener("DOMContentLoaded", () => {
         onSimulationFinished: () => {
           simulationControls?.setSimulationRunning(false);
         },
+        onHighlightElement: (id) => {
+          if (orchestrator) {
+            const comp = orchestrator.components.find(c => c.id === id);
+            if (comp) {
+              orchestrator.selectedComponents = [comp];
+              orchestrator.selectedComponent = comp;
+              orchestrator.render();
+            }
+          }
+        },
       });
     },
     onStopSimulation: async () => {

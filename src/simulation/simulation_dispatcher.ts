@@ -29,6 +29,7 @@ import { type ComponentInstance, type PinInstance, type WireInstance } from "../
 import { type AnalysisMode } from "../ui/simulation_controls";
 import { type TSResult } from "./fallback_solver";
 import { type TimeStepResult } from "../ui/oscilloscope_panel";
+import { classifySimulationError } from "./simulation-error";
 
 let fallbackTimeoutId: any = null;
 
@@ -286,6 +287,8 @@ export interface DispatchCallbacks {
   onIpcStatusUpdate: (text: string, color: string) => void;
   updateCanvasRendering: () => void;
   onSimulationFinished?: () => void;
+  /** Resalta un componente o nodo sospechoso en la interfaz visual */
+  onHighlightElement?: (id: string) => void;
 }
 
 // ==========================================================================
@@ -433,12 +436,9 @@ export async function dispatchSimulation(
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    callbacks.addLog(`Error en la comunicación con el motor de Rust: ${errorMsg}`, "error");
-    TelemetryPanel.logError(errorMsg);
+    const isBrowserEnv = errorMsg.includes("window.__TAURI_IPC__") || errorMsg.includes("not found") || errorMsg.includes("window.__TAURI__");
 
-    // Fallback a solvers TypeScript si Tauri IPC no está disponible
-    // (entorno de navegador estándar sin objeto window.__TAURI__)
-    if (errorMsg.includes("window.__TAURI_IPC__") || errorMsg.includes("not found") || errorMsg.includes("window.__TAURI__")) {
+    if (isBrowserEnv) {
       callbacks.addLog("Entorno de navegador detectado. Iniciando solucionador local en TypeScript...", "system");
 
       // Retardo estratégico de 300ms para emular latencia de red
@@ -537,6 +537,18 @@ export async function dispatchSimulation(
         }
       }, 300);
     } else {
+      const classified = classifySimulationError(errorMsg);
+      callbacks.addLog(`Error en el solver de Rust: ${classified.userMessage}`, "error");
+      callbacks.addLog(`[Detalles técnicos] ${classified.rawMessage}`, "system");
+
+      if (classified.suspectedComponentOrNetId) {
+        callbacks.addLog(`Componente o nodo sospechoso de falla: ${classified.suspectedComponentOrNetId}`, "error");
+        if (callbacks.onHighlightElement) {
+          callbacks.onHighlightElement(classified.suspectedComponentOrNetId);
+        }
+      }
+
+      TelemetryPanel.logError(classified.userMessage);
       callbacks.onIpcStatusUpdate("Error de simulación", "var(--accent-red)");
       if (callbacks.onSimulationFinished) {
         callbacks.onSimulationFinished();
