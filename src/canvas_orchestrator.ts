@@ -588,15 +588,19 @@ export class CanvasOrchestrator {
     const startY = Math.floor(topLeft.y / this.gridSize) * this.gridSize;
     const endY = Math.ceil(bottomRight.y / this.gridSize) * this.gridSize;
 
-    this.ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+    this.ctx.save();
+    this.ctx.setTransform(this.zoom, 0, 0, this.zoom, this.offsetX, this.offsetY);
+    this.ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+
+    const dotSize = 1.5 / this.zoom;
+    this.ctx.beginPath();
     for (let x = startX; x <= endX; x += this.gridSize) {
       for (let y = startY; y <= endY; y += this.gridSize) {
-        const screenPos = this.worldToScreen(x, y);
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, 1.2 * this.zoom, 0, Math.PI * 2);
-        this.ctx.fill();
+        this.ctx.rect(x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
       }
     }
+    this.ctx.fill();
+    this.ctx.restore();
   }
 
   private drawComponent(comp: ComponentInstance): void {
@@ -2109,6 +2113,111 @@ export class CanvasOrchestrator {
       this.selectedComponent = null;
     } else if (this.selectedComponent) {
       this.removeComponent(this.selectedComponent.id);
+      this.selectedComponent = null;
+    }
+  }
+
+  public fitAll(): void {
+    if (this.components.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const comp of this.components) {
+      const bounds = getComponentBounds(comp);
+      minX = Math.min(minX, bounds.x);
+      minY = Math.min(minY, bounds.y);
+      maxX = Math.max(maxX, bounds.x + bounds.width);
+      maxY = Math.max(maxY, bounds.y + bounds.height);
+    }
+
+    for (const wire of this.wires) {
+      for (const pt of wire.points) {
+        minX = Math.min(minX, pt.x);
+        minY = Math.min(minY, pt.y);
+        maxX = Math.max(maxX, pt.x);
+        maxY = Math.max(maxY, pt.y);
+      }
+    }
+
+    const margin = 40;
+    minX -= margin;
+    minY -= margin;
+    maxX += margin;
+    maxY += margin;
+
+    const canvasW = this.canvas.width;
+    const canvasH = this.canvas.height;
+    const worldW = maxX - minX;
+    const worldH = maxY - minY;
+    if (worldW <= 0 || worldH <= 0 || canvasW <= 0 || canvasH <= 0) return;
+
+    const zoomX = canvasW / worldW;
+    const zoomY = canvasH / worldH;
+    this.zoom = Math.min(zoomX, zoomY, this.maxZoom);
+    this.zoom = Math.max(this.zoom, this.minZoom);
+
+    this.offsetX = (canvasW - (minX + maxX) * this.zoom) / 2;
+    this.offsetY = (canvasH - (minY + maxY) * this.zoom) / 2;
+  }
+
+  public resetCameraToCircuit(): void {
+    if (this.components.length === 0) {
+      this.zoom = 1.0;
+      this.offsetX = this.canvas.width / 2;
+      this.offsetY = this.canvas.height / 2;
+      this.render();
+      return;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const comp of this.components) {
+      const bounds = getComponentBounds(comp);
+      minX = Math.min(minX, bounds.x);
+      minY = Math.min(minY, bounds.y);
+      maxX = Math.max(maxX, bounds.x + bounds.width);
+      maxY = Math.max(maxY, bounds.y + bounds.height);
+    }
+
+    const margin = 40;
+    minX -= margin;
+    minY -= margin;
+    maxX += margin;
+    maxY += margin;
+
+    const canvasW = this.canvas.width;
+    const canvasH = this.canvas.height;
+    const worldW = maxX - minX;
+    const worldH = maxY - minY;
+
+    if (worldW <= 0 || worldH <= 0 || canvasW <= 0 || canvasH <= 0) return;
+
+    const zoomX = canvasW / worldW;
+    const zoomY = canvasH / worldH;
+    
+    let targetZoom = Math.min(zoomX, zoomY, this.maxZoom);
+    targetZoom = Math.max(targetZoom, this.minZoom);
+
+    this.zoom = targetZoom;
+    this.offsetX = (canvasW - (minX + maxX) * this.zoom) / 2;
+    this.offsetY = (canvasH - (minY + maxY) * this.zoom) / 2;
+    
+    this.render();
+  }
+
+  public cancelWire(): void {
+    this.activePinForWire = null;
+    this.tempWireEnd = null;
+  }
+
+  public selectAll(): void {
+    this.selectedWire = null;
+    this.selectedComponents = [...this.components];
+    if (this.selectedComponents.length === 1) {
+      this.selectedComponent = this.selectedComponents[0];
+    } else if (this.selectedComponents.length > 0) {
       this.selectedComponent = null;
     }
   }

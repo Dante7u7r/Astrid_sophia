@@ -28,6 +28,7 @@ import { TooltipManager } from "./ui/tooltip_manager";
 import { TabManager, type Tab } from "./ui/tab_manager";
 import { PropertyEditor } from "./ui/property_editor";
 import { ExporterPanel } from "./ui/exporter_panel";
+import { CommandHistory } from "./canvas/command_history";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 
@@ -65,6 +66,9 @@ let exporterPanel: ExporterPanel | null = null;
 // Instancias de submódulos UI modularizados
 let telemetryPanel: TelemetryPanel | null = null;
 let oscilloscopePanel: OscilloscopePanel | null = null;
+
+// Historial de comandos para undo/redo
+const commandHistory = new CommandHistory({ maxHistorySize: 200 });
 
 // Mapa global de voltajes resueltos para visualización
 // (centralizado en circuitState.getVoltageMap())
@@ -132,6 +136,8 @@ function doCanvasRender(): void {
       sparMarkers.length > 0 ? sparMarkers : undefined,
     );
   }
+
+  oscilloscopePanel?.draw();
 }
 
 function updateCanvasRendering(immediate = false): void {
@@ -684,6 +690,12 @@ function initCanvasCAD() {
     onComponentPlaced: (comp) => {
       updatePropertiesPanel(comp);
     },
+    onUndo: () => commandHistory.undo(),
+    onRedo: () => commandHistory.redo(),
+    onSelectAll: () => orchestrator?.selectAll(),
+    onFitAll: () => orchestrator?.resetCameraToCircuit(),
+    onEscape: () => orchestrator?.cancelWire(),
+    onWireMode: () => addLog("Wire mode placeholder (doble click en pin para conectar)", "system"),
   });
 
   const canvasViewport = document.querySelector("#canvas-viewport") as HTMLElement;
