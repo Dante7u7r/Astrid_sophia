@@ -394,7 +394,7 @@ export class CanvasOrchestrator {
 
   public isVisible(box: BoundingBox): boolean {
     const topLeft = this.screenToWorld(0, 0);
-    const bottomRight = this.screenToWorld(this.canvas.width, this.canvas.height);
+    const bottomRight = this.screenToWorld(this.canvas.clientWidth, this.canvas.clientHeight);
 
     return (
       box.x + box.width >= topLeft.x &&
@@ -434,8 +434,8 @@ export class CanvasOrchestrator {
     const center = this.getCircuitGeometricCenter();
     const Gx = center.x;
     const Gy = center.y;
-    const canvasWidth = this.canvas.width;
-    const canvasHeight = this.canvas.height;
+    const canvasWidth = this.canvas.clientWidth;
+    const canvasHeight = this.canvas.clientHeight;
 
     // Offset required to place Gx at screen coordinate X is: screenX - Gx * zoom
     // We constrain screenX between [0, canvasWidth]
@@ -468,24 +468,35 @@ export class CanvasOrchestrator {
   // --- DRAWING / RENDERING ---
 
   public render(_voltageMap: Record<string, number> = {}, probes: { ch1?: Point2D; ch2?: Point2D; ch3?: Point2D; ch4?: Point2D } = {}, nodeMap: Record<string, string> = {}, sparMarkers?: { index: number; x: number; y: number }[]): void {
-    const { width, height } = this.canvas;
-    
-    // Sync actual drawing bounds
-    if (this.canvas.width !== this.canvas.clientWidth || this.canvas.height !== this.canvas.clientHeight) {
-      this.canvas.width = this.canvas.clientWidth;
-      this.canvas.height = this.canvas.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = this.canvas.clientWidth;
+    const cssHeight = this.canvas.clientHeight;
+
+    // 1. Sync physical buffer to CSS size × devicePixelRatio
+    if (this.canvas.width !== cssWidth * dpr || this.canvas.height !== cssHeight * dpr) {
+      this.canvas.width = cssWidth * dpr;
+      this.canvas.height = cssHeight * dpr;
+      this.canvas.style.width = `${cssWidth}px`;
+      this.canvas.style.height = `${cssHeight}px`;
     }
 
     this.clampCameraOffsets();
 
-    this.ctx.clearRect(0, 0, width, height);
+    // 2. Reset transform to identity, clear the entire physical buffer
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.save();
 
-    // 1. Draw Background Grid
-    this.drawWorldGrid();
+    // 3. Apply Camera Transformations (zoom & pan) scaled by DPR
+    this.ctx.setTransform(
+      this.zoom * dpr, 0,
+      0, this.zoom * dpr,
+      this.offsetX * dpr,
+      this.offsetY * dpr,
+    );
 
-    // 2. Apply Camera Transformations
-    this.ctx.setTransform(this.zoom, 0, 0, this.zoom, this.offsetX, this.offsetY);
+    // 4. Draw Background Grid
+    this.drawWorldGrid(dpr);
 
     // 3. Draw Wires
     this.drawWires(_voltageMap);
@@ -622,10 +633,11 @@ export class CanvasOrchestrator {
     this.ctx.restore();
   }
 
-  private drawWorldGrid(): void {
-    const { width, height } = this.canvas;
+  private drawWorldGrid(dpr: number = 1): void {
+    const cssW = this.canvas.clientWidth;
+    const cssH = this.canvas.clientHeight;
     const topLeft = this.screenToWorld(0, 0);
-    const bottomRight = this.screenToWorld(width, height);
+    const bottomRight = this.screenToWorld(cssW, cssH);
 
     const startX = Math.floor(topLeft.x / this.gridSize) * this.gridSize;
     const endX = Math.ceil(bottomRight.x / this.gridSize) * this.gridSize;
@@ -633,7 +645,12 @@ export class CanvasOrchestrator {
     const endY = Math.ceil(bottomRight.y / this.gridSize) * this.gridSize;
 
     this.ctx.save();
-    this.ctx.setTransform(this.zoom, 0, 0, this.zoom, this.offsetX, this.offsetY);
+    this.ctx.setTransform(
+      this.zoom * dpr, 0,
+      0, this.zoom * dpr,
+      this.offsetX * dpr,
+      this.offsetY * dpr,
+    );
     this.ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
 
     const dotSize = 1.5 / this.zoom;
@@ -1284,8 +1301,8 @@ export class CanvasOrchestrator {
     maxX += margin;
     maxY += margin;
 
-    const canvasW = this.canvas.width;
-    const canvasH = this.canvas.height;
+    const canvasW = this.canvas.clientWidth;
+    const canvasH = this.canvas.clientHeight;
     const worldW = maxX - minX;
     const worldH = maxY - minY;
     if (worldW <= 0 || worldH <= 0 || canvasW <= 0 || canvasH <= 0) return;
@@ -1302,8 +1319,8 @@ export class CanvasOrchestrator {
   public resetCameraToCircuit(): void {
     if (this.components.length === 0) {
       this.zoom = 1.0;
-      this.offsetX = this.canvas.width / 2;
-      this.offsetY = this.canvas.height / 2;
+      this.offsetX = this.canvas.clientWidth / 2;
+      this.offsetY = this.canvas.clientHeight / 2;
       this.render();
       return;
     }
@@ -1327,8 +1344,8 @@ export class CanvasOrchestrator {
     maxX += margin;
     maxY += margin;
 
-    const canvasW = this.canvas.width;
-    const canvasH = this.canvas.height;
+    const canvasW = this.canvas.clientWidth;
+    const canvasH = this.canvas.clientHeight;
     const worldW = maxX - minX;
     const worldH = maxY - minY;
 
