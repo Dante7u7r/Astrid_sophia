@@ -1,7 +1,7 @@
-# Astryd Sophia Skills — v2.1
+# Astryd Sophia Skills — v2.2
 **PhD-Grade Reference Package**
 
-Eight domain-specific skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
+Nine domain-specific skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
 
 ---
 
@@ -48,11 +48,37 @@ Astryd_Sophia_Skills/
 │   └── examples/
 │       └── subcircuit_expander.rs     ← lexer, hierarchical flattener, ParamContext, MNA output
 │
-└── realtime-cosimulation-runtime/
+├── realtime-cosimulation-runtime/
     ├── SKILL.md                       ← solver thread, lock-step MCU sync, 60 FPS telemetry, hot mutation
     └── examples/
         └── runtime_orchestrator.rs    ← native thread loop, MPSC drain, binary telemetry, cancel flag
+│
+└── circuit-sim-ux/
+    ├── SKILL.md                       ← 4-domain UX skill: canvas/wiring, sim feedback, inspector, selection
+    ├── references/
+    │   ├── canvas-wiring.md           ← snap-to-grid (GRID_STEP_PX=20), net model, ortho routing, pan/zoom
+    │   ├── simulation-feedback.md     ← SimulationFrame contract, HSL voltage scale, current animation, ERC feedback
+    │   ├── component-inspector.md     ← SPICE suffix parser (M-vs-Meg trap), real-time validation, batch edit
+    │   └── selection-history-shortcuts.md  ← rubber-band select, Command pattern undo/redo, EDA keymap
+    └── assets/components/
+        ├── net-graph.ts               ← DSU union-find, PinRef/NetWireRef, rebuildFromScratch, getVoltageKey
+        ├── wire-router.ts             ← orthogonal Manhattan routing, obstacle avoidance, Z-shape fallback
+        ├── voltage-color-scale.ts     ← HSL hue map, colorForNet(netId, frame, range), auto-range from frame
+        ├── current-flow-animation.tsx ← rAF particle system, speed ∝ |I|, direction from sign, threshold gate
+        ├── spice-value-parser.ts      ← suffix table (T/G/Meg/k/m/u/n/p/f), M-vs-Meg guard, 18 self-tests
+        ├── transient-stream.ts        ← sim-frame-update listener, dispose() lifecycle, currentForWire()
+        ├── simulation-error.ts        ← Result<T,String> classifier, 4 error kinds, componentId extraction
+        ├── command-history.ts         ← Command pattern, beginGroup/endGroup drag aggregation, batch move
+        └── INTEGRATION-EXAMPLE.tsx   ← end-to-end: streaming → NetGraph → colorForNet → CurrentFlowAnimation
 ```
+
+---
+
+## What changed from v2.1
+
+| Skill | Key additions |
+|---|---|
+| **circuit-sim-ux** | New skill. EDA-grade UX reference for schematic editors benchmarked against LTspice/KiCad/Multisim. 4 reference docs + 9 TypeScript/React implementation files. DSU `NetGraph` with `rebuildFromScratch` + `getVoltageKey` bridging TS net naming to Rust `HashMap<String,f64>` keys. `SimulationFrame` streaming via `sim-frame-update` Tauri event with `dispose()` lifecycle guard. `Result<T,String>` → structured error classifier with 4 kinds and component-id extraction. HSL voltage colour scale with `colorForNet()`, rAF current-flow particle animation, SPICE suffix parser with M-vs-Meg guard (18 self-tests), Command-pattern undo/redo with drag aggregation via `beginGroup`/`endGroup`. All 9 source files compile clean under `strict` mode against `@tauri-apps/api` v2 real types. |
 
 ---
 

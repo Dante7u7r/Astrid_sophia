@@ -274,7 +274,7 @@ export interface DispatchConfig {
   readonly simulationRunner?: SimulationRunner | null;
   readonly solveCircuitTS?: (netlist: CircuitNetlist) => TSResult | string;
   readonly solveTransientCircuitLocal?:
-    (netlist: CircuitNetlist, dt: number, tMax: number) => TimeStepResult[] | string;
+    (netlist: CircuitNetlist, dt: number, tMax: number) => Promise<TimeStepResult[] | string> | TimeStepResult[] | string;
   /** Modos que requieren lógica DOM/UI especial (PVT, SPAR) */
   readonly onSpecialMode?: (netlist: CircuitNetlist, mode: AnalysisMode) => Promise<void>;
 }
@@ -443,7 +443,7 @@ export async function dispatchSimulation(
 
       // Retardo estratégico de 300ms para emular latencia de red
       // y permitir que la UI termine de renderizar el estado de carga.
-      fallbackTimeoutId = setTimeout(() => {
+      fallbackTimeoutId = setTimeout(async () => {
         fallbackTimeoutId = null;
         if (mode === 'AC') {
           // Filtro pasa-bajos demo para respuesta en frecuencia
@@ -497,7 +497,7 @@ export async function dispatchSimulation(
             }
             return;
           }
-          const tsRes = config.solveTransientCircuitLocal(netlist, config.simSettings.dt, config.transientDuration);
+          const tsRes = await config.solveTransientCircuitLocal(netlist, config.simSettings.dt, config.transientDuration);
           if (typeof tsRes === "string") {
             callbacks.addLog(`Error del solucionador transitorio local: ${tsRes}`, "error");
           } else {

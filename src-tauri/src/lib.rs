@@ -1,4 +1,16 @@
-#![allow(clippy::all)]
+#![allow(
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::for_kv_map,
+    clippy::unnecessary_lazy_evaluations,
+    clippy::doc_lazy_continuation,
+    clippy::approx_constant,
+    clippy::float_cmp,
+    clippy::type_complexity,
+    clippy::needless_borrow,
+    clippy::single_match,
+    clippy::collapsible_match
+)]
 pub mod solver;
 mod telemetry;
 pub mod parser;
@@ -16,6 +28,63 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", content = "details")]
+pub enum SimulationError {
+    SingularMatrix { message: String, node: Option<String> },
+    MaxIterationsExceeded { message: String, component: Option<String> },
+    ConvergenceFailure { message: String, component: Option<String> },
+    InvalidCircuit { message: String, reason: String },
+    Unknown { message: String },
+}
+
+impl std::fmt::Display for SimulationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SingularMatrix { message, .. } => write!(f, "{}", message),
+            Self::MaxIterationsExceeded { message, .. } => write!(f, "{}", message),
+            Self::ConvergenceFailure { message, .. } => write!(f, "{}", message),
+            Self::InvalidCircuit { message, .. } => write!(f, "{}", message),
+            Self::Unknown { message } => write!(f, "{}", message),
+        }
+    }
+}
+
+impl std::error::Error for SimulationError {}
+
+impl From<String> for SimulationError {
+    fn from(err: String) -> Self {
+        if err.contains("singular") {
+            let node = err.split("node ").nth(1).or_else(|| err.split("at ").nth(1)).map(|s| s.trim().to_string());
+            SimulationError::SingularMatrix {
+                message: "Matriz singular: circuito no resuelto. Puede haber un nodo flotante o falta de referencia a tierra.".to_string(),
+                node,
+            }
+        } else if err.contains("limit") || err.contains("max") || err.contains("iteration") {
+            let component = err.split("diode ").nth(1).or_else(|| err.split("on ").nth(1)).map(|s| s.trim().to_string());
+            SimulationError::MaxIterationsExceeded {
+                message: "Se ha excedido el límite máximo de iteraciones Newton-Raphson. Comprueba los componentes no lineales o las fuentes de excitación.".to_string(),
+                component,
+            }
+        } else if err.contains("converg") {
+            let component = err.split("diode ").nth(1).or_else(|| err.split("on ").nth(1)).map(|s| s.trim().to_string());
+            SimulationError::ConvergenceFailure {
+                message: "El solucionador Newton-Raphson no convergió al punto de operación.".to_string(),
+                component,
+            }
+        } else if err.contains("invalid") || err.contains("netlist") || err.contains("missing") {
+            SimulationError::InvalidCircuit {
+                message: "Circuito o netlist inválida.".to_string(),
+                reason: err.clone(),
+            }
+        } else {
+            SimulationError::Unknown {
+                message: format!("Error en el solver de Rust: {}", err),
+            }
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -47,41 +116,41 @@ fn ping() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn run_dc_simulation(netlist: solver::CircuitNetlist) -> Result<solver::SimulationResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_dc_circuit(&netlist)
+async fn run_dc_simulation(netlist: solver::CircuitNetlist) -> Result<solver::SimulationResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_dc_circuit(&netlist).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_transient_simulation(
     netlist: solver::CircuitNetlist,
     settings: solver::TransientSettings,
-) -> Result<Vec<solver::TimeStepResult>, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_transient_circuit(&netlist, &settings)
+) -> Result<Vec<solver::TimeStepResult>, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_transient_circuit(&netlist, &settings).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_ac_sweep(
     netlist: solver::CircuitNetlist,
     settings: solver::AcSweepSettings,
-) -> Result<solver::AcSweepResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_ac_sweep(&netlist, &settings)
+) -> Result<solver::AcSweepResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_ac_sweep(&netlist, &settings).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_dc_sweep(
     netlist: solver::CircuitNetlist,
     settings: solver::DcSweepSettings,
-) -> Result<solver::DcSweepResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_dc_sweep(&netlist, &settings)
+) -> Result<solver::DcSweepResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_dc_sweep(&netlist, &settings).map_err(SimulationError::from)
 }
 
 #[tauri::command]
-async fn parse_spice_netlist(netlist_str: String) -> Result<solver::CircuitNetlist, String> {
-    parser::parse_spice_netlist_to_native(&netlist_str)
+async fn parse_spice_netlist(netlist_str: String) -> Result<solver::CircuitNetlist, SimulationError> {
+    parser::parse_spice_netlist_to_native(&netlist_str).map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -89,9 +158,9 @@ async fn run_monte_carlo_transient(
     netlist: solver::CircuitNetlist,
     transient_settings: solver::TransientSettings,
     mc_settings: solver::MonteCarloSettings,
-) -> Result<Vec<Vec<solver::TimeStepResult>>, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_monte_carlo_transient(&netlist, &transient_settings, &mc_settings)
+) -> Result<Vec<Vec<solver::TimeStepResult>>, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_monte_carlo_transient(&netlist, &transient_settings, &mc_settings).map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -99,8 +168,8 @@ async fn run_fft_analysis(
     time_steps: Vec<solver::TimeStepResult>,
     node_name: String,
     fundamental_freq: f64,
-) -> Result<solver::FftResult, String> {
-    solver::calculate_fft_and_thd(&time_steps, &node_name, fundamental_freq)
+) -> Result<solver::FftResult, SimulationError> {
+    solver::calculate_fft_and_thd(&time_steps, &node_name, fundamental_freq).map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -109,74 +178,74 @@ async fn run_imd_analysis(
     node_name: String,
     f1: f64,
     f2: f64,
-) -> Result<solver::ImdResult, String> {
-    solver::calculate_imd_analysis(&time_steps, &node_name, f1, f2)
+) -> Result<solver::ImdResult, SimulationError> {
+    solver::calculate_imd_analysis(&time_steps, &node_name, f1, f2).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_noise_sweep(
     netlist: solver::CircuitNetlist,
     settings: solver::NoiseSweepSettings,
-) -> Result<solver::NoiseSweepResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_noise_sweep(&netlist, &settings)
+) -> Result<solver::NoiseSweepResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_noise_sweep(&netlist, &settings).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn evaluate_measures(
     time_steps: Vec<solver::TimeStepResult>,
     directives: Vec<solver::MeasureDirective>,
-) -> Result<solver::MeasureResult, String> {
+) -> Result<solver::MeasureResult, SimulationError> {
     Ok(solver::evaluate_measures(&time_steps, &directives))
 }
 
 #[tauri::command]
 async fn expand_transmission_line(
     params: solver::TransmissionLineParams,
-) -> Result<Vec<solver::ComponentData>, String> {
+) -> Result<Vec<solver::ComponentData>, SimulationError> {
     Ok(solver::expand_transmission_line(&params))
 }
 
 #[tauri::command]
 async fn run_sensitivity_analysis(
     netlist: solver::CircuitNetlist,
-) -> Result<solver::SensitivityResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_dc_sensitivity(&netlist)
+) -> Result<solver::SensitivityResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_dc_sensitivity(&netlist).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn solve_dc_thermal(
     netlist: solver::CircuitNetlist,
     temp_k: f64,
-) -> Result<solver::SimulationResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_dc_circuit_thermal(&netlist, temp_k)
+) -> Result<solver::SimulationResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_dc_circuit_thermal(&netlist, temp_k).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_pss_simulation(
     netlist: solver::CircuitNetlist,
     settings: solver::PssSettings,
-) -> Result<Vec<solver::TimeStepResult>, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::solve_pss(&netlist, &settings)
+) -> Result<Vec<solver::TimeStepResult>, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::solve_pss(&netlist, &settings).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_stability_analysis(
     netlist: solver::CircuitNetlist,
-) -> Result<solver::PoleZeroResult, String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
-    solver::run_stability_analysis(&netlist)
+) -> Result<solver::PoleZeroResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    solver::run_stability_analysis(&netlist).map_err(SimulationError::from)
 }
 
 #[tauri::command]
 fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
     mutation: ComponentMutation,
-) -> Result<(), String> {
-    let mut queue = state.hot_mutations.lock().map_err(|e| e.to_string())?;
+) -> Result<(), SimulationError> {
+    let mut queue = state.hot_mutations.lock().map_err(|e| SimulationError::from(e.to_string()))?;
     queue.push(mutation);
     Ok(())
 }
@@ -187,8 +256,8 @@ async fn start_interactive_transient(
     state: tauri::State<'_, SimulationControlState>,
     netlist: solver::CircuitNetlist,
     settings: solver::TransientSettings,
-) -> Result<(), String> {
-    let netlist = parser::expand_netlist_subcircuits(&netlist)?;
+) -> Result<(), SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
     state.is_running.store(true, Ordering::SeqCst);
     let is_running = state.is_running.clone();
     let hot_mutations = state.hot_mutations.clone();
@@ -242,14 +311,14 @@ async fn start_interactive_transient(
                 }
             }
             if let Err(ref e) = result {
-                window_inner.emit("sim-frame-error", e).ok();
+                window_inner.emit("sim-frame-error", &SimulationError::from(e.clone())).ok();
             }
         }));
 
         if catch_result.is_err() {
             window.emit(
                 "sim-frame-error",
-                &"Pánico inesperado en el motor de simulación de Rust".to_string()
+                &SimulationError::Unknown { message: "Pánico inesperado en el motor de simulación de Rust".to_string() }
             ).ok();
         }
 

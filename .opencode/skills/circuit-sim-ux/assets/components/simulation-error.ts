@@ -79,43 +79,7 @@ const PATTERNS: Array<{ kind: SimulationErrorKind; regex: RegExp; userMessage: s
 // segura, no un error.
 const COMPONENT_OR_NET_ID_PATTERN = /\b([A-Z]{1,3}\d+|N\$\d+)\b/;
 
-export function classifySimulationError(error: any): ClassifiedSimulationError {
-  if (error && typeof error === "object" && "kind" in error && "details" in error) {
-    const kind = error.kind;
-    const details = error.details as any;
-    const rawMessage = details.message || JSON.stringify(error);
-    
-    let tsKind: SimulationErrorKind = "unknown";
-    let suspectedComponentOrNetId: string | null = null;
-    let userMessage = details.message || "";
-
-    if (kind === "SingularMatrix") {
-      tsKind = "singular-matrix";
-      suspectedComponentOrNetId = details.node || null;
-      userMessage = details.message;
-    } else if (kind === "MaxIterationsExceeded") {
-      tsKind = "max-iterations-exceeded";
-      suspectedComponentOrNetId = details.component || null;
-      userMessage = details.message;
-    } else if (kind === "ConvergenceFailure") {
-      tsKind = "convergence-failure";
-      suspectedComponentOrNetId = details.component || null;
-      userMessage = details.message;
-    } else if (kind === "InvalidCircuit") {
-      tsKind = "invalid-circuit";
-      userMessage = details.message;
-    }
-
-    return {
-      kind: tsKind,
-      rawMessage,
-      userMessage,
-      suspectedComponentOrNetId,
-    };
-  }
-
-  const rawMessage = error instanceof Error ? error.message : String(error);
-
+export function classifySimulationError(rawMessage: string): ClassifiedSimulationError {
   for (const pattern of PATTERNS) {
     if (pattern.regex.test(rawMessage)) {
       const idMatch = rawMessage.match(COMPONENT_OR_NET_ID_PATTERN);
@@ -156,6 +120,7 @@ export async function callSimulationCommand<T>(
     const value = await invokeFn();
     return { ok: true, value };
   } catch (err) {
-    return { ok: false, error: classifySimulationError(err) };
+    const rawMessage = typeof err === "string" ? err : String(err);
+    return { ok: false, error: classifySimulationError(rawMessage) };
   }
 }
