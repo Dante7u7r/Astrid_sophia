@@ -119,29 +119,37 @@ body {
 
 /* ══ PANELES LATERALES ═══════════════════════════ */
 .sidebar-panel {
-  height: 100%;
+  height: calc(100% - 24px);
+  margin: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: rgba(6, 9, 16, 0.5);
-  backdrop-filter: blur(8px);
+  background: rgba(8, 12, 22, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-depth);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.25s ease;
+              opacity 0.25s ease,
+              margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-left {
   width: var(--left-panel-width);
-  border-right: 1px solid var(--border-subtle);
+  margin-right: 6px;
+  border-radius: 16px;
 }
 
 .sidebar-right {
   width: var(--right-panel-width);
-  border-left: 1px solid var(--border-subtle);
+  margin-left: 6px;
+  border-radius: 16px;
 }
 
 .sidebar-left.collapsed,
 .sidebar-right.collapsed {
   width: 0;
+  margin: 12px 0;
   opacity: 0;
   pointer-events: none;
 }
@@ -150,8 +158,12 @@ body {
 .workspace-center {
   display: grid;
   grid-template-rows: var(--tabs-h) 1fr auto;
-  height: 100%;
-  min-height: 0;
+  height: calc(100% - 24px);
+  margin: 12px 6px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-void);
+  box-shadow: var(--shadow-depth);
   overflow: hidden;
 }
 
@@ -195,16 +207,21 @@ body {
 /* ══ DOCK INFERIOR ═══════════════════════════════ */
 .bottom-dock {
   height: var(--osc-panel-height);
-  background: rgba(4, 6, 12, 0.75);
-  border-top: 1px solid var(--border-subtle);
+  background: rgba(4, 6, 12, 0.82);
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   overflow: hidden;
   transition: var(--transition);
+  margin: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .bottom-dock.collapsed {
   height: 0;
+  margin: 0;
+  border-width: 0;
   opacity: 0;
   pointer-events: none;
 }
