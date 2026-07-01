@@ -15,9 +15,10 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer' | 'ldr';
   value: number | string;
   wiperPosition?: number; // Cursor del potenciómetro (0.01 - 0.99)
+  lux?: number; // Iluminación en Luxes para LDR (1 - 10000)
   x: number;
   y: number;
   rotation: number; // 0, 90, 180, 270 degrees
@@ -679,6 +680,43 @@ export class CanvasOrchestrator {
         this.ctx.lineTo(-4, 10);
         this.ctx.moveTo(0, 5);
         this.ctx.lineTo(4, 10);
+        this.ctx.stroke();
+        break;
+
+      case 'ldr':
+        // 1. Resistor zig-zag core
+        this.ctx.moveTo(-20, 0);
+        this.ctx.lineTo(-15, -8);
+        this.ctx.lineTo(-10, 8);
+        this.ctx.lineTo(-5, -8);
+        this.ctx.lineTo(0, 8);
+        this.ctx.lineTo(5, -8);
+        this.ctx.lineTo(10, 8);
+        this.ctx.lineTo(15, -8);
+        this.ctx.lineTo(20, 0);
+        this.ctx.stroke();
+
+        // 2. Outer circle
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, 24, 0, 2 * Math.PI);
+        this.ctx.stroke();
+
+        // 3. Two incoming light arrows pointing from top-left to center-ish
+        this.ctx.beginPath();
+        this.ctx.moveTo(-22, -22);
+        this.ctx.lineTo(-12, -12);
+        // Arrow head 1
+        this.ctx.lineTo(-12, -16);
+        this.ctx.moveTo(-12, -12);
+        this.ctx.lineTo(-16, -12);
+
+        // Arrow 2
+        this.ctx.moveTo(-16, -26);
+        this.ctx.lineTo(-6, -16);
+        // Arrow head 2
+        this.ctx.lineTo(-6, -20);
+        this.ctx.moveTo(-6, -16);
+        this.ctx.lineTo(-10, -16);
         this.ctx.stroke();
         break;
 

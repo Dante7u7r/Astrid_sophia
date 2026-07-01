@@ -196,6 +196,28 @@ export function extractElectricalNetlist(
         value: r2Val,
         pins: [pin1Node, pin2Node],
       });
+    } else if (comp.type === 'ldr') {
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+
+      const pin0Node = pinsMapped[0] || "0";
+      const pin1Node = pinsMapped[1] || "0";
+
+      const luxVal = comp.lux ?? 100;
+      const rVal = 500.0 + 500000.0 / Math.max(1, luxVal);
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: rVal,
+        pins: [pin0Node, pin1Node],
+      });
     } else if (comp.type === 'lamp') {
       const model = parseLampActuatorModel(comp.value?.toString() ?? "");
       const pinsMapped = pinsKeys.map(pk => {

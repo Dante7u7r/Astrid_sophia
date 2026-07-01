@@ -135,7 +135,21 @@ export class PropertyEditor {
       }
     }
 
-    if (comp.type === 'x') {
+    const ldrContainer = document.querySelector("#ldr-container") as HTMLElement;
+    const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
+    const luxDisplay = document.querySelector("#prop-lux-display") as HTMLElement;
+    if (ldrContainer && luxSlider && luxDisplay) {
+      if (comp.type === 'ldr') {
+        ldrContainer.style.display = "flex";
+        const luxVal = comp.lux ?? 100;
+        luxSlider.value = luxVal.toString();
+        luxDisplay.textContent = `${luxVal} Lx`;
+      } else {
+        ldrContainer.style.display = "none";
+      }
+    }
+
+    if (comp.type === 'x' || comp.type === 'ldr') {
       if (valGroup) valGroup.style.display = "none";
       if (unitGroup) unitGroup.style.display = "none";
     }
@@ -224,6 +238,15 @@ export class PropertyEditor {
       });
     }
 
+    const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
+    const luxDisplay = document.querySelector("#prop-lux-display") as HTMLElement;
+    if (luxSlider && luxDisplay) {
+      luxSlider.addEventListener("input", (e) => {
+        const val = parseInt((e.target as HTMLInputElement).value) || 100;
+        luxDisplay.textContent = `${val} Lx`;
+      });
+    }
+
     if (this.propValInput && this.propValSlider) {
       this.propValSlider.addEventListener("input", (e) => {
         const val = (e.target as HTMLInputElement).value;
@@ -307,6 +330,13 @@ export class PropertyEditor {
             const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
             if (wiperSlider) {
               selected.wiperPosition = parseFloat(wiperSlider.value) || 0.5;
+            }
+          }
+
+          if (selected.type === 'ldr') {
+            const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
+            if (luxSlider) {
+              selected.lux = parseInt(luxSlider.value) || 100;
             }
           }
 

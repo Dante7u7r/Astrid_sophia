@@ -157,4 +157,29 @@ describe("extractElectricalNetlist", () => {
     expect(r2!.pins[0]).toBe("0");
     expect(r2!.pins[1]).toBe(pinToNodeMap["POT1:2"]);
   });
+
+  test("extrae LDR como una resistencia dependiente de los luxes", () => {
+    const components: ComponentInstance[] = [
+      {
+        id: "LDR1", type: "ldr", lux: 100, x: 0, y: 0, rotation: 0,
+      } as unknown as ComponentInstance
+    ];
+
+    const wires: WireInstance[] = [];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      return [
+        { componentId: c.id, pinIndex: 0, x: 0, y: 0 },
+        { componentId: c.id, pinIndex: 1, x: 0, y: 0 }
+      ];
+    };
+
+    const { netlist } = extractElectricalNetlist(components, wires, getPins);
+    const rLdr = netlist.components.find(comp => comp.id === "LDR1");
+    expect(rLdr).toBeDefined();
+    expect(rLdr!.type).toBe("resistor");
+    
+    // R = 500 + 500000 / 100 = 5500 Ohms
+    expect(rLdr!.value).toBeCloseTo(5500);
+  });
 });
