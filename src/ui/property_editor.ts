@@ -1,6 +1,7 @@
 import { type ComponentInstance, type CanvasOrchestrator } from "../canvas_orchestrator";
 import { type McuDebugPanel } from "./mcu_debug_panel";
 import { type SimulationRunner } from "../simulation/simulation_runner";
+import { parseSpiceValue, formatSpiceValue } from "../simulation/spice_value_parser";
 
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
@@ -57,7 +58,7 @@ export class PropertyEditor {
     if (!this.propIdInput || !this.propValInput || !this.propValSlider || !this.propUnitInput) return;
 
     this.propIdInput.value = comp.id;
-    this.propValInput.value = comp.value.toString();
+    this.propValInput.value = formatSpiceValue(Number(comp.value) || 0);
     this.propValSlider.value = comp.value.toString();
 
     const mcuDebugPanel = this.callbacks.getMcuDebugPanel();
@@ -316,7 +317,8 @@ export class PropertyEditor {
         if (selected) {
           const oldId = selected.id;
           const newId = this.propIdInput!.value.trim();
-          const newVal = parseFloat(this.propValInput!.value) || 0;
+          const parsed = parseSpiceValue(this.propValInput!.value);
+          const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
 
           if (newId.length > 0 && newId !== oldId) {
             const duplicate = activeOrchestrator.components.some(c => c.id === newId);
@@ -328,6 +330,7 @@ export class PropertyEditor {
           }
 
           selected.value = newVal;
+          this.propValInput!.value = formatSpiceValue(newVal);
 
           if (selected.type === 'vsource' || selected.type === 'isource') {
             const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
@@ -344,7 +347,7 @@ export class PropertyEditor {
               selected.dutyCycle = parseFloat(waveDutyInput.value) || 0.5;
 
               selected.value = selected.offset;
-              this.propValInput!.value = selected.value.toString();
+              this.propValInput!.value = formatSpiceValue(selected.value);
               this.propValSlider!.value = selected.value.toString();
             }
           }

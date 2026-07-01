@@ -2173,6 +2173,17 @@ export class CanvasOrchestrator {
     this.syncWireConnections();
   }
 
+  public rotateSelectedByDegrees(deltaDegrees: number): void {
+    if (this.selectedComponents.length > 0) {
+      for (const comp of this.selectedComponents) {
+        comp.rotation = (comp.rotation + deltaDegrees + 360) % 360;
+      }
+    } else if (this.selectedComponent) {
+      this.selectedComponent.rotation = (this.selectedComponent.rotation + deltaDegrees + 360) % 360;
+    }
+    this.syncWireConnections();
+  }
+
   public mirrorSelectedComponent(): void {
     if (this.selectedComponents.length > 0) {
       for (const comp of this.selectedComponents) {

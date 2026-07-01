@@ -662,7 +662,16 @@ function initCanvasCAD() {
     },
     onNetlistSync: () => extractNetlist(),
     onSelectionChanged: (comp) => {
-      if (comp) updatePropertiesPanel(comp);
+      if (comp) {
+        updatePropertiesPanel(comp);
+        if (panelLayoutManager) {
+          panelLayoutManager.setPanelCollapsed("right", false);
+        }
+      } else {
+        if (panelLayoutManager) {
+          panelLayoutManager.setPanelCollapsed("right", true);
+        }
+      }
     },
     getPinNode: (pinKey) => circuitState.getPinNode(pinKey),
     log: (text, type = "system") => addLog(text, type),
@@ -998,6 +1007,9 @@ window.addEventListener("DOMContentLoaded", () => {
       }]...`, "system");
 
       const netlist = extractNetlist();
+      if (panelLayoutManager) {
+        panelLayoutManager.setPanelCollapsed("dock", false);
+      }
       if (!netlist || netlist.components.length === 0) {
         addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
         simulationControls?.setSimulationRunning(false);

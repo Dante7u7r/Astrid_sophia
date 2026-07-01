@@ -84,6 +84,7 @@ export function attachCanvasInput(
           orchestrator.selectionStart = orchestrator.snapPointToGrid(worldPt);
           orchestrator.selectionEnd = orchestrator.snapPointToGrid(worldPt);
           callbacks.onHideMcuDebug();
+          callbacks.onSelectionChanged(null);
         } else if (orchestrator.selectedWire) {
           callbacks.log(
             `Cable seleccionado: [${orchestrator.selectedWire.id}]. Presiona Delete/Backspace para eliminarlo de forma individual.`,
@@ -181,6 +182,20 @@ export function attachCanvasInput(
   };
 
   const onWheel = (e: WheelEvent) => {
+    if (e.shiftKey && (orchestrator.selectedComponent || orchestrator.selectedComponents.length > 0)) {
+      const degrees = e.deltaY < 0 ? -15 : 15;
+      orchestrator.rotateSelectedByDegrees(degrees);
+      if (orchestrator.selectedComponents.length > 0) {
+        callbacks.log(`Lote de ${orchestrator.selectedComponents.length} componentes rotados de forma fina (15°).`, "system");
+      } else if (orchestrator.selectedComponent) {
+        callbacks.log(`Componente [${orchestrator.selectedComponent.id}] rotado de forma fina a ${orchestrator.selectedComponent.rotation}°`, "system");
+      }
+      callbacks.requestRender(true);
+      callbacks.onCanvasModified();
+      e.preventDefault();
+      return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
@@ -380,6 +395,12 @@ export function attachCanvasInput(
         callbacks.onCanvasModified();
       }));
 
+      menu.appendChild(createMenuItem("Rotar 15°", "Shift+Rueda", () => {
+        orchestrator.rotateSelectedByDegrees(15);
+        callbacks.requestRender(true);
+        callbacks.onCanvasModified();
+      }));
+
       menu.appendChild(createMenuItem("Espejar (Mirror)", "M", () => {
         orchestrator.mirrorSelectedComponent();
         callbacks.requestRender(true);
@@ -391,6 +412,15 @@ export function attachCanvasInput(
         callbacks.requestRender(true);
         callbacks.onCanvasModified();
         callbacks.onNetlistSync();
+      }));
+
+      menu.appendChild(createMenuItem("Iniciar Cable", "W", () => {
+        callbacks.onWireMode();
+      }));
+
+      menu.appendChild(createMenuItem("Copiar ID", "", () => {
+        navigator.clipboard.writeText(clickedComp.id);
+        callbacks.log(`ID del componente copiado: ${clickedComp.id}`, "system");
       }));
 
       const divider = document.createElement("div");
@@ -421,6 +451,15 @@ export function attachCanvasInput(
           callbacks.requestRender(true);
         }));
       }
+
+      const divider = document.createElement("div");
+      divider.className = "context-menu-divider";
+      menu.appendChild(divider);
+
+      menu.appendChild(createMenuItem("Restablecer Layout", "Ctrl+0", () => {
+        const event = new KeyboardEvent("keydown", { key: "0", ctrlKey: true });
+        document.dispatchEvent(event);
+      }));
     }
 
     container.appendChild(menu);

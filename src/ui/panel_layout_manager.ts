@@ -30,7 +30,7 @@ const DEFAULT_LAYOUT: PanelLayout = {
   dockHeight: 210,
   leftCollapsed: false,
   rightCollapsed: false,
-  dockCollapsed: false,
+  dockCollapsed: true,
 };
 
 const LIMITS = {
@@ -325,6 +325,32 @@ export class PanelLayoutManager {
   }
 
   // ─── API Pública ───────────────────────────────────
+
+  public setPanelCollapsed(panel: "left" | "right" | "dock", collapsed: boolean) {
+    if (panel === "left") {
+      if (this.layout.leftCollapsed === collapsed) return;
+      this.layout.leftCollapsed = collapsed;
+      if (this.sidebarLeft) {
+        this.sidebarLeft.classList.toggle("collapsed", collapsed);
+      }
+    } else if (panel === "right") {
+      if (this.layout.rightCollapsed === collapsed) return;
+      this.layout.rightCollapsed = collapsed;
+      if (this.sidebarRight) {
+        this.sidebarRight.classList.toggle("collapsed", collapsed);
+      }
+    } else {
+      if (this.layout.dockCollapsed === collapsed) return;
+      this.layout.dockCollapsed = collapsed;
+      if (this.bottomDock) {
+        this.bottomDock.classList.toggle("collapsed", collapsed);
+      }
+    }
+
+    this.syncToggleButtons();
+    this.saveLayout();
+    setTimeout(() => this.notifyResize(), 320);
+  }
 
   public togglePanel(panel: "left" | "right" | "dock") {
     if (panel === "left") {

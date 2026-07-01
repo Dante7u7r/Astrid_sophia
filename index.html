@@ -23,30 +23,16 @@
         </div>
 
         <div class="simulation-controls" id="simulation-bar">
-          <button id="analysis-dc-btn" class="btn-ctrl active" type="button">
-            <span class="btn-icon">⚖️</span> Análisis CC
-          </button>
-          <button id="analysis-ac-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">📈</span> Barrido CA
-          </button>
-          <button id="analysis-tran-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">⏱️</span> Transitorio
-          </button>
-          <button id="analysis-sens-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">🔍</span> Sensibilidad
-          </button>
-          <button id="analysis-pss-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">🔄</span> PSS
-          </button>
-          <button id="analysis-stb-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">⚖️</span> Estabilidad
-          </button>
-          <button id="analysis-pvt-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">🔬</span> PVT
-          </button>
-          <button id="analysis-spar-btn" class="btn-ctrl" type="button">
-            <span class="btn-icon">📡</span> S-Param
-          </button>
+          <select id="analysis-mode-select" class="prop-input" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-bright); border-radius: 8px; font-size: 0.72rem; padding: 4px 10px; cursor: pointer; outline: none;">
+            <option value="DC">⚖️ Análisis CC</option>
+            <option value="AC">📈 Barrido CA</option>
+            <option value="TRAN">⏱️ Transitorio</option>
+            <option value="SENS">🔍 Sensibilidad</option>
+            <option value="PSS">🔄 PSS</option>
+            <option value="STB">⚖️ Estabilidad</option>
+            <option value="PVT">🔬 PVT</option>
+            <option value="SPAR">📡 S-Param</option>
+          </select>
           <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
           <button id="run-sim-btn" class="btn-ctrl btn-run" type="button" data-tooltip="Iniciar simulación activa">
             <span class="btn-icon">▶</span> Simular
