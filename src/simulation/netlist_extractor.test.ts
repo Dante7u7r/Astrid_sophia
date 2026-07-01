@@ -105,4 +105,56 @@ describe("extractElectricalNetlist", () => {
     // R1:0 y R2:1 no están cableados → nodos distintos
     expect(pinToNodeMap["R1:0"]).not.toBe(pinToNodeMap["R2:1"]);
   });
+
+  test("extrae potenciometro como dos resistencias en serie", () => {
+    const components: ComponentInstance[] = [
+      {
+        id: "POT1", type: "potentiometer", value: 10000, wiperPosition: 0.3, x: 0, y: 0, rotation: 0,
+      } as unknown as ComponentInstance,
+      {
+        id: "GND1", type: "ground", value: 0, x: 10, y: 10, rotation: 0,
+      } as unknown as ComponentInstance
+    ];
+
+    const wires: WireInstance[] = [
+      // Wire wiper to GND
+      {
+        id: "W1",
+        from: { componentId: "POT1", pinIndex: 1 },
+        to: { componentId: "GND1", pinIndex: 0 }
+      }
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "potentiometer") {
+        return [
+          { componentId: c.id, pinIndex: 0, x: 0, y: 0 },
+          { componentId: c.id, pinIndex: 1, x: 0, y: 0 },
+          { componentId: c.id, pinIndex: 2, x: 0, y: 0 },
+        ];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: 0, y: 0 }
+      ];
+    };
+
+    const { netlist, pinToNodeMap } = extractElectricalNetlist(components, wires, getPins);
+
+    expect(pinToNodeMap["GND1:0"]).toBe("0");
+    expect(pinToNodeMap["POT1:1"]).toBe("0");
+
+    const r1 = netlist.components.find(comp => comp.id === "POT1__R1");
+    const r2 = netlist.components.find(comp => comp.id === "POT1__R2");
+
+    expect(r1).toBeDefined();
+    expect(r2).toBeDefined();
+
+    expect(r1!.value).toBeCloseTo(3000);
+    expect(r2!.value).toBeCloseTo(7000);
+
+    expect(r1!.pins[0]).toBe(pinToNodeMap["POT1:0"]);
+    expect(r1!.pins[1]).toBe("0");
+    expect(r2!.pins[0]).toBe("0");
+    expect(r2!.pins[1]).toBe(pinToNodeMap["POT1:2"]);
+  });
 });

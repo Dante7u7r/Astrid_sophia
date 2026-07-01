@@ -121,6 +121,20 @@ export class PropertyEditor {
       }
     }
 
+    const potentiometerContainer = document.querySelector("#potentiometer-container") as HTMLElement;
+    const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
+    const wiperDisplay = document.querySelector("#prop-wiper-display") as HTMLElement;
+    if (potentiometerContainer && wiperSlider && wiperDisplay) {
+      if (comp.type === 'potentiometer') {
+        potentiometerContainer.style.display = "flex";
+        const wPos = comp.wiperPosition ?? 0.5;
+        wiperSlider.value = wPos.toString();
+        wiperDisplay.textContent = `${Math.round(wPos * 100)}%`;
+      } else {
+        potentiometerContainer.style.display = "none";
+      }
+    }
+
     if (comp.type === 'x') {
       if (valGroup) valGroup.style.display = "none";
       if (unitGroup) unitGroup.style.display = "none";
@@ -131,6 +145,11 @@ export class PropertyEditor {
         this.propUnitInput.value = "Ohmios (Ω)";
         this.propValSlider.min = "1";
         this.propValSlider.max = "10000";
+        break;
+      case 'potentiometer':
+        this.propUnitInput.value = "Resistencia Total (Ω)";
+        this.propValSlider.min = "10";
+        this.propValSlider.max = "1000000";
         break;
       case 'capacitor':
         this.propUnitInput.value = "Faradios (F)";
@@ -194,6 +213,14 @@ export class PropertyEditor {
     if (waveTypeSelect) {
       waveTypeSelect.addEventListener("change", () => {
         this.toggleWaveFieldsVisibility(waveTypeSelect.value);
+      });
+    }
+    const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
+    const wiperDisplay = document.querySelector("#prop-wiper-display") as HTMLElement;
+    if (wiperSlider && wiperDisplay) {
+      wiperSlider.addEventListener("input", (e) => {
+        const val = parseFloat((e.target as HTMLInputElement).value) || 0.5;
+        wiperDisplay.textContent = `${Math.round(val * 100)}%`;
       });
     }
 
@@ -273,6 +300,13 @@ export class PropertyEditor {
               selected.value = selected.offset;
               this.propValInput!.value = selected.value.toString();
               this.propValSlider!.value = selected.value.toString();
+            }
+          }
+
+          if (selected.type === 'potentiometer') {
+            const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
+            if (wiperSlider) {
+              selected.wiperPosition = parseFloat(wiperSlider.value) || 0.5;
             }
           }
 

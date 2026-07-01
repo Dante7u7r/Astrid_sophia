@@ -163,7 +163,40 @@ export function extractElectricalNetlist(
   for (const comp of components) {
     const pinsKeys = compPinMapping[comp.id] || [];
 
-    if (comp.type === 'lamp') {
+    if (comp.type === 'potentiometer') {
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+
+      const pin0Node = pinsMapped[0] || "0";
+      const pin1Node = pinsMapped[1] || "0";
+      const pin2Node = pinsMapped[2] || "0";
+
+      const totalVal = Number(comp.value) || 10000;
+      const pos = Math.max(0.01, Math.min(0.99, comp.wiperPosition ?? 0.5));
+
+      const r1Val = totalVal * pos;
+      const r2Val = totalVal * (1 - pos);
+
+      extractedComponents.push({
+        id: `${comp.id}__R1`,
+        type: 'resistor',
+        value: r1Val,
+        pins: [pin0Node, pin1Node],
+      });
+
+      extractedComponents.push({
+        id: `${comp.id}__R2`,
+        type: 'resistor',
+        value: r2Val,
+        pins: [pin1Node, pin2Node],
+      });
+    } else if (comp.type === 'lamp') {
       const model = parseLampActuatorModel(comp.value?.toString() ?? "");
       const pinsMapped = pinsKeys.map(pk => {
         const root = dsu.find(pk);

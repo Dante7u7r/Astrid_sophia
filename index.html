@@ -134,6 +134,19 @@
                       <span class="comp-desc">Bobina Magnética (H)</span>
                     </div>
                   </div>
+                  <!-- Potentiometer -->
+                  <div class="component-card" draggable="true" id="comp-potentiometer" data-type="potentiometer" data-default="10000">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
+                        <path d="M 20 36 L 20 28 L 17 25" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Potenciómetro</span>
+                      <span class="comp-desc">Resistencia Variable (Ω)</span>
+                    </div>
+                  </div>
                   <!-- GND -->
                   <div class="component-card" draggable="true" id="comp-ground" data-type="ground" data-default="0">
                     <div class="comp-icon-box">
@@ -642,6 +655,17 @@
                 <div id="group-wave-duty" class="property-group" style="display: none;">
                   <label class="property-label">Ciclo de Trabajo / Ancho</label>
                   <input id="prop-wave-duty" class="prop-input" type="number" step="0.05" min="0.01" max="0.99" value="0.5" />
+                </div>
+              </div>
+
+              <!-- Contenedor del Potenciómetro -->
+              <div id="potentiometer-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label">Posición del Cursor (Wiper: 1% - 99%)</label>
+                  <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                    <input id="prop-wiper-slider" type="range" min="0.01" max="0.99" step="0.01" value="0.5" style="flex-grow: 1;" />
+                    <span id="prop-wiper-display" style="min-width: 32px; font-weight: bold; color: var(--accent-color);">50%</span>
+                  </div>
                 </div>
               </div>
 

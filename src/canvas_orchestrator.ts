@@ -15,8 +15,9 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer';
   value: number | string;
+  wiperPosition?: number; // Cursor del potenciómetro (0.01 - 0.99)
   x: number;
   y: number;
   rotation: number; // 0, 90, 180, 270 degrees
@@ -292,6 +293,14 @@ export class CanvasOrchestrator {
       pins.push({ componentId: comp.id, pinIndex: 1, x: ptCoilB.x, y: ptCoilB.y });
       pins.push({ componentId: comp.id, pinIndex: 2, x: ptCommon.x, y: ptCommon.y });
       pins.push({ componentId: comp.id, pinIndex: 3, x: ptNo.x, y: ptNo.y });
+    } else if (comp.type === 'potentiometer') {
+      // Potentiometer has 3 pins: Terminal A (-40, 0), Wiper (0, 40), Terminal B (40, 0)
+      const ptA = getRotatedOffset(-40, 0);
+      const ptWiper = getRotatedOffset(0, 40);
+      const ptB = getRotatedOffset(40, 0);
+      pins.push({ componentId: comp.id, pinIndex: 0, x: ptA.x, y: ptA.y });
+      pins.push({ componentId: comp.id, pinIndex: 1, x: ptWiper.x, y: ptWiper.y });
+      pins.push({ componentId: comp.id, pinIndex: 2, x: ptB.x, y: ptB.y });
     } else if (comp.type === 'mcu_8051') {
       // DIP-40 Package
       // Pins 1-20 on the left side, y: -200 to 180 (step 20)
@@ -645,6 +654,31 @@ export class CanvasOrchestrator {
         this.ctx.lineTo(10, 8);
         this.ctx.lineTo(15, -8);
         this.ctx.lineTo(20, 0);
+        this.ctx.stroke();
+        break;
+
+      case 'potentiometer':
+        // Zig-zag symbol
+        this.ctx.moveTo(-20, 0);
+        this.ctx.lineTo(-15, -8);
+        this.ctx.lineTo(-10, 8);
+        this.ctx.lineTo(-5, -8);
+        this.ctx.lineTo(0, 8);
+        this.ctx.lineTo(5, -8);
+        this.ctx.lineTo(10, 8);
+        this.ctx.lineTo(15, -8);
+        this.ctx.lineTo(20, 0);
+        this.ctx.stroke();
+
+        // Wiper line and arrow head pointing to the middle
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, 40);
+        this.ctx.lineTo(0, 15);
+        // Arrow head pointing up
+        this.ctx.lineTo(0, 5);
+        this.ctx.lineTo(-4, 10);
+        this.ctx.moveTo(0, 5);
+        this.ctx.lineTo(4, 10);
         this.ctx.stroke();
         break;
 
