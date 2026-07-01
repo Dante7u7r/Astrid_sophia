@@ -15,10 +15,11 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer' | 'ldr';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer' | 'ldr' | 'thermistor';
   value: number | string;
   wiperPosition?: number; // Cursor del potenciómetro (0.01 - 0.99)
   lux?: number; // Iluminación en Luxes para LDR (1 - 10000)
+  temperatureCelsius?: number; // Temperatura del termistor (-50 - 150 C)
   x: number;
   y: number;
   rotation: number; // 0, 90, 180, 270 degrees
@@ -718,6 +719,32 @@ export class CanvasOrchestrator {
         this.ctx.moveTo(-6, -16);
         this.ctx.lineTo(-10, -16);
         this.ctx.stroke();
+        break;
+
+      case 'thermistor':
+        // 1. Resistor zig-zag core
+        this.ctx.moveTo(-20, 0);
+        this.ctx.lineTo(-15, -8);
+        this.ctx.lineTo(-10, 8);
+        this.ctx.lineTo(-5, -8);
+        this.ctx.lineTo(0, 8);
+        this.ctx.lineTo(5, -8);
+        this.ctx.lineTo(10, 8);
+        this.ctx.lineTo(15, -8);
+        this.ctx.lineTo(20, 0);
+        this.ctx.stroke();
+
+        // 2. Diagonal temperature control line with small foot
+        this.ctx.beginPath();
+        this.ctx.moveTo(-26, 12);
+        this.ctx.lineTo(-22, 12);
+        this.ctx.lineTo(22, -12);
+        this.ctx.stroke();
+
+        // 3. Small "-t°" label beside it
+        this.ctx.fillStyle = "currentColor";
+        this.ctx.font = "bold 10px var(--font-sans)";
+        this.ctx.fillText("-t°", 15, -13);
         break;
 
       case 'capacitor':

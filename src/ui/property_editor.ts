@@ -149,7 +149,21 @@ export class PropertyEditor {
       }
     }
 
-    if (comp.type === 'x' || comp.type === 'ldr') {
+    const thermistorContainer = document.querySelector("#thermistor-container") as HTMLElement;
+    const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
+    const tempDisplay = document.querySelector("#prop-temp-display") as HTMLElement;
+    if (thermistorContainer && tempSlider && tempDisplay) {
+      if (comp.type === 'thermistor') {
+        thermistorContainer.style.display = "flex";
+        const tempVal = comp.temperatureCelsius ?? 25;
+        tempSlider.value = tempVal.toString();
+        tempDisplay.textContent = `${tempVal} ºC`;
+      } else {
+        thermistorContainer.style.display = "none";
+      }
+    }
+
+    if (comp.type === 'x' || comp.type === 'ldr' || comp.type === 'thermistor') {
       if (valGroup) valGroup.style.display = "none";
       if (unitGroup) unitGroup.style.display = "none";
     }
@@ -247,6 +261,15 @@ export class PropertyEditor {
       });
     }
 
+    const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
+    const tempDisplay = document.querySelector("#prop-temp-display") as HTMLElement;
+    if (tempSlider && tempDisplay) {
+      tempSlider.addEventListener("input", (e) => {
+        const val = parseInt((e.target as HTMLInputElement).value) || 25;
+        tempDisplay.textContent = `${val} ºC`;
+      });
+    }
+
     if (this.propValInput && this.propValSlider) {
       this.propValSlider.addEventListener("input", (e) => {
         const val = (e.target as HTMLInputElement).value;
@@ -337,6 +360,13 @@ export class PropertyEditor {
             const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
             if (luxSlider) {
               selected.lux = parseInt(luxSlider.value) || 100;
+            }
+          }
+
+          if (selected.type === 'thermistor') {
+            const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
+            if (tempSlider) {
+              selected.temperatureCelsius = parseInt(tempSlider.value) || 25;
             }
           }
 

@@ -218,6 +218,32 @@ export function extractElectricalNetlist(
         value: rVal,
         pins: [pin0Node, pin1Node],
       });
+    } else if (comp.type === 'thermistor') {
+      const pinsMapped = pinsKeys.map(pk => {
+        const root = dsu.find(pk);
+        if (!rootToNodeIdMap[root]) {
+          rootToNodeIdMap[root] = nextNodeId.toString();
+          nextNodeId++;
+        }
+        return rootToNodeIdMap[root];
+      });
+
+      const pin0Node = pinsMapped[0] || "0";
+      const pin1Node = pinsMapped[1] || "0";
+
+      const tempCelsius = comp.temperatureCelsius ?? 25;
+      const tempK = tempCelsius + 273.15;
+      const t0 = 298.15;
+      const r0 = 10000;
+      const beta = 3950;
+      const rVal = r0 * Math.exp(beta * (1.0 / tempK - 1.0 / t0));
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: rVal,
+        pins: [pin0Node, pin1Node],
+      });
     } else if (comp.type === 'lamp') {
       const model = parseLampActuatorModel(comp.value?.toString() ?? "");
       const pinsMapped = pinsKeys.map(pk => {

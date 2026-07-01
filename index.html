@@ -162,6 +162,20 @@
                     <div class="comp-details">
                       <span class="comp-name">Fotoresistencia</span>
                       <span class="comp-desc">Sensor de Luz (LDR)</span>
+                  </div>
+                  <!-- Termistor (NTC) -->
+                  <div class="component-card" draggable="true" id="comp-thermistor" data-type="thermistor" data-default="25">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <!-- Resistor zig-zag inside -->
+                        <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
+                        <!-- Diagonal bar with small flat foot -->
+                        <path d="M 10 32 L 13 32 L 28 8" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Termistor</span>
+                      <span class="comp-desc">Sensor de Temp. (NTC)</span>
                     </div>
                   </div>
                   <!-- GND -->
@@ -693,6 +707,17 @@
                   <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
                     <input id="prop-lux-slider" type="range" min="1" max="10000" step="1" value="100" style="flex-grow: 1;" />
                     <span id="prop-lux-display" style="min-width: 50px; font-weight: bold; color: var(--accent-color);">100 Lx</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Contenedor del Termistor (NTC) -->
+              <div id="thermistor-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label">Temperatura Ambiente (ºC: -50 a 150)</label>
+                  <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                    <input id="prop-temp-slider" type="range" min="-50" max="150" step="1" value="25" style="flex-grow: 1;" />
+                    <span id="prop-temp-display" style="min-width: 50px; font-weight: bold; color: var(--accent-color);">25 ºC</span>
                   </div>
                 </div>
               </div>

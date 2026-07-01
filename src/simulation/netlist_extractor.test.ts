@@ -182,4 +182,29 @@ describe("extractElectricalNetlist", () => {
     // R = 500 + 500000 / 100 = 5500 Ohms
     expect(rLdr!.value).toBeCloseTo(5500);
   });
+
+  test("extrae termistor NTC aplicando la formula Beta", () => {
+    const components: ComponentInstance[] = [
+      {
+        id: "TH1", type: "thermistor", temperatureCelsius: 25, x: 0, y: 0, rotation: 0,
+      } as unknown as ComponentInstance
+    ];
+
+    const wires: WireInstance[] = [];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      return [
+        { componentId: c.id, pinIndex: 0, x: 0, y: 0 },
+        { componentId: c.id, pinIndex: 1, x: 0, y: 0 }
+      ];
+    };
+
+    const { netlist } = extractElectricalNetlist(components, wires, getPins);
+    const rTh = netlist.components.find(comp => comp.id === "TH1");
+    expect(rTh).toBeDefined();
+    expect(rTh!.type).toBe("resistor");
+
+    // At 25 C (298.15 K), R must be exactly r0 = 10000 Ohms
+    expect(rTh!.value).toBeCloseTo(10000);
+  });
 });
