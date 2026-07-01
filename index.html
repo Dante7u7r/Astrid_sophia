@@ -53,6 +53,49 @@
             <option value="04_amp_bjt_bode.astryd">Amp BJT (Bode)</option>
           </select>
           <button id="btn-save-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Guardar circuito actual">💾 Guardar</button>
+          <div class="dropdown-wrapper" style="position: relative; display: inline-block; margin-right: 8px;">
+            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentos y Diagnósticos">🛠️ Instrumentación</button>
+            <div id="instruments-dropdown" class="dropdown-menu-box" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--bg-glass); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-depth); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); width: 220px; z-index: 1000; padding: 10px;">
+              <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Paneles e Interfaz</div>
+              <button class="dropdown-menu-item-btn" id="menu-toggle-left" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
+                <span>📦 Panel Componentes</span>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+1</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="menu-toggle-right" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
+                <span>⚙️ Panel Propiedades</span>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+2</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="menu-toggle-dock" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
+                <span>📊 Osciloscopio & Logs</span>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+3</span>
+              </button>
+              
+              <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Diagnósticos SPICE</div>
+              <button class="dropdown-menu-item-btn" id="menu-run-erc" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>⚡ Chequeo de Reglas ERC</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="menu-settings" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>⚙️ Ajustes Físicos</span>
+              </button>
+              
+              <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Exportadores de Datos</div>
+              <button class="dropdown-menu-item-btn" id="export-csv-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>📊 Exportar Datos a CSV</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="export-svg-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>📈 Exportar Gráfico a SVG</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="export-s2p-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>📈 Touchstone (.s2p)</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="export-h5-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>📦 Exportar Binario HDF5</span>
+              </button>
+              <button class="dropdown-menu-item-btn" id="export-pdf-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
+                <span>📋 Generar Reporte PDF</span>
+              </button>
+            </div>
+          </div>
           <div style="width: 1px; height: 16px; background: var(--border-color); margin-right: 8px;"></div>
           <button id="settings-trigger-btn" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Configuración de simulación">⚙️ Ajustes</button>
           <span class="status-indicator active" id="ipc-status-dot"></span>
@@ -585,12 +628,6 @@
                   <button id="osc-ch1-btn" class="btn-osc-mini active" type="button">Canal 1</button>
                   <button id="osc-ch2-btn" class="btn-osc-mini" type="button">Canal 2</button>
                   <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
-                  <div style="width: 1px; height: 14px; background: var(--border-color); margin: 0 4px;"></div>
-                  <button id="export-csv-btn" class="btn-osc-mini" type="button" data-tooltip="Exportar datos a CSV">📥 CSV</button>
-                  <button id="export-svg-btn" class="btn-osc-mini" type="button" data-tooltip="Exportar gráfico a SVG">📊 SVG</button>
-                  <button id="export-s2p-btn" class="btn-osc-mini" type="button" data-tooltip="Touchstone 2-Port Parameters">📈 s2p</button>
-                  <button id="export-h5-btn" class="btn-osc-mini" type="button" data-tooltip="Datos Binarios HDF5 Lite">📦 HDF5</button>
-                  <button id="export-pdf-btn" class="btn-osc-mini" type="button" data-tooltip="Reporte PDF con Gráficos">📋 PDF</button>
                 </div>
               </div>
               <div class="osc-viewport" id="osc-viewport">

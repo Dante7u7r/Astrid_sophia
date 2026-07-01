@@ -984,6 +984,94 @@ window.addEventListener("DOMContentLoaded", () => {
   propertyEditor!.init();
   exporterPanel!.init();
 
+  // --- MENU DE INSTRUMENTACION ---
+  const instrumentsMenuBtn = document.querySelector("#instruments-menu-btn") as HTMLButtonElement | null;
+  const instrumentsDropdown = document.querySelector("#instruments-dropdown") as HTMLElement | null;
+
+  if (instrumentsMenuBtn && instrumentsDropdown) {
+    instrumentsMenuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = instrumentsDropdown.style.display === "block";
+      instrumentsDropdown.style.display = open ? "none" : "block";
+    });
+
+    document.addEventListener("click", (e) => {
+      if (instrumentsDropdown && !instrumentsDropdown.contains(e.target as Node)) {
+        instrumentsDropdown.style.display = "none";
+      }
+    });
+
+    // Wire buttons inside the menu
+    const menuToggleLeft = instrumentsDropdown.querySelector("#menu-toggle-left");
+    const menuToggleRight = instrumentsDropdown.querySelector("#menu-toggle-right");
+    const menuToggleDock = instrumentsDropdown.querySelector("#menu-toggle-dock");
+    const menuRunErc = instrumentsDropdown.querySelector("#menu-run-erc");
+    const menuSettings = instrumentsDropdown.querySelector("#menu-settings");
+
+    if (menuToggleLeft) {
+      menuToggleLeft.addEventListener("click", () => {
+        panelLayoutManager?.togglePanel("left");
+      });
+    }
+    if (menuToggleRight) {
+      menuToggleRight.addEventListener("click", () => {
+        panelLayoutManager?.togglePanel("right");
+      });
+    }
+    if (menuToggleDock) {
+      menuToggleDock.addEventListener("click", () => {
+        panelLayoutManager?.togglePanel("dock");
+      });
+    }
+    if (menuRunErc) {
+      menuRunErc.addEventListener("click", () => {
+        const netlist = extractNetlist();
+        if (netlist) {
+          const res = runElectricalRuleCheck(
+            netlist,
+            orchestrator!.components,
+            orchestrator!.wires,
+            (c) => orchestrator!.getComponentPins(c),
+          );
+          if (orchestrator) {
+            const ercIssues: { componentId: string; type: "error" | "warning"; message: string; pinIndex?: number }[] = [];
+            for (const w of res.warnings) {
+              const compMatch = w.match(/\[([a-zA-Z0-9_]+)\]/);
+              if (compMatch) {
+                const componentId = compMatch[1];
+                const pinMatch = w.match(/terminal index (\d+)/);
+                const pinIndex = pinMatch ? parseInt(pinMatch[1], 10) : undefined;
+                ercIssues.push({ componentId, type: "warning", message: w, pinIndex });
+              }
+            }
+            for (const err of res.errors) {
+              const compMatch = err.match(/\[([a-zA-Z0-9_,\s]+)\]/);
+              if (compMatch) {
+                const compList = compMatch[1].split(',').map(s => s.trim());
+                for (const cid of compList) {
+                  ercIssues.push({ componentId: cid, type: "error", message: err });
+                }
+              }
+            }
+            orchestrator.ercIssues = ercIssues;
+            orchestrator.render();
+          }
+          if (res.passed) {
+            addLog("ERC completado exitosamente sin errores críticos.", "system");
+          } else {
+            addLog(`ERC falló con ${res.errors.length} errores críticos. Chequee los halos pulsantes en el lienzo.`, "error");
+          }
+        }
+      });
+    }
+    if (menuSettings) {
+      menuSettings.addEventListener("click", () => {
+        const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement | null;
+        if (trigger) trigger.click();
+      });
+    }
+  }
+
   const rightPanelBody = document.querySelector("#sidebar-right .panel-body") as HTMLElement;
   if (rightPanelBody) {
     mcuDebugPanel = new McuDebugPanel(rightPanelBody, () => {
