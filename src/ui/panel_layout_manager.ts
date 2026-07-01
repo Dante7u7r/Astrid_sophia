@@ -398,7 +398,17 @@ export class PanelLayoutManager {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PanelLayout>;
-        return { ...DEFAULT_LAYOUT, ...parsed };
+        const layout = { ...DEFAULT_LAYOUT, ...parsed };
+        
+        // Validar y acotar dimensiones frente a los límites definidos
+        layout.leftWidth = Math.max(LIMITS.leftMin, Math.min(LIMITS.leftMax, layout.leftWidth));
+        layout.rightWidth = Math.max(LIMITS.rightMin, Math.min(LIMITS.rightMax, layout.rightWidth));
+        
+        const maxDockPx = window.innerHeight ? Math.floor(window.innerHeight * (LIMITS.dockMaxVh / 100)) : DEFAULT_LAYOUT.dockHeight;
+        const minDockPx = LIMITS.dockMin;
+        layout.dockHeight = Math.max(minDockPx, Math.min(maxDockPx || DEFAULT_LAYOUT.dockHeight, layout.dockHeight));
+        
+        return layout;
       }
     } catch {
       // Ignorar errores de parsing
