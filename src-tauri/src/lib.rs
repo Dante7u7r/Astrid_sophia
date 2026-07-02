@@ -391,6 +391,15 @@ async fn open_circuit_file() -> Result<(String, String), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        // Deshabilitar DMABuf en Linux de forma predeterminada para evitar cuelgues
+        // en controladores Mesa/Gallium sin perder la aceleración gráfica de WebKit.
+        if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(SimulationControlState {
