@@ -110,7 +110,7 @@ describe('Pruebas de Renderizado CAD - ComponentRenderer', () => {
 
     const dummyResistor = {
       id: 'R1',
-      type: 'resistor',
+      type: 'resistor' as const,
       value: 1000,
       x: 200,
       y: 200,
@@ -120,7 +120,7 @@ describe('Pruebas de Renderizado CAD - ComponentRenderer', () => {
 
     const dummyGnd = {
       id: 'GND1',
-      type: 'ground',
+      type: 'ground' as const,
       value: 0,
       x: 100,
       y: 100,
@@ -130,7 +130,7 @@ describe('Pruebas de Renderizado CAD - ComponentRenderer', () => {
 
     const dummyNpn = {
       id: 'Q1',
-      type: 'npn',
+      type: 'npn' as const,
       value: 0,
       x: 150,
       y: 150,
