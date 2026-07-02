@@ -14,8 +14,10 @@
  */
 
 const STORAGE_KEY = "astryd_panel_layout";
+const LAYOUT_VERSION = 3;
 
 interface PanelLayout {
+  version?: number;
   leftWidth: number;
   rightWidth: number;
   dockHeight: number;
@@ -25,8 +27,8 @@ interface PanelLayout {
 }
 
 const DEFAULT_LAYOUT: PanelLayout = {
-  leftWidth: 272,
-  rightWidth: 300,
+  leftWidth: 200,
+  rightWidth: 220,
   dockHeight: 210,
   leftCollapsed: false,
   rightCollapsed: false,
@@ -34,8 +36,8 @@ const DEFAULT_LAYOUT: PanelLayout = {
 };
 
 const LIMITS = {
-  leftMin: 180, leftMax: 400,
-  rightMin: 200, rightMax: 450,
+  leftMin: 160, leftMax: 400,
+  rightMin: 180, rightMax: 450,
   dockMin: 120, dockMaxVh: 50,
 };
 
@@ -378,7 +380,7 @@ export class PanelLayoutManager {
   }
 
   public resetAllPanels() {
-    this.layout = { ...DEFAULT_LAYOUT };
+    this.layout = { ...DEFAULT_LAYOUT, version: LAYOUT_VERSION };
     this.applyLayout();
     this.saveLayout();
   }
@@ -398,6 +400,12 @@ export class PanelLayoutManager {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PanelLayout>;
+        
+        // Si el layout guardado es de una versión anterior, ignorarlo y usar defaults
+        if (parsed.version !== LAYOUT_VERSION) {
+          return { ...DEFAULT_LAYOUT, version: LAYOUT_VERSION };
+        }
+        
         const layout = { ...DEFAULT_LAYOUT, ...parsed };
         
         // Validar y acotar dimensiones frente a los límites definidos
@@ -413,7 +421,7 @@ export class PanelLayoutManager {
     } catch {
       // Ignorar errores de parsing
     }
-    return { ...DEFAULT_LAYOUT };
+    return { ...DEFAULT_LAYOUT, version: LAYOUT_VERSION };
   }
 
   // ─── Utilidades ────────────────────────────────────

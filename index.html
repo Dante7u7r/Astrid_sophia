@@ -636,7 +636,7 @@
           <!-- DOCK INFERIOR (OSCILOSCOPIO + CONSOLA) -->
           <section class="bottom-dock" id="bottom-dock">
             <!-- Columna Izquierda: Panel de Instrumentación con Pestañas -->
-            <div class="instruments-panel" id="instruments-panel" style="display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.05); width: 62%;">
+            <div class="instruments-panel" id="instruments-panel" style="display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.05);">
               <!-- Barra de pestañas de Instrumentos -->
               <div class="instruments-tabs-bar" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid var(--border-color); height: 32px; align-items: center; padding: 0 10px; gap: 4px; flex-shrink: 0;">
                 <button class="inst-tab active" data-tab="oscilloscope" style="background: none; border: none; color: var(--cyan); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📊 Osciloscopio</button>
@@ -811,7 +811,7 @@
             </div>
 
             <!-- Columna Derecha: Consola de logs de la aplicación -->
-            <div class="console-panel" id="console-panel" style="width: 38%; display: flex; flex-direction: column; overflow: hidden;">
+            <div class="console-panel" id="console-panel" style="display: flex; flex-direction: column; overflow: hidden;">
               <div class="panel-header" id="console-header" style="height: 36px; min-height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;">
                 <h3 style="font-size: 0.68rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">Logs del Sistema</h3>
                 <button id="clear-console-btn" class="btn-clear-console" type="button">Limpiar</button>

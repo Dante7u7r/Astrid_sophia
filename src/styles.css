@@ -52,8 +52,8 @@
   /* ── Dimensiones de Layout ── */
   --header-h:          52px;
   --footer-h:          26px;
-  --left-panel-width:  272px;
-  --right-panel-width: 300px;
+  --left-panel-width:  200px;
+  --right-panel-width: 220px;
   --osc-panel-height:  210px;
   --tabs-h:            36px;
 
@@ -179,6 +179,7 @@ body {
   margin: 12px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   overflow: hidden;
   background: rgba(8, 12, 22, 0.65);
   backdrop-filter: blur(20px) saturate(180%);
@@ -194,12 +195,14 @@ body {
   width: var(--left-panel-width);
   margin-right: 0;
   border-radius: 16px;
+  min-width: 180px;
 }
 
 .sidebar-right {
   width: var(--right-panel-width);
   margin-left: 0;
   border-radius: 16px;
+  min-width: 200px;
 }
 
 .sidebar-left.collapsed,
@@ -221,6 +224,7 @@ body {
   background: var(--bg-void);
   box-shadow: var(--shadow-depth);
   overflow: hidden;
+  min-width: 0;
 }
 
 /* ══ LIENZO DE CIRCUITO ══════════════════════════ */
@@ -228,7 +232,9 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
+  display: block;
   /* Cuadrícula sutil de puntos */
   background-image:
     radial-gradient(circle, rgba(91, 243, 228, 0.12) 1px, transparent 1px);
@@ -257,6 +263,7 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  pointer-events: auto;
   z-index: 1;
 }
 
@@ -274,6 +281,7 @@ body {
   border-radius: 12px;
   border: 1px solid var(--border-color);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  min-width: 0;
 }
 
 .bottom-dock.collapsed {
@@ -320,6 +328,7 @@ body {
   flex-grow: 1;
   overflow-y: auto;
   padding: 14px;
+  width: 100%;
   scrollbar-width: thin;
   scrollbar-color: rgba(91, 243, 228, 0.2) transparent;
 }
@@ -660,4 +669,15 @@ body {
 
 .btn-add-tab:active {
   transform: scale(0.9);
+}
+
+/* ══ STRETCHING ABSOLUTO DEL DOCK INFERIOR ════════ */
+.bottom-dock div[id^="inst-"],
+.inst-content-box {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-height: 0;
 }

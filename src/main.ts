@@ -629,22 +629,44 @@ function initCanvasCAD() {
 
   orchestrator = new CanvasOrchestrator(canvasElement);
 
-  const resizeCanvas = () => {
-    const parent = canvasElement.parentElement;
-    if (parent) {
-      const w = parent.clientWidth;
-      const h = parent.clientHeight;
-      if (w === 0 || h === 0) {
-        setTimeout(resizeCanvas, 100);
-        return;
-      }
-      canvasElement.width = w;
-      canvasElement.height = h;
-      updateCanvasRendering();
+  const viewport = canvasElement.parentElement;
+
+  let prevCanvasWidth = -1;
+  let prevCanvasHeight = -1;
+
+  const syncCanvasDimensions = () => {
+    if (!viewport) return;
+    const dpr = window.devicePixelRatio || 1;
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+    const bufW = Math.round(width * dpr);
+    const bufH = Math.round(height * dpr);
+    
+    // Guard: solo actualizar si las dimensiones realmente cambiaron.
+    // Esto previene el feedback loop del ResizeObserver en WebKit
+    // (cambiar canvas.width/.height puede disparar otro ResizeObserver).
+    if (bufW !== prevCanvasWidth || bufH !== prevCanvasHeight) {
+      prevCanvasWidth = bufW;
+      prevCanvasHeight = bufH;
+      canvasElement.width = bufW;
+      canvasElement.height = bufH;
+      requestAnimationFrame(() => updateCanvasRendering());
     }
   };
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
+
+  // Callback compartido: PanelLayoutManager lo usa tras arrastrar splitters
+  const resizeCanvas = () => {
+    syncCanvasDimensions();
+  };
+
+  // ResizeObserver sobre el viewport: fiable incluso cuando window.resize
+  // no se dispara (Tauri/Linux al maximizar/restaurar)
+  if (viewport) {
+    const ro = new ResizeObserver(() => syncCanvasDimensions());
+    ro.observe(viewport);
+  }
+
+  syncCanvasDimensions();
 
   // Inicializar PanelLayoutManager con callback de resize del canvas
   const appRoot = document.querySelector("#app-viewport") as HTMLElement;
@@ -807,7 +829,7 @@ function initCanvasCAD() {
   const btnZoomIn = document.querySelector("#btn-zoom-in");
   if (btnZoomIn) {
     btnZoomIn.addEventListener("click", () => {
-      orchestrator!.zoomAt(1.15, canvasElement.width / 2, canvasElement.height / 2);
+      orchestrator!.zoomAt(1.15, canvasElement.clientWidth / 2, canvasElement.clientHeight / 2);
       updateCanvasRendering();
     });
   }
@@ -815,7 +837,7 @@ function initCanvasCAD() {
   const btnZoomOut = document.querySelector("#btn-zoom-out");
   if (btnZoomOut) {
     btnZoomOut.addEventListener("click", () => {
-      orchestrator!.zoomAt(0.85, canvasElement.width / 2, canvasElement.height / 2);
+      orchestrator!.zoomAt(0.85, canvasElement.clientWidth / 2, canvasElement.clientHeight / 2);
       updateCanvasRendering();
     });
   }
