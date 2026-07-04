@@ -12,6 +12,12 @@ Todas las mejoras y cambios importantes en este proyecto.
 - Tiempo del test objetivo reducido de ~109.9 s a ~12-14 s en perfil debug.
 - Suite Rust completa: 113 tests en ~13.5 s, sin tests ignorados.
 
+### Calidad Rust
+- Eliminada la excepción `clippy::upper_case_acronyms` del binding WinAPI de telemetría.
+- El tipo interno `FileTime` conserva el layout ABI mediante `#[repr(C)]` y pruebas
+  de tamaño, alineación y composición de sus palabras de 32 bits.
+- Las declaraciones WinAPI quedan privadas al módulo que las utiliza.
+
 ### Planificado para v1.0
 - [ ] Scripts de build (`build.sh`, `build.bat`)
 - [ ] Tests de integración end-to-end

@@ -1,8 +1,8 @@
+use serde::Serialize;
 #[cfg(target_os = "windows")]
 use std::mem;
 use std::sync::Mutex;
 use std::time::Instant;
-use serde::Serialize;
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -39,10 +39,9 @@ mod platform {
 
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    #[allow(clippy::upper_case_acronyms)]
-    pub struct FILETIME {
-        pub dw_low_date_time: u32,
-        pub dw_high_date_time: u32,
+    struct FileTime {
+        dw_low_date_time: u32,
+        dw_high_date_time: u32,
     }
 
     #[repr(C)]
@@ -61,22 +60,22 @@ mod platform {
     }
 
     extern "system" {
-        pub fn GetCurrentProcess() -> *mut std::ffi::c_void;
-        pub fn GetProcessMemoryInfo(
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn GetProcessMemoryInfo(
             process: *mut std::ffi::c_void,
             ppmc: *mut PROCESS_MEMORY_COUNTERS,
             cb: u32,
         ) -> i32;
-        pub fn GetProcessTimes(
+        fn GetProcessTimes(
             h_process: *mut std::ffi::c_void,
-            lp_creation_time: *mut FILETIME,
-            lp_exit_time: *mut FILETIME,
-            lp_kernel_time: *mut FILETIME,
-            lp_user_time: *mut FILETIME,
+            lp_creation_time: *mut FileTime,
+            lp_exit_time: *mut FileTime,
+            lp_kernel_time: *mut FileTime,
+            lp_user_time: *mut FileTime,
         ) -> i32;
     }
 
-    fn filetime_to_u64(ft: FILETIME) -> u64 {
+    fn filetime_to_u64(ft: FileTime) -> u64 {
         ((ft.dw_high_date_time as u64) << 32) | (ft.dw_low_date_time as u64)
     }
 
@@ -104,6 +103,27 @@ mod platform {
         }
 
         (ram_bytes, current_ticks, "Windows (Nativo)".to_string())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn file_time_matches_windows_layout() {
+            assert_eq!(mem::size_of::<FileTime>(), 8);
+            assert_eq!(mem::align_of::<FileTime>(), mem::align_of::<u32>());
+        }
+
+        #[test]
+        fn file_time_combines_high_and_low_words() {
+            let value = filetime_to_u64(FileTime {
+                dw_low_date_time: 0x89ab_cdef,
+                dw_high_date_time: 0x0123_4567,
+            });
+
+            assert_eq!(value, 0x0123_4567_89ab_cdef);
+        }
     }
 }
 
@@ -165,7 +185,7 @@ pub fn get_system_telemetry() -> TelemetryData {
         let duration = now.duration_since(prev.timestamp).as_secs_f64();
         if duration > 0.001 {
             let diff_ticks = current_ticks.saturating_sub(prev.cpu_time_ticks);
-            
+
             // Conversión de tics a segundos según la plataforma
             #[cfg(target_os = "windows")]
             let diff_seconds = (diff_ticks as f64) * 1e-7; // 100 ns por tic
@@ -176,7 +196,7 @@ pub fn get_system_telemetry() -> TelemetryData {
             // Dividir por la cantidad de procesadores lógicos para normalizar a la escala 0-100%
             let num_cpus = get_num_cpus();
             cpu_percent = (diff_seconds / duration) * 100.0 / num_cpus;
-            
+
             // Acotar porcentaje
             cpu_percent = cpu_percent.clamp(0.0, 100.0);
         }
