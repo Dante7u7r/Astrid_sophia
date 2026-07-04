@@ -132,6 +132,10 @@ async function collectMetrics(page) {
 
     return {
       title: document.title,
+      audit: {
+        stage: document.documentElement.dataset.auditStage ?? null,
+        step: document.documentElement.dataset.auditStep ?? null,
+      },
       viewport: { width: window.innerWidth, height: window.innerHeight },
       documentScrollWidth: document.documentElement.scrollWidth,
       bodyScrollWidth: document.body.scrollWidth,
@@ -166,6 +170,10 @@ async function collectMetrics(page) {
 function assertViewport(caseConfig, metrics) {
   const errors = [];
   const maxScrollWidth = caseConfig.width + 1;
+
+  if (metrics.audit.stage !== "canvas" || metrics.audit.step !== "full") {
+    errors.push(`build de auditoría inactiva o mal configurada: ${JSON.stringify(metrics.audit)}`);
+  }
 
   if (metrics.documentScrollWidth > maxScrollWidth || metrics.bodyScrollWidth > maxScrollWidth) {
     errors.push(`overflow horizontal: document=${metrics.documentScrollWidth}, body=${metrics.bodyScrollWidth}, viewport=${caseConfig.width}`);
@@ -310,6 +318,40 @@ async function auditRenderIsolation(page) {
   }
 }
 
+async function runProductionGuard() {
+  console.log(`[audit] comprobando guard de producción en ${BASE_URL}`);
+  const preview = await ensurePreview();
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.addInitScript(() => localStorage.clear());
+    await page.goto(`${BASE_URL}/?audit=1&auditStage=canvas&auditStep=skip-render`, {
+      waitUntil: "domcontentloaded",
+      timeout: 12_000,
+    });
+    await page.waitForTimeout(1_200);
+
+    const metrics = await collectMetrics(page);
+    if (metrics.audit.stage !== null || metrics.audit.step !== null) {
+      fail("La build de producción permitió activar el modo auditoría", { audit: metrics.audit });
+    }
+    if (metrics.nonTransparentCanvasPixels === 0) {
+      fail("La aplicación normal no renderizó el canvas durante el guard de producción");
+    }
+    if (pageErrors.length > 0) {
+      fail("La build de producción generó errores JavaScript", { pageErrors });
+    }
+  } finally {
+    await browser.close();
+    await preview.stop();
+  }
+
+  console.log("[audit] guard de producción OK: los query params fueron ignorados");
+}
+
 async function runAudit() {
   mkdirSync(OUTPUT_DIR, { recursive: true });
   console.log(`[audit] preparando preview en ${BASE_URL}`);
@@ -374,7 +416,11 @@ async function runAudit() {
   console.log(`Auditoría UI OK. Resultados: ${summaryPath}`);
 }
 
-runAudit().catch((error) => {
+const auditRun = process.argv.includes("--expect-production")
+  ? runProductionGuard()
+  : runAudit();
+
+auditRun.catch((error) => {
   console.error(error.message);
   process.exit(1);
 });

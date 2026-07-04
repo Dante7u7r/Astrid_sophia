@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:audit": "tsc && vite build --mode audit",
     "preview": "vite preview",
-    "audit:ui": "npm run build && node tests/visual_audit.mjs",
+    "audit:production-guard": "npm run build && node tests/visual_audit.mjs --expect-production",
+    "audit:ui": "npm run build:audit && node tests/visual_audit.mjs && npm run audit:production-guard",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",

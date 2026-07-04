@@ -31,12 +31,17 @@ import { ExporterPanel } from "./ui/exporter_panel";
 import { CommandHistory } from "./canvas/command_history";
 import { PanelLayoutManager } from "./ui/panel_layout_manager";
 import { InstrumentsDock } from "./ui/instruments_dock";
+import { resolveVisualAuditConfig } from "./testing/visual_audit_config";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
-const urlParams = new URLSearchParams(window.location.search);
-const visualAuditMode = urlParams.has("audit");
-const visualAuditStage = urlParams.get("auditStage") ?? "static";
-const visualAuditStep = urlParams.get("auditStep") ?? "full";
+const visualAudit = resolveVisualAuditConfig(window.location.search, {
+  isDevelopment: import.meta.env.DEV,
+  mode: import.meta.env.MODE,
+});
+if (visualAudit.enabled) {
+  document.documentElement.dataset.auditStage = visualAudit.stage;
+  document.documentElement.dataset.auditStep = visualAudit.step;
+}
 
 let simSettings: SimulationSettings = {
   dt: 0.0001,
@@ -103,7 +108,7 @@ let drawerBackdrop: HTMLElement | null = null;
 const compactDrawerMedia = window.matchMedia("(max-width: 760px)");
 
 function doCanvasRender(): void {
-  if (visualAuditMode && visualAuditStep === "skip-render") return;
+  if (visualAudit.isStep("skip-render")) return;
 
   const pinVoltageMap = circuitState.buildPinVoltageMap();
 
@@ -154,7 +159,7 @@ function doCanvasRender(): void {
         }
       }
     }
-    if (!(visualAuditMode && visualAuditStep === "skip-canvas-render")) {
+    if (!visualAudit.isStep("skip-canvas-render")) {
       orchestrator.render(
         pinVoltageMap,
         { ch1: ch1PinPos, ch2: ch2PinPos, ch3: ch3PinPos, ch4: ch4PinPos },
@@ -181,7 +186,7 @@ function updateCanvasRendering(immediate = false): void {
 }
 
 function doOscilloscopeRender(): void {
-  if (visualAuditMode && visualAuditStep === "skip-osc-render") return;
+  if (visualAudit.isStep("skip-osc-render")) return;
   oscilloscopePanel?.refreshVisibility();
 }
 
@@ -739,7 +744,7 @@ function initCanvasCAD() {
   if (!canvasElement) return;
 
   orchestrator = new CanvasOrchestrator(canvasElement);
-  if (visualAuditMode && visualAuditStep === "orchestrator") return;
+  if (visualAudit.isStep("orchestrator")) return;
 
   const viewport = canvasElement.parentElement;
 
@@ -779,17 +784,17 @@ function initCanvasCAD() {
   }
 
   syncCanvasDimensions();
-  if (visualAuditMode && visualAuditStep === "resize") return;
+  if (visualAudit.isStep("resize")) return;
 
   // Inicializar PanelLayoutManager con callback de resize del canvas
   const appRoot = document.querySelector("#app-viewport") as HTMLElement;
   if (appRoot) {
     panelLayoutManager = new PanelLayoutManager(appRoot, resizeCanvas);
   }
-  if (visualAuditMode && visualAuditStep === "layout") return;
+  if (visualAudit.isStep("layout")) return;
 
   const bottomDock = document.querySelector("#bottom-dock") as HTMLElement;
-  if (bottomDock && orchestrator && !visualAuditMode) {
+  if (bottomDock && orchestrator && !visualAudit.enabled) {
     instrumentsDock = new InstrumentsDock(bottomDock, orchestrator, {
       onCanvasModified: () => {
         markCurrentTabAsModified();
@@ -899,7 +904,7 @@ function initCanvasCAD() {
     onEscape: () => orchestrator?.cancelWire(),
     onWireMode: () => addLog("Wire mode placeholder (doble click en pin para conectar)", "system"),
   });
-  if (visualAuditMode && visualAuditStep === "input") return;
+  if (visualAudit.isStep("input")) return;
 
   const canvasViewport = document.querySelector("#canvas-viewport") as HTMLElement;
   if (canvasViewport) {
@@ -916,7 +921,7 @@ function initCanvasCAD() {
       log: (text, type = "system") => addLog(text, type),
     });
   }
-  if (visualAuditMode && visualAuditStep === "drop") return;
+  if (visualAudit.isStep("drop")) return;
 
   const toolboxCards = document.querySelectorAll(".component-card");
   toolboxCards.forEach(card => {
@@ -993,7 +998,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // Instanciar submódulos de UI modularizados
   telemetryPanel = new TelemetryPanel();
-  if (!visualAuditMode) {
+  if (!visualAudit.enabled) {
     telemetryPanel.start();
   }
 
@@ -1475,26 +1480,29 @@ window.addEventListener("DOMContentLoaded", () => {
     updateCanvasRendering,
   });
 
-  if (!visualAuditMode) {
+  if (!visualAudit.enabled) {
     initOscilloscopeInterface();
     initCanvasCAD();
     initFilePersistence();
     initTabManager();
   } else {
-    if (visualAuditStage === "oscilloscope") {
+    if (visualAudit.stage === "oscilloscope") {
       initOscilloscopeInterface();
     }
-    if (visualAuditStage === "canvas") {
+    if (visualAudit.stage === "canvas") {
       initOscilloscopeInterface();
       initCanvasCAD();
     }
-    if (visualAuditStage === "tabs") {
+    if (visualAudit.stage === "tabs") {
       initOscilloscopeInterface();
       initCanvasCAD();
       initFilePersistence();
       initTabManager();
     }
-    addLog(`Modo auditoría visual activo (${visualAuditStage}).`, "system");
+    addLog(
+      `Modo auditoría visual activo (etapa: ${visualAudit.stage}, paso: ${visualAudit.step}).`,
+      "system",
+    );
   }
 
   if (clearConsoleBtn) {

@@ -141,6 +141,9 @@ npm run test:integration
 # Watch mode for TDD
 npm run test:watch
 
+# Automated desktop/mobile UI audit
+npm run audit:ui
+
 # Production build (tsc + Vite)
 npm run build
 
@@ -158,6 +161,10 @@ cargo check
 cargo clippy -- -D warnings
 cargo test
 ```
+
+The visual audit mode is restricted to development and the dedicated Vite `audit`
+build mode. Its stages, isolation steps, and query parameters are documented in
+[`docs/ui-audit.md`](docs/ui-audit.md).
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 
