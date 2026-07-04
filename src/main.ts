@@ -98,6 +98,7 @@ let ch3ProbeNode: string | null = "3";
 let ch4ProbeNode: string | null = "4";
 
 let renderFramePending = false;
+let oscilloscopeFramePending = false;
 let drawerBackdrop: HTMLElement | null = null;
 const compactDrawerMedia = window.matchMedia("(max-width: 760px)");
 
@@ -163,10 +164,6 @@ function doCanvasRender(): void {
     }
   }
 
-  const bottomDockCollapsed = document.querySelector("#bottom-dock")?.classList.contains("collapsed") ?? false;
-  if (!bottomDockCollapsed && !(visualAuditMode && visualAuditStep === "skip-osc-render")) {
-    oscilloscopePanel?.draw();
-  }
 }
 
 function updateCanvasRendering(immediate = false): void {
@@ -180,6 +177,25 @@ function updateCanvasRendering(immediate = false): void {
   requestAnimationFrame(() => {
     renderFramePending = false;
     doCanvasRender();
+  });
+}
+
+function doOscilloscopeRender(): void {
+  if (visualAuditMode && visualAuditStep === "skip-osc-render") return;
+  oscilloscopePanel?.refreshVisibility();
+}
+
+function updateOscilloscopeRendering(immediate = false): void {
+  if (immediate) {
+    oscilloscopeFramePending = false;
+    doOscilloscopeRender();
+    return;
+  }
+  if (oscilloscopeFramePending) return;
+  oscilloscopeFramePending = true;
+  requestAnimationFrame(() => {
+    oscilloscopeFramePending = false;
+    doOscilloscopeRender();
   });
 }
 
@@ -685,7 +701,7 @@ function initOscilloscopeInterface() {
         const node = getProbe();
         addLog(`Canal ${channel.replace("CH", "")} (Sonda en Nodo ${node}, color ${colorName}) ${btn.classList.contains('active') ? 'visible' : 'oculto'}.`, "system");
         if (oscilloscopePanel && !oscilloscopePanel.isSimulating) {
-          oscilloscopePanel.draw();
+          updateOscilloscopeRendering();
         }
       }
     });
@@ -712,7 +728,7 @@ function initOscilloscopeInterface() {
   }
 
   setTimeout(() => {
-    if (oscilloscopePanel) oscilloscopePanel.draw();
+    updateOscilloscopeRendering();
   }, 100);
 }
 
@@ -1033,6 +1049,7 @@ window.addEventListener("DOMContentLoaded", () => {
           nodeVoltages: { ...frame.nodeVoltages } as Record<string, number>,
           branchCurrents: { ...frame.branchCurrents } as Record<string, number>,
         });
+        updateOscilloscopeRendering();
       }
 
       updateCanvasRendering();
@@ -1059,6 +1076,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   oscilloscopePanel = new OscilloscopePanel();
+  window.addEventListener("panel-layout-change", () => {
+    updateOscilloscopeRendering();
+  });
   oscilloscopePanel.onFrameUpdate = (sweepTime) => {
     if (oscilloscopePanel && orchestrator) {
       const results = oscilloscopePanel.transientResults;
@@ -1408,6 +1428,7 @@ window.addEventListener("DOMContentLoaded", () => {
           } else {
             circuitState.setVoltagesFromSnapshot(results.nodeVoltages ?? {});
           }
+          updateOscilloscopeRendering();
         },
         onIpcStatusUpdate: (text, color) => {
           if (ipcStatusDot && ipcStatusText) {
@@ -1444,7 +1465,7 @@ window.addEventListener("DOMContentLoaded", () => {
       activeAnalysisMode = mode;
       if (oscilloscopePanel) {
         oscilloscopePanel.activeAnalysisMode = mode;
-        oscilloscopePanel.draw();
+        updateOscilloscopeRendering();
       }
       if (mode !== 'PVT') {
         document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
@@ -1628,7 +1649,7 @@ function deserializeCircuit(jsonStr: string): boolean {
     // Actualizar renderizado y recalcular nodos eléctricos
     extractNetlist();
     updateCanvasRendering();
-    if (oscilloscopePanel) oscilloscopePanel.draw();
+    updateOscilloscopeRendering();
 
     return true;
   } catch (err) {

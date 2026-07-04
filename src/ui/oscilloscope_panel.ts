@@ -296,8 +296,50 @@ export class OscilloscopePanel {
     return this.ch4ProbeNode;
   }
 
+  private isCanvasVisible(): boolean {
+    if (!this.oscCanvas?.isConnected) return false;
+    const dock = this.oscCanvas.closest("#bottom-dock");
+    if (dock?.classList.contains("collapsed")) return false;
+    return this.oscCanvas.getClientRects().length > 0
+      && this.oscCanvas.clientWidth > 0
+      && this.oscCanvas.clientHeight > 0;
+  }
+
+  private shouldAnimate(): boolean {
+    return this.isSimulating
+      && !this.isOscPaused
+      && (this.activeAnalysisMode === "TRAN" || this.activeAnalysisMode === "PSS");
+  }
+
+  private cancelScheduledFrame(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  private scheduleNextFrame(): void {
+    if (!this.shouldAnimate() || this.animationFrameId !== null || !this.isCanvasVisible()) return;
+    this.animationFrameId = requestAnimationFrame(() => {
+      this.animationFrameId = null;
+      this.draw();
+    });
+  }
+
+  public refreshVisibility(): void {
+    if (!this.isCanvasVisible()) {
+      this.cancelScheduledFrame();
+      return;
+    }
+    this.draw();
+  }
+
   public draw() {
     if (!this.oscCanvas || !this.oscCtx) return;
+    if (!this.isCanvasVisible()) {
+      this.cancelScheduledFrame();
+      return;
+    }
 
     const width = this.oscCanvas.clientWidth;
     const height = this.oscCanvas.clientHeight;
@@ -607,44 +649,32 @@ export class OscilloscopePanel {
       }
     }
 
-    if (this.isSimulating && !this.isOscPaused) {
-      this.animationFrameId = requestAnimationFrame(() => this.draw());
-    }
+    this.scheduleNextFrame();
   }
 
   public pause() {
     this.isOscPaused = true;
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    this.cancelScheduledFrame();
   }
 
   public resume() {
     this.isOscPaused = false;
-    if (!this.animationFrameId && this.isSimulating) {
-      this.draw();
-    }
+    if (this.isSimulating) this.refreshVisibility();
   }
 
   public start() {
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-    }
+    this.cancelScheduledFrame();
     this.isSimulating = true;
     this.isOscPaused = false;
-    this.draw();
+    this.refreshVisibility();
   }
 
   public stop() {
     this.isSimulating = false;
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    this.cancelScheduledFrame();
     this.transientResults = [];
     this.acSweepResults = null;
     this.pvtTraces = [];
-    this.draw();
+    this.refreshVisibility();
   }
 }

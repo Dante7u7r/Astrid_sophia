@@ -64,15 +64,14 @@ async function ensurePreview() {
     return { started: false, stop: async () => {} };
   }
 
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const viteCli = resolve(process.cwd(), "node_modules", "vite", "bin", "vite.js");
   const child = spawn(
-    npmCommand,
-    ["run", "preview", "--", "--host", HOST, "--port", String(PORT)],
+    process.execPath,
+    [viteCli, "preview", "--host", HOST, "--port", String(PORT)],
     {
       cwd: process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, BROWSER: "none" },
-      shell: process.platform === "win32",
     },
   );
 
@@ -259,17 +258,74 @@ async function auditMobileDrawers(page) {
   });
 }
 
+async function auditRenderIsolation(page) {
+  console.log("[audit] expandiendo dock para comprobar aislamiento de render");
+  await page.evaluate(() => {
+    document.querySelector("#menu-toggle-dock")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await page.waitForTimeout(650);
+
+  const dockExpanded = await page.evaluate(
+    () => !document.querySelector("#bottom-dock")?.classList.contains("collapsed"),
+  );
+  if (!dockExpanded) fail("No se pudo expandir el dock para probar el aislamiento de render");
+
+  const canvasFingerprint = async (selector) => page.evaluate((canvasSelector) => {
+    const canvas = document.querySelector(canvasSelector);
+    if (!(canvas instanceof HTMLCanvasElement) || canvas.width <= 0 || canvas.height <= 0) return null;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let hash = 2166136261;
+    const stride = Math.max(4, Math.floor(pixels.length / 20_000 / 4) * 4);
+    for (let index = 0; index < pixels.length; index += stride) {
+      hash ^= pixels[index];
+      hash = Math.imul(hash, 16777619);
+      hash ^= pixels[index + 1] ?? 0;
+      hash = Math.imul(hash, 16777619);
+      hash ^= pixels[index + 2] ?? 0;
+      hash = Math.imul(hash, 16777619);
+      hash ^= pixels[index + 3] ?? 0;
+      hash = Math.imul(hash, 16777619);
+    }
+    return `${canvas.width}x${canvas.height}:${hash >>> 0}`;
+  }, selector);
+
+  const schematicBefore = await canvasFingerprint("#circuit-canvas");
+  const oscilloscopeBefore = await canvasFingerprint("#osc-canvas");
+  console.log("[audit] huellas iniciales obtenidas; aplicando zoom");
+  await page.click("#btn-zoom-in");
+  await page.waitForTimeout(250);
+  const schematicAfter = await canvasFingerprint("#circuit-canvas");
+  const oscilloscopeAfter = await canvasFingerprint("#osc-canvas");
+
+  if (!schematicBefore || !oscilloscopeBefore) {
+    fail("No fue posible obtener la huella de los canvas", { schematicBefore, oscilloscopeBefore });
+  }
+  if (schematicBefore === schematicAfter) {
+    fail("El zoom no provocó un render verificable del esquema", { schematicBefore, schematicAfter });
+  }
+  if (oscilloscopeBefore !== oscilloscopeAfter) {
+    fail("El render del esquema modificó el osciloscopio", { oscilloscopeBefore, oscilloscopeAfter });
+  }
+}
+
 async function runAudit() {
   mkdirSync(OUTPUT_DIR, { recursive: true });
+  console.log(`[audit] preparando preview en ${BASE_URL}`);
   const preview = await ensurePreview();
+  console.log("[audit] iniciando Chromium");
   const browser = await chromium.launch({ headless: true });
   const summary = [];
 
   try {
     for (const caseConfig of VIEWPORTS) {
+      console.log(`[audit] cargando viewport ${caseConfig.name}`);
       const page = await browser.newPage({
         viewport: { width: caseConfig.width, height: caseConfig.height },
       });
+      const pageErrors = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
       page.setDefaultTimeout(8_000);
       await page.addInitScript(() => {
         localStorage.clear();
@@ -290,17 +346,25 @@ async function runAudit() {
       await page.waitForTimeout(1_200);
 
       const metrics = await collectMetrics(page);
+      console.log(`[audit] métricas recogidas para ${caseConfig.name}`);
       assertViewport(caseConfig, metrics);
 
       const screenshotPath = resolve(OUTPUT_DIR, `${caseConfig.name}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: false, timeout: 10_000 });
-      if (caseConfig.name === "mobile") {
+      if (caseConfig.name === "desktop") {
+        await auditRenderIsolation(page);
+      } else {
         await auditMobileDrawers(page);
+      }
+      console.log(`[audit] interacciones verificadas para ${caseConfig.name}`);
+      if (pageErrors.length > 0) {
+        fail(`Se detectaron errores JavaScript en ${caseConfig.name}`, { pageErrors });
       }
       summary.push({ name: caseConfig.name, screenshotPath, metrics });
       await page.close();
     }
   } finally {
+    console.log("[audit] cerrando Chromium y preview");
     await browser.close();
     await preview.stop();
   }
