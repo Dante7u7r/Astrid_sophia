@@ -1,0 +1,27 @@
+{
+  "version": "2.0",
+  "components": [
+    { "id": "VCC", "type": "vsource", "value": 12, "x": 0, "y": -160, "rotation": 90 },
+    { "id": "Vin", "type": "vsource", "value": 0, "x": -240, "y": 0, "rotation": 0, "waveType": "sine", "amplitude": 0.01, "frequency": 1000, "offset": 0 },
+    { "id": "RB", "type": "resistor", "value": 100000, "x": -80, "y": 0, "rotation": 0 },
+    { "id": "Q1", "type": "npn", "value": 0, "x": 80, "y": 0, "rotation": 0 },
+    { "id": "RC", "type": "resistor", "value": 2200, "x": 240, "y": -80, "rotation": 90 },
+    { "id": "RE", "type": "resistor", "value": 1000, "x": 80, "y": 160, "rotation": 90 },
+    { "id": "GND1", "type": "ground", "value": 0, "x": 0, "y": 240, "rotation": 0 }
+  ],
+  "wires": [
+    { "id": "w1", "from": { "componentId": "VCC", "pinIndex": 0 }, "to": { "componentId": "RC", "pinIndex": 0 }, "points": [] },
+    { "id": "w2", "from": { "componentId": "VCC", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w3", "from": { "componentId": "Vin", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w4", "from": { "componentId": "Vin", "pinIndex": 0 }, "to": { "componentId": "RB", "pinIndex": 0 }, "points": [] },
+    { "id": "w5", "from": { "componentId": "RB", "pinIndex": 1 }, "to": { "componentId": "Q1", "pinIndex": 0 }, "points": [] },
+    { "id": "w6", "from": { "componentId": "Q1", "pinIndex": 1 }, "to": { "componentId": "RC", "pinIndex": 1 }, "points": [] },
+    { "id": "w7", "from": { "componentId": "RC", "pinIndex": 0 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w8", "from": { "componentId": "Q1", "pinIndex": 2 }, "to": { "componentId": "RE", "pinIndex": 0 }, "points": [] },
+    { "id": "w9", "from": { "componentId": "RE", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] }
+  ],
+  "viewport": { "zoom": 1.0, "offsetX": 500, "offsetY": 320 },
+  "simSettings": { "dt": 0.00001, "tolerance": 0.00001, "maxIterations": 150 },
+  "activeAnalysisMode": "AC",
+  "probes": { "ch1ProbeNode": "4", "ch2ProbeNode": "0" }
+}

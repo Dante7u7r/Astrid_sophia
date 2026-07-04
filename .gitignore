@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+htmlcov/
+.coverage
+.nyc_output/
+visual-audit-results/
+audit-*.png
+audit-*.json
+pw-*.log
+vite-*.log

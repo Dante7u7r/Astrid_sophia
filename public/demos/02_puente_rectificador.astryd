@@ -1,0 +1,31 @@
+{
+  "version": "2.0",
+  "components": [
+    { "id": "V1", "type": "vsource", "value": 0, "x": -240, "y": 0, "rotation": 0, "waveType": "sine", "amplitude": 10, "frequency": 50, "offset": 0 },
+    { "id": "D1", "type": "diode", "value": 0, "x": 0, "y": -80, "rotation": 0 },
+    { "id": "D2", "type": "diode", "value": 0, "x": 0, "y": 80, "rotation": 180 },
+    { "id": "D3", "type": "diode", "value": 0, "x": 160, "y": -80, "rotation": 0 },
+    { "id": "D4", "type": "diode", "value": 0, "x": 160, "y": 80, "rotation": 180 },
+    { "id": "R1", "type": "resistor", "value": 1000, "x": 320, "y": 0, "rotation": 0 },
+    { "id": "C1", "type": "capacitor", "value": 0.0001, "x": 480, "y": 0, "rotation": 0 },
+    { "id": "GND1", "type": "ground", "value": 0, "x": 160, "y": 200, "rotation": 0 }
+  ],
+  "wires": [
+    { "id": "w1", "from": { "componentId": "V1", "pinIndex": 0 }, "to": { "componentId": "D1", "pinIndex": 0 }, "points": [] },
+    { "id": "w2", "from": { "componentId": "V1", "pinIndex": 0 }, "to": { "componentId": "D2", "pinIndex": 1 }, "points": [] },
+    { "id": "w3", "from": { "componentId": "V1", "pinIndex": 1 }, "to": { "componentId": "D4", "pinIndex": 1 }, "points": [] },
+    { "id": "w4", "from": { "componentId": "V1", "pinIndex": 1 }, "to": { "componentId": "D3", "pinIndex": 0 }, "points": [] },
+    { "id": "w5", "from": { "componentId": "D1", "pinIndex": 1 }, "to": { "componentId": "D3", "pinIndex": 1 }, "points": [] },
+    { "id": "w6", "from": { "componentId": "D2", "pinIndex": 0 }, "to": { "componentId": "D4", "pinIndex": 0 }, "points": [] },
+    { "id": "w7", "from": { "componentId": "D1", "pinIndex": 1 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [] },
+    { "id": "w8", "from": { "componentId": "D2", "pinIndex": 0 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w9", "from": { "componentId": "D3", "pinIndex": 1 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [] },
+    { "id": "w10", "from": { "componentId": "D4", "pinIndex": 0 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w11", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "C1", "pinIndex": 0 }, "points": [] },
+    { "id": "w12", "from": { "componentId": "C1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] }
+  ],
+  "viewport": { "zoom": 0.9, "offsetX": 480, "offsetY": 320 },
+  "simSettings": { "dt": 0.00005, "tolerance": 0.00001, "maxIterations": 120 },
+  "activeAnalysisMode": "TRAN",
+  "probes": { "ch1ProbeNode": "3", "ch2ProbeNode": "0" }
+}
