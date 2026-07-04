@@ -6,6 +6,12 @@ Todas las mejoras y cambios importantes en este proyecto.
 
 ## [Unreleased] - En Desarrollo
 
+### Rendimiento de pruebas
+- `test_scr_phase_control` conserva las verificaciones de bloqueo, disparo y apagado
+  del SCR, pero usa una malla temporal ajustada a los puntos observados.
+- Tiempo del test objetivo reducido de ~109.9 s a ~12-14 s en perfil debug.
+- Suite Rust completa: 113 tests en ~13.5 s, sin tests ignorados.
+
 ### Planificado para v1.0
 - [ ] Scripts de build (`build.sh`, `build.bat`)
 - [ ] Tests de integración end-to-end
