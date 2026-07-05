@@ -20,8 +20,7 @@
 //            ya sincronizado (pines MCU actualizados).
 // ==========================================================================
 
-import { safeInvoke as invoke } from "./tauri_mock";
-import { listen } from "@tauri-apps/api/event";
+import { safeInvoke as invoke, safeListen as listen } from "./tauri_mock";
 import { TelemetryPanel } from "../ui/telemetry_panel";
 import { type McuRuntime } from "./mcu-runtime";
 import { type AnalogEventTrigger } from "./mcu-types";
@@ -92,6 +91,7 @@ export interface SimulationRunner {
 let coSimulationWorker: Worker | null = null;
 
 let unlistenStream: (() => void) | null = null;
+let unlistenError: (() => void) | null = null;
 
 /** Latch del paso temporal dt. Se actualiza en cada llamada a
  *  startInteractiveTransient() y es consumido por el listener IPC. */
@@ -102,6 +102,29 @@ let currentDt: number = 1e-4;
 // ==========================================================================
 
 export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): SimulationRunner {
+  const releaseLocalResources = (): void => {
+    if (coSimulationWorker) {
+      coSimulationWorker.terminate();
+      coSimulationWorker = null;
+    }
+
+    if (unlistenStream) {
+      unlistenStream();
+      unlistenStream = null;
+    }
+
+    if (unlistenError) {
+      unlistenError();
+      unlistenError = null;
+    }
+  };
+
+  const completeSimulation = (finalTime: number): void => {
+    callbacks.onSimulationComplete(finalTime);
+    callbacks.onSimulationStateChanged(false);
+    releaseLocalResources();
+  };
+
   return {
     async startInteractiveTransient(
       netlist: CircuitNetlist,
@@ -109,13 +132,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
     ): Promise<void> {
       // ENMIENDA 2: Blindaje de doble listener
       if (unlistenStream) {
-        unlistenStream();
-        unlistenStream = null;
-      }
-
-      if (coSimulationWorker) {
-        coSimulationWorker.terminate();
-        coSimulationWorker = null;
+        releaseLocalResources();
       }
 
       // Actualizar latch dt para el closure asíncrono
@@ -150,7 +167,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         if (data.type === "frame_processed") {
           callbacks.onFrameReceived(data.frame);
           if (data.frame.isFinal) {
-            callbacks.onSimulationComplete(data.frame.time);
+            completeSimulation(data.frame.time);
           }
         }
       };
@@ -169,13 +186,13 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         } else {
           callbacks.onFrameReceived(frame);
           if (frame.isFinal) {
-            callbacks.onSimulationComplete(frame.time);
+            completeSimulation(frame.time);
           }
         }
       });
 
       // Registrar listener IPC para errores de simulación
-      listen<string>('sim-frame-error', (event) => {
+      unlistenError = await listen<string>('sim-frame-error', (event) => {
         callbacks.onSimulationError(event.payload);
       });
 
@@ -186,6 +203,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(errorMsg);
         callbacks.onSimulationStateChanged(false);
+        releaseLocalResources();
         callbacks.onSimulationError(errorMsg);
         throw err;
       }
@@ -200,17 +218,8 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       } finally {
         callbacks.onSimulationStateChanged(false);
 
-        // ENMIENDA 3: Limpiar runtimes y desregistrar stream
-        if (coSimulationWorker) {
-          coSimulationWorker.postMessage({ type: "stop_interactive" });
-          coSimulationWorker.terminate();
-          coSimulationWorker = null;
-        }
-
-        if (unlistenStream) {
-          unlistenStream();
-          unlistenStream = null;
-        }
+        // ENMIENDA 3: Limpiar runtimes y desregistrar streams
+        releaseLocalResources();
       }
     },
 
@@ -227,4 +236,3 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
     },
   };
 }
-

@@ -1,4 +1,83 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
+
+type WebEventHandler = (event: Event<unknown>) => void;
+
+const webEventListeners = new Map<string, Set<WebEventHandler>>();
+const loggedMockCommands = new Set<string>();
+let webTransientRunId = 0;
+let webTransientTimers: ReturnType<typeof setTimeout>[] = [];
+
+function isTauriEnvironment(): boolean {
+  return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+}
+
+function emitWebEvent<T>(eventName: string, payload: T, id: number): void {
+  const handlers = webEventListeners.get(eventName);
+  if (!handlers) return;
+
+  const event = { event: eventName, id, payload } as Event<T>;
+  handlers.forEach((handler) => handler(event as Event<unknown>));
+}
+
+function stopWebTransient(): void {
+  webTransientRunId += 1;
+  webTransientTimers.forEach((timer) => clearTimeout(timer));
+  webTransientTimers = [];
+}
+
+function startWebTransient(args?: Record<string, unknown>): void {
+  stopWebTransient();
+  const runId = webTransientRunId;
+  const settings = args?.settings as { dt?: number; tMax?: number } | undefined;
+  const tMax = Math.max(settings?.tMax ?? 0.05, settings?.dt ?? 1e-4);
+  const frameCount = 60;
+
+  for (let index = 0; index < frameCount; index += 1) {
+    const timer = setTimeout(() => {
+      if (runId !== webTransientRunId) return;
+
+      const time = tMax * (index / (frameCount - 1));
+      const isFinal = index === frameCount - 1;
+      emitWebEvent("sim-frame-update", {
+        time,
+        nodeVoltages: {
+          "0": 0,
+          "1": 5,
+          "2": 5 * (1 - Math.exp(-time / 0.001)),
+        },
+        branchCurrents: {
+          V1: -0.005 * Math.exp(-time / 0.001),
+        },
+        frameIndex: index,
+        isFinal,
+        triggerEvent: null,
+      }, index);
+
+      if (isFinal) webTransientTimers = [];
+    }, 40 * (index + 1));
+    webTransientTimers.push(timer);
+  }
+}
+
+export async function safeListen<T>(
+  eventName: string,
+  handler: (event: Event<T>) => void,
+): Promise<UnlistenFn> {
+  if (isTauriEnvironment()) {
+    return await listen<T>(eventName, handler);
+  }
+
+  const handlers = webEventListeners.get(eventName) ?? new Set<WebEventHandler>();
+  const webHandler = handler as WebEventHandler;
+  handlers.add(webHandler);
+  webEventListeners.set(eventName, handlers);
+
+  return () => {
+    handlers.delete(webHandler);
+    if (handlers.size === 0) webEventListeners.delete(eventName);
+  };
+}
 
 /**
  * Invoca un comando de Tauri de manera segura.
@@ -7,14 +86,15 @@ import { invoke } from "@tauri-apps/api/core";
  * devuelve respuestas simuladas (mock) para evitar fallos y permitir pruebas de UI.
  */
 export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const isTauriEnv = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
-
-  if (isTauriEnv) {
+  if (isTauriEnvironment()) {
     return await invoke<T>(cmd, args);
   }
 
   // MOCK FALLBACK FOR WEB BROWSER
-  console.warn(`[Tauri Web Mock] Interceptado comando IPC '${cmd}' con argumentos:`, args);
+  if (!loggedMockCommands.has(cmd)) {
+    console.debug(`[Tauri Web Mock] Comando IPC simulado: '${cmd}'.`);
+    loggedMockCommands.add(cmd);
+  }
 
   switch (cmd) {
     case "get_performance_telemetry":
@@ -91,7 +171,13 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
       return "mock_exported_file.txt" as T;
 
     case "start_interactive_transient":
+      startWebTransient(args);
+      return undefined as T;
+
     case "stop_interactive_transient":
+      stopWebTransient();
+      return undefined as T;
+
     case "inject_live_mutation":
       return undefined as T;
 
