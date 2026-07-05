@@ -399,6 +399,35 @@ async function auditDesktopPanelCollapse(page) {
   }
 }
 
+async function auditComponentPlacement(page) {
+  const card = await page.locator("#comp-resistor").boundingBox();
+  const viewport = await page.locator("#canvas-viewport").boundingBox();
+  if (!card || !viewport) fail("No fue posible localizar la paleta o el lienzo para probar arrastre");
+
+  const startX = card.x + card.width / 2;
+  const startY = card.y + card.height / 2;
+  const targetX = viewport.x + viewport.width * 0.55;
+  const targetY = viewport.y + viewport.height * 0.45;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 24, startY + 8, { steps: 3 });
+  await page.mouse.move(targetX, targetY, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+
+  const state = await page.evaluate(() => ({
+    propertyId: document.querySelector("#prop-id-input")?.value,
+    propertyValue: document.querySelector("#prop-val-input")?.value,
+    ghostCount: document.querySelectorAll(".component-drag-ghost").length,
+    dropTargetActive: document.querySelector("#canvas-viewport")?.classList.contains("palette-drop-target") ?? false,
+    logTail: [...document.querySelectorAll(".log-line")].slice(-4).map((line) => line.textContent ?? ""),
+  }));
+  const placed = state.logTail.some((line) => line.includes("Componente colocado: [R1]"));
+  if (!placed || state.propertyId !== "R1" || state.propertyValue !== "1k" || state.ghostCount !== 0 || state.dropTargetActive) {
+    fail("El arrastre de componentes no completó limpiamente", { state });
+  }
+}
+
 async function auditRenderIsolation(page) {
   console.log("[audit] abriendo centro de instrumentos y comprobando aislamiento");
   const workspaceBefore = (await collectMetrics(page)).workspace;
@@ -649,6 +678,7 @@ async function runAudit() {
       if (caseConfig.name === "desktop") {
         await auditKeyboardFocus(page);
         await auditDesktopPanelCollapse(page);
+        await auditComponentPlacement(page);
         await auditRenderIsolation(page);
       } else {
         await auditMobileDrawers(page);

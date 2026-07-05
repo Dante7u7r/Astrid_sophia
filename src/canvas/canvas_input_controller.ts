@@ -495,18 +495,16 @@ export function attachCanvasDrop(
     "requestRender" | "onNetlistSync" | "onCanvasModified" | "onComponentPlaced" | "log"
   >,
 ): () => void {
-  const onDragOver = (e: DragEvent) => e.preventDefault();
-
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
+  const placeComponent = (
+    type: ComponentInstance["type"],
+    value: number,
+    clientX: number,
+    clientY: number,
+  ): boolean => {
     try {
-      const rawData = e.dataTransfer?.getData("text/plain");
-      if (!rawData) return;
-      const { type, value } = JSON.parse(rawData) as { type: ComponentInstance["type"]; value: number };
-
       const rect = canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
+      const screenX = clientX - rect.left;
+      const screenY = clientY - rect.top;
       const worldPt = orchestrator.screenToWorld(screenX, screenY);
       const snapped = orchestrator.snapPointToGrid(worldPt);
       const newComp = orchestrator.addComponent(type, snapped.x, snapped.y, value);
@@ -516,6 +514,25 @@ export function attachCanvasDrop(
       callbacks.onComponentPlaced(newComp);
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
+      return true;
+    } catch {
+      callbacks.log("Error al colocar componente.", "error");
+      return false;
+    }
+  };
+
+  const onDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  };
+
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    try {
+      const rawData = e.dataTransfer?.getData("text/plain");
+      if (!rawData) return;
+      const { type, value } = JSON.parse(rawData) as { type: ComponentInstance["type"]; value: number };
+      placeComponent(type, value, e.clientX, e.clientY);
     } catch {
       callbacks.log("Error al colocar componente.", "error");
     }
@@ -524,8 +541,125 @@ export function attachCanvasDrop(
   canvasViewport.addEventListener("dragover", onDragOver);
   canvasViewport.addEventListener("drop", onDrop);
 
+  const paletteCleanups: Array<() => void> = [];
+  const toolboxCards = document.querySelectorAll<HTMLElement>(".component-card");
+
+  toolboxCards.forEach((card) => {
+    card.draggable = false;
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    const componentName = card.querySelector(".comp-name")?.textContent?.trim() ?? "componente";
+    card.setAttribute("aria-label", `Colocar ${componentName}`);
+
+    let pointerId: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    let dragging = false;
+    let ghost: HTMLElement | null = null;
+
+    const getComponentData = () => ({
+      type: (card.dataset.type || "resistor") as ComponentInstance["type"],
+      value: Number.parseFloat(card.dataset.default || "1000"),
+    });
+
+    const isInsideViewport = (clientX: number, clientY: number): boolean => {
+      const rect = canvasViewport.getBoundingClientRect();
+      return clientX >= rect.left
+        && clientX <= rect.right
+        && clientY >= rect.top
+        && clientY <= rect.bottom;
+    };
+
+    const updateDragVisuals = (clientX: number, clientY: number): void => {
+      if (ghost) {
+        ghost.style.transform = `translate3d(${clientX + 14}px, ${clientY + 14}px, 0)`;
+      }
+      canvasViewport.classList.toggle("palette-drop-target", isInsideViewport(clientX, clientY));
+    };
+
+    const beginVisualDrag = (clientX: number, clientY: number): void => {
+      dragging = true;
+      card.classList.add("palette-drag-source");
+      document.body.classList.add("palette-drag-active");
+      ghost = card.cloneNode(true) as HTMLElement;
+      ghost.removeAttribute("id");
+      ghost.removeAttribute("role");
+      ghost.removeAttribute("tabindex");
+      ghost.setAttribute("aria-hidden", "true");
+      ghost.className = "component-drag-ghost";
+      document.body.appendChild(ghost);
+      updateDragVisuals(clientX, clientY);
+    };
+
+    const resetDrag = (): void => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("blur", resetDrag);
+      pointerId = null;
+      dragging = false;
+      ghost?.remove();
+      ghost = null;
+      card.classList.remove("palette-drag-source");
+      document.body.classList.remove("palette-drag-active");
+      canvasViewport.classList.remove("palette-drop-target");
+    };
+
+    const onPointerDown = (event: PointerEvent): void => {
+      if (event.button !== 0 || pointerId !== null) return;
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      document.addEventListener("pointermove", onPointerMove, { passive: false });
+      document.addEventListener("pointerup", onPointerUp);
+      document.addEventListener("pointercancel", onPointerCancel);
+      window.addEventListener("blur", resetDrag, { once: true });
+    };
+
+    const onPointerMove = (event: PointerEvent): void => {
+      if (event.pointerId !== pointerId) return;
+      if (!dragging && Math.hypot(event.clientX - startX, event.clientY - startY) >= 6) {
+        beginVisualDrag(event.clientX, event.clientY);
+      }
+      if (!dragging) return;
+      event.preventDefault();
+      updateDragVisuals(event.clientX, event.clientY);
+    };
+
+    const onPointerUp = (event: PointerEvent): void => {
+      if (event.pointerId !== pointerId) return;
+      if (dragging && isInsideViewport(event.clientX, event.clientY)) {
+        const { type, value } = getComponentData();
+        placeComponent(type, value, event.clientX, event.clientY);
+      }
+      resetDrag();
+    };
+
+    const onPointerCancel = (event: PointerEvent): void => {
+      if (event.pointerId === pointerId) resetDrag();
+    };
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      const rect = canvasViewport.getBoundingClientRect();
+      const { type, value } = getComponentData();
+      placeComponent(type, value, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    };
+
+    card.addEventListener("pointerdown", onPointerDown);
+    card.addEventListener("keydown", onKeyDown);
+
+    paletteCleanups.push(() => {
+      card.removeEventListener("pointerdown", onPointerDown);
+      card.removeEventListener("keydown", onKeyDown);
+      resetDrag();
+    });
+  });
+
   return () => {
     canvasViewport.removeEventListener("dragover", onDragOver);
     canvasViewport.removeEventListener("drop", onDrop);
+    paletteCleanups.forEach((cleanup) => cleanup());
   };
 }

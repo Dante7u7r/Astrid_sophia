@@ -1013,16 +1013,6 @@ function initCanvasCAD() {
   }
   if (visualAudit.isStep("drop")) return;
 
-  const toolboxCards = document.querySelectorAll(".component-card");
-  toolboxCards.forEach(card => {
-    card.addEventListener("dragstart", (e) => {
-      const htmlEvent = e as DragEvent;
-      const type = card.getAttribute("data-type") || "resistor";
-      const defaultValue = card.getAttribute("data-default") || "1000";
-      htmlEvent.dataTransfer?.setData("text/plain", JSON.stringify({ type, value: parseFloat(defaultValue) }));
-    });
-  });
-
   // Zoom In/Out & Clear floating buttons
   const btnClearCanvas = document.querySelector("#btn-clear-canvas");
   if (btnClearCanvas) {

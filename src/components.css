@@ -274,6 +274,7 @@
   align-items: center;
   gap: 12px;
   cursor: grab;
+  touch-action: none;
   user-select: none;
   transition: all 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
   box-shadow: 0 4px 10px rgba(0,0,0,0.15);
@@ -382,6 +383,45 @@
 .component-card:active {
   cursor: grabbing;
   transform: scale(0.97);
+}
+
+.component-card.palette-drag-source {
+  opacity: 0.45;
+  transform: scale(0.98);
+}
+
+.component-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  width: 172px;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(91, 243, 228, 0.52);
+  border-radius: 8px;
+  background: hsl(225, 23%, 11%);
+  color: var(--text-main);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65), 0 0 18px rgba(91, 243, 228, 0.18);
+  opacity: 0.94;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.component-drag-ghost .comp-desc {
+  display: none;
+}
+
+body.palette-drag-active,
+body.palette-drag-active * {
+  cursor: grabbing !important;
+}
+
+.canvas-viewport.palette-drop-target {
+  box-shadow: inset 0 0 0 2px rgba(91, 243, 228, 0.72), inset 0 0 28px rgba(91, 243, 228, 0.08);
 }
 
 .comp-icon-box {
