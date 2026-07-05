@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub, Mul, Div, Neg};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Dual3 {
@@ -16,7 +16,10 @@ impl Dual3 {
     }
 
     pub fn constant(val: f64) -> Self {
-        Dual3 { val, deriv: [0.0; 3] }
+        Dual3 {
+            val,
+            deriv: [0.0; 3],
+        }
     }
 
     pub fn exp(self) -> Self {
@@ -31,7 +34,11 @@ impl Dual3 {
 
     pub fn ln(self) -> Self {
         let val = self.val.ln();
-        let denom = if self.val.abs() < 1e-30 { 1e-30 } else { self.val };
+        let denom = if self.val.abs() < 1e-30 {
+            1e-30
+        } else {
+            self.val
+        };
         let deriv = [
             self.deriv[0] / denom,
             self.deriv[1] / denom,
@@ -175,8 +182,16 @@ impl Mul<Dual3> for f64 {
 impl Div<Dual3> for Dual3 {
     type Output = Dual3;
     fn div(self, other: Dual3) -> Dual3 {
-        let other_val_sq = if other.val.abs() < 1e-30 { 1e-30 } else { other.val * other.val };
-        let denom = if other.val.abs() < 1e-30 { 1e-30 } else { other.val };
+        let other_val_sq = if other.val.abs() < 1e-30 {
+            1e-30
+        } else {
+            other.val * other.val
+        };
+        let denom = if other.val.abs() < 1e-30 {
+            1e-30
+        } else {
+            other.val
+        };
         Dual3 {
             val: self.val / denom,
             deriv: [

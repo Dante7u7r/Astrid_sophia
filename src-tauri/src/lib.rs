@@ -11,32 +11,46 @@
     clippy::single_match,
     clippy::collapsible_match
 )]
-pub mod solver;
-mod telemetry;
-pub mod parser;
-mod topology;
-mod sparse_csc;
-mod symbolic;
-mod krylov;
-pub mod dual3;
-pub mod sparse_parallel;
-mod gpu_solver;
 pub mod ad_value;
+pub mod dual3;
+mod gpu_solver;
+mod krylov;
+pub mod parser;
+pub mod solver;
+mod sparse_csc;
+pub mod sparse_parallel;
+mod symbolic;
+mod telemetry;
+mod topology;
 
-use tauri::Emitter;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use serde::{Serialize, Deserialize};
+use tauri::Emitter;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", content = "details")]
 pub enum SimulationError {
-    SingularMatrix { message: String, node: Option<String> },
-    MaxIterationsExceeded { message: String, component: Option<String> },
-    ConvergenceFailure { message: String, component: Option<String> },
-    InvalidCircuit { message: String, reason: String },
-    Unknown { message: String },
+    SingularMatrix {
+        message: String,
+        node: Option<String>,
+    },
+    MaxIterationsExceeded {
+        message: String,
+        component: Option<String>,
+    },
+    ConvergenceFailure {
+        message: String,
+        component: Option<String>,
+    },
+    InvalidCircuit {
+        message: String,
+        reason: String,
+    },
+    Unknown {
+        message: String,
+    },
 }
 
 impl std::fmt::Display for SimulationError {
@@ -56,24 +70,42 @@ impl std::error::Error for SimulationError {}
 impl From<String> for SimulationError {
     fn from(err: String) -> Self {
         if err.contains("singular") {
-            let node = err.split("node ").nth(1).or_else(|| err.split("at ").nth(1)).map(|s| s.trim().to_string());
+            let node = err
+                .split("node ")
+                .nth(1)
+                .or_else(|| err.split("at ").nth(1))
+                .map(|s| s.trim().to_string());
             SimulationError::SingularMatrix {
                 message: "Matriz singular: circuito no resuelto. Puede haber un nodo flotante o falta de referencia a tierra.".to_string(),
                 node,
             }
         } else if err.contains("limit") || err.contains("max") || err.contains("iteration") {
-            let component = err.split("diode ").nth(1).or_else(|| err.split("on ").nth(1)).map(|s| s.trim().to_string());
+            let component = err
+                .split("diode ")
+                .nth(1)
+                .or_else(|| err.split("on ").nth(1))
+                .map(|s| s.trim().to_string());
             SimulationError::MaxIterationsExceeded {
                 message: "Se ha excedido el límite máximo de iteraciones Newton-Raphson. Comprueba los componentes no lineales o las fuentes de excitación.".to_string(),
                 component,
             }
         } else if err.contains("converg") {
-            let component = err.split("diode ").nth(1).or_else(|| err.split("on ").nth(1)).map(|s| s.trim().to_string());
+            let component = err
+                .split("diode ")
+                .nth(1)
+                .or_else(|| err.split("on ").nth(1))
+                .map(|s| s.trim().to_string());
             SimulationError::ConvergenceFailure {
-                message: "El solucionador Newton-Raphson no convergió al punto de operación.".to_string(),
+                message: "El solucionador Newton-Raphson no convergió al punto de operación."
+                    .to_string(),
                 component,
             }
-        } else if err.contains("invalid") || err.contains("inválido") || err.contains("netlist") || err.contains("missing") || err.contains("Tierra") {
+        } else if err.contains("invalid")
+            || err.contains("inválido")
+            || err.contains("netlist")
+            || err.contains("missing")
+            || err.contains("Tierra")
+        {
             SimulationError::InvalidCircuit {
                 message: "Circuito o netlist inválida.".to_string(),
                 reason: err.clone(),
@@ -116,7 +148,9 @@ fn ping() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn run_dc_simulation(netlist: solver::CircuitNetlist) -> Result<solver::SimulationResult, SimulationError> {
+async fn run_dc_simulation(
+    netlist: solver::CircuitNetlist,
+) -> Result<solver::SimulationResult, SimulationError> {
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
     solver::solve_dc_circuit(&netlist).map_err(SimulationError::from)
 }
@@ -149,7 +183,9 @@ async fn run_dc_sweep(
 }
 
 #[tauri::command]
-async fn parse_spice_netlist(netlist_str: String) -> Result<solver::CircuitNetlist, SimulationError> {
+async fn parse_spice_netlist(
+    netlist_str: String,
+) -> Result<solver::CircuitNetlist, SimulationError> {
     parser::parse_spice_netlist_to_native(&netlist_str).map_err(SimulationError::from)
 }
 
@@ -160,7 +196,8 @@ async fn run_monte_carlo_transient(
     mc_settings: solver::MonteCarloSettings,
 ) -> Result<Vec<Vec<solver::TimeStepResult>>, SimulationError> {
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
-    solver::solve_monte_carlo_transient(&netlist, &transient_settings, &mc_settings).map_err(SimulationError::from)
+    solver::solve_monte_carlo_transient(&netlist, &transient_settings, &mc_settings)
+        .map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -169,7 +206,8 @@ async fn run_fft_analysis(
     node_name: String,
     fundamental_freq: f64,
 ) -> Result<solver::FftResult, SimulationError> {
-    solver::calculate_fft_and_thd(&time_steps, &node_name, fundamental_freq).map_err(SimulationError::from)
+    solver::calculate_fft_and_thd(&time_steps, &node_name, fundamental_freq)
+        .map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -245,7 +283,10 @@ fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
     mutation: ComponentMutation,
 ) -> Result<(), SimulationError> {
-    let mut queue = state.hot_mutations.lock().map_err(|e| SimulationError::from(e.to_string()))?;
+    let mut queue = state
+        .hot_mutations
+        .lock()
+        .map_err(|e| SimulationError::from(e.to_string()))?;
     queue.push(mutation);
     Ok(())
 }
@@ -262,7 +303,7 @@ async fn start_interactive_transient(
     let is_running = state.is_running.clone();
     let hot_mutations = state.hot_mutations.clone();
 
-  tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let window_inner = window.clone();
         let is_running_inner = is_running.clone();
 
@@ -311,15 +352,21 @@ async fn start_interactive_transient(
                 }
             }
             if let Err(ref e) = result {
-                window_inner.emit("sim-frame-error", &SimulationError::from(e.clone())).ok();
+                window_inner
+                    .emit("sim-frame-error", &SimulationError::from(e.clone()))
+                    .ok();
             }
         }));
 
         if catch_result.is_err() {
-            window.emit(
-                "sim-frame-error",
-                &SimulationError::Unknown { message: "Pánico inesperado en el motor de simulación de Rust".to_string() }
-            ).ok();
+            window
+                .emit(
+                    "sim-frame-error",
+                    &SimulationError::Unknown {
+                        message: "Pánico inesperado en el motor de simulación de Rust".to_string(),
+                    },
+                )
+                .ok();
         }
 
         is_running.store(false, Ordering::SeqCst);
@@ -329,7 +376,9 @@ async fn start_interactive_transient(
 }
 
 #[tauri::command]
-fn stop_interactive_transient(state: tauri::State<'_, SimulationControlState>) -> Result<(), String> {
+fn stop_interactive_transient(
+    state: tauri::State<'_, SimulationControlState>,
+) -> Result<(), String> {
     state.is_running.store(false, Ordering::SeqCst);
     Ok(())
 }
@@ -353,7 +402,8 @@ async fn save_circuit_file(content: String) -> Result<String, String> {
     if let Some(file_handle) = file_path {
         let path = file_handle.path();
         let mut file = File::create(path).map_err(|e| e.to_string())?;
-        file.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| e.to_string())?;
         Ok(path.to_string_lossy().to_string())
     } else {
         Err("Operación cancelada por el usuario".to_string())
@@ -366,7 +416,8 @@ async fn save_circuit_to_path(path: String, content: String) -> Result<(), Strin
     use std::io::Write;
 
     let mut file = File::create(&path).map_err(|e| e.to_string())?;
-    file.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

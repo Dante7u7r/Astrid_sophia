@@ -16,7 +16,10 @@ fn main() {
     let netlist = parse_spice_netlist_to_native(netlist_str).unwrap();
     println!("Netlist parseada con éxito. Componentes:");
     for comp in &netlist.components {
-        println!("  - ID: {}, Tipo: {}, Pines: {:?}", comp.id, comp.comp_type, comp.pins);
+        println!(
+            "  - ID: {}, Tipo: {}, Pines: {:?}",
+            comp.id, comp.comp_type, comp.pins
+        );
     }
 
     let settings = TransientSettings {

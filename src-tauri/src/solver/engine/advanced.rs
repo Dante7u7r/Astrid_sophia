@@ -1,19 +1,19 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use crate::solver::matrix::*;
+use crate::solver::types::*;
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use crate::solver::types::*;
-use crate::solver::matrix::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[allow(unused_imports)]
-use super::devices::*;
+use super::ac::*;
 #[allow(unused_imports)]
 use super::dc::*;
 #[allow(unused_imports)]
-use super::transient::*;
+use super::devices::*;
 #[allow(unused_imports)]
-use super::ac::*;
+use super::transient::*;
 
 pub fn solve_pss(
     netlist: &CircuitNetlist,
@@ -138,12 +138,14 @@ pub fn solve_pss(
         if let Some(delta_x) = solve_sparse(&j_mat, &(-&h)) {
             x0 += delta_x;
         } else {
-            return Err("Matriz Jacobiana de Shooting singular. No se puede resolver el paso de Newton.".to_string());
+            return Err(
+                "Matriz Jacobiana de Shooting singular. No se puede resolver el paso de Newton."
+                    .to_string(),
+            );
         }
     }
 
     Ok(last_results)
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -155,7 +157,6 @@ pub struct PoleZeroResult {
     pub is_stable: bool,
     pub phaseMargin: f64,
     pub gainMargin: f64,
-
 }
 
 pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult, String> {
@@ -246,11 +247,21 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
                 "diode" | "led" => {
                     let n1 = comp.pins[0].parse::<usize>().unwrap();
                     let n2 = comp.pins[1].parse::<usize>().unwrap();
-                    
-                    let v_anode = if n1 > 0 { *op_result.node_voltages.get(&n1.to_string()).unwrap_or(&0.0) } else { 0.0 };
-                    let v_cathode = if n2 > 0 { *op_result.node_voltages.get(&n2.to_string()).unwrap_or(&0.0) } else { 0.0 };
+
+                    let v_anode = if n1 > 0 {
+                        *op_result.node_voltages.get(&n1.to_string()).unwrap_or(&0.0)
+                    } else {
+                        0.0
+                    };
+                    let v_cathode = if n2 > 0 {
+                        *op_result.node_voltages.get(&n2.to_string()).unwrap_or(&0.0)
+                    } else {
+                        0.0
+                    };
                     let mut vd = v_anode - v_cathode;
-                    if vd > 0.72 { vd = 0.72; }
+                    if vd > 0.72 {
+                        vd = 0.72;
+                    }
                     let gd = (DIODE_IS / DIODE_VT) * (vd / DIODE_VT).exp();
 
                     let idx1 = n1 > 0 && dynamic_nodes.contains(&n1);
@@ -272,21 +283,53 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
                     }
                 }
                 "opto" => {
-                    if comp.pins.len() < 4 { continue; }
+                    if comp.pins.len() < 4 {
+                        continue;
+                    }
                     let n_a = comp.pins[0].parse::<usize>().unwrap();
                     let n_k = comp.pins[1].parse::<usize>().unwrap();
                     let n_c = comp.pins[2].parse::<usize>().unwrap();
                     let n_e = comp.pins[3].parse::<usize>().unwrap();
 
                     // Recuperar punto de operación del opto
-                    let v_a = if n_a > 0 { *op_result.node_voltages.get(&n_a.to_string()).unwrap_or(&0.0) } else { 0.0 };
-                    let v_k = if n_k > 0 { *op_result.node_voltages.get(&n_k.to_string()).unwrap_or(&0.0) } else { 0.0 };
-                    let v_c = if n_c > 0 { *op_result.node_voltages.get(&n_c.to_string()).unwrap_or(&0.0) } else { 0.0 };
-                    let v_e = if n_e > 0 { *op_result.node_voltages.get(&n_e.to_string()).unwrap_or(&0.0) } else { 0.0 };
+                    let v_a = if n_a > 0 {
+                        *op_result
+                            .node_voltages
+                            .get(&n_a.to_string())
+                            .unwrap_or(&0.0)
+                    } else {
+                        0.0
+                    };
+                    let v_k = if n_k > 0 {
+                        *op_result
+                            .node_voltages
+                            .get(&n_k.to_string())
+                            .unwrap_or(&0.0)
+                    } else {
+                        0.0
+                    };
+                    let v_c = if n_c > 0 {
+                        *op_result
+                            .node_voltages
+                            .get(&n_c.to_string())
+                            .unwrap_or(&0.0)
+                    } else {
+                        0.0
+                    };
+                    let v_e = if n_e > 0 {
+                        *op_result
+                            .node_voltages
+                            .get(&n_e.to_string())
+                            .unwrap_or(&0.0)
+                    } else {
+                        0.0
+                    };
                     let vd = v_a - v_k;
                     let v_ce = v_c - v_e;
-                    let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
-                    let (_i_ce, g_md, g_o, _i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+                    let (_, id_led, gd_led) =
+                        solve_diode_junction_voltage(vd, netlist.temperature, comp);
+                    let (_i_ce, g_md, g_o, _i_ce_eq) =
+                        evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
 
                     // Estampar lado LED (conductancia del diodo)
                     let idx_a = n_a > 0 && dynamic_nodes.contains(&n_a);
@@ -317,26 +360,30 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
                         }
                     };
                     // g_o entre C y E
-                    if idx_c { stamp_g(n_c, n_c, g_o, &mut g_mat); }
-                    if idx_e { stamp_g(n_e, n_e, g_o, &mut g_mat); }
+                    if idx_c {
+                        stamp_g(n_c, n_c, g_o, &mut g_mat);
+                    }
+                    if idx_e {
+                        stamp_g(n_e, n_e, g_o, &mut g_mat);
+                    }
                     if idx_c && idx_e {
                         stamp_g(n_c, n_e, -g_o, &mut g_mat);
                         stamp_g(n_e, n_c, -g_o, &mut g_mat);
                     }
                     // g_md entre C y A/K, y entre E y A/K
                     if idx_c {
-                        stamp_g(n_c, n_a,  g_md, &mut g_mat);
+                        stamp_g(n_c, n_a, g_md, &mut g_mat);
                         stamp_g(n_c, n_k, -g_md, &mut g_mat);
                     }
                     if idx_e {
                         stamp_g(n_e, n_a, -g_md, &mut g_mat);
-                        stamp_g(n_e, n_k,  g_md, &mut g_mat);
+                        stamp_g(n_e, n_k, g_md, &mut g_mat);
                     }
                 }
                 "nmos" | "bsim3nmos" => {
                     let nd = comp.pins[1].parse::<usize>().unwrap();
                     let ns = comp.pins[2].parse::<usize>().unwrap();
-                    
+
                     let idx_d = nd > 0 && dynamic_nodes.contains(&nd);
                     let idx_s = ns > 0 && dynamic_nodes.contains(&ns);
 
@@ -359,7 +406,7 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
                 "pmos" | "bsim3pmos" => {
                     let nd = comp.pins[1].parse::<usize>().unwrap();
                     let ns = comp.pins[2].parse::<usize>().unwrap();
-                    
+
                     let idx_d = nd > 0 && dynamic_nodes.contains(&nd);
                     let idx_s = ns > 0 && dynamic_nodes.contains(&ns);
 
@@ -430,7 +477,7 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
             }
             Err(_) => {
                 for i in 0..size {
-                    let p_val = - g_mat[(i, i)] / c_mat[(i, i)].max(1e-15);
+                    let p_val = -g_mat[(i, i)] / c_mat[(i, i)].max(1e-15);
                     poles.push(Complex::new(p_val, 0.0));
                     if p_val > 0.0 {
                         is_stable = false;
@@ -478,7 +525,6 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
         phaseMargin: phase_margin,
         gainMargin: gain_margin,
     })
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -486,7 +532,6 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
 pub struct MonteCarloSettings {
     pub runs: usize,
     pub seed: Option<u64>,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -494,14 +539,14 @@ pub struct MonteCarloSettings {
 #[allow(dead_code)]
 pub struct MonteCarloResult {
     pub run_results: Vec<Vec<TimeStepResult>>,
-
 }
 
 // Generador pseudoaleatorio LCG simple determinista
 fn lcg_next(seed: &mut u64) -> f64 {
-    *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    *seed = seed
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     ((*seed >> 32) as f64) / 4294967295.0
-
 }
 
 // Transformación de Box-Muller para distribución normal estándar N(0, 1)
@@ -514,7 +559,6 @@ fn box_muller_standard(seed: &mut u64) -> f64 {
     let r = (-2.0 * u1.ln()).sqrt();
     let theta = 2.0 * std::f64::consts::PI * u2;
     r * theta.cos()
-
 }
 
 pub fn solve_monte_carlo_transient(
@@ -550,7 +594,6 @@ pub fn solve_monte_carlo_transient(
             solve_transient_circuit(&varied_netlist, transient_settings)
         })
         .collect()
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -560,7 +603,6 @@ pub struct DcSweepSettings {
     pub v_start: f64,
     pub v_end: f64,
     pub v_step: f64,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -569,7 +611,6 @@ pub struct DcSweepResult {
     pub sweep_voltages: Vec<f64>,
     pub node_voltages: HashMap<String, Vec<f64>>,
     pub branch_currents: HashMap<String, Vec<f64>>,
-
 }
 
 pub fn calculate_imd_analysis(
@@ -579,7 +620,9 @@ pub fn calculate_imd_analysis(
     f2: f64,
 ) -> Result<ImdResult, String> {
     if time_steps.len() < 2 {
-        return Err("No hay suficientes pasos de tiempo para análisis de intermodulación.".to_string());
+        return Err(
+            "No hay suficientes pasos de tiempo para análisis de intermodulación.".to_string(),
+        );
     }
 
     let t_max = time_steps.last().unwrap().time;
@@ -593,7 +636,8 @@ pub fn calculate_imd_analysis(
         let v_val = interpolate_node_voltage(time_steps, node_name, t_target);
 
         // Ventana de Hann: 0.5 * (1.0 - cos(2 * PI * i / (N - 1)))
-        let hann = 0.5 * (1.0 - (2.0 * std::f64::consts::PI * i as f64 / (n_points - 1) as f64).cos());
+        let hann =
+            0.5 * (1.0 - (2.0 * std::f64::consts::PI * i as f64 / (n_points - 1) as f64).cos());
         v_samples[i] = Complex::new(v_val * hann, 0.0);
     }
 
@@ -644,7 +688,10 @@ pub fn calculate_imd_analysis(
     let im3_power_dbv = 20.0 * a_im3.max(1e-9).log10();
 
     // 7. Calcular tasa de IMD en porcentaje
-    let total_im_sq = (mag_im2_diff * mag_im2_diff) + (mag_im2_sum * mag_im2_sum) + (mag_im3_lower * mag_im3_lower) + (mag_im3_upper * mag_im3_upper);
+    let total_im_sq = (mag_im2_diff * mag_im2_diff)
+        + (mag_im2_sum * mag_im2_sum)
+        + (mag_im3_lower * mag_im3_lower)
+        + (mag_im3_upper * mag_im3_upper);
     let imd_ratio_percent = if a_fund > 1e-6 {
         (total_im_sq.sqrt() / a_fund) * 100.0
     } else {
@@ -663,21 +710,23 @@ pub fn calculate_imd_analysis(
         frequencies,
         magnitudes_db,
     })
-
 }
 
 // Remuestreo por interpolación lineal para redes temporales no uniformes del paso adaptativo
-fn interpolate_node_voltage(
-    results: &[TimeStepResult],
-    node_name: &str,
-    t_target: f64,
-) -> f64 {
-    if results.is_empty() { return 0.0; }
+fn interpolate_node_voltage(results: &[TimeStepResult], node_name: &str, t_target: f64) -> f64 {
+    if results.is_empty() {
+        return 0.0;
+    }
     if t_target <= results[0].time {
         return *results[0].node_voltages.get(node_name).unwrap_or(&0.0);
     }
     if t_target >= results.last().unwrap().time {
-        return *results.last().unwrap().node_voltages.get(node_name).unwrap_or(&0.0);
+        return *results
+            .last()
+            .unwrap()
+            .node_voltages
+            .get(node_name)
+            .unwrap_or(&0.0);
     }
 
     // Búsqueda binaria para encontrar el intervalo [low, high]
@@ -703,31 +752,31 @@ fn interpolate_node_voltage(
         let fraction = (t_target - t0) / (t1 - t0);
         v0 + fraction * (v1 - v0)
     }
-
 }
 
 // Transformada Rápida de Fourier Cooley-Tukey Radix-2 en Rust puro
 fn fft_radix2(a: &mut [Complex<f64>]) {
     let n = a.len();
-    if n <= 1 { return; }
-    
+    if n <= 1 {
+        return;
+    }
+
     let mut even = vec![Complex::new(0.0, 0.0); n / 2];
     let mut odd = vec![Complex::new(0.0, 0.0); n / 2];
-    for i in 0..n/2 {
+    for i in 0..n / 2 {
         even[i] = a[2 * i];
         odd[i] = a[2 * i + 1];
     }
-    
+
     fft_radix2(&mut even);
     fft_radix2(&mut odd);
-    
-    for k in 0..n/2 {
+
+    for k in 0..n / 2 {
         let angle = -2.0 * std::f64::consts::PI * (k as f64) / (n as f64);
         let t = Complex::from_polar(1.0, angle) * odd[k];
         a[k] = even[k] + t;
-        a[k + n/2] = even[k] - t;
+        a[k + n / 2] = even[k] - t;
     }
-
 }
 
 // Core analítico de cálculo FFT y THD
@@ -842,7 +891,6 @@ pub fn calculate_fft_and_thd(
         magnitudes_db,
         thd,
     })
-
 }
 
 // ==================================================================================
@@ -865,7 +913,6 @@ pub struct MeasureDirective {
     /// Rango de tiempo [t_start, t_end] para restringir la búsqueda
     pub t_start: Option<f64>,
     pub t_end: Option<f64>,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -873,7 +920,6 @@ pub struct MeasureDirective {
 pub struct MeasureResult {
     pub measurements: HashMap<String, f64>,
     pub error_log: Option<String>,
-
 }
 
 /// Encuentra el tiempo exacto (interpolado linealmente) en que la señal cruza
@@ -918,7 +964,6 @@ fn find_threshold_crossing(
         }
     }
     None
-
 }
 
 /// Obtener el rango dinámico de una señal en el nodo dado dentro del intervalo [t_start, t_end]
@@ -935,13 +980,20 @@ fn get_signal_range(
             continue;
         }
         let v = *step.node_voltages.get(node).unwrap_or(&0.0);
-        if v < v_min { v_min = v; }
-        if v > v_max { v_max = v; }
+        if v < v_min {
+            v_min = v;
+        }
+        if v > v_max {
+            v_max = v;
+        }
     }
-    if v_min == f64::MAX { v_min = 0.0; }
-    if v_max == f64::MIN { v_max = 0.0; }
+    if v_min == f64::MAX {
+        v_min = 0.0;
+    }
+    if v_max == f64::MIN {
+        v_max = 0.0;
+    }
     (v_min, v_max)
-
 }
 
 /// Motor de evaluación de directivas `.measure` sobre resultados de simulación transitoria.
@@ -955,7 +1007,9 @@ pub fn evaluate_measures(
     if results.is_empty() {
         return MeasureResult {
             measurements,
-            error_log: Some("No hay resultados de simulación transitoria para evaluar.".to_string()),
+            error_log: Some(
+                "No hay resultados de simulación transitoria para evaluar.".to_string(),
+            ),
         };
     }
 
@@ -977,14 +1031,24 @@ pub fn evaluate_measures(
                 let (targ_min, targ_max) = get_signal_range(results, &dir.node, t_start, t_end);
                 let targ_level = targ_min + threshold_frac * (targ_max - targ_min);
 
-                if let Some(t_trig) = find_threshold_crossing(results, trig_node, trig_level, true, 1, t_start, t_end) {
-                    if let Some(t_targ) = find_threshold_crossing(results, &dir.node, targ_level, true, 1, t_start, t_end) {
+                if let Some(t_trig) =
+                    find_threshold_crossing(results, trig_node, trig_level, true, 1, t_start, t_end)
+                {
+                    if let Some(t_targ) = find_threshold_crossing(
+                        results, &dir.node, targ_level, true, 1, t_start, t_end,
+                    ) {
                         measurements.insert(dir.name.clone(), (t_targ - t_trig).abs());
                     } else {
-                        errors.push(format!("MEASURE {}: No se encontró cruce objetivo en nodo '{}'.", dir.name, dir.node));
+                        errors.push(format!(
+                            "MEASURE {}: No se encontró cruce objetivo en nodo '{}'.",
+                            dir.name, dir.node
+                        ));
                     }
                 } else {
-                    errors.push(format!("MEASURE {}: No se encontró cruce de disparo en nodo '{}'.", dir.name, trig_node));
+                    errors.push(format!(
+                        "MEASURE {}: No se encontró cruce de disparo en nodo '{}'.",
+                        dir.name, trig_node
+                    ));
                 }
             }
             "risetime" => {
@@ -993,14 +1057,24 @@ pub fn evaluate_measures(
                 let level_10 = v_min + 0.1 * (v_max - v_min);
                 let level_90 = v_min + 0.9 * (v_max - v_min);
 
-                if let Some(t_10) = find_threshold_crossing(results, &dir.node, level_10, true, 1, t_start, t_end) {
-                    if let Some(t_90) = find_threshold_crossing(results, &dir.node, level_90, true, 1, t_start, t_end) {
+                if let Some(t_10) =
+                    find_threshold_crossing(results, &dir.node, level_10, true, 1, t_start, t_end)
+                {
+                    if let Some(t_90) = find_threshold_crossing(
+                        results, &dir.node, level_90, true, 1, t_start, t_end,
+                    ) {
                         measurements.insert(dir.name.clone(), (t_90 - t_10).abs());
                     } else {
-                        errors.push(format!("MEASURE {}: No se encontró cruce del 90% en nodo '{}'.", dir.name, dir.node));
+                        errors.push(format!(
+                            "MEASURE {}: No se encontró cruce del 90% en nodo '{}'.",
+                            dir.name, dir.node
+                        ));
                     }
                 } else {
-                    errors.push(format!("MEASURE {}: No se encontró cruce del 10% en nodo '{}'.", dir.name, dir.node));
+                    errors.push(format!(
+                        "MEASURE {}: No se encontró cruce del 10% en nodo '{}'.",
+                        dir.name, dir.node
+                    ));
                 }
             }
             "falltime" => {
@@ -1009,22 +1083,36 @@ pub fn evaluate_measures(
                 let level_90 = v_min + 0.9 * (v_max - v_min);
                 let level_10 = v_min + 0.1 * (v_max - v_min);
 
-                if let Some(t_90) = find_threshold_crossing(results, &dir.node, level_90, false, 1, t_start, t_end) {
-                    if let Some(t_10) = find_threshold_crossing(results, &dir.node, level_10, false, 1, t_start, t_end) {
+                if let Some(t_90) =
+                    find_threshold_crossing(results, &dir.node, level_90, false, 1, t_start, t_end)
+                {
+                    if let Some(t_10) = find_threshold_crossing(
+                        results, &dir.node, level_10, false, 1, t_start, t_end,
+                    ) {
                         measurements.insert(dir.name.clone(), (t_10 - t_90).abs());
                     } else {
-                        errors.push(format!("MEASURE {}: No se encontró cruce descendente del 10% en nodo '{}'.", dir.name, dir.node));
+                        errors.push(format!(
+                            "MEASURE {}: No se encontró cruce descendente del 10% en nodo '{}'.",
+                            dir.name, dir.node
+                        ));
                     }
                 } else {
-                    errors.push(format!("MEASURE {}: No se encontró cruce descendente del 90% en nodo '{}'.", dir.name, dir.node));
+                    errors.push(format!(
+                        "MEASURE {}: No se encontró cruce descendente del 90% en nodo '{}'.",
+                        dir.name, dir.node
+                    ));
                 }
             }
             "peak" | "max" => {
                 let mut v_peak = f64::MIN;
                 for step in results {
-                    if step.time < t_start || step.time > t_end { continue; }
+                    if step.time < t_start || step.time > t_end {
+                        continue;
+                    }
                     let v = *step.node_voltages.get(&dir.node).unwrap_or(&0.0);
-                    if v > v_peak { v_peak = v; }
+                    if v > v_peak {
+                        v_peak = v;
+                    }
                 }
                 if v_peak > f64::MIN {
                     measurements.insert(dir.name.clone(), v_peak);
@@ -1033,9 +1121,13 @@ pub fn evaluate_measures(
             "min" => {
                 let mut v_min = f64::MAX;
                 for step in results {
-                    if step.time < t_start || step.time > t_end { continue; }
+                    if step.time < t_start || step.time > t_end {
+                        continue;
+                    }
                     let v = *step.node_voltages.get(&dir.node).unwrap_or(&0.0);
-                    if v < v_min { v_min = v; }
+                    if v < v_min {
+                        v_min = v;
+                    }
                 }
                 if v_min < f64::MAX {
                     measurements.insert(dir.name.clone(), v_min);
@@ -1053,7 +1145,9 @@ pub fn evaluate_measures(
                 for i in 1..results.len() {
                     let t0 = results[i - 1].time;
                     let t1 = results[i].time;
-                    if t1 < t_start || t0 > t_end { continue; }
+                    if t1 < t_start || t0 > t_end {
+                        continue;
+                    }
                     let v0 = *results[i - 1].node_voltages.get(&dir.node).unwrap_or(&0.0);
                     let v1 = *results[i].node_voltages.get(&dir.node).unwrap_or(&0.0);
                     let dt_seg = t1 - t0;
@@ -1071,7 +1165,9 @@ pub fn evaluate_measures(
                 for i in 1..results.len() {
                     let t0 = results[i - 1].time;
                     let t1 = results[i].time;
-                    if t1 < t_start || t0 > t_end { continue; }
+                    if t1 < t_start || t0 > t_end {
+                        continue;
+                    }
                     let v0 = *results[i - 1].node_voltages.get(&dir.node).unwrap_or(&0.0);
                     let v1 = *results[i].node_voltages.get(&dir.node).unwrap_or(&0.0);
                     let dt_seg = t1 - t0;
@@ -1083,16 +1179,22 @@ pub fn evaluate_measures(
                 }
             }
             _ => {
-                errors.push(format!("MEASURE {}: Tipo de medición '{}' no reconocido.", dir.name, dir.measure_type));
+                errors.push(format!(
+                    "MEASURE {}: Tipo de medición '{}' no reconocido.",
+                    dir.name, dir.measure_type
+                ));
             }
         }
     }
 
     MeasureResult {
         measurements,
-        error_log: if errors.is_empty() { None } else { Some(errors.join("\n")) },
+        error_log: if errors.is_empty() {
+            None
+        } else {
+            Some(errors.join("\n"))
+        },
     }
-
 }
 
 // ==================================================================================
@@ -1106,15 +1208,14 @@ pub fn evaluate_measures(
 #[serde(rename_all = "camelCase")]
 pub struct TransmissionLineParams {
     pub id: String,
-    pub pin_in: String,   // Nodo de entrada
-    pub pin_out: String,  // Nodo de salida
-    pub gnd: String,      // Nodo de referencia (tierra)
-    pub z0: f64,          // Impedancia característica (Ω)
-    pub td: f64,          // Retardo de propagación (s)
-    pub r_total: f64,     // Resistencia serie total de la línea (Ω), 0 para ideal
-    pub g_total: f64,     // Conductancia de fuga total (S), 0 para ideal
+    pub pin_in: String,    // Nodo de entrada
+    pub pin_out: String,   // Nodo de salida
+    pub gnd: String,       // Nodo de referencia (tierra)
+    pub z0: f64,           // Impedancia característica (Ω)
+    pub td: f64,           // Retardo de propagación (s)
+    pub r_total: f64,      // Resistencia serie total de la línea (Ω), 0 para ideal
+    pub g_total: f64,      // Conductancia de fuga total (S), 0 para ideal
     pub n_segments: usize, // Número de segmentos de la cascada Pi
-
 }
 
 /// Expande una línea de transmisión en N segmentos pasivos equivalentes en cascada Pi.
@@ -1166,7 +1267,11 @@ pub fn expand_transmission_line(params: &TransmissionLineParams) -> Vec<Componen
         }
 
         // L_seg en serie (node_mid → node_right) o (node_left → node_right) si no hay R
-        let l_left = if r_seg > 1e-15 { node_mid.clone() } else { node_left.clone() };
+        let l_left = if r_seg > 1e-15 {
+            node_mid.clone()
+        } else {
+            node_left.clone()
+        };
         components.push(ComponentData {
             id: format!("{}.L{}", prefix, i),
             comp_type: "inductor".to_string(),
@@ -1214,7 +1319,6 @@ pub fn expand_transmission_line(params: &TransmissionLineParams) -> Vec<Componen
     }
 
     components
-
 }
 
 // ==================================================================================
@@ -1227,11 +1331,11 @@ pub fn expand_transmission_line(params: &TransmissionLineParams) -> Vec<Componen
 
 /// Parámetros de banda prohibida de Silicio para el modelo de Varshni
 #[allow(dead_code)]
-pub const EG_SI_300: f64 = 1.12;         // Banda prohibida del Si a 300K (eV)
+pub const EG_SI_300: f64 = 1.12; // Banda prohibida del Si a 300K (eV)
 #[allow(dead_code)]
 const VARSHNI_ALPHA: f64 = 7.021e-4; // Parámetro α de Varshni para Si (eV/K)
 #[allow(dead_code)]
-const VARSHNI_BETA: f64 = 1108.0;    // Parámetro β de Varshni para Si (K)
+const VARSHNI_BETA: f64 = 1108.0; // Parámetro β de Varshni para Si (K)
 
 /// Calcula el potencial de banda prohibida del Silicio según Varshni:
 ///   Eg(T) = Eg(0) - α * T² / (T + β)
@@ -1240,7 +1344,6 @@ const VARSHNI_BETA: f64 = 1108.0;    // Parámetro β de Varshni para Si (K)
 pub fn bandgap_varshni(temp_k: f64) -> f64 {
     let eg0 = EG_SI_300 + VARSHNI_ALPHA * 300.0 * 300.0 / (300.0 + VARSHNI_BETA);
     eg0 - VARSHNI_ALPHA * temp_k * temp_k / (temp_k + VARSHNI_BETA)
-
 }
 
 /// Escalamiento térmico de la corriente de saturación inversa de la unión PN:
@@ -1263,7 +1366,6 @@ pub fn thermal_is_pn(is_t0: f64, t0: f64, t: f64, xti: f64, n: f64) -> f64 {
     let ratio = (t / t0).powf(xti / n);
     let exp_term = ((eg_t0 / vt_t0 - eg_t / vt_t) / n).exp();
     is_t0 * ratio * exp_term
-
 }
 
 /// Voltaje térmico a temperatura T:
@@ -1271,7 +1373,6 @@ pub fn thermal_is_pn(is_t0: f64, t0: f64, t: f64, xti: f64, n: f64) -> f64 {
 #[allow(dead_code)]
 pub fn thermal_vt(temp_k: f64) -> f64 {
     PHYS_KB * temp_k / PHYS_Q
-
 }
 
 /// Escalamiento térmico de resistencia con coeficientes de primer y segundo orden:
@@ -1279,7 +1380,6 @@ pub fn thermal_vt(temp_k: f64) -> f64 {
 pub fn thermal_resistance(r0: f64, t0: f64, t: f64, tc1: f64, tc2: f64) -> f64 {
     let dt = t - t0;
     r0 * (1.0 + tc1 * dt + tc2 * dt * dt)
-
 }
 
 /// Degradación de movilidad de portadores en MOSFETs:
@@ -1294,7 +1394,6 @@ pub fn thermal_resistance(r0: f64, t0: f64, t: f64, tc1: f64, tc2: f64) -> f64 {
 #[allow(dead_code)]
 pub fn thermal_mosfet_beta(beta_t0: f64, t0: f64, t: f64, bex: f64) -> f64 {
     beta_t0 * (t / t0).powf(-bex)
-
 }
 
 /// Corrimiento térmico de la tensión de umbral de MOSFETs:
@@ -1302,7 +1401,6 @@ pub fn thermal_mosfet_beta(beta_t0: f64, t0: f64, t: f64, bex: f64) -> f64 {
 /// donde TCV ≈ 2 mV/K para MOSFETs de Si
 pub fn thermal_mosfet_vth(vth_t0: f64, t0: f64, t: f64, tcv: f64) -> f64 {
     vth_t0 - tcv * (t - t0)
-
 }
 
 /// Aplica correcciones térmicas completas a un netlist, devolviendo un netlist
@@ -1331,12 +1429,12 @@ pub fn apply_thermal_drift(netlist: &CircuitNetlist, temp_k: f64) -> CircuitNetl
             "capacitor" => {
                 // Coeficiente de temperatura para cerámicos X7R: ~±15% sobre rango
                 let tc1 = 30e-6; // 30 ppm/K (conservador)
-                comp.value *= 1.0 + tc1 * (temp_k - t0) ;
+                comp.value *= 1.0 + tc1 * (temp_k - t0);
             }
             "inductor" => {
                 // Coeficiente de temperatura del inductor: ~50 ppm/K
                 let tc1 = 50e-6;
-                comp.value *= 1.0 + tc1 * (temp_k - t0) ;
+                comp.value *= 1.0 + tc1 * (temp_k - t0);
             }
             "diode" | "led" => {
                 // El campo `value` de diodos a menudo es nominal; pero internamente
@@ -1360,16 +1458,17 @@ pub fn apply_thermal_drift(netlist: &CircuitNetlist, temp_k: f64) -> CircuitNetl
     }
 
     adjusted
-
 }
 
 /// Resolvedor DC con temperatura global inyectada.
 /// Aplica el modelo de deriva térmica completo al netlist y resuelve.
-pub fn solve_dc_circuit_thermal(netlist: &CircuitNetlist, temp_k: f64) -> Result<SimulationResult, String> {
+pub fn solve_dc_circuit_thermal(
+    netlist: &CircuitNetlist,
+    temp_k: f64,
+) -> Result<SimulationResult, String> {
     let mut adjusted_netlist = apply_thermal_drift(netlist, temp_k);
     adjusted_netlist.temperature = Some(temp_k);
     solve_dc_circuit(&adjusted_netlist)
-
 }
 
 /// Resolvedor DC con acoplamiento electro-térmico completo (Relaxation Loop).
@@ -1377,43 +1476,45 @@ pub fn solve_dc_circuit_thermal(netlist: &CircuitNetlist, temp_k: f64) -> Result
 ///   1. Resolver el circuito eléctrico con temperaturas fijas → obtener corrientes/voltajes
 ///   2. Calcular potencia disipada por dispositivo → resolver red térmica → actualizar T_j
 /// Converge cuando max(|ΔT_j|) < thermal_tol.
-pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationResult, HashMap<String, f64>), String> {
-    let config = netlist.thermal_config.as_ref().ok_or(
-        "Se requiere .THERMAL en el netlist para simulación electro-térmica".to_string()
-    )?;
-    
+pub fn solve_dc_electrothermal(
+    netlist: &CircuitNetlist,
+) -> Result<(SimulationResult, HashMap<String, f64>), String> {
+    let config = netlist
+        .thermal_config
+        .as_ref()
+        .ok_or("Se requiere .THERMAL en el netlist para simulación electro-térmica".to_string())?;
+
     let t_amb = config.t_amb;
     let max_iters = config.max_thermal_iters;
     let tol = config.thermal_tol;
-    
+
     // Identificar dispositivos térmicamente activos y sus índices
-    let thermal_devices: Vec<(usize, String)> = netlist.components.iter().enumerate()
-        .filter_map(|(i, c)| {
-            match c.comp_type.as_str() {
-                "diode" | "led" | "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" |
-                "bsim4nmos" | "bsim4pmos" | "npn" | "pnp" | "opto" => {
-                    Some((i, c.id.clone()))
-                }
-                _ => None,
-            }
+    let thermal_devices: Vec<(usize, String)> = netlist
+        .components
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| match c.comp_type.as_str() {
+            "diode" | "led" | "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos"
+            | "bsim4pmos" | "npn" | "pnp" | "opto" => Some((i, c.id.clone())),
+            _ => None,
         })
         .collect();
-    
+
     let n_dev = thermal_devices.len();
     if n_dev == 0 {
         // Sin dispositivos térmicos, resolver normalmente
         let result = solve_dc_circuit(netlist)?;
         return Ok((result, HashMap::new()));
     }
-    
+
     // Inicializar temperaturas de unión a T_amb
     let mut device_temps: HashMap<String, f64> = HashMap::new();
     for (_, id) in &thermal_devices {
         device_temps.insert(id.clone(), t_amb);
     }
-    
+
     let mut last_result: Option<SimulationResult> = None;
-    
+
     for _iter in 0..max_iters {
         // --- Paso 1: Resolver circuito eléctrico con temperaturas actuales ---
         let mut adjusted_netlist = netlist.clone();
@@ -1425,13 +1526,12 @@ pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationRe
         };
         adjusted_netlist = apply_thermal_drift(&adjusted_netlist, avg_temp);
         adjusted_netlist.temperature = Some(avg_temp);
-        
+
         let result = solve_dc_circuit(&adjusted_netlist)?;
-        
+
         // --- Paso 2: Calcular potencia disipada por dispositivo ---
         let mut power_diss: HashMap<String, f64> = HashMap::new();
-        
-        
+
         for (comp_idx, comp_id) in &thermal_devices {
             let comp = &netlist.components[*comp_idx];
             let p = match comp.comp_type.as_str() {
@@ -1446,7 +1546,9 @@ pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationRe
                     (vd * id_val).abs()
                 }
                 "nmos" | "bsim3nmos" | "bsim4nmos" => {
-                    if comp.pins.len() < 3 { 0.0 } else {
+                    if comp.pins.len() < 3 {
+                        0.0
+                    } else {
                         let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
                         let nd = comp.pins[1].parse::<usize>().unwrap_or(0);
                         let ns = comp.pins[2].parse::<usize>().unwrap_or(0);
@@ -1459,13 +1561,26 @@ pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationRe
                             let nb = comp.pins[3].parse::<usize>().unwrap_or(0);
                             let vb = *result.node_voltages.get(&nb.to_string()).unwrap_or(&0.0);
                             vb - vs
-                        } else { 0.0 };
-                        let (ids, _, _) = evaluate_bsim3_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, Some(avg_temp), Some(comp));
+                        } else {
+                            0.0
+                        };
+                        let (ids, _, _) = evaluate_bsim3_nmos(
+                            vgs,
+                            vds,
+                            vbs,
+                            comp.value,
+                            comp.w,
+                            comp.l,
+                            Some(avg_temp),
+                            Some(comp),
+                        );
                         (vds * ids).abs()
                     }
                 }
                 "pmos" | "bsim3pmos" | "bsim4pmos" => {
-                    if comp.pins.len() < 3 { 0.0 } else {
+                    if comp.pins.len() < 3 {
+                        0.0
+                    } else {
                         let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
                         let nd = comp.pins[1].parse::<usize>().unwrap_or(0);
                         let ns = comp.pins[2].parse::<usize>().unwrap_or(0);
@@ -1478,20 +1593,37 @@ pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationRe
                             let nb = comp.pins[3].parse::<usize>().unwrap_or(0);
                             let vb = *result.node_voltages.get(&nb.to_string()).unwrap_or(&0.0);
                             vs - vb
-                        } else { 0.0 };
-                        let (isd, _, _) = evaluate_bsim3_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, Some(avg_temp), Some(comp));
+                        } else {
+                            0.0
+                        };
+                        let (isd, _, _) = evaluate_bsim3_pmos(
+                            vsg,
+                            vsd,
+                            vsb,
+                            comp.value,
+                            comp.w,
+                            comp.l,
+                            Some(avg_temp),
+                            Some(comp),
+                        );
                         (vsd * isd).abs()
                     }
                 }
                 "npn" | "pnp" => {
-                    if comp.pins.len() < 3 { 0.0 } else {
+                    if comp.pins.len() < 3 {
+                        0.0
+                    } else {
                         let nb = comp.pins[0].parse::<usize>().unwrap_or(0);
                         let nc = comp.pins[1].parse::<usize>().unwrap_or(0);
                         let ne = comp.pins[2].parse::<usize>().unwrap_or(0);
                         let _vb = *result.node_voltages.get(&nb.to_string()).unwrap_or(&0.0);
                         let vc_pin = *result.node_voltages.get(&nc.to_string()).unwrap_or(&0.0);
                         let ve = *result.node_voltages.get(&ne.to_string()).unwrap_or(&0.0);
-                        let vce = if comp.comp_type == "npn" { vc_pin - ve } else { ve - vc_pin };
+                        let vce = if comp.comp_type == "npn" {
+                            vc_pin - ve
+                        } else {
+                            ve - vc_pin
+                        };
                         // Corriente de colector simplificada
                         let ic_branch = result.branch_currents.get(comp_id).copied().unwrap_or(0.0);
                         (vce.abs() * ic_branch.abs()).min(50.0)
@@ -1501,30 +1633,30 @@ pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationRe
             };
             power_diss.insert(comp_id.clone(), p);
         }
-        
+
         // --- Paso 3: Construir y resolver la red térmica Gth ---
         // Para cada dispositivo i: Tj_i = T_amb + Rth_i * P_i + Σ_j(Rth_ij * P_j)
         let mut new_temps: HashMap<String, f64> = HashMap::new();
-        
+
         for (comp_idx, comp_id) in &thermal_devices {
             let comp = &netlist.components[*comp_idx];
-            
+
             // Rth propio: desde comp.rth > constante por defecto
-            let rth_self = comp.rth.unwrap_or_else(|| {
-                match comp.comp_type.as_str() {
-                    "diode" | "led" => DIODE_RTH_JA,
-                    "opto" => OPTO_RTH_JA,
-                    "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => MOS_RTH_JA,
-                    "npn" | "pnp" => BJT_RTH_JA,
-                    _ => 100.0,
+            let rth_self = comp.rth.unwrap_or_else(|| match comp.comp_type.as_str() {
+                "diode" | "led" => DIODE_RTH_JA,
+                "opto" => OPTO_RTH_JA,
+                "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => {
+                    MOS_RTH_JA
                 }
+                "npn" | "pnp" => BJT_RTH_JA,
+                _ => 100.0,
             });
-            
+
             let p_self = *power_diss.get(comp_id).unwrap_or(&0.0);
-            
+
             // Contribución propia
             let mut tj = t_amb + rth_self * p_self;
-            
+
             // Contribución de acoplamiento térmico mutuo
             for (id1, id2, rth_mutual) in &config.thermal_coupling {
                 if id1 == comp_id {
@@ -1535,38 +1667,38 @@ pub fn solve_dc_electrothermal(netlist: &CircuitNetlist) -> Result<(SimulationRe
                     tj += rth_mutual * p_other;
                 }
             }
-            
+
             // Clampar temperatura: no puede ser menor que ambiente ni mayor que 500K
             let tj_clamped = tj.clamp(t_amb, 500.0);
             new_temps.insert(comp_id.clone(), tj_clamped);
         }
-        
+
         // --- Paso 4: Verificar convergencia ---
-        let max_delta_t = thermal_devices.iter()
+        let max_delta_t = thermal_devices
+            .iter()
             .map(|(_, id)| {
                 let t_old = *device_temps.get(id).unwrap_or(&t_amb);
                 let t_new = *new_temps.get(id).unwrap_or(&t_amb);
                 (t_new - t_old).abs()
             })
             .fold(0.0_f64, f64::max);
-        
+
         device_temps = new_temps;
         last_result = Some(result);
-        
+
         if max_delta_t < tol {
             break;
         }
     }
-    
+
     let final_result = last_result.unwrap_or_else(|| SimulationResult {
         node_voltages: HashMap::new(),
         branch_currents: HashMap::new(),
         convergence_iterations: 0,
         error_log: Some("Simulación electro-térmica no convergió".to_string()),
     });
-    
-    Ok((final_result, device_temps))
 
+    Ok((final_result, device_temps))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1577,7 +1709,6 @@ pub struct ParameterSensitivity {
     pub parameter_value: f64,
     pub absolute_sensitivities: HashMap<String, f64>,
     pub normalized_sensitivities: HashMap<String, f64>,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1587,7 +1718,6 @@ pub struct WorstCaseLimits {
     pub worst_case_high: f64,
     pub worst_case_low: f64,
     pub max_deviation: f64,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1596,7 +1726,6 @@ pub struct SensitivityResult {
     pub nominal_voltages: HashMap<String, f64>,
     pub sensitivities: Vec<ParameterSensitivity>,
     pub worst_case_limits: HashMap<String, WorstCaseLimits>,
-
 }
 
 /// Realiza un análisis de sensibilidad en corriente continua (DC Sensitivity) y
@@ -1608,8 +1737,15 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
 
     // 2. Identificar el número máximo de nodos activos y mapear fuentes
     let n = crate::topology::validate_netlist_topology(netlist, true)?;
-    let v_sources: Vec<&ComponentData> = netlist.components.iter()
-        .filter(|c| c.comp_type == "vsource" || c.comp_type == "bvoltage" || c.comp_type == "vcvs" || c.comp_type == "ccvs")
+    let v_sources: Vec<&ComponentData> = netlist
+        .components
+        .iter()
+        .filter(|c| {
+            c.comp_type == "vsource"
+                || c.comp_type == "bvoltage"
+                || c.comp_type == "vcvs"
+                || c.comp_type == "ccvs"
+        })
         .collect();
     let m = v_sources.len();
     let size = n + m;
@@ -1644,8 +1780,16 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
         if comp.comp_type == "diode" || comp.comp_type == "led" {
             let node_anode = comp.pins[0].parse::<usize>().unwrap();
             let node_cathode = comp.pins[1].parse::<usize>().unwrap();
-            let v_anode = if node_anode > 0 { prev_voltages[node_anode] } else { 0.0 };
-            let v_cathode = if node_cathode > 0 { prev_voltages[node_cathode] } else { 0.0 };
+            let v_anode = if node_anode > 0 {
+                prev_voltages[node_anode]
+            } else {
+                0.0
+            };
+            let v_cathode = if node_cathode > 0 {
+                prev_voltages[node_cathode]
+            } else {
+                0.0
+            };
             let vd = v_anode - v_cathode;
             let (_, _, geq) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
 
@@ -1659,47 +1803,82 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             stamp_conductance(node_anode, node_cathode, -geq);
             stamp_conductance(node_cathode, node_anode, -geq);
         } else if comp.comp_type == "opto" {
-            if comp.pins.len() < 4 { continue; }
+            if comp.pins.len() < 4 {
+                continue;
+            }
             let node_a = comp.pins[0].parse::<usize>().unwrap();
             let node_k = comp.pins[1].parse::<usize>().unwrap();
             let node_c = comp.pins[2].parse::<usize>().unwrap();
             let node_e = comp.pins[3].parse::<usize>().unwrap();
-            let v_a = if node_a > 0 { prev_voltages[node_a] } else { 0.0 };
-            let v_k = if node_k > 0 { prev_voltages[node_k] } else { 0.0 };
-            let v_c = if node_c > 0 { prev_voltages[node_c] } else { 0.0 };
-            let v_e = if node_e > 0 { prev_voltages[node_e] } else { 0.0 };
+            let v_a = if node_a > 0 {
+                prev_voltages[node_a]
+            } else {
+                0.0
+            };
+            let v_k = if node_k > 0 {
+                prev_voltages[node_k]
+            } else {
+                0.0
+            };
+            let v_c = if node_c > 0 {
+                prev_voltages[node_c]
+            } else {
+                0.0
+            };
+            let v_e = if node_e > 0 {
+                prev_voltages[node_e]
+            } else {
+                0.0
+            };
             let vd = v_a - v_k;
             let v_ce = v_c - v_e;
             let (_, id_led, gd_led) = solve_diode_junction_voltage(vd, netlist.temperature, comp);
-            let (_i_ce, g_md, g_o, _i_ce_eq) = evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
+            let (_i_ce, g_md, g_o, _i_ce_eq) =
+                evaluate_opto_receiver(vd, gd_led, id_led, v_ce, comp);
 
             let mut stamp = |r: usize, c: usize, g: f64| {
-                if r > 0 && c > 0 { j_matrix[(r - 1, c - 1)] += g; }
+                if r > 0 && c > 0 {
+                    j_matrix[(r - 1, c - 1)] += g;
+                }
             };
             // Lado LED
-            stamp(node_a, node_a,  gd_led);
-            stamp(node_k, node_k,  gd_led);
+            stamp(node_a, node_a, gd_led);
+            stamp(node_k, node_k, gd_led);
             stamp(node_a, node_k, -gd_led);
             stamp(node_k, node_a, -gd_led);
             // Lado receptor
-            stamp(node_c, node_a,  g_md);
+            stamp(node_c, node_a, g_md);
             stamp(node_c, node_k, -g_md);
-            stamp(node_c, node_c,  g_o);
+            stamp(node_c, node_c, g_o);
             stamp(node_c, node_e, -g_o);
             stamp(node_e, node_a, -g_md);
-            stamp(node_e, node_k,  g_md);
+            stamp(node_e, node_k, g_md);
             stamp(node_e, node_c, -g_o);
-            stamp(node_e, node_e,  g_o);
+            stamp(node_e, node_e, g_o);
         } else if comp.comp_type == "nmos" {
             let node_gate = comp.pins[0].parse::<usize>().unwrap();
             let node_drain = comp.pins[1].parse::<usize>().unwrap();
             let node_source = comp.pins[2].parse::<usize>().unwrap();
-            let v_gate = if node_gate > 0 { prev_voltages[node_gate] } else { 0.0 };
-            let v_drain = if node_drain > 0 { prev_voltages[node_drain] } else { 0.0 };
-            let v_source = if node_source > 0 { prev_voltages[node_source] } else { 0.0 };
+            let v_gate = if node_gate > 0 {
+                prev_voltages[node_gate]
+            } else {
+                0.0
+            };
+            let v_drain = if node_drain > 0 {
+                prev_voltages[node_drain]
+            } else {
+                0.0
+            };
+            let v_source = if node_source > 0 {
+                prev_voltages[node_source]
+            } else {
+                0.0
+            };
             let vgs = v_gate - v_source;
             let mut vds = v_drain - v_source;
-            if vds < 0.0 { vds = 0.0; }
+            if vds < 0.0 {
+                vds = 0.0;
+            }
             let vth = comp.value;
             let kn = 0.02;
 
@@ -1728,23 +1907,45 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             stamp_conductance(node_source, node_drain, -gds);
 
             if node_drain > 0 {
-                if node_gate > 0 { j_matrix[(node_drain - 1, node_gate - 1)] += gm; }
-                if node_source > 0 { j_matrix[(node_drain - 1, node_source - 1)] -= gm; }
+                if node_gate > 0 {
+                    j_matrix[(node_drain - 1, node_gate - 1)] += gm;
+                }
+                if node_source > 0 {
+                    j_matrix[(node_drain - 1, node_source - 1)] -= gm;
+                }
             }
             if node_source > 0 {
-                if node_gate > 0 { j_matrix[(node_source - 1, node_gate - 1)] -= gm; }
-                if node_source > 0 { j_matrix[(node_source - 1, node_source - 1)] += gm; }
+                if node_gate > 0 {
+                    j_matrix[(node_source - 1, node_gate - 1)] -= gm;
+                }
+                if node_source > 0 {
+                    j_matrix[(node_source - 1, node_source - 1)] += gm;
+                }
             }
         } else if comp.comp_type == "pmos" {
             let node_gate = comp.pins[0].parse::<usize>().unwrap();
             let node_drain = comp.pins[1].parse::<usize>().unwrap();
             let node_source = comp.pins[2].parse::<usize>().unwrap();
-            let v_gate = if node_gate > 0 { prev_voltages[node_gate] } else { 0.0 };
-            let v_drain = if node_drain > 0 { prev_voltages[node_drain] } else { 0.0 };
-            let v_source = if node_source > 0 { prev_voltages[node_source] } else { 0.0 };
+            let v_gate = if node_gate > 0 {
+                prev_voltages[node_gate]
+            } else {
+                0.0
+            };
+            let v_drain = if node_drain > 0 {
+                prev_voltages[node_drain]
+            } else {
+                0.0
+            };
+            let v_source = if node_source > 0 {
+                prev_voltages[node_source]
+            } else {
+                0.0
+            };
             let vsg = v_source - v_gate;
             let mut vsd = v_source - v_drain;
-            if vsd < 0.0 { vsd = 0.0; }
+            if vsd < 0.0 {
+                vsd = 0.0;
+            }
             let vth = if comp.value == 0.0 { -1.5 } else { comp.value };
             let vth_abs = -vth;
             let kp = 0.02;
@@ -1774,21 +1975,41 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             stamp_conductance(node_drain, node_source, -gds_cond);
 
             if node_drain > 0 {
-                if node_source > 0 { j_matrix[(node_drain - 1, node_source - 1)] -= gm_sd; }
-                if node_gate > 0 { j_matrix[(node_drain - 1, node_gate - 1)] += gm_sd; }
+                if node_source > 0 {
+                    j_matrix[(node_drain - 1, node_source - 1)] -= gm_sd;
+                }
+                if node_gate > 0 {
+                    j_matrix[(node_drain - 1, node_gate - 1)] += gm_sd;
+                }
             }
             if node_source > 0 {
-                if node_source > 0 { j_matrix[(node_source - 1, node_source - 1)] += gm_sd; }
-                if node_gate > 0 { j_matrix[(node_source - 1, node_gate - 1)] -= gm_sd; }
+                if node_source > 0 {
+                    j_matrix[(node_source - 1, node_source - 1)] += gm_sd;
+                }
+                if node_gate > 0 {
+                    j_matrix[(node_source - 1, node_gate - 1)] -= gm_sd;
+                }
             }
         } else if comp.comp_type == "npn" || comp.comp_type == "pnp" {
             let is_npn = comp.comp_type == "npn";
             let node_base = comp.pins[0].parse::<usize>().unwrap();
             let node_collector = comp.pins[1].parse::<usize>().unwrap();
             let node_emitter = comp.pins[2].parse::<usize>().unwrap();
-            let v_base = if node_base > 0 { prev_voltages[node_base] } else { 0.0 };
-            let v_collector = if node_collector > 0 { prev_voltages[node_collector] } else { 0.0 };
-            let v_emitter = if node_emitter > 0 { prev_voltages[node_emitter] } else { 0.0 };
+            let v_base = if node_base > 0 {
+                prev_voltages[node_base]
+            } else {
+                0.0
+            };
+            let v_collector = if node_collector > 0 {
+                prev_voltages[node_collector]
+            } else {
+                0.0
+            };
+            let v_emitter = if node_emitter > 0 {
+                prev_voltages[node_emitter]
+            } else {
+                0.0
+            };
 
             let (mut vbe, mut vbc) = if is_npn {
                 (v_base - v_emitter, v_base - v_collector)
@@ -1796,10 +2017,16 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
                 (v_emitter - v_base, v_collector - v_base)
             };
 
-            if vbe > 0.72 { vbe = 0.72; }
-            if vbc > 0.72 { vbc = 0.72; }
+            if vbe > 0.72 {
+                vbe = 0.72;
+            }
+            if vbc > 0.72 {
+                vbc = 0.72;
+            }
 
-            let beta_f = comp.bjt_bf.unwrap_or(if comp.value <= 1.0 { 100.0 } else { comp.value });
+            let beta_f = comp
+                .bjt_bf
+                .unwrap_or(if comp.value <= 1.0 { 100.0 } else { comp.value });
             let beta_r = 1.0;
             let alpha_f = beta_f / (beta_f + 1.0);
             let alpha_r = beta_r / (beta_r + 1.0);
@@ -1825,15 +2052,23 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             stamp_conductance(node_base, node_collector, -g_bc_b);
 
             if node_collector > 0 {
-                if node_base > 0 { j_matrix[(node_collector - 1, node_base - 1)] += alpha_f * gbe - gbc; }
-                if node_emitter > 0 { j_matrix[(node_collector - 1, node_emitter - 1)] -= alpha_f * gbe; }
+                if node_base > 0 {
+                    j_matrix[(node_collector - 1, node_base - 1)] += alpha_f * gbe - gbc;
+                }
+                if node_emitter > 0 {
+                    j_matrix[(node_collector - 1, node_emitter - 1)] -= alpha_f * gbe;
+                }
                 j_matrix[(node_collector - 1, node_collector - 1)] += gbc;
             }
 
             if node_emitter > 0 {
-                if node_base > 0 { j_matrix[(node_emitter - 1, node_base - 1)] -= gbe - alpha_r * gbc; }
+                if node_base > 0 {
+                    j_matrix[(node_emitter - 1, node_base - 1)] -= gbe - alpha_r * gbc;
+                }
                 j_matrix[(node_emitter - 1, node_emitter - 1)] += gbe;
-                if node_collector > 0 { j_matrix[(node_emitter - 1, node_collector - 1)] -= alpha_r * gbc; }
+                if node_collector > 0 {
+                    j_matrix[(node_emitter - 1, node_collector - 1)] -= alpha_r * gbc;
+                }
             }
         } else if comp.comp_type == "njf" || comp.comp_type == "pjf" {
             let is_njf = comp.comp_type == "njf";
@@ -1841,9 +2076,21 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             let node_gate = comp.pins[1].parse::<usize>().unwrap();
             let node_source = comp.pins[2].parse::<usize>().unwrap();
 
-            let v_drain = if node_drain > 0 { prev_voltages[node_drain] } else { 0.0 };
-            let v_gate = if node_gate > 0 { prev_voltages[node_gate] } else { 0.0 };
-            let v_source = if node_source > 0 { prev_voltages[node_source] } else { 0.0 };
+            let v_drain = if node_drain > 0 {
+                prev_voltages[node_drain]
+            } else {
+                0.0
+            };
+            let v_gate = if node_gate > 0 {
+                prev_voltages[node_gate]
+            } else {
+                0.0
+            };
+            let v_source = if node_source > 0 {
+                prev_voltages[node_source]
+            } else {
+                0.0
+            };
 
             let vto = comp.jfet_vto.unwrap_or(if is_njf { -2.0 } else { 2.0 });
             let beta = comp.jfet_beta.unwrap_or(1e-3);
@@ -1860,7 +2107,11 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             let mut _swapped = false;
             if vds < 0.0 {
                 vds = -vds;
-                vgs = if is_njf { v_gate - v_drain } else { v_drain - v_gate };
+                vgs = if is_njf {
+                    v_gate - v_drain
+                } else {
+                    v_drain - v_gate
+                };
                 _swapped = true;
             }
 
@@ -1869,7 +2120,9 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
                 (0.0, 0.0, 1e-9)
             } else if vds < vgst {
                 let gm_val = 2.0 * beta * vds * (1.0 + lambda * vds);
-                let gds_val = beta * ( (2.0 * vgst - 2.0 * vds) * (1.0 + lambda * vds) + vds * (2.0 * vgst - vds) * lambda );
+                let gds_val = beta
+                    * ((2.0 * vgst - 2.0 * vds) * (1.0 + lambda * vds)
+                        + vds * (2.0 * vgst - vds) * lambda);
                 (0.0, gm_val, gds_val.max(1e-9))
             } else {
                 let gm_val = 2.0 * beta * vgst * (1.0 + lambda * vds);
@@ -1881,35 +2134,67 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             let gds_final = gds;
 
             // Estampar gds directamente (evita conflicto de borrow con closure)
-            if node_drain > 0 { j_matrix[(node_drain - 1, node_drain - 1)] += gds_final; }
-            if node_source > 0 { j_matrix[(node_source - 1, node_source - 1)] += gds_final; }
-            if node_drain > 0 && node_source > 0 { j_matrix[(node_drain - 1, node_source - 1)] -= gds_final; }
-            if node_source > 0 && node_drain > 0 { j_matrix[(node_source - 1, node_drain - 1)] -= gds_final; }
-
             if node_drain > 0 {
-                if node_gate > 0 { j_matrix[(node_drain - 1, node_gate - 1)] += gm_final; }
-                if node_source > 0 { j_matrix[(node_drain - 1, node_source - 1)] -= gm_final; }
+                j_matrix[(node_drain - 1, node_drain - 1)] += gds_final;
             }
             if node_source > 0 {
-                if node_gate > 0 { j_matrix[(node_source - 1, node_gate - 1)] -= gm_final; }
-                if node_source > 0 { j_matrix[(node_source - 1, node_source - 1)] += gm_final; }
+                j_matrix[(node_source - 1, node_source - 1)] += gds_final;
+            }
+            if node_drain > 0 && node_source > 0 {
+                j_matrix[(node_drain - 1, node_source - 1)] -= gds_final;
+            }
+            if node_source > 0 && node_drain > 0 {
+                j_matrix[(node_source - 1, node_drain - 1)] -= gds_final;
+            }
+
+            if node_drain > 0 {
+                if node_gate > 0 {
+                    j_matrix[(node_drain - 1, node_gate - 1)] += gm_final;
+                }
+                if node_source > 0 {
+                    j_matrix[(node_drain - 1, node_source - 1)] -= gm_final;
+                }
+            }
+            if node_source > 0 {
+                if node_gate > 0 {
+                    j_matrix[(node_source - 1, node_gate - 1)] -= gm_final;
+                }
+                if node_source > 0 {
+                    j_matrix[(node_source - 1, node_source - 1)] += gm_final;
+                }
             }
 
             let (vt_local, _) = get_thermal_parameters(netlist.temperature, None);
             let gate_is = 1e-14;
             let exp_gs = ((v_gate - v_source) / vt_local).exp();
             let gg_gs = (gate_is / vt_local) * exp_gs;
-            if node_gate > 0 { j_matrix[(node_gate - 1, node_gate - 1)] += gg_gs; }
-            if node_source > 0 { j_matrix[(node_source - 1, node_source - 1)] += gg_gs; }
-            if node_gate > 0 && node_source > 0 { j_matrix[(node_gate - 1, node_source - 1)] -= gg_gs; }
-            if node_source > 0 && node_gate > 0 { j_matrix[(node_source - 1, node_gate - 1)] -= gg_gs; }
+            if node_gate > 0 {
+                j_matrix[(node_gate - 1, node_gate - 1)] += gg_gs;
+            }
+            if node_source > 0 {
+                j_matrix[(node_source - 1, node_source - 1)] += gg_gs;
+            }
+            if node_gate > 0 && node_source > 0 {
+                j_matrix[(node_gate - 1, node_source - 1)] -= gg_gs;
+            }
+            if node_source > 0 && node_gate > 0 {
+                j_matrix[(node_source - 1, node_gate - 1)] -= gg_gs;
+            }
 
             let exp_gd = ((v_gate - v_drain) / vt_local).exp();
             let gg_gd = (gate_is / vt_local) * exp_gd;
-            if node_gate > 0 { j_matrix[(node_gate - 1, node_gate - 1)] += gg_gd; }
-            if node_drain > 0 { j_matrix[(node_drain - 1, node_drain - 1)] += gg_gd; }
-            if node_gate > 0 && node_drain > 0 { j_matrix[(node_gate - 1, node_drain - 1)] -= gg_gd; }
-            if node_drain > 0 && node_gate > 0 { j_matrix[(node_drain - 1, node_gate - 1)] -= gg_gd; }
+            if node_gate > 0 {
+                j_matrix[(node_gate - 1, node_gate - 1)] += gg_gd;
+            }
+            if node_drain > 0 {
+                j_matrix[(node_drain - 1, node_drain - 1)] += gg_gd;
+            }
+            if node_gate > 0 && node_drain > 0 {
+                j_matrix[(node_gate - 1, node_drain - 1)] -= gg_gd;
+            }
+            if node_drain > 0 && node_gate > 0 {
+                j_matrix[(node_drain - 1, node_gate - 1)] -= gg_gd;
+            }
         } else if comp.comp_type == "opamp" {
             let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
             let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
@@ -1917,10 +2202,26 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
             let pin_vminus = comp.pins[3].parse::<usize>().unwrap();
             let pin_out = comp.pins[4].parse::<usize>().unwrap();
 
-            let v_in_pos = if pin_in_pos > 0 { prev_voltages[pin_in_pos] } else { 0.0 };
-            let v_in_neg = if pin_in_neg > 0 { prev_voltages[pin_in_neg] } else { 0.0 };
-            let v_vplus = if pin_vplus > 0 { prev_voltages[pin_vplus] } else { 15.0 };
-            let v_vminus = if pin_vminus > 0 { prev_voltages[pin_vminus] } else { -15.0 };
+            let v_in_pos = if pin_in_pos > 0 {
+                prev_voltages[pin_in_pos]
+            } else {
+                0.0
+            };
+            let v_in_neg = if pin_in_neg > 0 {
+                prev_voltages[pin_in_neg]
+            } else {
+                0.0
+            };
+            let v_vplus = if pin_vplus > 0 {
+                prev_voltages[pin_vplus]
+            } else {
+                15.0
+            };
+            let v_vminus = if pin_vminus > 0 {
+                prev_voltages[pin_vminus]
+            } else {
+                -15.0
+            };
 
             let v_diff = v_in_pos - v_in_neg;
             let mut v_span = v_vplus - v_vminus;
@@ -2079,12 +2380,15 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
         let nominal_val = *nominal_voltages.get(&node_str).unwrap_or(&0.0);
         let max_dev = *worst_case_deviations.get(&node_str).unwrap_or(&0.0);
 
-        worst_case_limits.insert(node_str, WorstCaseLimits {
-            nominal_value: nominal_val,
-            worst_case_high: nominal_val + max_dev,
-            worst_case_low: nominal_val - max_dev,
-            max_deviation: max_dev,
-        });
+        worst_case_limits.insert(
+            node_str,
+            WorstCaseLimits {
+                nominal_value: nominal_val,
+                worst_case_high: nominal_val + max_dev,
+                worst_case_low: nominal_val - max_dev,
+                max_deviation: max_dev,
+            },
+        );
     }
 
     Ok(SensitivityResult {
@@ -2092,6 +2396,4 @@ pub fn solve_dc_sensitivity(netlist: &CircuitNetlist) -> Result<SensitivityResul
         sensitivities,
         worst_case_limits,
     })
-
 }
-

@@ -11,10 +11,10 @@
 //! `solve_monte_carlo_transient`, `calculate_fft_and_thd`, `calculate_imd_analysis`,
 //! `evaluate_measures`, `expand_transmission_line`, `apply_thermal_drift`, `solve_dc_circuit_thermal`.
 
-pub mod types;
-pub mod matrix;
 mod engine;
+pub mod matrix;
+pub mod types;
 
-pub use types::*;
-pub use matrix::*;
 pub use engine::*;
+pub use matrix::*;
+pub use types::*;

@@ -1,17 +1,17 @@
-use nalgebra::{DMatrix, DVector};
-use crate::solver::types::*;
 use crate::solver::matrix::*;
+use crate::solver::types::*;
+use nalgebra::{DMatrix, DVector};
 
-#[allow(unused_imports)]
-use super::devices::*;
-#[allow(unused_imports)]
-use super::dc::*;
-#[allow(unused_imports)]
-use super::transient::*;
 #[allow(unused_imports)]
 use super::ac::*;
 #[allow(unused_imports)]
 use super::advanced::*;
+#[allow(unused_imports)]
+use super::dc::*;
+#[allow(unused_imports)]
+use super::devices::*;
+#[allow(unused_imports)]
+use super::transient::*;
 
 #[cfg(test)]
 mod tests {
@@ -62,7 +62,13 @@ mod tests {
             fixed_step: Some(false),
         };
 
-        let (results, _, _) = solve_transient_circuit_with_initial_states(&netlist, &settings, HashMap::new(), HashMap::new()).unwrap();
+        let (results, _, _) = solve_transient_circuit_with_initial_states(
+            &netlist,
+            &settings,
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
         assert!(results.len() > 20);
 
         let mut verified_fall_success = false;
@@ -70,7 +76,7 @@ mod tests {
 
         for step in &results {
             let v2 = *step.node_voltages.get("2").unwrap();
-            
+
             // Flanco de bajada (entrada sube a t=0.0, salida baja tras fall_delay=25ns)
             // A t=1us, el transitorio ya procesó la bajada a LOW (0V)
             if (step.time - 1e-6).abs() < 1e-9 {
@@ -86,8 +92,14 @@ mod tests {
             }
         }
 
-        assert!(verified_fall_success, "No se pudo verificar el retardo de bajada");
-        assert!(verified_rise_success, "No se pudo verificar el retardo de subida");
+        assert!(
+            verified_fall_success,
+            "No se pudo verificar el retardo de bajada"
+        );
+        assert!(
+            verified_rise_success,
+            "No se pudo verificar el retardo de subida"
+        );
     }
 
     #[test]
@@ -130,7 +142,13 @@ mod tests {
             fixed_step: Some(false),
         };
 
-        let (results, _, _) = solve_transient_circuit_with_initial_states(&netlist, &settings, HashMap::new(), HashMap::new()).unwrap();
+        let (results, _, _) = solve_transient_circuit_with_initial_states(
+            &netlist,
+            &settings,
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
         assert!(results.len() > 20);
 
         let mut checked_high = false;
@@ -156,22 +174,20 @@ mod tests {
         let netlist = CircuitNetlist {
             mutual_inductances: None,
             thermal_config: None,
-            components: vec![
-                ComponentData {
-                    id: "MCU1".to_string(),
-                    comp_type: "arduino_uno".to_string(),
-                    value: 1.0,
-                    pins: vec![
-                        "1".to_string(),
-                        "2".to_string(),
-                        "3".to_string(),
-                        "4".to_string(),
-                        "5".to_string(),
-                        "0".to_string(),
-                    ],
-                    ..Default::default()
-                },
-            ],
+            components: vec![ComponentData {
+                id: "MCU1".to_string(),
+                comp_type: "arduino_uno".to_string(),
+                value: 1.0,
+                pins: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "0".to_string(),
+                ],
+                ..Default::default()
+            }],
             wires: vec![],
             temperature: None,
             fixed_step: Some(false),
@@ -186,7 +202,13 @@ mod tests {
             fixed_step: Some(false),
         };
 
-        let (results, _, _) = solve_transient_circuit_with_initial_states(&netlist, &settings, HashMap::new(), HashMap::new()).unwrap();
+        let (results, _, _) = solve_transient_circuit_with_initial_states(
+            &netlist,
+            &settings,
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
 
         let mut checked_high = false;
         let mut checked_low = false;
@@ -208,27 +230,40 @@ mod tests {
 
     #[test]
     fn test_sparse_lu_real_solver() {
-        let matrix = DMatrix::from_row_slice(3, 3, &[
-            2.0, -1.0,  0.0,
-           -1.0,  2.0, -1.0,
-            0.0, -1.0,  2.0,
-        ]);
+        let matrix =
+            DMatrix::from_row_slice(3, 3, &[2.0, -1.0, 0.0, -1.0, 2.0, -1.0, 0.0, -1.0, 2.0]);
         let b = DVector::from_row_slice(&[1.0, 0.0, 1.0]);
         let decomp_dense = matrix.clone().lu();
         let expected_x = decomp_dense.solve(&b).unwrap();
         let x = solve_sparse(&matrix, &b).unwrap();
         for i in 0..3 {
-            assert!((x[i] - expected_x[i]).abs() < 1e-12, "x[{}] = {} debería ser {}", i, x[i], expected_x[i]);
+            assert!(
+                (x[i] - expected_x[i]).abs() < 1e-12,
+                "x[{}] = {} debería ser {}",
+                i,
+                x[i],
+                expected_x[i]
+            );
         }
     }
 
     #[test]
     fn test_sparse_lu_complex_solver() {
-        let matrix = DMatrix::from_row_slice(3, 3, &[
-            Complex::new(2.0, 1.0), Complex::new(-1.0, 0.0), Complex::new(0.0, 0.0),
-            Complex::new(-1.0, 0.0), Complex::new(2.0, -1.0), Complex::new(-1.0, 0.0),
-            Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0), Complex::new(2.0, 2.0),
-        ]);
+        let matrix = DMatrix::from_row_slice(
+            3,
+            3,
+            &[
+                Complex::new(2.0, 1.0),
+                Complex::new(-1.0, 0.0),
+                Complex::new(0.0, 0.0),
+                Complex::new(-1.0, 0.0),
+                Complex::new(2.0, -1.0),
+                Complex::new(-1.0, 0.0),
+                Complex::new(0.0, 0.0),
+                Complex::new(-1.0, 0.0),
+                Complex::new(2.0, 2.0),
+            ],
+        );
         let b = DVector::from_row_slice(&[
             Complex::new(1.0, 0.0),
             Complex::new(0.0, 0.0),
@@ -238,7 +273,13 @@ mod tests {
         let expected_x = decomp_dense.solve(&b).unwrap();
         let x = solve_complex_sparse(&matrix, &b).unwrap();
         for i in 0..3 {
-            assert!((x[i] - expected_x[i]).norm() < 1e-12, "x[{}] = {:?} debería ser {:?}", i, x[i], expected_x[i]);
+            assert!(
+                (x[i] - expected_x[i]).norm() < 1e-12,
+                "x[{}] = {:?} debería ser {:?}",
+                i,
+                x[i],
+                expected_x[i]
+            );
         }
     }
 
@@ -281,7 +322,11 @@ mod tests {
         assert_eq!(*result.node_voltages.get("0").unwrap(), 0.0);
         assert_eq!(*result.node_voltages.get("1").unwrap(), 10.0);
         let v_node2 = *result.node_voltages.get("2").unwrap();
-        assert!((v_node2 - 5.0).abs() < 1e-5, "Voltaje en Nodo 2 debería ser 5.0V, obtenido: {}", v_node2);
+        assert!(
+            (v_node2 - 5.0).abs() < 1e-5,
+            "Voltaje en Nodo 2 debería ser 5.0V, obtenido: {}",
+            v_node2
+        );
     }
 
     #[test]
@@ -326,33 +371,72 @@ mod tests {
 
         // 1. Verificar voltajes nominales
         let v_node2 = *result.nominal_voltages.get("2").unwrap();
-        assert!((v_node2 - 5.0).abs() < 1e-5, "Voltaje nominal en Nodo 2 debería ser 5.0V");
+        assert!(
+            (v_node2 - 5.0).abs() < 1e-5,
+            "Voltaje nominal en Nodo 2 debería ser 5.0V"
+        );
 
         // 2. Verificar sensibilidades absolutas y normalizadas
         // dV(2)/dR1 = -Vsrc * R2 / (R1 + R2)^2 = -10 * 1000 / 2000^2 = -0.0025 V/Ohm
         // dV(2)/dR2 = Vsrc * R1 / (R1 + R2)^2 = 10 * 1000 / 2000^2 = 0.0025 V/Ohm
-        let sens_r1 = result.sensitivities.iter().find(|s| s.component_id == "R1").unwrap();
+        let sens_r1 = result
+            .sensitivities
+            .iter()
+            .find(|s| s.component_id == "R1")
+            .unwrap();
         let abs_sens_r1 = *sens_r1.absolute_sensitivities.get("2").unwrap();
         let norm_sens_r1 = *sens_r1.normalized_sensitivities.get("2").unwrap();
 
-        assert!((abs_sens_r1 - (-0.0025)).abs() < 1e-6, "Sensibilidad absoluta dV(2)/dR1 errónea: {}", abs_sens_r1);
+        assert!(
+            (abs_sens_r1 - (-0.0025)).abs() < 1e-6,
+            "Sensibilidad absoluta dV(2)/dR1 errónea: {}",
+            abs_sens_r1
+        );
         // (dV/dR) * (R/V) = -0.0025 * 1000 / 5 = -0.5 (-50%)
-        assert!((norm_sens_r1 - (-0.5)).abs() < 1e-5, "Sensibilidad normalizada dV(2)/dR1 errónea: {}", norm_sens_r1);
+        assert!(
+            (norm_sens_r1 - (-0.5)).abs() < 1e-5,
+            "Sensibilidad normalizada dV(2)/dR1 errónea: {}",
+            norm_sens_r1
+        );
 
-        let sens_r2 = result.sensitivities.iter().find(|s| s.component_id == "R2").unwrap();
+        let sens_r2 = result
+            .sensitivities
+            .iter()
+            .find(|s| s.component_id == "R2")
+            .unwrap();
         let abs_sens_r2 = *sens_r2.absolute_sensitivities.get("2").unwrap();
         let norm_sens_r2 = *sens_r2.normalized_sensitivities.get("2").unwrap();
 
-        assert!((abs_sens_r2 - 0.0025).abs() < 1e-6, "Sensibilidad absoluta dV(2)/dR2 errónea: {}", abs_sens_r2);
-        assert!((norm_sens_r2 - 0.5).abs() < 1e-5, "Sensibilidad normalizada dV(2)/dR2 errónea: {}", norm_sens_r2);
+        assert!(
+            (abs_sens_r2 - 0.0025).abs() < 1e-6,
+            "Sensibilidad absoluta dV(2)/dR2 errónea: {}",
+            abs_sens_r2
+        );
+        assert!(
+            (norm_sens_r2 - 0.5).abs() < 1e-5,
+            "Sensibilidad normalizada dV(2)/dR2 errónea: {}",
+            norm_sens_r2
+        );
 
         // 3. Verificar peor caso (Worst Case)
         // delta_V2 = |dV(2)/dR1| * (R1 * tol1) + |dV(2)/dR2| * (R2 * tol2)
         // delta_V2 = 0.0025 * (1000 * 0.05) + 0.0025 * (1000 * 0.05) = 0.125 + 0.125 = 0.25 V
         let wc_limits = result.worst_case_limits.get("2").unwrap();
-        assert!((wc_limits.max_deviation - 0.25).abs() < 1e-5, "Desviación del peor caso errónea: {}", wc_limits.max_deviation);
-        assert!((wc_limits.worst_case_high - 5.25).abs() < 1e-5, "Límite superior del peor caso erróneo: {}", wc_limits.worst_case_high);
-        assert!((wc_limits.worst_case_low - 4.75).abs() < 1e-5, "Límite inferior del peor caso erróneo: {}", wc_limits.worst_case_low);
+        assert!(
+            (wc_limits.max_deviation - 0.25).abs() < 1e-5,
+            "Desviación del peor caso errónea: {}",
+            wc_limits.max_deviation
+        );
+        assert!(
+            (wc_limits.worst_case_high - 5.25).abs() < 1e-5,
+            "Límite superior del peor caso erróneo: {}",
+            wc_limits.worst_case_high
+        );
+        assert!(
+            (wc_limits.worst_case_low - 4.75).abs() < 1e-5,
+            "Límite inferior del peor caso erróneo: {}",
+            wc_limits.worst_case_low
+        );
     }
 
     #[test]
@@ -392,7 +476,11 @@ mod tests {
 
         let result = solve_dc_circuit(&netlist).unwrap();
         let v_anode = *result.node_voltages.get("2").unwrap();
-        assert!(v_anode > 0.5 && v_anode < 0.8, "El voltaje del diodo polarizado directo debería rondar los 0.6V-0.7V, obtenido: {}", v_anode);
+        assert!(
+            v_anode > 0.5 && v_anode < 0.8,
+            "El voltaje del diodo polarizado directo debería rondar los 0.6V-0.7V, obtenido: {}",
+            v_anode
+        );
     }
 
     #[test]
@@ -438,7 +526,10 @@ mod tests {
         };
 
         let results = solve_transient_circuit(&netlist, &settings).unwrap();
-        assert!(results.len() > 0, "Debería haber al menos un paso temporal de simulación.");
+        assert!(
+            results.len() > 0,
+            "Debería haber al menos un paso temporal de simulación."
+        );
 
         let get_voltage_at = |target_t: f64| -> f64 {
             let mut closest_val = 0.0;
@@ -452,15 +543,27 @@ mod tests {
             }
             closest_val
         };
-        
+
         let v_t0 = get_voltage_at(0.0);
-        assert!(v_t0 >= 0.0 && v_t0 < 1.0, "Voltaje inicial en el primer paso debería rondar los 0V-0.5V, obtenido: {}", v_t0);
+        assert!(
+            v_t0 >= 0.0 && v_t0 < 1.0,
+            "Voltaje inicial en el primer paso debería rondar los 0V-0.5V, obtenido: {}",
+            v_t0
+        );
 
         let v_t10 = get_voltage_at(0.010);
-        assert!(v_t10 > 2.8 && v_t10 < 3.4, "Voltaje RC en t=10ms debería rondar los 3.16V, obtenido: {}", v_t10);
+        assert!(
+            v_t10 > 2.8 && v_t10 < 3.4,
+            "Voltaje RC en t=10ms debería rondar los 3.16V, obtenido: {}",
+            v_t10
+        );
 
         let v_t50 = get_voltage_at(0.050);
-        assert!(v_t50 > 4.9, "Voltaje RC en t=50ms debería estar casi cargado (>4.9V), obtenido: {}", v_t50);
+        assert!(
+            v_t50 > 4.9,
+            "Voltaje RC en t=50ms debería estar casi cargado (>4.9V), obtenido: {}",
+            v_t50
+        );
     }
 
     #[test]
@@ -506,28 +609,64 @@ mod tests {
         };
 
         let results = solve_ac_sweep(&netlist, &settings).unwrap();
-        
-        let idx_10hz = results.frequencies.iter().position(|&f| (f - 10.0).abs() < 0.5).unwrap();
-        let idx_100hz = results.frequencies.iter().position(|&f| (f - 100.0).abs() < 5.0).unwrap();
-        let idx_1000hz = results.frequencies.iter().position(|&f| (f - 1000.0).abs() < 50.0).unwrap();
+
+        let idx_10hz = results
+            .frequencies
+            .iter()
+            .position(|&f| (f - 10.0).abs() < 0.5)
+            .unwrap();
+        let idx_100hz = results
+            .frequencies
+            .iter()
+            .position(|&f| (f - 100.0).abs() < 5.0)
+            .unwrap();
+        let idx_1000hz = results
+            .frequencies
+            .iter()
+            .position(|&f| (f - 1000.0).abs() < 50.0)
+            .unwrap();
 
         let amp_10hz = results.node_amplitudes.get("2").unwrap()[idx_10hz];
         let phase_10hz = results.node_phases.get("2").unwrap()[idx_10hz];
-        
+
         let amp_100hz = results.node_amplitudes.get("2").unwrap()[idx_100hz];
         let phase_100hz = results.node_phases.get("2").unwrap()[idx_100hz];
 
         let amp_1000hz = results.node_amplitudes.get("2").unwrap()[idx_1000hz];
         let phase_1000hz = results.node_phases.get("2").unwrap()[idx_1000hz];
 
-        assert!(amp_10hz > -0.2 && amp_10hz <= 0.0, "Amplitud a 10Hz debería ser ~0dB, obtenida: {}", amp_10hz);
-        assert!(phase_10hz < 0.0 && phase_10hz > -10.0, "Fase a 10Hz debería ser ~ -5.7°, obtenida: {}", phase_10hz);
+        assert!(
+            amp_10hz > -0.2 && amp_10hz <= 0.0,
+            "Amplitud a 10Hz debería ser ~0dB, obtenida: {}",
+            amp_10hz
+        );
+        assert!(
+            phase_10hz < 0.0 && phase_10hz > -10.0,
+            "Fase a 10Hz debería ser ~ -5.7°, obtenida: {}",
+            phase_10hz
+        );
 
-        assert!((amp_100hz - -3.01).abs() < 0.1, "Amplitud a fc (100Hz) debería ser -3 dB, obtenida: {}", amp_100hz);
-        assert!((phase_100hz - -45.0).abs() < 1.0, "Fase a fc (100Hz) debería ser -45°, obtenida: {}", phase_100hz);
+        assert!(
+            (amp_100hz - -3.01).abs() < 0.1,
+            "Amplitud a fc (100Hz) debería ser -3 dB, obtenida: {}",
+            amp_100hz
+        );
+        assert!(
+            (phase_100hz - -45.0).abs() < 1.0,
+            "Fase a fc (100Hz) debería ser -45°, obtenida: {}",
+            phase_100hz
+        );
 
-        assert!((amp_1000hz - -20.0).abs() < 0.5, "Amplitud a 1kHz debería ser -20 dB, obtenida: {}", amp_1000hz);
-        assert!(phase_1000hz < -80.0 && phase_1000hz > -90.0, "Fase a 1kHz debería aproximarse a -90°, obtenida: {}", phase_1000hz);
+        assert!(
+            (amp_1000hz - -20.0).abs() < 0.5,
+            "Amplitud a 1kHz debería ser -20 dB, obtenida: {}",
+            amp_1000hz
+        );
+        assert!(
+            phase_1000hz < -80.0 && phase_1000hz > -90.0,
+            "Fase a 1kHz debería aproximarse a -90°, obtenida: {}",
+            phase_1000hz
+        );
     }
 
     #[test]
@@ -574,7 +713,11 @@ mod tests {
 
         let result_off = solve_dc_circuit(&netlist_off).unwrap();
         let v_drain_off = *result_off.node_voltages.get("2").unwrap();
-        assert!((v_drain_off - 5.0).abs() < 1e-3, "Con Vgate=0V, Vdrain debería ser 5.0V, obtenido: {}", v_drain_off);
+        assert!(
+            (v_drain_off - 5.0).abs() < 1e-3,
+            "Con Vgate=0V, Vdrain debería ser 5.0V, obtenido: {}",
+            v_drain_off
+        );
 
         let netlist_on = CircuitNetlist {
             mutual_inductances: None,
@@ -618,7 +761,11 @@ mod tests {
 
         let result_on = solve_dc_circuit(&netlist_on).unwrap();
         let v_drain_on = *result_on.node_voltages.get("2").unwrap();
-        assert!(v_drain_on < 0.5, "Con Vgate=5V, Vdrain debería bajar, obtenido: {}", v_drain_on);
+        assert!(
+            v_drain_on < 0.5,
+            "Con Vgate=5V, Vdrain debería bajar, obtenido: {}",
+            v_drain_on
+        );
     }
 
     #[test]
@@ -689,13 +836,17 @@ mod tests {
         };
 
         let result = solve_dc_circuit(&netlist).unwrap();
-        
+
         let v_out = *result.node_voltages.get("3").unwrap();
         let v_virtual_gnd = *result.node_voltages.get("2").unwrap();
 
         // Ganancia teórica Av = -Rf / R1 = -10. Con Vin = 1V, Vout debe ser -10V
         assert!((v_out - -10.0).abs() < 1e-2, "El voltaje de salida debería ser exactamente -10.0V (ganancia inversora de -10), obtenido: {}", v_out);
-        assert!(v_virtual_gnd.abs() < 1e-3, "La tierra virtual (nodo inversor) debería estar muy cerca de 0V, obtenido: {}", v_virtual_gnd);
+        assert!(
+            v_virtual_gnd.abs() < 1e-3,
+            "La tierra virtual (nodo inversor) debería estar muy cerca de 0V, obtenido: {}",
+            v_virtual_gnd
+        );
     }
 
     #[test]
@@ -742,7 +893,11 @@ mod tests {
 
         let result_off = solve_dc_circuit(&netlist_off).unwrap();
         let v_drain_off = *result_off.node_voltages.get("2").unwrap();
-        assert!(v_drain_off.abs() < 1e-3, "Con Vgate=5V, PMOS apagado, Vdrain debería ser 0V, obtenido: {}", v_drain_off);
+        assert!(
+            v_drain_off.abs() < 1e-3,
+            "Con Vgate=5V, PMOS apagado, Vdrain debería ser 0V, obtenido: {}",
+            v_drain_off
+        );
 
         let netlist_on = CircuitNetlist {
             mutual_inductances: None,
@@ -786,7 +941,11 @@ mod tests {
 
         let result_on = solve_dc_circuit(&netlist_on).unwrap();
         let v_drain_on = *result_on.node_voltages.get("2").unwrap();
-        assert!(v_drain_on > 4.0, "Con Vgate=0V, PMOS encendido, Vdrain debería subir cerca de 5V, obtenido: {}", v_drain_on);
+        assert!(
+            v_drain_on > 4.0,
+            "Con Vgate=0V, PMOS encendido, Vdrain debería subir cerca de 5V, obtenido: {}",
+            v_drain_on
+        );
     }
 
     #[test]
@@ -842,8 +1001,16 @@ mod tests {
         let v_base = *result.node_voltages.get("4").unwrap();
         let v_collector = *result.node_voltages.get("2").unwrap();
 
-        assert!(v_base > 0.5 && v_base < 0.8, "Vbase debería ser ~0.55V, obtenido: {}", v_base);
-        assert!(v_collector > 8.0 && v_collector < 9.0, "Vcollector debería ser ~8.7V, obtenido: {}", v_collector);
+        assert!(
+            v_base > 0.5 && v_base < 0.8,
+            "Vbase debería ser ~0.55V, obtenido: {}",
+            v_base
+        );
+        assert!(
+            v_collector > 8.0 && v_collector < 9.0,
+            "Vcollector debería ser ~8.7V, obtenido: {}",
+            v_collector
+        );
     }
 
     #[test]
@@ -894,14 +1061,17 @@ mod tests {
         };
 
         let settings = TransientSettings {
-            dt: 1e-6,     // 1 µs paso nominal inicial
-            t_max: 1e-4,  // 100 µs simulación (un ciclo de conmutación completo a 10 kHz es 100 µs)
+            dt: 1e-6,    // 1 µs paso nominal inicial
+            t_max: 1e-4, // 100 µs simulación (un ciclo de conmutación completo a 10 kHz es 100 µs)
             fixed_step: None,
             integration_method: None,
         };
 
         let results = solve_transient_circuit(&netlist, &settings).unwrap();
-        assert!(results.len() > 0, "La simulación transitoria de inversor CMOS debió generar resultados.");
+        assert!(
+            results.len() > 0,
+            "La simulación transitoria de inversor CMOS debió generar resultados."
+        );
 
         // Validar conmutación física dinámicamente
         let get_voltage_at = |target_t: f64| -> f64 {
@@ -989,7 +1159,10 @@ mod tests {
         };
 
         let results = solve_transient_circuit(&netlist, &settings).unwrap();
-        assert!(results.len() > 0, "Debería haber resultados de simulación transitoria para BJT.");
+        assert!(
+            results.len() > 0,
+            "Debería haber resultados de simulación transitoria para BJT."
+        );
 
         let get_voltage_at = |target_t: f64| -> f64 {
             let mut closest_val = 0.0;
@@ -1006,11 +1179,19 @@ mod tests {
 
         // Vin es alto (~5V) en t=25 µs (pico positivo, NPN encendido/saturado): Vcollector debería ser bajo (<0.5V)
         let v_c_low = get_voltage_at(25e-6);
-        assert!(v_c_low < 0.5, "El colector del NPN saturado debería estar a nivel bajo (<0.5V), obtenido: {}", v_c_low);
+        assert!(
+            v_c_low < 0.5,
+            "El colector del NPN saturado debería estar a nivel bajo (<0.5V), obtenido: {}",
+            v_c_low
+        );
 
         // Vin es bajo (~-5V) en t=75 µs (pico negativo, NPN cortado): Vcollector debería subir a Vcc (5V)
         let v_c_high = get_voltage_at(75e-6);
-        assert!(v_c_high > 4.5, "El colector del NPN cortado debería subir a Vcc (~5V), obtenido: {}", v_c_high);
+        assert!(
+            v_c_high > 4.5,
+            "El colector del NPN cortado debería subir a Vcc (~5V), obtenido: {}",
+            v_c_high
+        );
     }
 
     #[test]
@@ -1056,10 +1237,10 @@ mod tests {
         };
 
         let result = solve_dc_sweep(&netlist, &settings).unwrap();
-        
+
         // Debería generar exactamente 31 puntos de barrido (0.0 a 3.0 inclusive, paso 0.1)
         assert_eq!(result.sweep_voltages.len(), 31);
-        
+
         // A 0V en la entrada, la tensión del ánodo (nodo 2) es 0V
         assert!((result.node_voltages.get("2").unwrap()[0] - 0.0).abs() < 1e-6);
 
@@ -1120,14 +1301,18 @@ mod tests {
 
         let results = solve_monte_carlo_transient(&netlist, &t_settings, &mc_settings).unwrap();
         assert_eq!(results.len(), 20); // 20 corridas de simulación
-        
+
         for run in results {
             assert!(run.len() > 0);
             let v_mid = *run.last().unwrap().node_voltages.get("2").unwrap();
             // Para divisor de tensión R1/R2 ideales de 1k, Vmid = 5.0V.
             // Con +/-10% de tolerancia, la dispersión está en torno a 5.0V, variando físicamente.
             // Aseguramos que los valores sean físicos y caigan dentro de límites lógicos
-            assert!(v_mid > 4.0 && v_mid < 6.0, "Divisor variando por tolerancia fuera de cotas: {}", v_mid);
+            assert!(
+                v_mid > 4.0 && v_mid < 6.0,
+                "Divisor variando por tolerancia fuera de cotas: {}",
+                v_mid
+            );
         }
     }
 
@@ -1135,7 +1320,7 @@ mod tests {
     fn test_fft_sine_thd() {
         let f_fund = 1000.0;
         let t_max = 0.01; // 10 ms (10 ciclos completos de 1kHz)
-        
+
         // Generar 2048 pasos uniformes de una senoide ideal
         let n_steps = 2048;
         let mut time_steps = Vec::with_capacity(n_steps);
@@ -1145,19 +1330,19 @@ mod tests {
             // Senoide ideal de amplitud 5V, offset 0V
             let v_val = 5.0 * (2.0 * std::f64::consts::PI * f_fund * t).sin();
             node_voltages.insert("1".to_string(), v_val);
-            
+
             time_steps.push(TimeStepResult {
                 time: t,
                 node_voltages,
                 branch_currents: HashMap::new(),
             });
         }
-        
+
         let fft_res = calculate_fft_and_thd(&time_steps, "1", f_fund).unwrap();
-        
+
         // El espectro de frecuenciaNyquist debe ser de 1024 bins
         assert_eq!(fft_res.frequencies.len(), 1024);
-        
+
         // Encontrar el bin correspondiente a 1000 Hz en fft_res.frequencies
         let mut fund_bin = 0;
         let mut min_diff = f64::MAX;
@@ -1168,14 +1353,22 @@ mod tests {
                 fund_bin = idx;
             }
         }
-        
+
         // La magnitud en dB de la fundamental a 1000Hz debería ser muy alta (aproximadamente 20*log10(5) = 13.97 dBV)
         let db_val = fft_res.magnitudes_db[fund_bin];
-        assert!((db_val - 13.97).abs() < 0.5, "La fundamental a 1kHz debería rondar los 14dBV (amplitud 5V), obtenido: {}", db_val);
-        
+        assert!(
+            (db_val - 13.97).abs() < 0.5,
+            "La fundamental a 1kHz debería rondar los 14dBV (amplitud 5V), obtenido: {}",
+            db_val
+        );
+
         // Dado que la onda es una senoide perfectamente pura por diseño,
         // su THD debería ser sumamente baja (virtualmente cero, < 0.2% considerando la fuga espectral discreta de 2048 puntos)
-        assert!(fft_res.thd < 0.2, "THD de senoide ideal debería ser muy cercano a 0%, obtenido: {}%", fft_res.thd);
+        assert!(
+            fft_res.thd < 0.2,
+            "THD de senoide ideal debería ser muy cercano a 0%, obtenido: {}%",
+            fft_res.thd
+        );
     }
 
     #[test]
@@ -1213,16 +1406,16 @@ mod tests {
                 f_start: 10.0,
                 f_end: 1000.0,
                 points_per_decade: 10,
-            op_guess: None,
+                op_guess: None,
             },
         };
 
         let result = solve_noise_sweep(&netlist, &settings).unwrap();
-        
+
         // Densidad teórica del ruido de Johnson-Nyquist para R=10k a 300K:
         // v_noise = sqrt(4 * k_B * T * R) = sqrt(4 * 1.380649e-23 * 300 * 10000) = 1.287159e-8 V/sqrt(Hz) (12.87 nV/rHz)
         let expected_noise = 1.287159e-8;
-        
+
         for &noise_val in &result.output_noise_density {
             let error_pct = (noise_val - expected_noise).abs() / expected_noise;
             assert!(error_pct < 0.01, "El ruido térmico del resistor debería ser exactamente 12.87 nV/rHz, obtenido: {} V/rHz", noise_val);
@@ -1315,32 +1508,55 @@ mod tests {
         ];
 
         let result = evaluate_measures(&time_steps, &directives);
-        assert!(result.error_log.is_none(), "No debería haber errores: {:?}", result.error_log);
+        assert!(
+            result.error_log.is_none(),
+            "No debería haber errores: {:?}",
+            result.error_log
+        );
 
         // Verificar retardo de propagación ≈ 20ns (±2ns de tolerancia por discretización)
-        let delay = *result.measurements.get("t_delay").expect("Medición t_delay no encontrada");
+        let delay = *result
+            .measurements
+            .get("t_delay")
+            .expect("Medición t_delay no encontrada");
         assert!(
             (delay - 20e-9).abs() < 2e-9,
-            "El retardo de propagación debería ser ~20ns, obtenido: {:.2}ns", delay * 1e9
+            "El retardo de propagación debería ser ~20ns, obtenido: {:.2}ns",
+            delay * 1e9
         );
 
         // Verificar tiempo de subida (10%→90% de 5V = 0.5V→4.5V sobre 100ns de rampa = 80ns)
-        let risetime = *result.measurements.get("t_rise").expect("Medición t_rise no encontrada");
+        let risetime = *result
+            .measurements
+            .get("t_rise")
+            .expect("Medición t_rise no encontrada");
         assert!(
             (risetime - 80e-9).abs() < 5e-9,
-            "El tiempo de subida debería ser ~80ns, obtenido: {:.2}ns", risetime * 1e9
+            "El tiempo de subida debería ser ~80ns, obtenido: {:.2}ns",
+            risetime * 1e9
         );
 
         // Verificar pico = 5V
-        let peak = *result.measurements.get("v_peak").expect("Medición v_peak no encontrada");
+        let peak = *result
+            .measurements
+            .get("v_peak")
+            .expect("Medición v_peak no encontrada");
         assert!(
             (peak - 5.0).abs() < 0.1,
-            "El pico debería ser 5V, obtenido: {:.4}V", peak
+            "El pico debería ser 5V, obtenido: {:.4}V",
+            peak
         );
 
         // Verificar promedio (la rampa de 10ns-110ns sobre 200ns tiene un promedio razonable)
-        let avg = *result.measurements.get("v_avg").expect("Medición v_avg no encontrada");
-        assert!(avg > 0.0 && avg < 5.0, "El promedio debería estar entre 0 y 5V, obtenido: {:.4}V", avg);
+        let avg = *result
+            .measurements
+            .get("v_avg")
+            .expect("Medición v_avg no encontrada");
+        assert!(
+            avg > 0.0 && avg < 5.0,
+            "El promedio debería estar entre 0 y 5V, obtenido: {:.4}V",
+            avg
+        );
     }
 
     // ================================================================
@@ -1367,24 +1583,36 @@ mod tests {
         // Para línea ideal (R=0, G=0): cada segmento genera 1 inductor + 2 capacitores = 3 componentes
         // Total: 20 * 3 = 60 componentes
         assert_eq!(
-            components.len(), 60,
-            "Una línea ideal de 20 segmentos debería generar 60 componentes pasivos, generó: {}", components.len()
+            components.len(),
+            60,
+            "Una línea ideal de 20 segmentos debería generar 60 componentes pasivos, generó: {}",
+            components.len()
         );
 
         // Verificar valores de L y C por segmento
         let l_expected = 50.0 * 1e-9 / 20.0; // Z0 * Td / N = 2.5 nH
         let c_expected = 1e-9 / (50.0 * 20.0); // Td / (Z0 * N) = 1 pF
 
-        let first_inductor = components.iter().find(|c| c.comp_type == "inductor").unwrap();
+        let first_inductor = components
+            .iter()
+            .find(|c| c.comp_type == "inductor")
+            .unwrap();
         assert!(
             (first_inductor.value - l_expected).abs() / l_expected < 0.01,
-            "L_seg debería ser {:.4e} H, obtenido: {:.4e} H", l_expected, first_inductor.value
+            "L_seg debería ser {:.4e} H, obtenido: {:.4e} H",
+            l_expected,
+            first_inductor.value
         );
 
-        let first_cap = components.iter().find(|c| c.comp_type == "capacitor").unwrap();
+        let first_cap = components
+            .iter()
+            .find(|c| c.comp_type == "capacitor")
+            .unwrap();
         assert!(
             (first_cap.value - c_expected / 2.0).abs() / (c_expected / 2.0) < 0.01,
-            "C_seg/2 debería ser {:.4e} F, obtenido: {:.4e} F", c_expected / 2.0, first_cap.value
+            "C_seg/2 debería ser {:.4e} F, obtenido: {:.4e} F",
+            c_expected / 2.0,
+            first_cap.value
         );
     }
 
@@ -1408,20 +1636,30 @@ mod tests {
         // Para línea con pérdidas: cada segmento genera 1R + 1L + 2C + 2G_shunt = 6 componentes
         // Total: 10 * 6 = 60 componentes
         assert_eq!(
-            components.len(), 60,
-            "Una línea con pérdidas de 10 segmentos debería generar 60 componentes, generó: {}", components.len()
+            components.len(),
+            60,
+            "Una línea con pérdidas de 10 segmentos debería generar 60 componentes, generó: {}",
+            components.len()
         );
 
         // Verificar que hay resistores de serie y de fuga
         let r_series: Vec<_> = components.iter().filter(|c| c.id.contains(".R")).collect();
-        let r_shunt: Vec<_> = components.iter().filter(|c| c.id.contains(".GL") || c.id.contains(".GR")).collect();
+        let r_shunt: Vec<_> = components
+            .iter()
+            .filter(|c| c.id.contains(".GL") || c.id.contains(".GR"))
+            .collect();
         assert_eq!(r_series.len(), 10, "Debería haber 10 resistores de serie");
-        assert_eq!(r_shunt.len(), 20, "Debería haber 20 resistores de fuga (GL+GR)");
+        assert_eq!(
+            r_shunt.len(),
+            20,
+            "Debería haber 20 resistores de fuga (GL+GR)"
+        );
 
         // R_seg = 5/10 = 0.5Ω
         assert!(
             (r_series[0].value - 0.5).abs() < 0.001,
-            "R_seg debería ser 0.5Ω, obtenido: {}Ω", r_series[0].value
+            "R_seg debería ser 0.5Ω, obtenido: {}Ω",
+            r_series[0].value
         );
     }
 
@@ -1466,7 +1704,9 @@ mod tests {
 
         assert!(
             (r_400 - expected).abs() < 1.0,
-            "R(400K) debería ser {:.0}Ω, obtenido: {:.0}Ω", expected, r_400
+            "R(400K) debería ser {:.0}Ω, obtenido: {:.0}Ω",
+            expected,
+            r_400
         );
     }
 
@@ -1474,13 +1714,14 @@ mod tests {
     fn test_thermal_mosfet_vth_drift() {
         // Vth(T) = Vth(T0) - TCV*(T-T0)
         let vth_300 = 0.7; // 0.7V a 300K
-        let tcv = 2.0e-3;  // -2 mV/K
+        let tcv = 2.0e-3; // -2 mV/K
 
         let vth_400 = thermal_mosfet_vth(vth_300, 300.0, 400.0, tcv);
         // Vth(400) = 0.7 - 0.002 * 100 = 0.5V
         assert!(
             (vth_400 - 0.5).abs() < 0.001,
-            "Vth(400K) debería ser 0.500V, obtenido: {:.4}V", vth_400
+            "Vth(400K) debería ser 0.500V, obtenido: {:.4}V",
+            vth_400
         );
     }
 
@@ -1495,7 +1736,9 @@ mod tests {
 
         assert!(
             (beta_400 - expected).abs() / expected < 0.001,
-            "β(400K) debería ser {:.6}, obtenido: {:.6}", expected, beta_400
+            "β(400K) debería ser {:.6}, obtenido: {:.6}",
+            expected,
+            beta_400
         );
 
         // β debe disminuir con la temperatura
@@ -1550,13 +1793,18 @@ mod tests {
         // Para el test, usamos apply_thermal_drift que ajusta R, pero el diodo usa Is global.
         // Verificamos que la resistencia aumenta con la temperatura (efecto indirecto).
         let netlist_hot = apply_thermal_drift(&netlist, 398.15);
-        let r1_hot = netlist_hot.components.iter().find(|c| c.id == "R1").unwrap();
+        let r1_hot = netlist_hot
+            .components
+            .iter()
+            .find(|c| c.id == "R1")
+            .unwrap();
 
         // Verificar que la resistencia aumentó ~38% (TC1=3.9e-3 * 98.15K ≈ 0.383)
         let r_ratio = r1_hot.value / 1000.0;
         assert!(
             r_ratio > 1.3 && r_ratio < 1.5,
-            "La resistencia a 125°C debería aumentar ~38%, ratio obtenido: {:.3}", r_ratio
+            "La resistencia a 125°C debería aumentar ~38%, ratio obtenido: {:.3}",
+            r_ratio
         );
 
         // Verificar que Vt(T) escala correctamente
@@ -1564,16 +1812,16 @@ mod tests {
         let vt_398 = thermal_vt(398.15);
         assert!(
             (vt_300 - 0.025852).abs() < 1e-4,
-            "Vt(300K) debería ser ~25.85mV, obtenido: {:.6}V", vt_300
+            "Vt(300K) debería ser ~25.85mV, obtenido: {:.6}V",
+            vt_300
         );
-        assert!(
-            vt_398 > vt_300,
-            "Vt(398K) debería ser mayor que Vt(300K)"
-        );
+        assert!(vt_398 > vt_300, "Vt(398K) debería ser mayor que Vt(300K)");
         let vt_expected_398 = PHYS_KB * 398.15 / PHYS_Q;
         assert!(
             (vt_398 - vt_expected_398).abs() < 1e-6,
-            "Vt(398.15K) debería ser {:.6}V, obtenido: {:.6}V", vt_expected_398, vt_398
+            "Vt(398.15K) debería ser {:.6}V, obtenido: {:.6}V",
+            vt_expected_398,
+            vt_398
         );
 
         // Verificar banda prohibida de Varshni disminuye con temperatura
@@ -1581,7 +1829,8 @@ mod tests {
         let eg_400 = bandgap_varshni(400.0);
         assert!(
             (eg_300 - EG_SI_300).abs() < 0.001,
-            "Eg(300K) debería ser ~1.12 eV, obtenido: {:.4} eV", eg_300
+            "Eg(300K) debería ser ~1.12 eV, obtenido: {:.4} eV",
+            eg_300
         );
         assert!(
             eg_400 < eg_300,
@@ -1635,9 +1884,15 @@ mod tests {
         };
 
         let results = solve_pss(&netlist, &pss_settings);
-        assert!(results.is_ok(), "PSS Shooting Method debería converger sin problemas");
+        assert!(
+            results.is_ok(),
+            "PSS Shooting Method debería converger sin problemas"
+        );
         let step_results = results.unwrap();
-        assert!(!step_results.is_empty(), "Los resultados de PSS no deben estar vacíos");
+        assert!(
+            !step_results.is_empty(),
+            "Los resultados de PSS no deben estar vacíos"
+        );
     }
 
     #[test]
@@ -1688,14 +1943,24 @@ mod tests {
         };
 
         let res = run_stability_analysis(&netlist);
-        assert!(res.is_ok(), "El análisis de estabilidad debería ejecutarse con éxito");
+        assert!(
+            res.is_ok(),
+            "El análisis de estabilidad debería ejecutarse con éxito"
+        );
         let data = res.unwrap();
-        assert!(data.is_stable, "El circuito RC pasivo simple debe ser estable");
+        assert!(
+            data.is_stable,
+            "El circuito RC pasivo simple debe ser estable"
+        );
         assert_eq!(data.poles.len(), 1, "Debería haber exactamente 1 polo");
-        
+
         let p = data.poles[0];
         // El polo debe estar muy cercano a -1000 rad/s
-        assert!((p.re + 1000.0).abs() < 1.0, "El polo debería ser aproximadamente -1000, obtenido: {:?}", p);
+        assert!(
+            (p.re + 1000.0).abs() < 1.0,
+            "El polo debería ser aproximadamente -1000, obtenido: {:?}",
+            p
+        );
     }
 
     #[test]
@@ -1728,7 +1993,10 @@ mod tests {
         };
 
         let result = solve_dc_circuit(&netlist);
-        assert!(result.is_ok(), "La simulación Mixed-Signal debe converger en DC");
+        assert!(
+            result.is_ok(),
+            "La simulación Mixed-Signal debe converger en DC"
+        );
         let data = result.unwrap();
         let v_out = *data.node_voltages.get("2").unwrap_or(&5.0);
         // La compuerta NOT invierte 5V (true) a aprox 0V (false)
@@ -1743,17 +2011,35 @@ mod tests {
         let vth = 0.4;
 
         // Transistor base (W = 10u, L = 0.18u)
-        let (ids_base, gm_base, _) = evaluate_bsim3_nmos(vgs, vds, vbs, vth, Some(10.0e-6), Some(0.18e-6), None, None);
-        
+        let (ids_base, gm_base, _) =
+            evaluate_bsim3_nmos(vgs, vds, vbs, vth, Some(10.0e-6), Some(0.18e-6), None, None);
+
         // Transistor escalado 10x en ancho (W = 100u, L = 0.18u)
-        let (ids_scaled, gm_scaled, _) = evaluate_bsim3_nmos(vgs, vds, vbs, vth, Some(100.0e-6), Some(0.18e-6), None, None);
+        let (ids_scaled, gm_scaled, _) = evaluate_bsim3_nmos(
+            vgs,
+            vds,
+            vbs,
+            vth,
+            Some(100.0e-6),
+            Some(0.18e-6),
+            None,
+            None,
+        );
 
         // Validar la proporción 10x de corriente y gm
         let ratio_ids = ids_scaled / ids_base;
         let ratio_gm = gm_scaled / gm_base;
 
-        assert!((ratio_ids - 10.0).abs() < 0.1, "La corriente debería escalar 10x, obtenido: {}", ratio_ids);
-        assert!((ratio_gm - 10.0).abs() < 0.1, "El gm debería escalar 10x, obtenido: {}", ratio_gm);
+        assert!(
+            (ratio_ids - 10.0).abs() < 0.1,
+            "La corriente debería escalar 10x, obtenido: {}",
+            ratio_ids
+        );
+        assert!(
+            (ratio_gm - 10.0).abs() < 0.1,
+            "El gm debería escalar 10x, obtenido: {}",
+            ratio_gm
+        );
     }
 
     #[test]
@@ -1796,10 +2082,13 @@ mod tests {
         };
 
         let res = run_stability_analysis(&netlist);
-        assert!(res.is_ok(), "El análisis de estabilidad debería ejecutarse con éxito");
+        assert!(
+            res.is_ok(),
+            "El análisis de estabilidad debería ejecutarse con éxito"
+        );
         let data = res.unwrap();
         assert!(data.is_stable, "El circuito RC debe ser estable");
-        
+
         // Debería detectar el polo en aprox -2000 rad/s y el cero en aprox -1000 rad/s
         assert!(!data.poles.is_empty(), "Debería haber polos");
         assert!(!data.zeros.is_empty(), "Debería haber ceros de transmisión");
@@ -1808,8 +2097,16 @@ mod tests {
         let has_zero_1000 = data.zeros.iter().any(|z| (z.re + 1000.0).abs() < 10.0);
 
         // Verificar el polo y el cero calculados
-        assert!(has_pole_2000, "Debería tener un polo cerca de -2000, obtenidos: {:?}", data.poles);
-        assert!(has_zero_1000, "Debería tener un cero cerca de -1000, obtenidos: {:?}", data.zeros);
+        assert!(
+            has_pole_2000,
+            "Debería tener un polo cerca de -2000, obtenidos: {:?}",
+            data.poles
+        );
+        assert!(
+            has_zero_1000,
+            "Debería tener un cero cerca de -1000, obtenidos: {:?}",
+            data.zeros
+        );
     }
 
     #[test]
@@ -1859,7 +2156,10 @@ mod tests {
             op_guess: None,
         };
         let ac_res = solve_ac_sweep(&netlist, &ac_settings);
-        assert!(ac_res.is_ok(), "AC Sweep con BSIM3nmos debería converger y ejecutarse con éxito");
+        assert!(
+            ac_res.is_ok(),
+            "AC Sweep con BSIM3nmos debería converger y ejecutarse con éxito"
+        );
         let ac_data = ac_res.unwrap();
         assert!(!ac_data.frequencies.is_empty());
         assert!(ac_data.node_amplitudes.contains_key("2"));
@@ -1871,7 +2171,10 @@ mod tests {
             ac_settings,
         };
         let noise_res = solve_noise_sweep(&netlist, &noise_settings);
-        assert!(noise_res.is_ok(), "Noise Sweep con BSIM3nmos debería converger y ejecutarse con éxito");
+        assert!(
+            noise_res.is_ok(),
+            "Noise Sweep con BSIM3nmos debería converger y ejecutarse con éxito"
+        );
         let noise_data = noise_res.unwrap();
         assert!(!noise_data.output_noise_density.is_empty());
     }
@@ -1918,14 +2221,21 @@ mod tests {
         };
 
         let sweep_res = solve_dc_sweep(&netlist, &sweep_settings);
-        assert!(sweep_res.is_ok(), "DC Sweep con continuación de estados debería converger sin problemas");
+        assert!(
+            sweep_res.is_ok(),
+            "DC Sweep con continuación de estados debería converger sin problemas"
+        );
         let data = sweep_res.unwrap();
         assert_eq!(data.sweep_voltages.len(), 21);
         assert!(data.node_voltages.contains_key("2"));
-        
+
         // El voltaje del nodo 2 (después del diodo) debería subir a medida que V1 sube
         let v2_final = data.node_voltages.get("2").unwrap().last().unwrap();
-        assert!(*v2_final > 1.0, "Con 2V de entrada, el nodo 2 debería estar sobre 1.0V (obtenido: {}V)", v2_final);
+        assert!(
+            *v2_final > 1.0,
+            "Con 2V de entrada, el nodo 2 debería estar sobre 1.0V (obtenido: {}V)",
+            v2_final
+        );
     }
 
     #[test]
@@ -1949,7 +2259,13 @@ mod tests {
                     id: "X1".to_string(),
                     comp_type: "opamp".to_string(),
                     value: 1e5,
-                    pins: vec!["1".to_string(), "0".to_string(), "0".to_string(), "0".to_string(), "2".to_string()], // IN+, IN-, V+ (GND), V- (GND), OUT
+                    pins: vec![
+                        "1".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "2".to_string(),
+                    ], // IN+, IN-, V+ (GND), V- (GND), OUT
                     ..Default::default()
                 },
             ],
@@ -1981,7 +2297,11 @@ mod tests {
 
         // A 1 Hz: Ganancia open-loop alta (~93 dB), salida de 1e-4V * 4.48e4 = 4.48V (~13 dBV)
         // A 1000 Hz: Ganancia open-loop atenuada por 100x (-40 dB), salida de 44.8mV (~-27 dBV)
-        assert!(amp_low > 5.0, "La ganancia en baja frecuencia debería ser alta, obtenido: {} dBV", amp_low);
+        assert!(
+            amp_low > 5.0,
+            "La ganancia en baja frecuencia debería ser alta, obtenido: {} dBV",
+            amp_low
+        );
         assert!(amp_high < -10.0, "La ganancia en alta frecuencia debería estar severamente atenuada por el polo, obtenido: {} dBV", amp_high);
     }
 
@@ -2091,7 +2411,12 @@ mod tests {
         let noise_w50 = res_w50.output_noise_density[0];
 
         // El ruido a W=50um debería ser menor que a W=10um gracias a la dependencia geométrica 1 / (W*L)
-        assert!(noise_w50 < noise_w10, "El ruido 1/f con MOSFET más ancho debería estar suprimido (W50: {} < W10: {})", noise_w50, noise_w10);
+        assert!(
+            noise_w50 < noise_w10,
+            "El ruido 1/f con MOSFET más ancho debería estar suprimido (W50: {} < W10: {})",
+            noise_w50,
+            noise_w10
+        );
     }
 
     #[test]
@@ -2135,7 +2460,7 @@ mod tests {
 
         let settings = TransientSettings {
             dt: 1e-9,      // 1 ns
-            t_max: 200e-9,  // 200 ns
+            t_max: 200e-9, // 200 ns
             fixed_step: Some(true),
             integration_method: None,
         };
@@ -2150,8 +2475,11 @@ mod tests {
                 max_v2 = v2;
             }
         }
-        
-        assert!(max_v2 > 0.0, "La tensión debería ser positiva en los semiciclos positivos.");
+
+        assert!(
+            max_v2 > 0.0,
+            "La tensión debería ser positiva en los semiciclos positivos."
+        );
     }
 
     #[test]
@@ -2161,15 +2489,20 @@ mod tests {
         let netlist_arduino = CircuitNetlist {
             mutual_inductances: None,
             thermal_config: None,
-            components: vec![
-                ComponentData {
-                    id: "MCU1".to_string(),
-                    comp_type: "arduino_uno".to_string(),
-                    value: 1.0, // Mode 1 (Blink)
-                    pins: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string(), "0".to_string()],
-                    ..Default::default()
-                },
-            ],
+            components: vec![ComponentData {
+                id: "MCU1".to_string(),
+                comp_type: "arduino_uno".to_string(),
+                value: 1.0, // Mode 1 (Blink)
+                pins: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "0".to_string(),
+                ],
+                ..Default::default()
+            }],
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
@@ -2180,7 +2513,11 @@ mod tests {
         // En continua (DC), el carril Pin_VCC (nodo 5) debería auto-polarizarse a 5.0 V gracias al Norton equivalent interno.
         let dc_res = solve_dc_circuit(&netlist_arduino).unwrap();
         let v_vcc = *dc_res.node_voltages.get("5").unwrap();
-        assert!((v_vcc - 5.0).abs() < 0.1, "El carril de VCC de Arduino debería regular a ~5.0V, obtenido: {}", v_vcc);
+        assert!(
+            (v_vcc - 5.0).abs() < 0.1,
+            "El carril de VCC de Arduino debería regular a ~5.0V, obtenido: {}",
+            v_vcc
+        );
 
         // En transitorio, verificamos el parpadeo a 1 Hz (T = 1.0 s, 0.5s HIGH, 0.5s LOW)
         let settings_blink = TransientSettings {
@@ -2190,22 +2527,35 @@ mod tests {
             integration_method: None,
         };
         let results_blink = solve_transient_circuit(&netlist_arduino, &settings_blink).unwrap();
-        
+
         let get_out_voltage = |t_target: f64| -> f64 {
-            let step = results_blink.iter().min_by(|a, b| {
-                (a.time - t_target).abs().partial_cmp(&(b.time - t_target).abs()).unwrap()
-            }).unwrap();
+            let step = results_blink
+                .iter()
+                .min_by(|a, b| {
+                    (a.time - t_target)
+                        .abs()
+                        .partial_cmp(&(b.time - t_target).abs())
+                        .unwrap()
+                })
+                .unwrap();
             *step.node_voltages.get("2").unwrap()
         };
 
         // A t = 0.2 s, debería estar en HIGH (~5.0 V)
         let v_t0_2 = get_out_voltage(0.2);
-        assert!(v_t0_2 > 4.5, "Blink a 0.2s debería estar en HIGH, obtenido: {}", v_t0_2);
+        assert!(
+            v_t0_2 > 4.5,
+            "Blink a 0.2s debería estar en HIGH, obtenido: {}",
+            v_t0_2
+        );
 
         // A t = 0.7 s, debería estar en LOW (~0 V)
         let v_t0_7 = get_out_voltage(0.7);
-        assert!(v_t0_7 < 0.5, "Blink a 0.7s debería estar en LOW, obtenido: {}", v_t0_7);
-
+        assert!(
+            v_t0_7 < 0.5,
+            "Blink a 0.7s debería estar en LOW, obtenido: {}",
+            v_t0_7
+        );
 
         // 2. Test ESP32 - Mode 0 (Follower)
         // Vin conectado a Pin_ADC (nodo 3)
@@ -2217,7 +2567,14 @@ mod tests {
                     id: "MCU2".to_string(),
                     comp_type: "esp32".to_string(),
                     value: 0.0, // Mode 0 (Eco Follower)
-                    pins: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string(), "0".to_string()],
+                    pins: vec![
+                        "1".to_string(),
+                        "2".to_string(),
+                        "3".to_string(),
+                        "4".to_string(),
+                        "5".to_string(),
+                        "0".to_string(),
+                    ],
                     ..Default::default()
                 },
                 ComponentData {
@@ -2237,12 +2594,19 @@ mod tests {
 
         let dc_res_esp32 = solve_dc_circuit(&netlist_esp32).unwrap();
         let v_vcc_esp32 = *dc_res_esp32.node_voltages.get("5").unwrap();
-        assert!((v_vcc_esp32 - 3.3).abs() < 0.1, "El carril de VCC de ESP32 debería regular a ~3.3V, obtenido: {}", v_vcc_esp32);
+        assert!(
+            (v_vcc_esp32 - 3.3).abs() < 0.1,
+            "El carril de VCC de ESP32 debería regular a ~3.3V, obtenido: {}",
+            v_vcc_esp32
+        );
 
         // Pin_DAC (nodo 4) debería seguir a Pin_ADC (Vin = 1.5V)
         let v_dac = *dc_res_esp32.node_voltages.get("4").unwrap();
-        assert!((v_dac - 1.5).abs() < 0.2, "El dac debería seguir al adc (1.5V), obtenido: {}", v_dac);
-
+        assert!(
+            (v_dac - 1.5).abs() < 0.2,
+            "El dac debería seguir al adc (1.5V), obtenido: {}",
+            v_dac
+        );
 
         // 3. Test Raspberry Pi Pico - Mode 2 (Hysteresis Comparator)
         let netlist_pico = CircuitNetlist {
@@ -2253,7 +2617,14 @@ mod tests {
                     id: "MCU3".to_string(),
                     comp_type: "raspberry_pi_pico".to_string(),
                     value: 2.0, // Mode 2 (Comparator)
-                    pins: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string(), "0".to_string()],
+                    pins: vec![
+                        "1".to_string(),
+                        "2".to_string(),
+                        "3".to_string(),
+                        "4".to_string(),
+                        "5".to_string(),
+                        "0".to_string(),
+                    ],
                     ..Default::default()
                 },
                 ComponentData {
@@ -2298,7 +2669,14 @@ mod tests {
                     id: "MCU1".to_string(),
                     comp_type: "arduino_uno".to_string(),
                     value: 1.0, // Mode 1 (Blink - HIGH en continua)
-                    pins: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string(), "0".to_string()],
+                    pins: vec![
+                        "1".to_string(),
+                        "2".to_string(),
+                        "3".to_string(),
+                        "4".to_string(),
+                        "5".to_string(),
+                        "0".to_string(),
+                    ],
                     ..Default::default()
                 },
                 ComponentData {
@@ -2318,17 +2696,21 @@ mod tests {
 
         // En continua (DC), resolvemos el circuito.
         let res = solve_dc_circuit(&netlist_short).unwrap();
-        
+
         // Obtenemos el voltaje en el nodo 2. La corriente a través del resistor Rload es V(2)/1.
         // Con limitación activa a 40 mA, V(2) debería ser aproximadamente I_max * Rload = 40 mV.
         let v_out = *res.node_voltages.get("2").unwrap();
-        
+
         // Permitimos una tolerancia ya que el modelo Norton incluye la resistencia de salida de 20 Ohm.
         // Con Rload = 1 Ohm y G_out = 0.05 S (R_out = 20 Ohm):
         // I_load = I_eq_clamped * R_out / (R_out + R_load) = 40 mA * 20 / 21 = 38 mA.
         // V_out = I_load * R_load = 38 mV.
         assert!(v_out < 0.1, "La protección activa contra sobrecorrientes debería limitar la tensión a <100mV bajo cortocircuito, obtenido: {}V", v_out);
-        assert!(v_out > 0.01, "Debería haber una corriente circulando (>10mV), obtenido: {}V", v_out);
+        assert!(
+            v_out > 0.01,
+            "Debería haber una corriente circulando (>10mV), obtenido: {}V",
+            v_out
+        );
 
         // 2. Verificar el transitorio electro-térmico y muestreo ADC S&H
         // Simulamos un ESP32 en Modo 0 (Eco) con entrada analógica (1.5V) y reloj de muestreo activo.
@@ -2340,7 +2722,14 @@ mod tests {
                     id: "MCU2".to_string(),
                     comp_type: "esp32".to_string(),
                     value: 0.0, // Modo 0 (Eco)
-                    pins: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string(), "0".to_string()],
+                    pins: vec![
+                        "1".to_string(),
+                        "2".to_string(),
+                        "3".to_string(),
+                        "4".to_string(),
+                        "5".to_string(),
+                        "0".to_string(),
+                    ],
                     ..Default::default()
                 },
                 ComponentData {
@@ -2359,14 +2748,17 @@ mod tests {
         };
 
         let settings = TransientSettings {
-            dt: 1e-6, // 1 microsegundo de paso para ver el muestreo activo de S&H
+            dt: 1e-6,    // 1 microsegundo de paso para ver el muestreo activo de S&H
             t_max: 5e-6, // 5 pasos
             fixed_step: Some(true),
             integration_method: None,
         };
 
         let results = solve_transient_circuit(&netlist_thermal, &settings).unwrap();
-        assert!(results.len() > 0, "Debería completar el análisis transitorio electro-térmico mixed-signal.");
+        assert!(
+            results.len() > 0,
+            "Debería completar el análisis transitorio electro-térmico mixed-signal."
+        );
     }
 
     #[test]
@@ -2451,15 +2843,27 @@ mod tests {
 
         // Constantes y aritmética básica
         let r1 = evaluate_expression_string("2.5 + 3.0 * 2.0", &nv, &bc, 0.0).unwrap();
-        assert!((r1 - 8.5).abs() < 1e-10, "2.5 + 3.0 * 2.0 = 8.5, obtenido: {}", r1);
+        assert!(
+            (r1 - 8.5).abs() < 1e-10,
+            "2.5 + 3.0 * 2.0 = 8.5, obtenido: {}",
+            r1
+        );
 
         // sin(pi/2) = 1.0
         let r2 = evaluate_expression_string("sin(pi / 2)", &nv, &bc, 0.0).unwrap();
-        assert!((r2 - 1.0).abs() < 1e-10, "sin(pi/2) = 1.0, obtenido: {}", r2);
+        assert!(
+            (r2 - 1.0).abs() < 1e-10,
+            "sin(pi/2) = 1.0, obtenido: {}",
+            r2
+        );
 
         // ln(exp(1)) = 1.0
         let r3 = evaluate_expression_string("ln(exp(1))", &nv, &bc, 0.0).unwrap();
-        assert!((r3 - 1.0).abs() < 1e-6, "ln(exp(1)) = 1.0, obtenido: {}", r3);
+        assert!(
+            (r3 - 1.0).abs() < 1e-6,
+            "ln(exp(1)) = 1.0, obtenido: {}",
+            r3
+        );
 
         // V(1) = 5.0
         let r4 = evaluate_expression_string("V(1)", &nv, &bc, 0.0).unwrap();
@@ -2471,31 +2875,60 @@ mod tests {
 
         // I(V1) = 0.025
         let r6 = evaluate_expression_string("I(V1)", &nv, &bc, 0.0).unwrap();
-        assert!((r6 - 0.025).abs() < 1e-10, "I(V1) = 0.025, obtenido: {}", r6);
+        assert!(
+            (r6 - 0.025).abs() < 1e-10,
+            "I(V1) = 0.025, obtenido: {}",
+            r6
+        );
 
         // Expresión compuesta: V(1) * sin(pi/2) + V(2)^2 = 5.0 * 1.0 + 9.0 = 14.0
-        let r7 = evaluate_expression_string("V(1) * sin(pi / 2) + V(2) ^ 2", &nv, &bc, 0.0).unwrap();
-        assert!((r7 - 14.0).abs() < 1e-10, "V(1)*sin(pi/2)+V(2)^2 = 14.0, obtenido: {}", r7);
+        let r7 =
+            evaluate_expression_string("V(1) * sin(pi / 2) + V(2) ^ 2", &nv, &bc, 0.0).unwrap();
+        assert!(
+            (r7 - 14.0).abs() < 1e-10,
+            "V(1)*sin(pi/2)+V(2)^2 = 14.0, obtenido: {}",
+            r7
+        );
 
         // Operador unario negativo: -V(3) = -1.5
         let r8 = evaluate_expression_string("-V(3)", &nv, &bc, 0.0).unwrap();
-        assert!((r8 - (-1.5)).abs() < 1e-10, "-V(3) = -1.5, obtenido: {}", r8);
+        assert!(
+            (r8 - (-1.5)).abs() < 1e-10,
+            "-V(3) = -1.5, obtenido: {}",
+            r8
+        );
 
         // Tiempo transitorio: t con time = 0.001
         let r9 = evaluate_expression_string("sin(2 * pi * 1000 * t)", &nv, &bc, 0.001).unwrap();
         let expected = (2.0 * std::f64::consts::PI * 1000.0 * 0.001).sin();
-        assert!((r9 - expected).abs() < 1e-10, "sin(2*pi*1000*t) con t=0.001, obtenido: {}", r9);
+        assert!(
+            (r9 - expected).abs() < 1e-10,
+            "sin(2*pi*1000*t) con t=0.001, obtenido: {}",
+            r9
+        );
 
         // sqrt(abs(-16)) = 4.0
         let r10 = evaluate_expression_string("sqrt(abs(-16))", &nv, &bc, 0.0).unwrap();
-        assert!((r10 - 4.0).abs() < 1e-10, "sqrt(abs(-16)) = 4.0, obtenido: {}", r10);
+        assert!(
+            (r10 - 4.0).abs() < 1e-10,
+            "sqrt(abs(-16)) = 4.0, obtenido: {}",
+            r10
+        );
 
         // max y min
         let r11 = evaluate_expression_string("max(V(1), V(2))", &nv, &bc, 0.0).unwrap();
-        assert!((r11 - 5.0).abs() < 1e-10, "max(V(1), V(2)) = 5.0, obtenido: {}", r11);
+        assert!(
+            (r11 - 5.0).abs() < 1e-10,
+            "max(V(1), V(2)) = 5.0, obtenido: {}",
+            r11
+        );
 
         let r12 = evaluate_expression_string("min(V(1), V(2))", &nv, &bc, 0.0).unwrap();
-        assert!((r12 - 3.0).abs() < 1e-10, "min(V(1), V(2)) = 3.0, obtenido: {}", r12);
+        assert!(
+            (r12 - 3.0).abs() < 1e-10,
+            "min(V(1), V(2)) = 3.0, obtenido: {}",
+            r12
+        );
     }
 
     #[test]
@@ -2555,11 +2988,19 @@ mod tests {
 
         // V(1) debería ser 5.0V
         let v1 = *result.node_voltages.get("1").unwrap();
-        assert!((v1 - 5.0).abs() < 0.01, "V(1) debería ser ~5.0V, obtenido: {}", v1);
+        assert!(
+            (v1 - 5.0).abs() < 0.01,
+            "V(1) debería ser ~5.0V, obtenido: {}",
+            v1
+        );
 
         // V(3) debería ser V(1) * 2 = 10.0V (forzado por bvoltage B1)
         let v3 = *result.node_voltages.get("3").unwrap();
-        assert!((v3 - 10.0).abs() < 0.1, "V(3) debería ser ~10.0V (B1 = V(1)*2), obtenido: {}", v3);
+        assert!(
+            (v3 - 10.0).abs() < 0.1,
+            "V(3) debería ser ~10.0V (B1 = V(1)*2), obtenido: {}",
+            v3
+        );
     }
 
     #[test]
@@ -2612,9 +3053,13 @@ mod tests {
 
         // V(1) debería ser 5.0V
         let v1 = *result.node_voltages.get("1").unwrap();
-        assert!((v1 - 5.0).abs() < 0.01, "V(1) debería ser ~5.0V, obtenido: {}", v1);
+        assert!(
+            (v1 - 5.0).abs() < 0.01,
+            "V(1) debería ser ~5.0V, obtenido: {}",
+            v1
+        );
 
-        // V(2): R1 (1k) conecta V(1)=5V a nodo 2. En nodo 2 hay R2 (1k) a GND y 
+        // V(2): R1 (1k) conecta V(1)=5V a nodo 2. En nodo 2 hay R2 (1k) a GND y
         // bcurrent que drena V(2)/1000 A extra. Sin bcurrent: V(2) = 2.5V.
         // Con bcurrent: la carga efectiva extra es como otra resistencia de 1k en paralelo con R2.
         // R_eq_load = R2 || 1k_equivalente_bcurrent, pero es no lineal.
@@ -2624,7 +3069,12 @@ mod tests {
         // 5 - V2 = 2*V2 -> V2 = 5/3 ≈ 1.667V
         let v2 = *result.node_voltages.get("2").unwrap();
         let expected_v2 = 5.0 / 3.0;
-        assert!((v2 - expected_v2).abs() < 0.1, "V(2) debería ser ~{:.3}V con bcurrent, obtenido: {}", expected_v2, v2);
+        assert!(
+            (v2 - expected_v2).abs() < 0.1,
+            "V(2) debería ser ~{:.3}V con bcurrent, obtenido: {}",
+            expected_v2,
+            v2
+        );
     }
 
     // ======================================================================
@@ -2634,16 +3084,24 @@ mod tests {
     #[test]
     fn test_b_source_ad_findiff_codegen_empty_grad() {
         let mut cache = HashMap::new();
-        let nv = [("1".to_string(), 5.0), ("2".to_string(), 3.0)].into_iter().collect();
+        let nv = [("1".to_string(), 5.0), ("2".to_string(), 3.0)]
+            .into_iter()
+            .collect();
         let bc = HashMap::new();
         let ad = evaluate_expression_ad("42.0", &nv, &bc, 0.0, &mut cache).unwrap();
-        assert!(ad.grad.is_empty(), "Constante 42 debería tener grad vacío, tiene {:?}", ad.grad);
+        assert!(
+            ad.grad.is_empty(),
+            "Constante 42 debería tener grad vacío, tiene {:?}",
+            ad.grad
+        );
     }
 
     #[test]
     fn test_b_source_ad_findiff_codegen_voltage_ref() {
         let mut cache = HashMap::new();
-        let nv = [("1".to_string(), 5.0), ("2".to_string(), 3.0)].into_iter().collect();
+        let nv = [("1".to_string(), 5.0), ("2".to_string(), 3.0)]
+            .into_iter()
+            .collect();
         let bc = HashMap::new();
         let ad = evaluate_expression_ad("V(1)", &nv, &bc, 0.0, &mut cache).unwrap();
         assert_eq!(ad.value, 5.0, "V(1) debería ser 5.0");
@@ -2653,10 +3111,16 @@ mod tests {
     #[test]
     fn test_b_source_ad_findiff_codegen_vdiff_grad() {
         let mut cache = HashMap::new();
-        let nv = [("1".to_string(), 7.0), ("2".to_string(), 2.0)].into_iter().collect();
+        let nv = [("1".to_string(), 7.0), ("2".to_string(), 2.0)]
+            .into_iter()
+            .collect();
         let bc = HashMap::new();
         let ad = evaluate_expression_ad("V(1,2)", &nv, &bc, 0.0, &mut cache).unwrap();
-        assert!((ad.value - 5.0).abs() < 1e-12, "V(1,2) debería ser 5.0, es {}", ad.value);
+        assert!(
+            (ad.value - 5.0).abs() < 1e-12,
+            "V(1,2) debería ser 5.0, es {}",
+            ad.value
+        );
         assert_eq!(ad.grad.get(&1), Some(&1.0), "dV(1,2)/dV1 debería ser 1");
         assert_eq!(ad.grad.get(&2), Some(&-1.0), "dV(1,2)/dV2 debería ser -1");
     }
@@ -2664,26 +3128,49 @@ mod tests {
     #[test]
     fn test_b_source_ad_findiff_codegen_product_rule() {
         let mut cache = HashMap::new();
-        let nv = [("1".to_string(), 3.0), ("2".to_string(), 4.0)].into_iter().collect();
+        let nv = [("1".to_string(), 3.0), ("2".to_string(), 4.0)]
+            .into_iter()
+            .collect();
         let bc = HashMap::new();
         let ad = evaluate_expression_ad("V(1)*V(2)", &nv, &bc, 0.0, &mut cache).unwrap();
-        assert!((ad.value - 12.0).abs() < 1e-12, "V(1)*V(2) debería ser 12, es {}", ad.value);
+        assert!(
+            (ad.value - 12.0).abs() < 1e-12,
+            "V(1)*V(2) debería ser 12, es {}",
+            ad.value
+        );
         // d/dV1 = V(2) = 4, d/dV2 = V(1) = 3
-        assert!((ad.grad.get(&1).unwrap_or(&0.0) - 4.0).abs() < 1e-12, "dV/dV1 debería ser 4");
-        assert!((ad.grad.get(&2).unwrap_or(&0.0) - 3.0).abs() < 1e-12, "dV/dV2 debería ser 3");
+        assert!(
+            (ad.grad.get(&1).unwrap_or(&0.0) - 4.0).abs() < 1e-12,
+            "dV/dV1 debería ser 4"
+        );
+        assert!(
+            (ad.grad.get(&2).unwrap_or(&0.0) - 3.0).abs() < 1e-12,
+            "dV/dV2 debería ser 3"
+        );
     }
 
     #[test]
     fn test_b_source_ad_findiff_codegen_chain_rule() {
         let mut cache = HashMap::new();
-        let nv = [("1".to_string(), std::f64::consts::FRAC_PI_4)].into_iter().collect();
+        let nv = [("1".to_string(), std::f64::consts::FRAC_PI_4)]
+            .into_iter()
+            .collect();
         let bc = HashMap::new();
         let ad = evaluate_expression_ad("sin(V(1))", &nv, &bc, 0.0, &mut cache).unwrap();
         let expected_val = (std::f64::consts::FRAC_PI_4).sin();
-        assert!((ad.value - expected_val).abs() < 1e-12, "sin(V(1)) debería ser {}, es {}", expected_val, ad.value);
+        assert!(
+            (ad.value - expected_val).abs() < 1e-12,
+            "sin(V(1)) debería ser {}, es {}",
+            expected_val,
+            ad.value
+        );
         let expected_deriv = (std::f64::consts::FRAC_PI_4).cos();
-        assert!((ad.grad.get(&1).unwrap_or(&0.0) - expected_deriv).abs() < 1e-12,
-            "d(sin(V1))/dV1 debería ser {}, es {}", expected_deriv, ad.grad.get(&1).unwrap_or(&0.0));
+        assert!(
+            (ad.grad.get(&1).unwrap_or(&0.0) - expected_deriv).abs() < 1e-12,
+            "d(sin(V1))/dV1 debería ser {}, es {}",
+            expected_deriv,
+            ad.grad.get(&1).unwrap_or(&0.0)
+        );
     }
 
     #[test]
@@ -2693,17 +3180,26 @@ mod tests {
         let v0 = 2.0;
         let nv = [("1".to_string(), v0)].into_iter().collect();
         let bc = HashMap::new();
-        let ad = evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv, &bc, 0.0, &mut cache).unwrap();
+        let ad =
+            evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv, &bc, 0.0, &mut cache).unwrap();
         let analytic_deriv = ad.grad.get(&1).unwrap_or(&0.0);
 
         let nv_plus = [("1".to_string(), v0 + eps)].into_iter().collect();
-        let ad_plus = evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv_plus, &bc, 0.0, &mut cache).unwrap();
+        let ad_plus =
+            evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv_plus, &bc, 0.0, &mut cache)
+                .unwrap();
         let nv_minus = [("1".to_string(), v0 - eps)].into_iter().collect();
-        let ad_minus = evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv_minus, &bc, 0.0, &mut cache).unwrap();
+        let ad_minus =
+            evaluate_expression_ad("V(1)*V(1) + exp(V(1))", &nv_minus, &bc, 0.0, &mut cache)
+                .unwrap();
         let fd_deriv = (ad_plus.value - ad_minus.value) / (2.0 * eps);
 
-        assert!((analytic_deriv - fd_deriv).abs() < 1e-6,
-            "Analytic dV/dV1={} no coincide con FD={}", analytic_deriv, fd_deriv);
+        assert!(
+            (analytic_deriv - fd_deriv).abs() < 1e-6,
+            "Analytic dV/dV1={} no coincide con FD={}",
+            analytic_deriv,
+            fd_deriv
+        );
     }
 
     #[test]
@@ -2737,7 +3233,11 @@ mod tests {
         };
         let result = solve_dc_circuit(&netlist).unwrap();
         let v2 = *result.node_voltages.get("2").unwrap();
-        assert!((v2 - 5.0).abs() < 0.1, "V(2) con bvoltage AD debería ser ~5.0V, es {}", v2);
+        assert!(
+            (v2 - 5.0).abs() < 0.1,
+            "V(2) con bvoltage AD debería ser ~5.0V, es {}",
+            v2
+        );
     }
 
     #[test]
@@ -2779,8 +3279,12 @@ mod tests {
         let result = solve_dc_circuit(&netlist).unwrap();
         let v2 = *result.node_voltages.get("2").unwrap();
         let expected_v2 = 5.0 / 3.0;
-        assert!((v2 - expected_v2).abs() < 0.1,
-            "V(2) con bcurrent AD debería ser ~{:.3}V, es {}", expected_v2, v2);
+        assert!(
+            (v2 - expected_v2).abs() < 0.1,
+            "V(2) con bcurrent AD debería ser ~{:.3}V, es {}",
+            expected_v2,
+            v2
+        );
     }
 
     #[test]
@@ -2824,63 +3328,109 @@ mod tests {
         };
 
         let settings = TransientSettings {
-            dt: 1e-5,       // 10 μs
-            t_max: 2e-3,    // 2 ms — 2 ciclos completos de la senoidal a 1 kHz
+            dt: 1e-5,    // 10 μs
+            t_max: 2e-3, // 2 ms — 2 ciclos completos de la senoidal a 1 kHz
             fixed_step: Some(true),
             integration_method: Some("euler".to_string()),
         };
 
         let results = solve_transient_circuit(&netlist, &settings).unwrap();
-        assert!(results.len() > 50, "Debería haber > 50 pasos, hay: {}", results.len());
+        assert!(
+            results.len() > 50,
+            "Debería haber > 50 pasos, hay: {}",
+            results.len()
+        );
 
         // Verificar que la simulación con self-heating produce resultados estables
         let last = results.last().unwrap();
         let v2_last = *last.node_voltages.get("2").unwrap();
         // V(2) debe estar en un rango razonable (clip del diodo entre -0.7V y ~5V)
-        assert!(v2_last > -1.0 && v2_last < 6.0, "V(2) fuera de rango, obtenido: {}", v2_last);
+        assert!(
+            v2_last > -1.0 && v2_last < 6.0,
+            "V(2) fuera de rango, obtenido: {}",
+            v2_last
+        );
 
         // Verificar que hay corriente no trivial en algún paso (semiciclo positivo)
         let mut found_current = false;
         for step in &results {
             let i_v1 = step.branch_currents.get("V1").unwrap().abs();
-            if i_v1 > 0.001 { // > 1 mA
+            if i_v1 > 0.001 {
+                // > 1 mA
                 found_current = true;
                 break;
             }
         }
-        assert!(found_current, "El diodo debería conducir corriente > 1 mA en el semiciclo positivo");
+        assert!(
+            found_current,
+            "El diodo debería conducir corriente > 1 mA en el semiciclo positivo"
+        );
 
         // Verificar que get_thermal_parameters_junction produce valores físicamente sensatos
         let (vt_310, is_310) = get_thermal_parameters_junction(310.0, None);
         let (vt_300, is_300) = get_thermal_parameters_junction(300.0, None);
         // A mayor temperatura: Vt debe aumentar (k*T/q crece) e Is debe aumentar (más portadores)
-        assert!(vt_310 > vt_300, "Vt(310K) = {} debería ser > Vt(300K) = {}", vt_310, vt_300);
-        assert!(is_310 > is_300, "Is(310K) = {} debería ser > Is(300K) = {}", is_310, is_300);
+        assert!(
+            vt_310 > vt_300,
+            "Vt(310K) = {} debería ser > Vt(300K) = {}",
+            vt_310,
+            vt_300
+        );
+        assert!(
+            is_310 > is_300,
+            "Is(310K) = {} debería ser > Is(300K) = {}",
+            is_310,
+            is_300
+        );
         // Verificar ratio: Is crece ~4x por cada 10°C para silicio con modelo SPICE (T/T0)^3 * exp(-Eg*q/k*(1/T-1/T0))
         let is_ratio = is_310 / is_300;
-        assert!(is_ratio > 2.0 && is_ratio < 6.0, 
-            "Is(310K)/Is(300K) = {:.3}, debería estar entre 2.0 y 6.0 para silicio (SPICE)", is_ratio);
+        assert!(
+            is_ratio > 2.0 && is_ratio < 6.0,
+            "Is(310K)/Is(300K) = {:.3}, debería estar entre 2.0 y 6.0 para silicio (SPICE)",
+            is_ratio
+        );
     }
 
     #[test]
     fn test_bsim4_nmos_gate_leakage() {
         let w = Some(10e-6);
         let l = Some(0.045e-6); // canal corto de 45nm
-        
-        let (_ids_low, _gm_low, _gds_low, igs_low, _gg_low) = evaluate_bsim4_nmos(0.2, 0.5, 0.0, 0.35, w, l);
-        let (_ids_high, _gm_high, _gds_high, igs_high, gg_high) = evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, w, l);
+
+        let (_ids_low, _gm_low, _gds_low, igs_low, _gg_low) =
+            evaluate_bsim4_nmos(0.2, 0.5, 0.0, 0.35, w, l);
+        let (_ids_high, _gm_high, _gds_high, igs_high, gg_high) =
+            evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, w, l);
 
         // A Vgs = 0.2V, Ig es extremadamente bajo o cero:
-        assert!(igs_low < 1e-12, "Ig a baja tensión debería ser < 1 pA, obtenido: {}", igs_low);
-        
+        assert!(
+            igs_low < 1e-12,
+            "Ig a baja tensión debería ser < 1 pA, obtenido: {}",
+            igs_low
+        );
+
         // A Vgs = 1.0V, Ig debe crecer de forma cuántica debido a la capa de óxido ultrafina de 1.4nm:
-        assert!(igs_high > 1e-9, "Ig a nominal debería ser > 1 nA, obtenido: {}", igs_high);
-        assert!(gg_high > 1e-9, "Conductancia de compuerta gg a nominal debería ser > 1 nS, obtenido: {}", gg_high);
+        assert!(
+            igs_high > 1e-9,
+            "Ig a nominal debería ser > 1 nA, obtenido: {}",
+            igs_high
+        );
+        assert!(
+            gg_high > 1e-9,
+            "Conductancia de compuerta gg a nominal debería ser > 1 nS, obtenido: {}",
+            gg_high
+        );
 
         // Verificamos escalado geométrico: duplicar W debe duplicar exactamente Ig y gg
-        let (_, _, _, igs_high_double, gg_high_double) = evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, Some(20e-6), l);
-        assert!((igs_high_double - 2.0 * igs_high).abs() < 1e-15, "Duplicar W debería duplicar Ig");
-        assert!((gg_high_double - 2.0 * gg_high).abs() < 1e-15, "Duplicar W debería duplicar gg");
+        let (_, _, _, igs_high_double, gg_high_double) =
+            evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, Some(20e-6), l);
+        assert!(
+            (igs_high_double - 2.0 * igs_high).abs() < 1e-15,
+            "Duplicar W debería duplicar Ig"
+        );
+        assert!(
+            (gg_high_double - 2.0 * gg_high).abs() < 1e-15,
+            "Duplicar W debería duplicar gg"
+        );
     }
 
     #[test]
@@ -2893,10 +3443,19 @@ mod tests {
         let (isd_sat, _, gds_sat, _, _) = evaluate_bsim4_pmos(1.0, 1.0, 0.0, 0.35, w, l);
 
         // La corriente de saturación debe ser mayor que la corriente lineal:
-        assert!(isd_sat > isd_lin, "Corriente en saturación {} debe ser mayor que en triodo {}", isd_sat, isd_lin);
-        
+        assert!(
+            isd_sat > isd_lin,
+            "Corriente en saturación {} debe ser mayor que en triodo {}",
+            isd_sat,
+            isd_lin
+        );
+
         // Gracias a CLM (lambda_clm = 0.08), la conductancia de salida gds en saturación no es cero:
-        assert!(gds_sat > 1e-9, "Gds en saturación debe ser mayor a 1 nS debido a CLM, obtenido: {}", gds_sat);
+        assert!(
+            gds_sat > 1e-9,
+            "Gds en saturación debe ser mayor a 1 nS debido a CLM, obtenido: {}",
+            gds_sat
+        );
     }
 
     #[test]
@@ -2925,7 +3484,11 @@ mod tests {
         assert_eq!(d_si.diode_is, Some(1e-14));
         assert_eq!(d_si.diode_n, Some(1.0));
 
-        let d_schottky = netlist.components.iter().find(|c| c.id == "DSchottky").unwrap();
+        let d_schottky = netlist
+            .components
+            .iter()
+            .find(|c| c.id == "DSchottky")
+            .unwrap();
         assert_eq!(d_schottky.diode_is, Some(1e-7));
         assert_eq!(d_schottky.diode_n, Some(1.0));
 
@@ -2936,9 +3499,21 @@ mod tests {
 
         // Un diodo de silicio nominal a 1-5 mA tiene una caída de ~0.7V
         // Un diodo Schottky nominal a 1-5 mA tiene una caída de ~0.3V
-        assert!(v_si > 0.6 && v_si < 0.8, "El voltaje de silicio debería ser ~0.7V, obtenido: {}", v_si);
-        assert!(v_schottky > 0.2 && v_schottky < 0.45, "El voltaje de Schottky debería ser ~0.3V, obtenido: {}", v_schottky);
-        assert!(v_si - v_schottky > 0.25, "La diferencia de tensión debería ser > 0.25V, obtenido: {}", v_si - v_schottky);
+        assert!(
+            v_si > 0.6 && v_si < 0.8,
+            "El voltaje de silicio debería ser ~0.7V, obtenido: {}",
+            v_si
+        );
+        assert!(
+            v_schottky > 0.2 && v_schottky < 0.45,
+            "El voltaje de Schottky debería ser ~0.3V, obtenido: {}",
+            v_schottky
+        );
+        assert!(
+            v_si - v_schottky > 0.25,
+            "La diferencia de tensión debería ser > 0.25V, obtenido: {}",
+            v_si - v_schottky
+        );
     }
 
     #[test]
@@ -2985,7 +3560,10 @@ mod tests {
         let v_c1 = *result.node_voltages.get("3").unwrap();
         let v_c2 = *result.node_voltages.get("4").unwrap();
 
-        println!("VC1 (Pequeña señal): {} V, VC2 (Potencia): {} V", v_c1, v_c2);
+        println!(
+            "VC1 (Pequeña señal): {} V, VC2 (Potencia): {} V",
+            v_c1, v_c2
+        );
         // Q1 al tener bf de 200 conduce más corriente que Q2 con bf de 50,
         // por ende VC1 es menor que VC2.
         assert!(v_c1 < v_c2, "Q1 con bf de 200 debería conducir más y bajar el voltaje de colector más que Q2 con bf de 50");
@@ -3027,8 +3605,14 @@ mod tests {
         // El diodo con resistencia de serie de 5 ohms experimenta una caída de tensión externa mucho mayor
         // ya que V_ext = V_junction + I * Rs
         println!("D1 ext: {} V, D2 ext: {} V", v_d1_ext, v_d2_ext);
-        assert!(v_d1_ext > 0.65 && v_d1_ext < 0.85, "El diodo ideal debería estar clampado a ~0.7V-0.8V");
-        assert!(v_d2_ext > v_d1_ext + 0.15, "El diodo con Rs debería tener una tensión externa sustancialmente mayor");
+        assert!(
+            v_d1_ext > 0.65 && v_d1_ext < 0.85,
+            "El diodo ideal debería estar clampado a ~0.7V-0.8V"
+        );
+        assert!(
+            v_d2_ext > v_d1_ext + 0.15,
+            "El diodo con Rs debería tener una tensión externa sustancialmente mayor"
+        );
     }
 
     #[test]
@@ -3059,7 +3643,11 @@ mod tests {
 
         println!("Voltaje Zener: {} V", v_zener);
         // Como la entrada es -10V, y el Zener regula a -5.1V, el nodo 2 debería estar clampado a aprox -5.1V
-        assert!(v_zener < -4.8 && v_zener > -5.4, "El voltaje Zener regulado debería ser de aprox -5.1V, obtenido: {}", v_zener);
+        assert!(
+            v_zener < -4.8 && v_zener > -5.4,
+            "El voltaje Zener regulado debería ser de aprox -5.1V, obtenido: {}",
+            v_zener
+        );
     }
 
     #[test]
@@ -3123,14 +3711,21 @@ mod tests {
         };
 
         let result = solve_dc_circuit(&netlist);
-        assert!(result.is_ok(), "La simulación del JFET debe converger en DC");
+        assert!(
+            result.is_ok(),
+            "La simulación del JFET debe converger en DC"
+        );
 
         // Verificar analíticamente: con Vgs=0, Vto=-2, Vds=5 (saturación ya que Vds > Vgs-Vto = 2)
         // Ids = beta * (Vgs - Vto)^2 * (1 + lambda * Vds) = 1e-3 * 4 * (1 + 0.1) = 4.4 mA
         // Este es un test de consistencia, no de valor exacto (el circuito tiene interacciones)
         let data = result.unwrap();
         let v_drain = *data.node_voltages.get("1").unwrap_or(&0.0);
-        assert!(v_drain > 0.0, "El voltaje de drenador del JFET debe ser positivo, obtenido: {}", v_drain);
+        assert!(
+            v_drain > 0.0,
+            "El voltaje de drenador del JFET debe ser positivo, obtenido: {}",
+            v_drain
+        );
 
         // Verificar la región de corte: con Vgs <= Vto, la corriente debe ser ~0
         let netlist_cutoff = CircuitNetlist {
@@ -3177,7 +3772,10 @@ mod tests {
         };
 
         let result_cutoff = solve_dc_circuit(&netlist_cutoff);
-        assert!(result_cutoff.is_ok(), "La simulación JFET en corte debe converger");
+        assert!(
+            result_cutoff.is_ok(),
+            "La simulación JFET en corte debe converger"
+        );
     }
 
     #[test]
@@ -3228,12 +3826,26 @@ mod tests {
 
         // Simulación a temperatura nominal (27°C)
         let (ids_room, gm_room, _) = evaluate_bsim3_nmos(
-            vgs, vds, vbs, vth, Some(10.0e-6), Some(0.18e-6), Some(300.15), None
+            vgs,
+            vds,
+            vbs,
+            vth,
+            Some(10.0e-6),
+            Some(0.18e-6),
+            Some(300.15),
+            None,
         );
 
         // Simulación a alta temperatura (125°C = 398.15K)
         let (ids_hot, gm_hot, _) = evaluate_bsim3_nmos(
-            vgs, vds, vbs, vth, Some(10.0e-6), Some(0.18e-6), Some(398.15), None
+            vgs,
+            vds,
+            vbs,
+            vth,
+            Some(10.0e-6),
+            Some(0.18e-6),
+            Some(398.15),
+            None,
         );
 
         // A temperatura más alta:
@@ -3241,7 +3853,10 @@ mod tests {
         // 2. La movilidad DECRECE (ute=-1.5) → tiende a DECREMENTAR corriente
         // El efecto neto a alta temperatura es que la corriente DISMINUYE porque la
         // degradación de movilidad domina sobre la reducción de Vth
-        assert!(ids_room > 0.0, "Ids a temperatura ambiente debe ser positiva");
+        assert!(
+            ids_room > 0.0,
+            "Ids a temperatura ambiente debe ser positiva"
+        );
         assert!(ids_hot > 0.0, "Ids a alta temperatura debe ser positiva");
 
         // La corriente a alta temperatura debe ser diferente de la corriente a temp ambiente
@@ -3258,10 +3873,24 @@ mod tests {
 
         // Verificar PMOS también
         let (isd_room_p, _, _) = evaluate_bsim3_pmos(
-            vgs, vds, vbs, vth, Some(10.0e-6), Some(0.18e-6), Some(300.15), None
+            vgs,
+            vds,
+            vbs,
+            vth,
+            Some(10.0e-6),
+            Some(0.18e-6),
+            Some(300.15),
+            None,
         );
         let (isd_hot_p, _, _) = evaluate_bsim3_pmos(
-            vgs, vds, vbs, vth, Some(10.0e-6), Some(0.18e-6), Some(398.15), None
+            vgs,
+            vds,
+            vbs,
+            vth,
+            Some(10.0e-6),
+            Some(0.18e-6),
+            Some(398.15),
+            None,
         );
 
         let ratio_p = isd_hot_p / isd_room_p;
@@ -3283,7 +3912,11 @@ mod tests {
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
         let res = solve_dc_circuit(&parsed).unwrap();
         let v1 = *res.node_voltages.get("1").unwrap();
-        assert!((v1 - 10.0).abs() < 1e-4, "Nodo 1 debería estar a 10.0V, obtenido: {}", v1);
+        assert!(
+            (v1 - 10.0).abs() < 1e-4,
+            "Nodo 1 debería estar a 10.0V, obtenido: {}",
+            v1
+        );
     }
 
     #[test]
@@ -3301,8 +3934,16 @@ mod tests {
         let res = solve_dc_circuit(&parsed).unwrap();
         let v2 = *res.node_voltages.get("2").unwrap();
         let v3 = *res.node_voltages.get("3").unwrap();
-        assert!((v2 - 20.0).abs() < 1e-4, "VCVS (E1): Nodo 2 debería estar a 20V, obtenido: {}", v2);
-        assert!((v3 - 4.0).abs() < 1e-4, "VCCS (G1): Nodo 3 debería estar a 4V, obtenido: {}", v3);
+        assert!(
+            (v2 - 20.0).abs() < 1e-4,
+            "VCVS (E1): Nodo 2 debería estar a 20V, obtenido: {}",
+            v2
+        );
+        assert!(
+            (v3 - 4.0).abs() < 1e-4,
+            "VCCS (G1): Nodo 3 debería estar a 4V, obtenido: {}",
+            v3
+        );
     }
 
     #[test]
@@ -3321,8 +3962,16 @@ mod tests {
         let res = solve_dc_circuit(&parsed).unwrap();
         let v2 = *res.node_voltages.get("2").unwrap();
         let v3 = *res.node_voltages.get("3").unwrap();
-        assert!((v2.abs() - 2.5).abs() < 1e-4, "CCCS: Nodo 2 absoluto debería ser 2.5V, obtenido: {}", v2);
-        assert!((v3.abs() - 0.5).abs() < 1e-4, "CCVS: Nodo 3 absoluto debería ser 0.5V, obtenido: {}", v3);
+        assert!(
+            (v2.abs() - 2.5).abs() < 1e-4,
+            "CCCS: Nodo 2 absoluto debería ser 2.5V, obtenido: {}",
+            v2
+        );
+        assert!(
+            (v3.abs() - 0.5).abs() < 1e-4,
+            "CCVS: Nodo 3 absoluto debería ser 0.5V, obtenido: {}",
+            v3
+        );
     }
 
     #[test]
@@ -3341,15 +3990,22 @@ mod tests {
         Vmain 1 0 5
         ";
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
-        
+
         // Verificar que Flocal ha sido aplanada a X1.Flocal y que su controlador es X1.Vlocal
-        let flocal = parsed.components.iter().find(|c| c.id == "X1.Flocal").unwrap();
+        let flocal = parsed
+            .components
+            .iter()
+            .find(|c| c.id == "X1.Flocal")
+            .unwrap();
         assert_eq!(flocal.comp_type, "cccs");
         assert_eq!(flocal.controlling_source, Some("X1.Vlocal".to_string()));
-        
+
         let res = solve_dc_circuit(&parsed).unwrap();
         let v2 = *res.node_voltages.get("2").unwrap();
-        assert!(v2.abs() > 0.0, "La salida del subcircuito con CCCS debe simular correctamente");
+        assert!(
+            v2.abs() > 0.0,
+            "La salida del subcircuito con CCCS debe simular correctamente"
+        );
     }
 
     #[test]
@@ -3388,7 +4044,10 @@ mod tests {
             op_guess: None,
         };
         let res = solve_ac_sweep(&parsed, &settings).unwrap();
-        assert!(!res.frequencies.is_empty(), "AC sweep debe generar frecuencias");
+        assert!(
+            !res.frequencies.is_empty(),
+            "AC sweep debe generar frecuencias"
+        );
     }
 
     #[test]
@@ -3401,14 +4060,18 @@ mod tests {
         R1 1 0 {Rval}
         ";
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
-        
+
         let r1 = parsed.components.iter().find(|c| c.id == "R1").unwrap();
         assert_eq!(r1.comp_type, "resistor");
         assert_eq!(r1.value, 2000.0);
 
         let res = solve_dc_circuit(&parsed).unwrap();
         let v1 = *res.node_voltages.get("1").unwrap();
-        assert!((v1 - 10.0).abs() < 1e-4, "V1 debe tener el valor parametrizado globalmente a 10V, obtenido: {}", v1);
+        assert!(
+            (v1 - 10.0).abs() < 1e-4,
+            "V1 debe tener el valor parametrizado globalmente a 10V, obtenido: {}",
+            v1
+        );
     }
 
     #[test]
@@ -3420,7 +4083,11 @@ mod tests {
         V1 1 0 5
         ";
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
-        assert_eq!(parsed.temperature, Some(125.0), "La temperatura global debe ser 125.0");
+        assert_eq!(
+            parsed.temperature,
+            Some(125.0),
+            "La temperatura global debe ser 125.0"
+        );
     }
 
     #[test]
@@ -3444,7 +4111,10 @@ mod tests {
         let first_step = &res[0];
         let v1 = *first_step.node_voltages.get("1").unwrap();
         let v2 = *first_step.node_voltages.get("2").unwrap();
-        assert!((v1 - v2 - 1.8).abs() < 0.1, "La diferencia de potencial del capacitor debe iniciarse en 1.8V");
+        assert!(
+            (v1 - v2 - 1.8).abs() < 0.1,
+            "La diferencia de potencial del capacitor debe iniciarse en 1.8V"
+        );
     }
 
     #[test]
@@ -3464,7 +4134,10 @@ mod tests {
             integration_method: Some("gear2".to_string()),
         };
         let res = solve_transient_circuit(&parsed, &settings).unwrap();
-        assert!(!res.is_empty(), "La simulación transitoria adaptativa por LTE debe completarse exitosamente");
+        assert!(
+            !res.is_empty(),
+            "La simulación transitoria adaptativa por LTE debe completarse exitosamente"
+        );
     }
 
     #[test]
@@ -3478,12 +4151,20 @@ mod tests {
         R2 3 0 1k
         ";
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
-        
+
         let res = solve_dc_circuit(&parsed).unwrap();
         let v2 = *res.node_voltages.get("2").unwrap();
         let v3 = *res.node_voltages.get("3").unwrap();
-        assert!(v2.abs() < 1e-3, "V2 debería ser prácticamente 0V por bleed resistor, obtenido: {}", v2);
-        assert!(v3.abs() < 1e-3, "V3 debería ser prácticamente 0V por bleed resistor, obtenido: {}", v3);
+        assert!(
+            v2.abs() < 1e-3,
+            "V2 debería ser prácticamente 0V por bleed resistor, obtenido: {}",
+            v2
+        );
+        assert!(
+            v3.abs() < 1e-3,
+            "V3 debería ser prácticamente 0V por bleed resistor, obtenido: {}",
+            v3
+        );
     }
 
     #[test]
@@ -3511,13 +4192,15 @@ mod tests {
     #[test]
     fn test_sparse_markowitz_vlsi_performance() {
         use crate::parser::parse_spice_netlist_to_native;
-        
+
         // Construir un circuito de gran escala (VLSI) con 150 nodos en escalera
-        let mut netlist_str = String::from("
+        let mut netlist_str = String::from(
+            "
         * VLSI Ladder Netlist
         V1 1 0 10.0
-        ");
-        
+        ",
+        );
+
         let num_nodes = 150;
         for i in 1..num_nodes {
             netlist_str.push_str(&format!("R{} {} {} 1k\n", i, i, i + 1));
@@ -3533,42 +4216,52 @@ mod tests {
         let res = solve_dc_circuit(&parsed).unwrap();
         let elapsed = start_time.elapsed();
 
-        println!("Tiempo de resolución sparse de {} nodos con Markowitz: {:?}", num_nodes, elapsed);
+        println!(
+            "Tiempo de resolución sparse de {} nodos con Markowitz: {:?}",
+            num_nodes, elapsed
+        );
 
         // Validaciones de corrección de voltajes nodal
         let v1 = *res.node_voltages.get("1").unwrap();
         let v_last = *res.node_voltages.get(&num_nodes.to_string()).unwrap();
 
-        assert!((v1 - 10.0).abs() < 1e-12, "El voltaje de entrada debería ser 10.0V");
-        assert!(v_last > 0.0 && v_last < 10.0, "El voltaje al final de la escalera debe atenuarse, obtenido: {}", v_last);
+        assert!(
+            (v1 - 10.0).abs() < 1e-12,
+            "El voltaje de entrada debería ser 10.0V"
+        );
+        assert!(
+            v_last > 0.0 && v_last < 10.0,
+            "El voltaje al final de la escalera debe atenuarse, obtenido: {}",
+            v_last
+        );
     }
 
     #[test]
     fn test_sparse_csc_numerical_factorize() {
-        use crate::sparse_csc::{SparseMatrixCSC, SymbolicLU, NumericLUWorkspace};
+        use crate::sparse_csc::{NumericLUWorkspace, SparseMatrixCSC, SymbolicLU};
         use nalgebra::DVector;
 
         // 1. Definir un sistema MNA disperso no trivial con una matriz diagonalmente dominante y fill-in
         let size = 5;
         let mut matrix_a = SparseMatrix::new(size);
-        
+
         // Estampar valores no triviales
         matrix_a.add_element(0, 0, 4.0);
         matrix_a.add_element(0, 1, -1.0);
         matrix_a.add_element(0, 3, -1.0);
-        
+
         matrix_a.add_element(1, 0, -1.0);
         matrix_a.add_element(1, 1, 3.0);
         matrix_a.add_element(1, 2, -1.0);
-        
+
         matrix_a.add_element(2, 1, -1.0);
         matrix_a.add_element(2, 2, 4.0);
         matrix_a.add_element(2, 4, -2.0);
-        
+
         matrix_a.add_element(3, 0, -1.0);
         matrix_a.add_element(3, 3, 3.0);
         matrix_a.add_element(3, 4, -1.0);
-        
+
         matrix_a.add_element(4, 2, -2.0);
         matrix_a.add_element(4, 3, -1.0);
         matrix_a.add_element(4, 4, 5.0);
@@ -3584,39 +4277,48 @@ mod tests {
         let symbolic = SymbolicLU::analyze(&matrix_a);
         let mut workspace = NumericLUWorkspace::new(&symbolic);
         let matrix_csc = SparseMatrixCSC::from_sparse(&matrix_a);
-        
-        matrix_csc.left_looking_factorize(&symbolic, &mut workspace).unwrap();
+
+        matrix_csc
+            .left_looking_factorize(&symbolic, &mut workspace)
+            .unwrap();
         let sol_csc = symbolic.solve(&workspace, &b).unwrap();
 
         // 4. Comparar ambas soluciones
         for i in 0..size {
             let diff = (sol_classic[i] - sol_csc[i]).abs();
-            assert!(diff < 1e-12, "Discrepancia en la solución en el índice {}: clásica = {}, csc = {}, diff = {}", i, sol_classic[i], sol_csc[i], diff);
+            assert!(
+                diff < 1e-12,
+                "Discrepancia en la solución en el índice {}: clásica = {}, csc = {}, diff = {}",
+                i,
+                sol_classic[i],
+                sol_csc[i],
+                diff
+            );
         }
     }
 
     #[test]
     fn test_complex_sparse_csc_numerical_factorize() {
-        use crate::sparse_csc::{ComplexSparseMatrixCSC, SymbolicLU, ComplexNumericLUWorkspace};
-        use num_complex::Complex;
+        use crate::sparse_csc::{ComplexNumericLUWorkspace, ComplexSparseMatrixCSC, SymbolicLU};
         use nalgebra::DVector;
+        use num_complex::Complex;
 
         let size = 4;
         let mut matrix_a = ComplexSparseMatrix::new(size);
-        
+
         // Estampar elementos complejos no triviales
         matrix_a.add_element(0, 0, Complex::new(4.0, 1.0));
         matrix_a.add_element(0, 1, Complex::new(-1.0, 0.0));
         matrix_a.add_element(0, 2, Complex::new(0.0, -2.0));
-        
+
         matrix_a.add_element(1, 0, Complex::new(-1.0, 0.0));
         matrix_a.add_element(1, 1, Complex::new(3.0, 2.0));
         matrix_a.add_element(1, 3, Complex::new(-1.0, 1.0));
-        
+
         matrix_a.add_element(2, 0, Complex::new(0.0, -2.0));
         matrix_a.add_element(2, 2, Complex::new(5.0, 0.0));
         matrix_a.add_element(2, 3, Complex::new(-2.0, -1.0));
-        
+
         matrix_a.add_element(3, 1, Complex::new(-1.0, 1.0));
         matrix_a.add_element(3, 2, Complex::new(-2.0, -1.0));
         matrix_a.add_element(3, 3, Complex::new(6.0, 4.0));
@@ -3646,7 +4348,9 @@ mod tests {
 
         // Factorizar y resolver
         matrix_csc.update_from_sparse(&matrix_a);
-        matrix_csc.left_looking_factorize(&symbolic, &mut workspace).unwrap();
+        matrix_csc
+            .left_looking_factorize(&symbolic, &mut workspace)
+            .unwrap();
         let sol_csc = symbolic.solve_complex(&workspace, &b).unwrap();
 
         // Comparar soluciones con tolerancia estricta
@@ -3658,8 +4362,8 @@ mod tests {
 
     #[test]
     fn test_schur_parallel_solver_correctness() {
+        use crate::sparse_csc::{NumericLUWorkspace, SparseMatrixCSC, SymbolicLU};
         use crate::sparse_parallel::SchurParallelSolver;
-        use crate::sparse_csc::{SparseMatrixCSC, SymbolicLU, NumericLUWorkspace};
         use nalgebra::DVector;
 
         // Construir un circuito particionable sintético de tamaño 45 (14 bloques locales de tamaño 3 + 3 nodos de borde)
@@ -3705,13 +4409,21 @@ mod tests {
         let symbolic_seq = SymbolicLU::analyze(&matrix_a);
         let mut workspace_seq = NumericLUWorkspace::new(&symbolic_seq);
         let matrix_csc_seq = SparseMatrixCSC::from_sparse(&matrix_a);
-        matrix_csc_seq.left_looking_factorize(&symbolic_seq, &mut workspace_seq).unwrap();
+        matrix_csc_seq
+            .left_looking_factorize(&symbolic_seq, &mut workspace_seq)
+            .unwrap();
         let sol_seq = symbolic_seq.solve(&workspace_seq, &b).unwrap();
 
         // 2. Resolver con nuestro nuevo SchurParallelSolver
         let mut parallel_solver = SchurParallelSolver::analyze(&matrix_a, 0.1);
-        assert!(!parallel_solver.is_monolithic, "El circuito sintético debería haber sido particionado.");
-        assert!(parallel_solver.blocks.len() >= 2, "Debería haber múltiples bloques independientes.");
+        assert!(
+            !parallel_solver.is_monolithic,
+            "El circuito sintético debería haber sido particionado."
+        );
+        assert!(
+            parallel_solver.blocks.len() >= 2,
+            "Debería haber múltiples bloques independientes."
+        );
 
         let sol_par = parallel_solver.solve(&matrix_a, &b).unwrap();
 
@@ -3726,15 +4438,13 @@ mod tests {
     fn test_schur_parallel_scalability() {
         // Simular un circuito de 20 inversores lógicos CMOS conectados en paralelo
         // Genera una red masiva de transistores con más de 60 nodos activos para forzar el solver en paralelo
-        let mut components = vec![
-            ComponentData {
-                id: "Vdd".to_string(),
-                comp_type: "vsource".to_string(),
-                value: 5.0,
-                pins: vec!["1".to_string(), "0".to_string()],
-                ..Default::default()
-            }
-        ];
+        let mut components = vec![ComponentData {
+            id: "Vdd".to_string(),
+            comp_type: "vsource".to_string(),
+            value: 5.0,
+            pins: vec!["1".to_string(), "0".to_string()],
+            ..Default::default()
+        }];
 
         // Construir 20 inversores independientes alimentados por VDD (nodo 1) y GND (nodo 0)
         // Cada inversor i usa nodo de entrada (i*2 + 2) y salida (i*2 + 3)
@@ -3802,13 +4512,18 @@ mod tests {
         // Como el circuito tiene más de 60 nodos activos, solve_dc_circuit usará el SchurParallelSolver
         // de forma auto-adaptativa, resolviendo los 20 bloques en paralelo sobre múltiples hilos de Rayon.
         let result = solve_dc_circuit(&netlist).unwrap();
-        
+
         // Verificar que la simulación es correcta y física
         for i in 0..20 {
             let out_node = (i * 2 + 3).to_string();
             let v_out = *result.node_voltages.get(&out_node).unwrap();
             // Cada inversor con entrada a 2.5V se polariza físicamente a ~3.75V debido a Rload conectada a VDD
-            assert!(v_out > 3.5 && v_out < 4.0, "Inversor {} no balanceado, Vout obtenido: {}", i, v_out);
+            assert!(
+                v_out > 3.5 && v_out < 4.0,
+                "Inversor {} no balanceado, Vout obtenido: {}",
+                i,
+                v_out
+            );
         }
     }
 
@@ -3817,7 +4532,7 @@ mod tests {
         // Creamos una matriz singular estructurada artificialmente con diagonal cero
         // y verificamos que el resolvedor de MNA aplica la estabilización estática y resuelve
         // el sistema sin lanzar pánico numérico y con alta precisión.
-        use crate::sparse_csc::{SymbolicLU, ComplexNumericLUWorkspace, ComplexSparseMatrixCSC};
+        use crate::sparse_csc::{ComplexNumericLUWorkspace, ComplexSparseMatrixCSC, SymbolicLU};
         let mut matrix_a = ComplexSparseMatrix::new(2);
         // Matriz: [ 0.0, 1.0; 1.0, 0.0 ] (singular si se hace LU directo sin pivoteo)
         matrix_a.add_element(0, 1, Complex::new(1.0, 0.0));
@@ -3837,7 +4552,10 @@ mod tests {
         let matrix_csc = ComplexSparseMatrixCSC::from_sparse(&matrix_a);
 
         let res = matrix_csc.left_looking_factorize(&symbolic, &mut workspace);
-        assert!(res.is_ok(), "Static pivoting debería estabilizar y permitir factorizar sin error");
+        assert!(
+            res.is_ok(),
+            "Static pivoting debería estabilizar y permitir factorizar sin error"
+        );
 
         let b = nalgebra::DVector::from_vec(vec![Complex::new(1.0, 0.0), Complex::new(2.0, 0.0)]);
         let sol = symbolic.solve_complex(&workspace, &b);
@@ -3889,14 +4607,12 @@ mod tests {
                     ..Default::default()
                 },
             ],
-            mutual_inductances: Some(vec![
-                MutualInductance {
-                    id: "K1".to_string(),
-                    l1_id: "L1".to_string(),
-                    l2_id: "L2".to_string(),
-                    k_coeff: 0.99,
-                }
-            ]),
+            mutual_inductances: Some(vec![MutualInductance {
+                id: "K1".to_string(),
+                l1_id: "L1".to_string(),
+                l2_id: "L2".to_string(),
+                k_coeff: 0.99,
+            }]),
             wires: vec![],
             temperature: None,
             fixed_step: Some(true),
@@ -3913,7 +4629,10 @@ mod tests {
         };
 
         let results = solve_transient_circuit(&netlist, &settings).unwrap();
-        assert!(!results.is_empty(), "La simulación transitoria debería retornar resultados");
+        assert!(
+            !results.is_empty(),
+            "La simulación transitoria debería retornar resultados"
+        );
 
         // Al final de la simulación (en régimen permanente), verificamos el voltaje secundario en el nodo 2
         // en relación con la entrada en el nodo 1.
@@ -3924,14 +4643,25 @@ mod tests {
             if step.time > 0.02 {
                 let v1 = step.node_voltages.get("1").copied().unwrap_or(0.0).abs();
                 let v2 = step.node_voltages.get("2").copied().unwrap_or(0.0).abs();
-                if v1 > max_v1 { max_v1 = v1; }
-                if v2 > max_v2 { max_v2 = v2; }
+                if v1 > max_v1 {
+                    max_v1 = v1;
+                }
+                if v2 > max_v2 {
+                    max_v2 = v2;
+                }
             }
         }
 
         // Con k = 0.99, max_v1 debería ser ~10.0 y max_v2 debería ser ~0.99
-        assert!((max_v1 - 10.0).abs() < 0.1, "Voltaje primario debería ser ~10V de amplitud");
-        assert!((max_v2 - 0.99).abs() < 0.16, "Relación de transformación 10:1 falló. Vsecundario obtenido: {}", max_v2);
+        assert!(
+            (max_v1 - 10.0).abs() < 0.1,
+            "Voltaje primario debería ser ~10V de amplitud"
+        );
+        assert!(
+            (max_v2 - 0.99).abs() < 0.16,
+            "Relación de transformación 10:1 falló. Vsecundario obtenido: {}",
+            max_v2
+        );
     }
 
     #[test]
@@ -3984,10 +4714,18 @@ mod tests {
         // En f = 1591.5 Hz (w = 10000 rad/s), Xc = 1 / (w * C) = 100 Ohm.
         // Impedancia total Z = R + jXc = 100 - j100.
         // Magnitud de voltaje en nodo 2 = |Vc| = |10 * (-j100) / (100 - j100)| = 10 / sqrt(2) = 7.07V -> ~17.0 dB
-        let idx_near_1591 = results.frequencies.iter().position(|&f| (f - 1591.5).abs() < 100.0).unwrap();
+        let idx_near_1591 = results
+            .frequencies
+            .iter()
+            .position(|&f| (f - 1591.5).abs() < 100.0)
+            .unwrap();
         let amp_db = results.node_amplitudes.get("2").unwrap()[idx_near_1591];
         // 20 * log10(7.07) = 17.0 dB
-        assert!((amp_db - 17.0).abs() < 1.0, "AC Sweep falló en verificar el polo de atenuación, obtenido: {} dB", amp_db);
+        assert!(
+            (amp_db - 17.0).abs() < 1.0,
+            "AC Sweep falló en verificar el polo de atenuación, obtenido: {} dB",
+            amp_db
+        );
     }
 
     #[test]
@@ -4056,19 +4794,25 @@ mod tests {
         assert!(!results_trap.is_empty(), "TRAP: No hay resultados");
         assert!(!results_euler.is_empty(), "Euler: No hay resultados");
 
-        let amp_trap: f64 = results_trap.iter()
+        let amp_trap: f64 = results_trap
+            .iter()
             .filter(|s| s.time > 3e-3)
             .map(|s| s.node_voltages.get("2").unwrap().abs())
             .fold(0.0, f64::max);
 
-        let amp_euler: f64 = results_euler.iter()
+        let amp_euler: f64 = results_euler
+            .iter()
             .filter(|s| s.time > 3e-3)
             .map(|s| s.node_voltages.get("2").unwrap().abs())
             .fold(0.0, f64::max);
 
         println!("Amplitudes - TRAP: {}, Euler: {}", amp_trap, amp_euler);
 
-        assert!(amp_trap > 1e-6, "TRAP debe producir oscilación, amplitud: {}", amp_trap);
+        assert!(
+            amp_trap > 1e-6,
+            "TRAP debe producir oscilación, amplitud: {}",
+            amp_trap
+        );
         // TRAP should have similar or better amplitude than Euler (both are valid integration methods)
         // The key difference is that TRAP is 2nd order and Euler is 1st order
     }
@@ -4141,7 +4885,11 @@ mod tests {
         let res = result.unwrap();
         let v_out = *res.node_voltages.get("2").unwrap();
         // Con Vin = 1V, la salida se saturará a +15V o -15V (o un valor intermedio estable)
-        assert!(v_out.abs() > 0.1, "Voltaje de salida del Schmitt trigger inválido: {}", v_out);
+        assert!(
+            v_out.abs() > 0.1,
+            "Voltaje de salida del Schmitt trigger inválido: {}",
+            v_out
+        );
     }
 
     #[test]
@@ -4158,7 +4906,8 @@ mod tests {
             let mut node_voltages = HashMap::new();
 
             // Señal fundamental de dos tonos
-            let v_fund = (2.0 * std::f64::consts::PI * f1 * t).sin() + (2.0 * std::f64::consts::PI * f2 * t).sin();
+            let v_fund = (2.0 * std::f64::consts::PI * f1 * t).sin()
+                + (2.0 * std::f64::consts::PI * f2 * t).sin();
             // Agregar una distorsión no lineal cúbica que genera IM3
             let v_distorted = v_fund - 0.05 * v_fund.powi(3);
 
@@ -4173,17 +4922,37 @@ mod tests {
 
         let imd_res = calculate_imd_analysis(&time_steps, "out", f1, f2).unwrap();
 
-        println!("Power Fund: {}, IM3: {}, IMD%: {}, IP3: {}",
-                 imd_res.fundamental_power_dbv, imd_res.im3_power_dbv, imd_res.imd_ratio_percent, imd_res.ip3_out_dbv);
+        println!(
+            "Power Fund: {}, IM3: {}, IMD%: {}, IP3: {}",
+            imd_res.fundamental_power_dbv,
+            imd_res.im3_power_dbv,
+            imd_res.imd_ratio_percent,
+            imd_res.ip3_out_dbv
+        );
 
         // Las fundamentales deben detectarse con buena potencia
-        assert!(imd_res.fundamental_power_dbv > -10.0, "La potencia fundamental debería ser medible");
+        assert!(
+            imd_res.fundamental_power_dbv > -10.0,
+            "La potencia fundamental debería ser medible"
+        );
         // El producto IM3 a 2f1 - f2 (800Hz) o 2f2 - f1 (1100Hz) debe ser detectable
-        assert!(imd_res.im3_power_dbv > -60.0, "Los productos IM3 deberían ser detectables en el espectro");
+        assert!(
+            imd_res.im3_power_dbv > -60.0,
+            "Los productos IM3 deberían ser detectables en el espectro"
+        );
         // La tasa de IMD en porcentaje debe ser positiva y razonable
-        assert!(imd_res.imd_ratio_percent > 0.1 && imd_res.imd_ratio_percent < 25.0, "IMD fuera de rango: {}%", imd_res.imd_ratio_percent);
+        assert!(
+            imd_res.imd_ratio_percent > 0.1 && imd_res.imd_ratio_percent < 25.0,
+            "IMD fuera de rango: {}%",
+            imd_res.imd_ratio_percent
+        );
         // IP3 extrapolado debe ser estable y mayor que la potencia fundamental
-        assert!(imd_res.ip3_out_dbv > imd_res.fundamental_power_dbv, "IP3 de salida ({}) debe ser mayor que la fundamental ({})", imd_res.ip3_out_dbv, imd_res.fundamental_power_dbv);
+        assert!(
+            imd_res.ip3_out_dbv > imd_res.fundamental_power_dbv,
+            "IP3 de salida ({}) debe ser mayor que la fundamental ({})",
+            imd_res.ip3_out_dbv,
+            imd_res.fundamental_power_dbv
+        );
     }
 
     #[test]
@@ -4259,8 +5028,11 @@ mod tests {
 
         // Voltaje del ánodo del LED (nodo 2): debe rondar 0.6-0.8V (caída del LED)
         let v_anode = *result.node_voltages.get("2").unwrap();
-        assert!(v_anode > 0.5 && v_anode < 0.9,
-                "Voltaje del ánodo del LED (nodo 2) fuera de rango esperado [0.5, 0.9] V, obtenido: {}", v_anode);
+        assert!(
+            v_anode > 0.5 && v_anode < 0.9,
+            "Voltaje del ánodo del LED (nodo 2) fuera de rango esperado [0.5, 0.9] V, obtenido: {}",
+            v_anode
+        );
 
         // Voltaje del colector (nodo 3): debe caer de 5V según I_ce = CTR * I_led
         // I_led ~ (5 - v_anode)/1k, I_ce = 0.5 * I_led, V_C = 5 - 10k * I_ce
@@ -4282,7 +5054,7 @@ mod tests {
                 ComponentData {
                     id: "V1".to_string(),
                     comp_type: "vsource".to_string(),
-                    value: 0.0,  // LED apagado
+                    value: 0.0, // LED apagado
                     pins: vec!["1".to_string(), "0".to_string()],
                     ..Default::default()
                 },
@@ -4334,13 +5106,19 @@ mod tests {
         let res_off = solve_dc_circuit(&netlist_off).unwrap();
         let v_collector_off = *res_off.node_voltages.get("3").unwrap();
         // Con LED apagado: I_led = 0 => I_ce = 0 => no caída en Rc => V_C = 5V (aislamiento perfecto)
-        assert!((v_collector_off - 5.0).abs() < 1e-3,
-                "Con LED apagado, V_C debe ser 5V (aislamiento galvánico perfecto), obtenido: {}", v_collector_off);
+        assert!(
+            (v_collector_off - 5.0).abs() < 1e-3,
+            "Con LED apagado, V_C debe ser 5V (aislamiento galvánico perfecto), obtenido: {}",
+            v_collector_off
+        );
 
         // Y el ánodo del LED también debe ser ~0V (sin excitación)
         let v_anode_off = *res_off.node_voltages.get("2").unwrap();
-        assert!(v_anode_off.abs() < 0.1,
-                "Con V1=0V, el ánodo del LED debe estar en ~0V, obtenido: {}", v_anode_off);
+        assert!(
+            v_anode_off.abs() < 0.1,
+            "Con V1=0V, el ánodo del LED debe estar en ~0V, obtenido: {}",
+            v_anode_off
+        );
 
         // Diferencia entre ON y OFF: el cambio en V_C confirma la transferencia óptica
         let delta_vc = v_collector_off - v_collector;
@@ -4370,7 +5148,10 @@ mod tests {
         };
 
         let results = solve_transient_circuit(&netlist, &settings).unwrap();
-        assert!(results.len() > 0, "Debería haber al menos un paso temporal de simulación.");
+        assert!(
+            results.len() > 0,
+            "Debería haber al menos un paso temporal de simulación."
+        );
 
         let get_voltage_at = |target_t: f64| -> f64 {
             let mut closest_val = 0.0;
@@ -4382,21 +5163,36 @@ mod tests {
                     closest_val = *step.node_voltages.get("2").unwrap_or(&0.0);
                 }
             }
-            assert!(min_diff < 1e-9, "No existe una muestra para t={target_t}s; distancia mínima: {min_diff}s");
+            assert!(
+                min_diff < 1e-9,
+                "No existe una muestra para t={target_t}s; distancia mínima: {min_diff}s"
+            );
             closest_val
         };
 
         // 1. Antes del disparo (t = 1.5 ms): el SCR está apagado, V_load ~ 0V
         let v_t1_5 = get_voltage_at(0.0015);
-        assert!(v_t1_5.abs() < 0.15, "Antes de disparar (1.5ms), la carga debería estar apagada (0V), obtenido: {}", v_t1_5);
+        assert!(
+            v_t1_5.abs() < 0.15,
+            "Antes de disparar (1.5ms), la carga debería estar apagada (0V), obtenido: {}",
+            v_t1_5
+        );
 
         // 2. Después del disparo y cerca del pico positivo (t = 4.5 ms): el SCR conduce
         let v_t4_5 = get_voltage_at(0.0045);
-        assert!(v_t4_5 > 7.2 && v_t4_5 < 9.5, "Después de disparar (4.5ms), el SCR debería conducir, obtenido: {}", v_t4_5);
+        assert!(
+            v_t4_5 > 7.2 && v_t4_5 < 9.5,
+            "Después de disparar (4.5ms), el SCR debería conducir, obtenido: {}",
+            v_t4_5
+        );
 
         // 3. En el ciclo negativo (t = 15 ms): el SCR se apagó en el cruce por cero y permanece bloqueado
         let v_t15 = get_voltage_at(0.015);
-        assert!(v_t15.abs() < 0.15, "En el semiciclo negativo (15ms), la carga debería estar bloqueada (0V), obtenido: {}", v_t15);
+        assert!(
+            v_t15.abs() < 0.15,
+            "En el semiciclo negativo (15ms), la carga debería estar bloqueada (0V), obtenido: {}",
+            v_t15
+        );
     }
 
     #[test]
@@ -4441,15 +5237,18 @@ mod tests {
         };
 
         let (result, temps) = solve_dc_electrothermal(&netlist).unwrap();
-        
+
         let d1_temp = *temps.get("D1").unwrap();
         // A 300.15K, V_D ~ 0.7V, I_D ~ 93mA -> P ~ 65mW
         // Con Rth=1000, dT = 65mW * 1000 = 65K. T_j esperada = ~365K.
         assert!(d1_temp > 340.0 && d1_temp < 390.0, "La temperatura de unión del diodo debería aumentar por self-heating a ~365K, obtenida: {:.2}K", d1_temp);
-        
+
         let v2 = *result.node_voltages.get("2").unwrap();
         // Con V_source = 10V y V_D ligeramente menor debido a la temperatura (deriva -2mV/C)
-        assert!(v2 > 9.0 && v2 < 10.0, "El voltaje a través de la resistencia debería ser de ~9.3V a 9.5V, obtenido: {:.2}V", v2);
+        assert!(
+            v2 > 9.0 && v2 < 10.0,
+            "El voltaje a través de la resistencia debería ser de ~9.3V a 9.5V, obtenido: {:.2}V",
+            v2
+        );
     }
 }
-

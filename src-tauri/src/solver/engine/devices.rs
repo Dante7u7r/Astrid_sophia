@@ -1,46 +1,45 @@
-use std::collections::HashMap;
 use crate::ad_value::AdValue;
 use crate::solver::types::*;
+use std::collections::HashMap;
 
-#[allow(unused_imports)]
-use super::dc::*;
-#[allow(unused_imports)]
-use super::transient::*;
 #[allow(unused_imports)]
 use super::ac::*;
 #[allow(unused_imports)]
 use super::advanced::*;
+#[allow(unused_imports)]
+use super::dc::*;
+#[allow(unused_imports)]
+use super::transient::*;
 
 // Constantes físicas universales
-pub const PHYS_KB: f64 = 1.380649e-23;   // Constante de Boltzmann (J/K)
+pub const PHYS_KB: f64 = 1.380649e-23; // Constante de Boltzmann (J/K)
 pub const PHYS_Q: f64 = 1.602176634e-19; // Carga del electrón (C)
-pub const PHYS_T: f64 = 300.0;           // Temperatura estándar (300 K = 26.85 ºC)
+pub const PHYS_T: f64 = 300.0; // Temperatura estándar (300 K = 26.85 ºC)
 
 // Constantes físicas para el modelo del Diodo PN (Shockley)
-pub const DIODE_IS: f64 = 1e-12;       // Corriente de saturación inversa (1 pA)
-pub const DIODE_VT: f64 = 0.025852;    // Voltaje térmico a 300K (25.85 mV)
-pub const DIODE_N: f64 = 1.0;          // Coeficiente de emisión ideal
+pub const DIODE_IS: f64 = 1e-12; // Corriente de saturación inversa (1 pA)
+pub const DIODE_VT: f64 = 0.025852; // Voltaje térmico a 300K (25.85 mV)
+pub const DIODE_N: f64 = 1.0; // Coeficiente de emisión ideal
 
 // Parámetros de capacidades dinámicas de diodos y transistores (Fase 13)
-pub const DIODE_TT: f64 = 10e-9;      // Tiempo de tránsito de portadores de difusión (10 ns)
-pub const DIODE_CJO: f64 = 2e-12;     // Capacidad de unión a cero voltios (2 pF)
-pub const DIODE_VJ: f64 = 0.6;        // Potencial de contacto de unión (0.6 V)
-pub const DIODE_M: f64 = 0.5;         // Coeficiente de graduación de unión (0.5)
+pub const DIODE_TT: f64 = 10e-9; // Tiempo de tránsito de portadores de difusión (10 ns)
+pub const DIODE_CJO: f64 = 2e-12; // Capacidad de unión a cero voltios (2 pF)
+pub const DIODE_VJ: f64 = 0.6; // Potencial de contacto de unión (0.6 V)
+pub const DIODE_M: f64 = 0.5; // Coeficiente de graduación de unión (0.5)
 
 pub fn get_thermal_parameters(temp_opt: Option<f64>, is_custom: Option<f64>) -> (f64, f64) {
     let temp = temp_opt.unwrap_or(PHYS_T);
     let vt = (1.380649e-23 * temp) / 1.602176634e-19; // k * T / q
-    
+
     // Escalamiento SPICE de Is con la temperatura (Eg = 1.11 eV para silicio)
     let t0 = PHYS_T;
     let eg = 1.11;
     let q = 1.602176634e-19;
     let k = 1.380649e-23;
-    
-    let base_is = is_custom.unwrap_or(DIODE_IS);
-    let is_temp = base_is * (temp / t0).powf(3.0) * (- (eg * q / k) * (1.0 / temp - 1.0 / t0)).exp();
-    (vt, is_temp)
 
+    let base_is = is_custom.unwrap_or(DIODE_IS);
+    let is_temp = base_is * (temp / t0).powf(3.0) * (-(eg * q / k) * (1.0 / temp - 1.0 / t0)).exp();
+    (vt, is_temp)
 }
 
 /// Parámetros térmicos a nivel de unión para self-heating de dispositivos discretos
@@ -49,35 +48,36 @@ pub fn get_thermal_parameters_junction(tjunc: f64, is_custom: Option<f64>) -> (f
     let t0 = PHYS_T;
     let eg = 1.11;
     let base_is = is_custom.unwrap_or(DIODE_IS);
-    let is_temp = base_is * (tjunc / t0).powf(3.0) * (-(eg * PHYS_Q / PHYS_KB) * (1.0 / tjunc - 1.0 / t0)).exp();
+    let is_temp = base_is
+        * (tjunc / t0).powf(3.0)
+        * (-(eg * PHYS_Q / PHYS_KB) * (1.0 / tjunc - 1.0 / t0)).exp();
     (vt, is_temp)
-
 }
 
 // Constantes de Self-Heating para dispositivos discretos (Modelo RC térmico de unión)
 // Resistencia térmica unión-ambiente (°C/W) — valores típicos para encapsulados TO-92/SOT-23
-pub const DIODE_RTH_JA: f64 = 150.0;   // Diodo: 150 °C/W (encapsulado DO-41)
-pub const BJT_RTH_JA: f64 = 200.0;     // BJT: 200 °C/W (encapsulado TO-92)
-pub const MOS_RTH_JA: f64 = 62.5;      // MOSFET: 62.5 °C/W (encapsulado TO-220)
+pub const DIODE_RTH_JA: f64 = 150.0; // Diodo: 150 °C/W (encapsulado DO-41)
+pub const BJT_RTH_JA: f64 = 200.0; // BJT: 200 °C/W (encapsulado TO-92)
+pub const MOS_RTH_JA: f64 = 62.5; // MOSFET: 62.5 °C/W (encapsulado TO-220)
 
 // Capacidad térmica (J/°C) — modela la inercia térmica del chip de silicio
-pub const DIODE_CTH: f64 = 0.002;      // Diodo: 2 mJ/°C
-pub const BJT_CTH: f64 = 0.005;        // BJT: 5 mJ/°C
-pub const MOS_CTH: f64 = 0.010;        // MOSFET: 10 mJ/°C
+pub const DIODE_CTH: f64 = 0.002; // Diodo: 2 mJ/°C
+pub const BJT_CTH: f64 = 0.005; // BJT: 5 mJ/°C
+pub const MOS_CTH: f64 = 0.010; // MOSFET: 10 mJ/°C
 
 // Constantes de Self-Heating para optoacopladores (encapsulado DIP-4)
-pub const OPTO_RTH_JA: f64 = 200.0;    // Opto DIP-4: 200 °C/W
-pub const OPTO_CTH: f64 = 1e-4;        // Opto DIP-4: 100 µJ/°C
+pub const OPTO_RTH_JA: f64 = 200.0; // Opto DIP-4: 200 °C/W
+pub const OPTO_CTH: f64 = 1e-4; // Opto DIP-4: 100 µJ/°C
 
 // Parámetros por defecto del optoacoplador (lado receptor fototransistor)
-pub const OPTO_DEFAULT_CTR: f64 = 0.5;   // Current Transfer Ratio: 50%
+pub const OPTO_DEFAULT_CTR: f64 = 0.5; // Current Transfer Ratio: 50%
 pub const OPTO_DEFAULT_VSAT: f64 = 0.2;
 
 // Parámetros por defecto para tiristores (SCR/TRIAC)
-pub const SCR_DEFAULT_VGT: f64 = 0.7;   // Voltaje de disparo de puerta (V)
-pub const SCR_DEFAULT_IH: f64 = 5e-3;   // Corriente de mantenimiento (A)
-pub const SCR_DEFAULT_IS: f64 = 1e-12;  // Corriente de saturación de los BJTs internos (A)
-pub const SCR_MAX_BETA: f64 = 200.0;    // β máximo para evitar problemas de convergencia  // Tensión de saturación suave del transistor (V)
+pub const SCR_DEFAULT_VGT: f64 = 0.7; // Voltaje de disparo de puerta (V)
+pub const SCR_DEFAULT_IH: f64 = 5e-3; // Corriente de mantenimiento (A)
+pub const SCR_DEFAULT_IS: f64 = 1e-12; // Corriente de saturación de los BJTs internos (A)
+pub const SCR_MAX_BETA: f64 = 200.0; // β máximo para evitar problemas de convergencia  // Tensión de saturación suave del transistor (V)
 
 pub fn evaluate_pn_junction(vj: f64, vt: f64, is_val: f64) -> (f64, f64, f64) {
     let v_limit = 0.70; // Voltaje límite de linealización
@@ -96,16 +96,14 @@ pub fn evaluate_pn_junction(vj: f64, vt: f64, is_val: f64) -> (f64, f64, f64) {
         let ieq = i_limit - g_limit * v_limit;
         (i, g, ieq)
     }
-
 }
 
 // Coeficientes de temperatura para MOSFETs (SPICE Level 1 / Level 3)
-pub const MOS_VTH_TC: f64 = -2.3e-3;   // dVth/dT = -2.3 mV/°C (Vth disminuye con T)
+pub const MOS_VTH_TC: f64 = -2.3e-3; // dVth/dT = -2.3 mV/°C (Vth disminuye con T)
 pub const MOS_MOBILITY_EXPO: f64 = -1.5; // μ(T) = μ₀ * (T/T₀)^(-1.5) (movilidad baja con T)
 
 // Coeficiente de temperatura para β de BJTs (SPICE)
-pub const BJT_BETA_EXPO: f64 = 1.8;    // β(T) = β₀ * (T/T₀)^Xti
-
+pub const BJT_BETA_EXPO: f64 = 1.8; // β(T) = β₀ * (T/T₀)^Xti
 
 pub fn pnjlim(v_new: f64, v_old: f64, vt: f64, v_crit: f64) -> f64 {
     if v_new > v_crit && (v_new - v_old) > 2.0 * vt {
@@ -115,7 +113,6 @@ pub fn pnjlim(v_new: f64, v_old: f64, vt: f64, v_crit: f64) -> f64 {
     } else {
         v_new
     }
-
 }
 
 #[allow(dead_code)]
@@ -127,7 +124,6 @@ pub fn get_diode_capacitance(vd: f64, gd: f64) -> f64 {
         DIODE_CJO * (1.0 + DIODE_M * vd / DIODE_VJ)
     };
     c_dif + c_dep
-
 }
 
 pub fn get_diode_capacitance_param(vd: f64, gd: f64, comp: &ComponentData) -> f64 {
@@ -143,10 +139,13 @@ pub fn get_diode_capacitance_param(vd: f64, gd: f64, comp: &ComponentData) -> f6
         cjo * (1.0 + m * vd / vj)
     };
     c_dif + c_dep
-
 }
 
-pub fn solve_diode_junction_voltage(v_ext: f64, temp: Option<f64>, comp: &ComponentData) -> (f64, f64, f64) {
+pub fn solve_diode_junction_voltage(
+    v_ext: f64,
+    temp: Option<f64>,
+    comp: &ComponentData,
+) -> (f64, f64, f64) {
     let rs = comp.diode_rs.unwrap_or(0.0);
     let comp_n = comp.diode_n.unwrap_or(DIODE_N);
     let (vt, is_val) = get_thermal_parameters(temp, comp.diode_is);
@@ -221,7 +220,6 @@ pub fn solve_diode_junction_voltage(v_ext: f64, temp: Option<f64>, comp: &Compon
     // Conductancia efectiva externa
     let geq_eff = gd_ideal / (1.0 + gd_ideal * rs);
     (vd_j, id_ideal, geq_eff)
-
 }
 
 // Helper para el lado receptor (fototransistor) del optoacoplador.
@@ -231,7 +229,13 @@ pub fn solve_diode_junction_voltage(v_ext: f64, temp: Option<f64>, comp: &Compon
 //   g_o     = dI_ce/dV_ce = CTR * I_d(V_d) * (1 - tanh^2) / V_sat
 //   I_ce_eq = I_ce - g_md * V_d - g_o * V_ce   (fuente equivalente para MNA)
 // Protección contra V_sat == 0 mediante floor en 1e-6 V.
-pub fn evaluate_opto_receiver(vd: f64, gd_led: f64, id_led: f64, v_ce: f64, comp: &ComponentData) -> (f64, f64, f64, f64) {
+pub fn evaluate_opto_receiver(
+    vd: f64,
+    gd_led: f64,
+    id_led: f64,
+    v_ce: f64,
+    comp: &ComponentData,
+) -> (f64, f64, f64, f64) {
     let ctr = comp.opto_ctr.unwrap_or(OPTO_DEFAULT_CTR);
     let vsat = comp.opto_vsat.unwrap_or(OPTO_DEFAULT_VSAT).max(1e-6);
     let t_vce = (v_ce / vsat).tanh();
@@ -240,7 +244,6 @@ pub fn evaluate_opto_receiver(vd: f64, gd_led: f64, id_led: f64, v_ce: f64, comp
     let g_o = ctr * id_led * (1.0 - t_vce * t_vce) / vsat;
     let i_ce_eq = i_ce - g_md * vd - g_o * v_ce;
     (i_ce, g_md, g_o, i_ce_eq)
-
 }
 
 pub fn get_jfet_capacitances(vgs: f64, vgd: f64, comp: &ComponentData) -> (f64, f64) {
@@ -266,14 +269,13 @@ pub fn get_jfet_capacitances(vgs: f64, vgd: f64, comp: &ComponentData) -> (f64, 
     };
 
     (c_gs, c_gd)
-
 }
 
 // Parámetros de capacidades dinámicas de MOSFET (Fase 13)
-pub const MOS_COX_WL: f64 = 15e-12;   // Capacidad total de óxido W * L * Cox (15 pF)
-pub const MOS_CGSO: f64 = 5e-12;      // Capacidad de solapamiento puerta-fuente fija (5 pF)
-pub const MOS_CGDO: f64 = 5e-12;      // Capacidad de solapamiento puerta-drenador fija (5 pF)
-pub const MOS_CDSO: f64 = 2e-12;      // Capacidad fija drenador-fuente (2 pF)
+pub const MOS_COX_WL: f64 = 15e-12; // Capacidad total de óxido W * L * Cox (15 pF)
+pub const MOS_CGSO: f64 = 5e-12; // Capacidad de solapamiento puerta-fuente fija (5 pF)
+pub const MOS_CGDO: f64 = 5e-12; // Capacidad de solapamiento puerta-drenador fija (5 pF)
+pub const MOS_CDSO: f64 = 2e-12; // Capacidad fija drenador-fuente (2 pF)
 
 pub fn get_nmos_capacitances(
     vgs: f64,
@@ -292,8 +294,11 @@ pub fn get_nmos_capacitances(
     } else {
         (MOS_CGSO + (2.0 / 3.0) * MOS_COX_WL, MOS_CGDO)
     };
-    (c_gs * area_factor, c_gd * area_factor, MOS_CDSO * area_factor)
-
+    (
+        c_gs * area_factor,
+        c_gd * area_factor,
+        MOS_CDSO * area_factor,
+    )
 }
 
 pub fn get_pmos_capacitances(
@@ -313,18 +318,21 @@ pub fn get_pmos_capacitances(
     } else {
         (MOS_CGSO + (2.0 / 3.0) * MOS_COX_WL, MOS_CGDO)
     };
-    (c_sg * area_factor, c_sd * area_factor, MOS_CDSO * area_factor)
-
+    (
+        c_sg * area_factor,
+        c_sd * area_factor,
+        MOS_CDSO * area_factor,
+    )
 }
 
 // Parámetros de capacidades dinámicas de BJT (Fase 16)
-pub const BJT_TF: f64 = 0.1e-9;      // Tiempo de tránsito directo (100 ps)
-pub const BJT_TR: f64 = 10e-9;       // Tiempo de tránsito inverso (10 ns)
-pub const BJT_CJE0: f64 = 2e-12;     // Capacidad BE a cero voltios (2 pF)
-pub const BJT_CJC0: f64 = 1.5e-12;   // Capacidad BC a cero voltios (1.5 pF)
-pub const BJT_VJE: f64 = 0.7;        // Potencial de unión BE (0.7 V)
-pub const BJT_VJC: f64 = 0.6;        // Potencial de unión BC (0.6 V)
-pub const BJT_M: f64 = 0.33;         // Coeficiente de graduación de unión (0.33)
+pub const BJT_TF: f64 = 0.1e-9; // Tiempo de tránsito directo (100 ps)
+pub const BJT_TR: f64 = 10e-9; // Tiempo de tránsito inverso (10 ns)
+pub const BJT_CJE0: f64 = 2e-12; // Capacidad BE a cero voltios (2 pF)
+pub const BJT_CJC0: f64 = 1.5e-12; // Capacidad BC a cero voltios (1.5 pF)
+pub const BJT_VJE: f64 = 0.7; // Potencial de unión BE (0.7 V)
+pub const BJT_VJC: f64 = 0.6; // Potencial de unión BC (0.6 V)
+pub const BJT_M: f64 = 0.33; // Coeficiente de graduación de unión (0.33)
 
 pub fn get_bjt_be_capacitance(vbe: f64, gbe: f64, comp: &ComponentData) -> f64 {
     let tf = comp.bjt_tf.unwrap_or(BJT_TF);
@@ -339,7 +347,6 @@ pub fn get_bjt_be_capacitance(vbe: f64, gbe: f64, comp: &ComponentData) -> f64 {
         (cje / denom_fc) * factor
     };
     c_dif + c_dep
-
 }
 
 pub fn get_bjt_bc_capacitance(vbc: f64, gbc: f64, comp: &ComponentData) -> f64 {
@@ -355,7 +362,6 @@ pub fn get_bjt_bc_capacitance(vbc: f64, gbc: f64, comp: &ComponentData) -> f64 {
         (cjc / denom_fc) * factor
     };
     c_dif + c_dep
-
 }
 
 // ============================================================================
@@ -376,7 +382,6 @@ pub enum Token {
     LParen,
     RParen,
     Comma,
-
 }
 
 pub fn tokenize_expression(input: &str) -> Result<Vec<Token>, String> {
@@ -388,23 +393,58 @@ pub fn tokenize_expression(input: &str) -> Result<Vec<Token>, String> {
     while i < len {
         let ch = chars[i];
         match ch {
-            ' ' | '\t' | '\n' | '\r' => { i += 1; }
-            '+' => { tokens.push(Token::Plus); i += 1; }
-            '-' => { tokens.push(Token::Minus); i += 1; }
-            '*' => { tokens.push(Token::Star); i += 1; }
-            '/' => { tokens.push(Token::Slash); i += 1; }
-            '^' => { tokens.push(Token::Caret); i += 1; }
-            '(' => { tokens.push(Token::LParen); i += 1; }
-            ')' => { tokens.push(Token::RParen); i += 1; }
-            ',' => { tokens.push(Token::Comma); i += 1; }
+            ' ' | '\t' | '\n' | '\r' => {
+                i += 1;
+            }
+            '+' => {
+                tokens.push(Token::Plus);
+                i += 1;
+            }
+            '-' => {
+                tokens.push(Token::Minus);
+                i += 1;
+            }
+            '*' => {
+                tokens.push(Token::Star);
+                i += 1;
+            }
+            '/' => {
+                tokens.push(Token::Slash);
+                i += 1;
+            }
+            '^' => {
+                tokens.push(Token::Caret);
+                i += 1;
+            }
+            '(' => {
+                tokens.push(Token::LParen);
+                i += 1;
+            }
+            ')' => {
+                tokens.push(Token::RParen);
+                i += 1;
+            }
+            ',' => {
+                tokens.push(Token::Comma);
+                i += 1;
+            }
             '0'..='9' | '.' => {
                 let start = i;
-                while i < len && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == 'e' || chars[i] == 'E'
-                    || ((chars[i] == '+' || chars[i] == '-') && i > start && (chars[i-1] == 'e' || chars[i-1] == 'E'))) {
+                while i < len
+                    && (chars[i].is_ascii_digit()
+                        || chars[i] == '.'
+                        || chars[i] == 'e'
+                        || chars[i] == 'E'
+                        || ((chars[i] == '+' || chars[i] == '-')
+                            && i > start
+                            && (chars[i - 1] == 'e' || chars[i - 1] == 'E')))
+                {
                     i += 1;
                 }
                 let num_str: String = chars[start..i].iter().collect();
-                let val = num_str.parse::<f64>().map_err(|_| format!("Número inválido en expresión B-Source: '{}'", num_str))?;
+                let val = num_str
+                    .parse::<f64>()
+                    .map_err(|_| format!("Número inválido en expresión B-Source: '{}'", num_str))?;
                 tokens.push(Token::Number(val));
             }
             c if c.is_ascii_alphabetic() || c == '_' => {
@@ -416,12 +456,14 @@ pub fn tokenize_expression(input: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::Ident(ident));
             }
             _ => {
-                return Err(format!("Carácter inesperado '{}' en expresión B-Source", ch));
+                return Err(format!(
+                    "Carácter inesperado '{}' en expresión B-Source",
+                    ch
+                ));
             }
         }
     }
     Ok(tokens)
-
 }
 
 #[derive(Debug, Clone)]
@@ -429,17 +471,22 @@ pub enum ExprAST {
     Num(f64),
     Var(String),
     UnaryMinus(Box<ExprAST>),
-    BinOp { op: char, left: Box<ExprAST>, right: Box<ExprAST> },
-    FuncCall { name: String, args: Vec<ExprAST> },
+    BinOp {
+        op: char,
+        left: Box<ExprAST>,
+        right: Box<ExprAST>,
+    },
+    FuncCall {
+        name: String,
+        args: Vec<ExprAST>,
+    },
     VoltageRef(String, Option<String>), // V(node) o V(n1, n2)
     CurrentRef(String),                 // I(vsource_id)
-
 }
 
 struct ExprParser {
     tokens: Vec<Token>,
     pos: usize,
-
 }
 
 impl ExprParser {
@@ -464,7 +511,10 @@ impl ExprParser {
     fn expect_rparen(&mut self) -> Result<(), String> {
         match self.next_token() {
             Some(Token::RParen) => Ok(()),
-            other => Err(format!("Se esperaba ')' en expresión B-Source, encontrado: {:?}", other)),
+            other => Err(format!(
+                "Se esperaba ')' en expresión B-Source, encontrado: {:?}",
+                other
+            )),
         }
     }
 
@@ -479,12 +529,20 @@ impl ExprParser {
                 Some(Token::Plus) => {
                     self.next_token();
                     let right = self.parse_multiplicative()?;
-                    left = ExprAST::BinOp { op: '+', left: Box::new(left), right: Box::new(right) };
+                    left = ExprAST::BinOp {
+                        op: '+',
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 Some(Token::Minus) => {
                     self.next_token();
                     let right = self.parse_multiplicative()?;
-                    left = ExprAST::BinOp { op: '-', left: Box::new(left), right: Box::new(right) };
+                    left = ExprAST::BinOp {
+                        op: '-',
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 _ => break,
             }
@@ -499,12 +557,20 @@ impl ExprParser {
                 Some(Token::Star) => {
                     self.next_token();
                     let right = self.parse_power()?;
-                    left = ExprAST::BinOp { op: '*', left: Box::new(left), right: Box::new(right) };
+                    left = ExprAST::BinOp {
+                        op: '*',
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 Some(Token::Slash) => {
                     self.next_token();
                     let right = self.parse_power()?;
-                    left = ExprAST::BinOp { op: '/', left: Box::new(left), right: Box::new(right) };
+                    left = ExprAST::BinOp {
+                        op: '/',
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 _ => break,
             }
@@ -517,7 +583,11 @@ impl ExprParser {
         if let Some(Token::Caret) = self.peek() {
             self.next_token();
             let exp = self.parse_unary()?;
-            Ok(ExprAST::BinOp { op: '^', left: Box::new(base), right: Box::new(exp) })
+            Ok(ExprAST::BinOp {
+                op: '^',
+                left: Box::new(base),
+                right: Box::new(exp),
+            })
         } else {
             Ok(base)
         }
@@ -565,14 +635,24 @@ impl ExprParser {
                         let node1 = match self.next_token() {
                             Some(Token::Ident(s)) => s,
                             Some(Token::Number(n)) => format!("{}", n as i64),
-                            other => return Err(format!("Se esperaba un nodo en V(), encontrado: {:?}", other)),
+                            other => {
+                                return Err(format!(
+                                    "Se esperaba un nodo en V(), encontrado: {:?}",
+                                    other
+                                ))
+                            }
                         };
                         if let Some(Token::Comma) = self.peek() {
                             self.next_token(); // consume ','
                             let node2 = match self.next_token() {
                                 Some(Token::Ident(s)) => s,
                                 Some(Token::Number(n)) => format!("{}", n as i64),
-                                other => return Err(format!("Se esperaba segundo nodo en V(n1,n2), encontrado: {:?}", other)),
+                                other => {
+                                    return Err(format!(
+                                        "Se esperaba segundo nodo en V(n1,n2), encontrado: {:?}",
+                                        other
+                                    ))
+                                }
                             };
                             self.expect_rparen()?;
                             return Ok(ExprAST::VoltageRef(node1, Some(node2)));
@@ -590,7 +670,12 @@ impl ExprParser {
                         let src_id = match self.next_token() {
                             Some(Token::Ident(s)) => s,
                             Some(Token::Number(n)) => format!("{}", n as i64),
-                            other => return Err(format!("Se esperaba un ID de fuente en I(), encontrado: {:?}", other)),
+                            other => {
+                                return Err(format!(
+                                    "Se esperaba un ID de fuente en I(), encontrado: {:?}",
+                                    other
+                                ))
+                            }
                         };
                         self.expect_rparen()?;
                         return Ok(ExprAST::CurrentRef(src_id));
@@ -610,16 +695,21 @@ impl ExprParser {
                         }
                     }
                     self.expect_rparen()?;
-                    return Ok(ExprAST::FuncCall { name: name_lower, args });
+                    return Ok(ExprAST::FuncCall {
+                        name: name_lower,
+                        args,
+                    });
                 }
 
                 // Variable genérica
                 Ok(ExprAST::Var(name))
             }
-            other => Err(format!("Token inesperado en expresión B-Source: {:?}", other)),
+            other => Err(format!(
+                "Token inesperado en expresión B-Source: {:?}",
+                other
+            )),
         }
     }
-
 }
 
 /// Contexto de evaluación de expresiones: voltajes de nodos, corrientes de ramas y tiempo actual
@@ -627,7 +717,6 @@ pub struct EvalContext<'a> {
     node_voltages: &'a HashMap<String, f64>,
     branch_currents: &'a HashMap<String, f64>,
     time: f64,
-
 }
 
 #[allow(dead_code)]
@@ -641,9 +730,12 @@ pub fn evaluate_expression_string(
     let tokens = tokenize_expression(expr_str)?;
     let mut parser = ExprParser::new(tokens);
     let ast = parser.parse_expression()?;
-    let ctx = EvalContext { node_voltages, branch_currents, time };
+    let ctx = EvalContext {
+        node_voltages,
+        branch_currents,
+        time,
+    };
     evaluate_ast(&ast, &ctx)
-
 }
 
 // ==========================================================================
@@ -686,9 +778,13 @@ pub fn evaluate_ast_ad(ast: &ExprAST, ctx: &EvalContext) -> Result<AdValue, Stri
         }
         ExprAST::FuncCall { name, args } => {
             if args.is_empty() {
-                return Err(format!("La función '{}' requiere al menos un argumento", name));
+                return Err(format!(
+                    "La función '{}' requiere al menos un argumento",
+                    name
+                ));
             }
-            let evaled: Vec<AdValue> = args.iter()
+            let evaled: Vec<AdValue> = args
+                .iter()
                 .map(|a| evaluate_ast_ad(a, ctx))
                 .collect::<Result<Vec<_>, _>>()?;
             match name.as_str() {
@@ -696,7 +792,7 @@ pub fn evaluate_ast_ad(ast: &ExprAST, ctx: &EvalContext) -> Result<AdValue, Stri
                 "cos" => Ok(AdValue::cos(&evaled[0])),
                 "tan" => Ok(AdValue::tan(&evaled[0])),
                 "exp" => Ok(AdValue::exp(&evaled[0])),
-                "ln"  => Ok(AdValue::ln(&evaled[0])),
+                "ln" => Ok(AdValue::ln(&evaled[0])),
                 "log" => {
                     let ln_val = AdValue::ln(&evaled[0]);
                     let ln10 = AdValue::constant(std::f64::consts::LN_10);
@@ -768,7 +864,11 @@ pub fn evaluate_expression_ad(
             ast_cache.entry(expr_str.to_string()).or_insert(parsed_ast)
         }
     };
-    let ctx = EvalContext { node_voltages, branch_currents, time };
+    let ctx = EvalContext {
+        node_voltages,
+        branch_currents,
+        time,
+    };
     evaluate_ast_ad(ast, &ctx)
 }
 
@@ -811,9 +911,13 @@ pub fn evaluate_ast(ast: &ExprAST, ctx: &EvalContext) -> Result<f64, String> {
         }
         ExprAST::FuncCall { name, args } => {
             if args.is_empty() {
-                return Err(format!("La función '{}' requiere al menos un argumento", name));
+                return Err(format!(
+                    "La función '{}' requiere al menos un argumento",
+                    name
+                ));
             }
-            let evaled: Vec<f64> = args.iter()
+            let evaled: Vec<f64> = args
+                .iter()
                 .map(|a| evaluate_ast(a, ctx))
                 .collect::<Result<Vec<_>, _>>()?;
             match name.as_str() {
@@ -821,25 +925,38 @@ pub fn evaluate_ast(ast: &ExprAST, ctx: &EvalContext) -> Result<f64, String> {
                 "cos" => Ok(evaled[0].cos()),
                 "tan" => Ok(evaled[0].tan()),
                 "exp" => Ok(evaled[0].exp()),
-                "ln"  => {
-                    if evaled[0] <= 0.0 { Err("ln(x) requiere x > 0".to_string()) }
-                    else { Ok(evaled[0].ln()) }
+                "ln" => {
+                    if evaled[0] <= 0.0 {
+                        Err("ln(x) requiere x > 0".to_string())
+                    } else {
+                        Ok(evaled[0].ln())
+                    }
                 }
                 "log" => {
-                    if evaled[0] <= 0.0 { Err("log(x) requiere x > 0".to_string()) }
-                    else { Ok(evaled[0].log10()) }
+                    if evaled[0] <= 0.0 {
+                        Err("log(x) requiere x > 0".to_string())
+                    } else {
+                        Ok(evaled[0].log10())
+                    }
                 }
                 "sqrt" => {
-                    if evaled[0] < 0.0 { Err("sqrt(x) requiere x >= 0".to_string()) }
-                    else { Ok(evaled[0].sqrt()) }
+                    if evaled[0] < 0.0 {
+                        Err("sqrt(x) requiere x >= 0".to_string())
+                    } else {
+                        Ok(evaled[0].sqrt())
+                    }
                 }
                 "abs" => Ok(evaled[0].abs()),
                 "max" => {
-                    if args.len() < 2 { return Err("max() requiere 2 argumentos".to_string()); }
+                    if args.len() < 2 {
+                        return Err("max() requiere 2 argumentos".to_string());
+                    }
                     Ok(evaled[0].max(evaled[1]))
                 }
                 "min" => {
-                    if args.len() < 2 { return Err("min() requiere 2 argumentos".to_string()); }
+                    if args.len() < 2 {
+                        return Err("min() requiere 2 argumentos".to_string());
+                    }
                     Ok(evaled[0].min(evaled[1]))
                 }
                 _ => Err(format!("Función desconocida: '{}'", name)),
@@ -853,9 +970,7 @@ pub fn evaluate_ast(ast: &ExprAST, ctx: &EvalContext) -> Result<f64, String> {
             };
             Ok(v_a - v_b)
         }
-        ExprAST::CurrentRef(src_id) => {
-            Ok(*ctx.branch_currents.get(src_id).unwrap_or(&0.0))
-        }
+        ExprAST::CurrentRef(src_id) => Ok(*ctx.branch_currents.get(src_id).unwrap_or(&0.0)),
     }
 }
 
@@ -890,7 +1005,7 @@ pub fn evaluate_bsim3_nmos(
 
     // --- Coeficientes de temperatura BSIM3 para NMOS ---
     let kt1 = -0.11; // Coeficiente de temperatura de Vth (V)
-    let ute = -1.5;   // Exponente de degradación de movilidad térmica
+    let ute = -1.5; // Exponente de degradación de movilidad térmica
 
     // Derivación térmica del voltaje de umbral: Vth(T) = Vth0 + kt1 * (T - Tnom) / Tnom
     let vth0 = if vth_netlist != 0.0 { vth_netlist } else { 0.4 };
@@ -913,37 +1028,36 @@ pub fn evaluate_bsim3_nmos(
         let exp_sub = ((vgs - vth) / (n_factor * vt_therm)).exp();
         let exp_vds = (-vds.max(0.0) / vt_therm).exp();
         let ids_val = i_off * exp_sub * (1.0 - exp_vds);
-        
+
         let gm_val = ids_val / (n_factor * vt_therm);
         let gds_val = i_off * exp_sub * (exp_vds / vt_therm);
-        
+
         (ids_val, gm_val, gds_val.max(1e-9))
     } else {
         let vds_sat = (esat * l * (vgs - vth)) / (esat * l + abulk * (vgs - vth));
-        
+
         if vds < vds_sat {
             let denom = 1.0 + vds / (esat * l);
             let num = w * mu_eff * cox * (vgs - vth - abulk * vds / 2.0) * vds;
             let ids_val = num / (denom * l);
-            
+
             let gm_val = (w * mu_eff * cox * vds) / (denom * l);
             let gds_val = (w * mu_eff * cox * (vgs - vth - abulk * vds)) / (denom * l);
-            
+
             (ids_val, gm_val, gds_val.max(1e-9))
         } else {
             let denom = 1.0 + vds_sat / (esat * l);
             let num = w * mu_eff * cox * (vgs - vth - abulk * vds_sat / 2.0) * vds_sat;
             let ids_val = num / (denom * l);
-            
+
             let gm_val = (w * mu_eff * cox * vds_sat) / (denom * l);
             let gds_val = ids_val * 0.05 / (vds + 1e-3);
-            
+
             (ids_val, gm_val, gds_val.max(1e-9))
         }
     };
 
     (ids, gm, gds)
-
 }
 
 pub fn evaluate_bsim3_pmos(
@@ -976,9 +1090,13 @@ pub fn evaluate_bsim3_pmos(
 
     // --- Coeficientes de temperatura BSIM3 para PMOS ---
     let kt1 = -0.12; // Coeficiente de temperatura de Vth para PMOS
-    let ute = -1.2;   // Exponente de degradación de movilidad térmica (PMOS)
+    let ute = -1.2; // Exponente de degradación de movilidad térmica (PMOS)
 
-    let vth0 = if vth_netlist != 0.0 { vth_netlist.abs() } else { 0.4 };
+    let vth0 = if vth_netlist != 0.0 {
+        vth_netlist.abs()
+    } else {
+        0.4
+    };
     let delta_t = t_actual - tnom;
     let vth_thermal = vth0 + kt1 * (delta_t / tnom);
     let vth = vth_thermal - theta_dibl * vsd;
@@ -998,37 +1116,36 @@ pub fn evaluate_bsim3_pmos(
         let exp_sub = ((vsg - vth) / (n_factor * vt_therm)).exp();
         let exp_vsd = (-vsd.max(0.0) / vt_therm).exp();
         let ids_val = i_off * exp_sub * (1.0 - exp_vsd);
-        
+
         let gm_val = ids_val / (n_factor * vt_therm);
         let gds_val = i_off * exp_sub * (exp_vsd / vt_therm);
-        
+
         (ids_val, gm_val, gds_val.max(1e-9))
     } else {
         let vds_sat = (esat * l * (vsg - vth)) / (esat * l + abulk * (vsg - vth));
-        
+
         if vsd < vds_sat {
             let denom = 1.0 + vsd / (esat * l);
             let num = w * mu_eff * cox * (vsg - vth - abulk * vsd / 2.0) * vsd;
             let ids_val = num / (denom * l);
-            
+
             let gm_val = (w * mu_eff * cox * vsd) / (denom * l);
             let gds_val = (w * mu_eff * cox * (vsg - vth - abulk * vsd)) / (denom * l);
-            
+
             (ids_val, gm_val, gds_val.max(1e-9))
         } else {
             let denom = 1.0 + vds_sat / (esat * l);
             let num = w * mu_eff * cox * (vsg - vth - abulk * vds_sat / 2.0) * vds_sat;
             let ids_val = num / (denom * l);
-            
+
             let gm_val = (w * mu_eff * cox * vds_sat) / (denom * l);
             let gds_val = ids_val * 0.05 / (vsd + 1e-3);
-            
+
             (ids_val, gm_val, gds_val.max(1e-9))
         }
     };
 
     (isd, gm, gds)
-
 }
 
 pub fn evaluate_bsim4_nmos(
@@ -1055,7 +1172,11 @@ pub fn evaluate_bsim4_nmos(
     let n_factor = 1.3;
     let lambda_clm = 0.08;
 
-    let vth0 = if vth_netlist != 0.0 { vth_netlist } else { 0.35 };
+    let vth0 = if vth_netlist != 0.0 {
+        vth_netlist
+    } else {
+        0.35
+    };
     let vth = vth0 - theta_dibl * vds;
 
     let e_vert = (vgs + vth).abs() / tox;
@@ -1078,24 +1199,27 @@ pub fn evaluate_bsim4_nmos(
         let exp_sub = ((vgs - vth) / (n_factor * vt_therm)).exp();
         let exp_vds = (-vds.max(0.0) / vt_therm).exp();
         let ids_val = i_off * exp_sub * (1.0 - exp_vds) * (1.0 + lambda_clm * vds);
-        
+
         let gm_val = ids_val / (n_factor * vt_therm);
-        let gds_val = i_off * exp_sub * (exp_vds / vt_therm) * (1.0 + lambda_clm * vds) + ids_val * lambda_clm / (1.0 + lambda_clm * vds);
-        
+        let gds_val = i_off * exp_sub * (exp_vds / vt_therm) * (1.0 + lambda_clm * vds)
+            + ids_val * lambda_clm / (1.0 + lambda_clm * vds);
+
         (ids_val, gm_val, gds_val.max(1e-9))
     } else {
         let vds_sat = (esat * l * (vgs - vth)) / (esat * l + abulk * (vgs - vth));
-        
+
         if vds < vds_sat {
             // Triode Region
             let denom = 1.0 + vds / (esat * l);
             let num = w * mu_eff * cox * (vgs - vth - abulk * vds / 2.0) * vds;
             let ids_base = num / (denom * l);
             let ids_val = ids_base * (1.0 + lambda_clm * vds);
-            
+
             let gm_val = ((w * mu_eff * cox * vds) / (denom * l)) * (1.0 + lambda_clm * vds);
-            let gds_val = ((w * mu_eff * cox * (vgs - vth - abulk * vds)) / (denom * l)) * (1.0 + lambda_clm * vds) + ids_base * lambda_clm;
-            
+            let gds_val = ((w * mu_eff * cox * (vgs - vth - abulk * vds)) / (denom * l))
+                * (1.0 + lambda_clm * vds)
+                + ids_base * lambda_clm;
+
             (ids_val, gm_val, gds_val.max(1e-9))
         } else {
             // Saturation Region
@@ -1103,16 +1227,15 @@ pub fn evaluate_bsim4_nmos(
             let num = w * mu_eff * cox * (vgs - vth - abulk * vds_sat / 2.0) * vds_sat;
             let ids_base = num / (denom * l);
             let ids_val = ids_base * (1.0 + lambda_clm * vds);
-            
+
             let gm_val = ((w * mu_eff * cox * vds_sat) / (denom * l)) * (1.0 + lambda_clm * vds);
             let gds_val = ids_base * lambda_clm;
-            
+
             (ids_val, gm_val, gds_val.max(1e-9))
         }
     };
 
     (ids, gm, gds, igs, gg)
-
 }
 
 pub fn evaluate_bsim4_pmos(
@@ -1139,7 +1262,11 @@ pub fn evaluate_bsim4_pmos(
     let n_factor = 1.3;
     let lambda_clm = 0.08;
 
-    let vth0 = if vth_netlist != 0.0 { vth_netlist.abs() } else { 0.35 };
+    let vth0 = if vth_netlist != 0.0 {
+        vth_netlist.abs()
+    } else {
+        0.35
+    };
     let vth = vth0 - theta_dibl * vsd;
 
     let e_vert = (vsg + vth).abs() / tox;
@@ -1162,24 +1289,27 @@ pub fn evaluate_bsim4_pmos(
         let exp_sub = ((vsg - vth) / (n_factor * vt_therm)).exp();
         let exp_vsd = (-vsd.max(0.0) / vt_therm).exp();
         let ids_val = i_off * exp_sub * (1.0 - exp_vsd) * (1.0 + lambda_clm * vsd);
-        
+
         let gm_val = ids_val / (n_factor * vt_therm);
-        let gds_val = i_off * exp_sub * (exp_vsd / vt_therm) * (1.0 + lambda_clm * vsd) + ids_val * lambda_clm / (1.0 + lambda_clm * vsd);
-        
+        let gds_val = i_off * exp_sub * (exp_vsd / vt_therm) * (1.0 + lambda_clm * vsd)
+            + ids_val * lambda_clm / (1.0 + lambda_clm * vsd);
+
         (ids_val, gm_val, gds_val.max(1e-9))
     } else {
         let vds_sat = (esat * l * (vsg - vth)) / (esat * l + abulk * (vsg - vth));
-        
+
         if vsd < vds_sat {
             // Triode Region
             let denom = 1.0 + vsd / (esat * l);
             let num = w * mu_eff * cox * (vsg - vth - abulk * vsd / 2.0) * vsd;
             let ids_base = num / (denom * l);
             let ids_val = ids_base * (1.0 + lambda_clm * vsd);
-            
+
             let gm_val = ((w * mu_eff * cox * vsd) / (denom * l)) * (1.0 + lambda_clm * vsd);
-            let gds_val = ((w * mu_eff * cox * (vsg - vth - abulk * vsd)) / (denom * l)) * (1.0 + lambda_clm * vsd) + ids_base * lambda_clm;
-            
+            let gds_val = ((w * mu_eff * cox * (vsg - vth - abulk * vsd)) / (denom * l))
+                * (1.0 + lambda_clm * vsd)
+                + ids_base * lambda_clm;
+
             (ids_val, gm_val, gds_val.max(1e-9))
         } else {
             // Saturation Region
@@ -1187,17 +1317,13 @@ pub fn evaluate_bsim4_pmos(
             let num = w * mu_eff * cox * (vsg - vth - abulk * vds_sat / 2.0) * vds_sat;
             let ids_base = num / (denom * l);
             let ids_val = ids_base * (1.0 + lambda_clm * vsd);
-            
+
             let gm_val = ((w * mu_eff * cox * vds_sat) / (denom * l)) * (1.0 + lambda_clm * vsd);
             let gds_val = ids_base * lambda_clm;
-            
+
             (ids_val, gm_val, gds_val.max(1e-9))
         }
     };
 
     (isd, gm, gds, igs, gg)
-
 }
-
-
-

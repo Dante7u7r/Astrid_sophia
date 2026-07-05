@@ -1,12 +1,12 @@
+use crate::solver::{CircuitNetlist, ComponentData};
 use std::collections::HashMap;
-use crate::solver::{ComponentData, CircuitNetlist};
 
 #[allow(unused_imports)]
-use super::lexer::*;
+use super::devices::*;
 #[allow(unused_imports)]
 use super::expressions::*;
 #[allow(unused_imports)]
-use super::devices::*;
+use super::lexer::*;
 
 #[derive(Clone, Debug)]
 pub struct SubcktTemplate {
@@ -22,7 +22,11 @@ pub struct SubcktTemplate {
 pub fn create_scr_template() -> SubcktTemplate {
     SubcktTemplate {
         name: "SCR_VIRTUAL".to_string(),
-        pins: vec!["anode".to_string(), "cathode".to_string(), "gate".to_string()],
+        pins: vec![
+            "anode".to_string(),
+            "cathode".to_string(),
+            "gate".to_string(),
+        ],
         lines: vec![
             "Qpnp N1 gate anode pnp_scr".to_string(),
             "Qnpn gate N1 cathode npn_scr".to_string(),
@@ -70,8 +74,10 @@ pub fn get_subckt_template_and_models(
 
     if is_scr_or_triac {
         let m = models.get(subckt_name).unwrap();
-        let _vgt = get_evaluated_model_param(m, "vgt", global_params).unwrap_or(crate::solver::SCR_DEFAULT_VGT);
-        let ih = get_evaluated_model_param(m, "ih", global_params).unwrap_or(crate::solver::SCR_DEFAULT_IH);
+        let _vgt = get_evaluated_model_param(m, "vgt", global_params)
+            .unwrap_or(crate::solver::SCR_DEFAULT_VGT);
+        let ih = get_evaluated_model_param(m, "ih", global_params)
+            .unwrap_or(crate::solver::SCR_DEFAULT_IH);
 
         let tpl = if first_char == 's' {
             create_scr_template()
@@ -83,76 +89,98 @@ pub fn get_subckt_template_and_models(
         let beta = (50.0 * (5e-3 / ih)).clamp(10.0, crate::solver::SCR_MAX_BETA);
 
         if first_char == 's' {
-            local_models.insert("pnp_scr".to_string(), DeviceModel {
-                name: "pnp_scr".to_string(),
-                model_type: "pnp".to_string(),
-                params: [
-                    ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
-                    ("bf".to_string(), beta),
-                    ("vaf".to_string(), 100.0),
-                    ("rb".to_string(), 1.0),   // Resistencia interna de base baja
-                    ("rc".to_string(), 0.1),   // Resistencia interna de colector baja
-                    ("cje".to_string(), 100e-12),
-                    ("cjc".to_string(), 50e-12),
-                ].into_iter().collect(),
-                param_expressions: HashMap::new(),
-                va_ports: None,
-                va_equations: None,
-            });
-            local_models.insert("npn_scr".to_string(), DeviceModel {
-                name: "npn_scr".to_string(),
-                model_type: "npn".to_string(),
-                params: [
-                    ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
-                    ("bf".to_string(), beta),
-                    ("vaf".to_string(), 100.0),
-                    ("rb".to_string(), 1.0),   // Resistencia interna de base baja
-                    ("rc".to_string(), 0.1),   // Resistencia interna de colector baja
-                    ("cje".to_string(), 100e-12),
-                    ("cjc".to_string(), 50e-12),
-                ].into_iter().collect(),
-                param_expressions: HashMap::new(),
-                va_ports: None,
-                va_equations: None,
-            });
+            local_models.insert(
+                "pnp_scr".to_string(),
+                DeviceModel {
+                    name: "pnp_scr".to_string(),
+                    model_type: "pnp".to_string(),
+                    params: [
+                        ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
+                        ("bf".to_string(), beta),
+                        ("vaf".to_string(), 100.0),
+                        ("rb".to_string(), 1.0), // Resistencia interna de base baja
+                        ("rc".to_string(), 0.1), // Resistencia interna de colector baja
+                        ("cje".to_string(), 100e-12),
+                        ("cjc".to_string(), 50e-12),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    param_expressions: HashMap::new(),
+                    va_ports: None,
+                    va_equations: None,
+                },
+            );
+            local_models.insert(
+                "npn_scr".to_string(),
+                DeviceModel {
+                    name: "npn_scr".to_string(),
+                    model_type: "npn".to_string(),
+                    params: [
+                        ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
+                        ("bf".to_string(), beta),
+                        ("vaf".to_string(), 100.0),
+                        ("rb".to_string(), 1.0), // Resistencia interna de base baja
+                        ("rc".to_string(), 0.1), // Resistencia interna de colector baja
+                        ("cje".to_string(), 100e-12),
+                        ("cjc".to_string(), 50e-12),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    param_expressions: HashMap::new(),
+                    va_ports: None,
+                    va_equations: None,
+                },
+            );
         } else {
-            local_models.insert("pnp_triac".to_string(), DeviceModel {
-                name: "pnp_triac".to_string(),
-                model_type: "pnp".to_string(),
-                params: [
-                    ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
-                    ("bf".to_string(), beta),
-                    ("vaf".to_string(), 100.0),
-                    ("rb".to_string(), 1.0),   // Resistencia interna de base baja
-                    ("rc".to_string(), 0.1),   // Resistencia interna de colector baja
-                    ("cje".to_string(), 100e-12),
-                    ("cjc".to_string(), 50e-12),
-                ].into_iter().collect(),
-                param_expressions: HashMap::new(),
-                va_ports: None,
-                va_equations: None,
-            });
-            local_models.insert("npn_triac".to_string(), DeviceModel {
-                name: "npn_triac".to_string(),
-                model_type: "npn".to_string(),
-                params: [
-                    ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
-                    ("bf".to_string(), beta),
-                    ("vaf".to_string(), 100.0),
-                    ("rb".to_string(), 1.0),   // Resistencia interna de base baja
-                    ("rc".to_string(), 0.1),   // Resistencia interna de colector baja
-                    ("cje".to_string(), 100e-12),
-                    ("cjc".to_string(), 50e-12),
-                ].into_iter().collect(),
-                param_expressions: HashMap::new(),
-                va_ports: None,
-                va_equations: None,
-            });
+            local_models.insert(
+                "pnp_triac".to_string(),
+                DeviceModel {
+                    name: "pnp_triac".to_string(),
+                    model_type: "pnp".to_string(),
+                    params: [
+                        ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
+                        ("bf".to_string(), beta),
+                        ("vaf".to_string(), 100.0),
+                        ("rb".to_string(), 1.0), // Resistencia interna de base baja
+                        ("rc".to_string(), 0.1), // Resistencia interna de colector baja
+                        ("cje".to_string(), 100e-12),
+                        ("cjc".to_string(), 50e-12),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    param_expressions: HashMap::new(),
+                    va_ports: None,
+                    va_equations: None,
+                },
+            );
+            local_models.insert(
+                "npn_triac".to_string(),
+                DeviceModel {
+                    name: "npn_triac".to_string(),
+                    model_type: "npn".to_string(),
+                    params: [
+                        ("is".to_string(), crate::solver::SCR_DEFAULT_IS),
+                        ("bf".to_string(), beta),
+                        ("vaf".to_string(), 100.0),
+                        ("rb".to_string(), 1.0), // Resistencia interna de base baja
+                        ("rc".to_string(), 0.1), // Resistencia interna de colector baja
+                        ("cje".to_string(), 100e-12),
+                        ("cjc".to_string(), 50e-12),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    param_expressions: HashMap::new(),
+                    va_ports: None,
+                    va_equations: None,
+                },
+            );
         }
 
         Some((tpl, local_models))
     } else {
-        templates.get(subckt_name).map(|tpl| (tpl.clone(), models.clone()))
+        templates
+            .get(subckt_name)
+            .map(|tpl| (tpl.clone(), models.clone()))
     }
 }
 
@@ -216,7 +244,7 @@ pub fn flatten_subcircuit(
 
         // Mapear los pines del componente hijo
         let first_char = child_local_id.chars().next().unwrap().to_ascii_lowercase();
-        
+
         let (num_pins, is_gate, is_subckt) = match first_char {
             'r' | 'c' | 'l' => (2, false, false),
             'd' => (2, false, false),
@@ -224,7 +252,7 @@ pub fn flatten_subcircuit(
             'j' => (3, false, false), // JFET (Drain, Gate, Source)
             'm' => (3, false, false), // MOSFET (simplificado a 3 pines en este simulador: G D S)
             'v' | 'i' => (2, false, false),
-            'b' => (2, false, false), // B-source
+            'b' => (2, false, false),       // B-source
             'e' | 'g' => (4, false, false), // VCVS, VCCS
             'f' | 'h' => (2, false, false), // CCCS, CCVS
             'o' => {
@@ -232,7 +260,11 @@ pub fn flatten_subcircuit(
                 // Híbrido: primero mirar el modelo .model; si no hay modelo, fallback por tokens.len().
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "opto" { (4, false, false) } else { (5, false, false) }
+                    if m.model_type == "opto" {
+                        (4, false, false)
+                    } else {
+                        (5, false, false)
+                    }
                 } else {
                     (if tokens.len() >= 7 { 5 } else { 4 }, false, false)
                 }
@@ -241,15 +273,27 @@ pub fn flatten_subcircuit(
                 // SCR: 3 pines (anode, cathode, gate)
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "scr" { (3, false, true) } else { (2, false, false) }
-                } else { (3, false, false) }
+                    if m.model_type == "scr" {
+                        (3, false, true)
+                    } else {
+                        (2, false, false)
+                    }
+                } else {
+                    (3, false, false)
+                }
             }
             't' => {
                 // TRIAC: 3 pines (mt1, mt2, gate)
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "triac" { (3, false, true) } else { (2, false, false) }
-                } else { (3, false, false) }
+                    if m.model_type == "triac" {
+                        (3, false, true)
+                    } else {
+                        (2, false, false)
+                    }
+                } else {
+                    (3, false, false)
+                }
             }
             'y' => {
                 let model_name = tokens.last().unwrap();
@@ -268,7 +312,12 @@ pub fn flatten_subcircuit(
                 let line_lower = line.to_lowercase();
                 if line_lower.contains("not_gate") {
                     (2, true, false)
-                } else if line_lower.contains("and_gate") || line_lower.contains("or_gate") || line_lower.contains("nand_gate") || line_lower.contains("nor_gate") || line_lower.contains("xor_gate") {
+                } else if line_lower.contains("and_gate")
+                    || line_lower.contains("or_gate")
+                    || line_lower.contains("nand_gate")
+                    || line_lower.contains("nor_gate")
+                    || line_lower.contains("xor_gate")
+                {
                     (3, true, false)
                 } else {
                     (5, false, false)
@@ -289,7 +338,10 @@ pub fn flatten_subcircuit(
             // Instancia interna de otro subcircuito
             // Sintaxis: Xhijo pin1 pin2 ... pinN nombre_subcircuito
             if tokens.len() < 3 {
-                return Err(format!("Línea de subcircuito inválida en {}: {}", instance_id, line));
+                return Err(format!(
+                    "Línea de subcircuito inválida en {}: {}",
+                    instance_id, line
+                ));
             }
             let subckt_name = tokens.last().unwrap().clone();
             let sub_pins_raw = &tokens[1..tokens.len() - 1];
@@ -321,10 +373,29 @@ pub fn flatten_subcircuit(
                 }
             }
 
-            if let Some((tpl, local_models)) = get_subckt_template_and_models(&subckt_name, first_char, templates, models, global_params) {
-                flatten_subcircuit(&child_global_id, &tpl, &sub_pins_mapped, &child_override_params, templates, &local_models, components, global_params, next_internal_node)?;
+            if let Some((tpl, local_models)) = get_subckt_template_and_models(
+                &subckt_name,
+                first_char,
+                templates,
+                models,
+                global_params,
+            ) {
+                flatten_subcircuit(
+                    &child_global_id,
+                    &tpl,
+                    &sub_pins_mapped,
+                    &child_override_params,
+                    templates,
+                    &local_models,
+                    components,
+                    global_params,
+                    next_internal_node,
+                )?;
             } else {
-                return Err(format!("Subcircuito o modelo '{}' no encontrado", subckt_name));
+                return Err(format!(
+                    "Subcircuito o modelo '{}' no encontrado",
+                    subckt_name
+                ));
             }
         } else {
             // Componente estándar
@@ -334,12 +405,24 @@ pub fn flatten_subcircuit(
                 // Optoacoplador (4 pines) vs Opamp (5 pines) — distinción por modelo o tokens
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "opto" { 4 } else { 5 }
+                    if m.model_type == "opto" {
+                        4
+                    } else {
+                        5
+                    }
                 } else {
-                    if tokens.len() >= 7 { 5 } else { 4 }
+                    if tokens.len() >= 7 {
+                        5
+                    } else {
+                        4
+                    }
                 }
             } else if first_char == 'u' || first_char == 'a' {
-                if tokens.len() >= 7 { 5 } else { num_pins }
+                if tokens.len() >= 7 {
+                    5
+                } else {
+                    num_pins
+                }
             } else {
                 num_pins
             };
@@ -373,7 +456,7 @@ pub fn flatten_subcircuit(
             }
 
             let value_or_model = &tokens[actual_pins_count + 1];
-            
+
             let comp_type = if is_gate {
                 value_or_model.clone()
             } else {
@@ -383,30 +466,36 @@ pub fn flatten_subcircuit(
                     'l' => "inductor".to_string(),
                     'd' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "led" { "led".to_string() } else { "diode".to_string() }
-                        } else { "diode".to_string() }
-                    },
+                            if m.model_type == "led" {
+                                "led".to_string()
+                            } else {
+                                "diode".to_string()
+                            }
+                        } else {
+                            "diode".to_string()
+                        }
+                    }
                     'q' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
                         } else {
                             "npn".to_string()
                         }
-                    },
+                    }
                     'j' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
                         } else {
                             "njf".to_string()
                         }
-                    },
+                    }
                     'm' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
                         } else {
                             "nmos".to_string()
                         }
-                    },
+                    }
                     'y' => "verilog_a".to_string(),
                     'v' => "vsource".to_string(),
                     'i' => "isource".to_string(),
@@ -418,30 +507,46 @@ pub fn flatten_subcircuit(
                         } else {
                             "bvoltage".to_string()
                         }
-                    },
+                    }
                     'e' => "vcvs".to_string(),
                     'g' => "vccs".to_string(),
                     'f' => "cccs".to_string(),
                     'h' => "ccvs".to_string(),
                     'o' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "opto" { "opto".to_string() } else { "opamp".to_string() }
+                            if m.model_type == "opto" {
+                                "opto".to_string()
+                            } else {
+                                "opamp".to_string()
+                            }
                         } else if tokens.len() == 6 {
                             "opto".to_string()
                         } else {
                             "opamp".to_string()
                         }
-                    },
+                    }
                     's' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "scr" { "scr".to_string() } else { "resistor".to_string() }
-                        } else { "scr".to_string() }
-                    },
+                            if m.model_type == "scr" {
+                                "scr".to_string()
+                            } else {
+                                "resistor".to_string()
+                            }
+                        } else {
+                            "scr".to_string()
+                        }
+                    }
                     't' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "triac" { "triac".to_string() } else { "resistor".to_string() }
-                        } else { "triac".to_string() }
-                    },
+                            if m.model_type == "triac" {
+                                "triac".to_string()
+                            } else {
+                                "resistor".to_string()
+                            }
+                        } else {
+                            "triac".to_string()
+                        }
+                    }
                     _ => "opamp".to_string(),
                 }
             };
@@ -458,25 +563,25 @@ pub fn flatten_subcircuit(
                 let joined_rest = tokens[3..].join(" ");
                 let clean_rest = joined_rest.trim();
                 let lower_clean_rest = clean_rest.to_lowercase();
-                let expr_part = if lower_clean_rest.starts_with("v=") || lower_clean_rest.starts_with("i=") {
-                    clean_rest[2..].trim()
-                } else {
-                    clean_rest
-                };
+                let expr_part =
+                    if lower_clean_rest.starts_with("v=") || lower_clean_rest.starts_with("i=") {
+                        clean_rest[2..].trim()
+                    } else {
+                        clean_rest
+                    };
                 let mut expression = expr_part.to_string();
                 if expression.starts_with('{') && expression.ends_with('}') {
-                    expression = expression[1..expression.len()-1].trim().to_string();
+                    expression = expression[1..expression.len() - 1].trim().to_string();
                 }
                 comp.expression = Some(expression);
             }
 
-            if (comp_type == "cccs" || comp_type == "ccvs")
-                && tokens.len() >= 5 {
-                    comp.controlling_source = Some(format!("{}.{}", instance_id, tokens[3]));
-                    if let Ok(val) = parse_spice_value(&tokens[4]) {
-                        comp.value = val;
-                    }
+            if (comp_type == "cccs" || comp_type == "ccvs") && tokens.len() >= 5 {
+                comp.controlling_source = Some(format!("{}.{}", instance_id, tokens[3]));
+                if let Ok(val) = parse_spice_value(&tokens[4]) {
+                    comp.value = val;
                 }
+            }
 
             // Parsear parámetros de compuertas lógicas si es compuerta
             if is_gate {
@@ -508,7 +613,7 @@ pub fn flatten_subcircuit(
             } else {
                 // Verificar si es una expresión entre llaves {expr}
                 if value_or_model.starts_with('{') && value_or_model.ends_with('}') {
-                    let expr = &value_or_model[1..value_or_model.len()-1];
+                    let expr = &value_or_model[1..value_or_model.len() - 1];
                     if let Ok(val) = evaluate_expression(expr, &param_env) {
                         comp.value = val;
                     }
@@ -518,14 +623,26 @@ pub fn flatten_subcircuit(
                     let joined_rest = tokens[actual_pins_count + 1..].join(" ");
                     if let Some(open) = joined_rest.find('{') {
                         if let Some(close) = joined_rest.find('}') {
-                            let expr = &joined_rest[open+1..close];
+                            let expr = &joined_rest[open + 1..close];
                             if let Ok(val) = evaluate_expression(expr, &param_env) {
                                 comp.value = val;
                             }
                         }
                     }
                 }
-                if comp.comp_type == "diode" || comp.comp_type == "led" || comp.comp_type == "opto" || comp.comp_type == "scr" || comp.comp_type == "triac" || comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" || comp.comp_type == "verilog_a" {
+                if comp.comp_type == "diode"
+                    || comp.comp_type == "led"
+                    || comp.comp_type == "opto"
+                    || comp.comp_type == "scr"
+                    || comp.comp_type == "triac"
+                    || comp.comp_type == "npn"
+                    || comp.comp_type == "pnp"
+                    || comp.comp_type == "nmos"
+                    || comp.comp_type == "pmos"
+                    || comp.comp_type == "njf"
+                    || comp.comp_type == "pjf"
+                    || comp.comp_type == "verilog_a"
+                {
                     // Inyectar el valor por defecto o del modelo
                     if let Some(m) = models.get(value_or_model) {
                         // Para transistores, guardamos el beta o valor de modulación en .value
@@ -548,17 +665,17 @@ pub fn flatten_subcircuit(
                             comp.diode_ibv = get_evaluated_model_param(m, "ibv", &param_env);
                         } else if comp.comp_type == "opto" {
                             // Parámetros del optoacoplador: CTR, Is, N, Vsat
-                            comp.opto_ctr  = get_evaluated_model_param(m, "ctr",  &param_env);
-                            comp.opto_is   = get_evaluated_model_param(m, "is",   &param_env);
-                            comp.opto_n    = get_evaluated_model_param(m, "n",    &param_env);
+                            comp.opto_ctr = get_evaluated_model_param(m, "ctr", &param_env);
+                            comp.opto_is = get_evaluated_model_param(m, "is", &param_env);
+                            comp.opto_n = get_evaluated_model_param(m, "n", &param_env);
                             comp.opto_vsat = get_evaluated_model_param(m, "vsat", &param_env);
                             // El LED interno usa diode_is/diode_n como fallback en el solver
                             comp.diode_is = comp.opto_is;
-                            comp.diode_n  = comp.opto_n;
+                            comp.diode_n = comp.opto_n;
                         } else if comp.comp_type == "scr" || comp.comp_type == "triac" {
                             // Parámetros del tiristor/TRIAC: Vgt (voltaje de disparo) e Ih (corriente de mantenimiento)
                             comp.scr_vgt = get_evaluated_model_param(m, "vgt", &param_env);
-                            comp.scr_ih  = get_evaluated_model_param(m, "ih",  &param_env);
+                            comp.scr_ih = get_evaluated_model_param(m, "ih", &param_env);
                         } else if comp.comp_type == "npn" || comp.comp_type == "pnp" {
                             comp.bjt_is = get_evaluated_model_param(m, "is", &param_env);
                             comp.bjt_bf = get_evaluated_model_param(m, "bf", &param_env);
@@ -575,7 +692,13 @@ pub fn flatten_subcircuit(
                             comp.jfet_lambda = get_evaluated_model_param(m, "lambda", &param_env);
                             comp.jfet_cgs = get_evaluated_model_param(m, "cgs", &param_env);
                             comp.jfet_cgd = get_evaluated_model_param(m, "cgd", &param_env);
-                        } else if comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "bsim3nmos" || comp.comp_type == "bsim3pmos" || comp.comp_type == "bsim4nmos" || comp.comp_type == "bsim4pmos" {
+                        } else if comp.comp_type == "nmos"
+                            || comp.comp_type == "pmos"
+                            || comp.comp_type == "bsim3nmos"
+                            || comp.comp_type == "bsim3pmos"
+                            || comp.comp_type == "bsim4nmos"
+                            || comp.comp_type == "bsim4pmos"
+                        {
                             comp.bsim_vmax = get_evaluated_model_param(m, "vmax", &param_env);
                             comp.bsim_u0 = get_evaluated_model_param(m, "u0", &param_env);
                             comp.bsim_tox = get_evaluated_model_param(m, "tox", &param_env);
@@ -587,7 +710,11 @@ pub fn flatten_subcircuit(
                             if let Some(ref eqs) = m.va_equations {
                                 let mut serialized_eqs = Vec::new();
                                 for (from, to, expr) in eqs {
-                                    serialized_eqs.push((from.clone(), to.clone(), format_va_expr(expr)));
+                                    serialized_eqs.push((
+                                        from.clone(),
+                                        to.clone(),
+                                        format_va_expr(expr),
+                                    ));
                                 }
                                 comp.va_equations = Some(serialized_eqs);
                             }
@@ -670,10 +797,7 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
             // El nombre del subcircuito se toma del campo subcircuit_name,
             // o del valor numérico como fallback
             let fallback_name = comp.value.to_string();
-            let name = comp
-                .subcircuit_name
-                .as_deref()
-                .unwrap_or(&fallback_name);
+            let name = comp.subcircuit_name.as_deref().unwrap_or(&fallback_name);
             x_lines.push(' ');
             x_lines.push_str(name);
             x_lines.push('\n');
@@ -705,4 +829,3 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
         triggers: None,
     })
 }
-

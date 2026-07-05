@@ -1,11 +1,11 @@
 use super::resolve_includes;
+use crate::solver::{CircuitNetlist, ComponentData, MutualInductance, ThermalConfig};
 use std::collections::HashMap;
-use crate::solver::{ComponentData, CircuitNetlist, MutualInductance, ThermalConfig};
 
 #[allow(unused_imports)]
-use super::lexer::*;
-#[allow(unused_imports)]
 use super::expressions::*;
+#[allow(unused_imports)]
+use super::lexer::*;
 #[allow(unused_imports)]
 use super::subcircuits::*;
 
@@ -19,8 +19,6 @@ pub struct DeviceModel {
     pub va_equations: Option<Vec<(String, String, VaExpr)>>, // (from_port, to_port, AST)
 }
 
-
-
 // Parser de directiva .model
 pub fn parse_model_directive(line: &str) -> Option<DeviceModel> {
     let tokens: Vec<&str> = line.split_whitespace().collect();
@@ -29,7 +27,7 @@ pub fn parse_model_directive(line: &str) -> Option<DeviceModel> {
     }
 
     let model_name = tokens[1].to_string();
-    
+
     // El tipo puede estar entre paréntesis o directo, ej: npn o npn(...)
     let mut type_raw = tokens[2].to_lowercase();
     let params_start_idx = 3;
@@ -56,12 +54,12 @@ pub fn parse_model_directive(line: &str) -> Option<DeviceModel> {
 
     let mut params = HashMap::new();
     let mut param_expressions = HashMap::new();
-    
+
     // Parsear parejas clave=valor de forma consciente de bloques de llaves {...}
     let mut param_tokens = Vec::new();
     let mut current_token = String::new();
     let mut brace_level = 0;
-    
+
     for c in params_str.chars() {
         match c {
             '{' => {
@@ -109,7 +107,7 @@ pub fn parse_model_directive(line: &str) -> Option<DeviceModel> {
     if type_raw.eq_ignore_ascii_case("verilog_a") {
         let mut ports = Vec::new();
         let mut equations = Vec::new();
-        
+
         let mut iter = param_tokens.into_iter().peekable();
         while let Some(key) = iter.next() {
             if key == "=" {
@@ -120,26 +118,35 @@ pub fn parse_model_directive(line: &str) -> Option<DeviceModel> {
                 if let Some(val_str) = iter.next() {
                     let key_lower = key.to_lowercase();
                     if key_lower == "ports" {
-                        let mut ports_clean = val_str.trim_matches(|c| c == '\'' || c == '\"').trim();
+                        let mut ports_clean =
+                            val_str.trim_matches(|c| c == '\'' || c == '\"').trim();
                         if ports_clean.starts_with('(') && ports_clean.ends_with(')') {
-                            ports_clean = &ports_clean[1..ports_clean.len()-1];
+                            ports_clean = &ports_clean[1..ports_clean.len() - 1];
                         }
-                        ports = ports_clean.split(',').map(|s| s.trim().to_string()).collect();
+                        ports = ports_clean
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .collect();
                     } else if key_lower == "equation" {
                         let mut eq_clean = val_str.trim_matches(|c| c == '\'' || c == '\"').trim();
                         if eq_clean.starts_with('(') && eq_clean.ends_with(')') {
-                            eq_clean = &eq_clean[1..eq_clean.len()-1];
+                            eq_clean = &eq_clean[1..eq_clean.len() - 1];
                         }
                         if let Some(arrow_idx) = eq_clean.find("<+") {
                             let target = &eq_clean[..arrow_idx].trim();
-                            let expr_str = &eq_clean[arrow_idx+2..].trim();
-                            
+                            let expr_str = &eq_clean[arrow_idx + 2..].trim();
+
                             if target.starts_with("I(") && target.ends_with(')') {
-                                let ports_part = &target[2..target.len()-1];
-                                let ports_split: Vec<&str> = ports_part.split(',').map(|s| s.trim()).collect();
+                                let ports_part = &target[2..target.len() - 1];
+                                let ports_split: Vec<&str> =
+                                    ports_part.split(',').map(|s| s.trim()).collect();
                                 if ports_split.len() == 2 {
                                     if let Ok(expr) = parse_va_expression(expr_str) {
-                                        equations.push((ports_split[0].to_string(), ports_split[1].to_string(), expr));
+                                        equations.push((
+                                            ports_split[0].to_string(),
+                                            ports_split[1].to_string(),
+                                            expr,
+                                        ));
                                     }
                                 }
                             }
@@ -186,7 +193,6 @@ pub fn parse_model_directive(line: &str) -> Option<DeviceModel> {
     })
 }
 
-
 /// Evalúa dinámicamente un parámetro de modelo buscando primero su valor literal o su expresión
 pub fn get_evaluated_model_param(
     model: &DeviceModel,
@@ -210,8 +216,8 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
     let mut models = HashMap::new();
     let mut root_lines = Vec::new();
     let mut global_params = HashMap::new();
-    let mut ic_list = Vec::new();       // Para guardar condición inicial: (nodo, valor)
-    let mut nodeset_list = Vec::new();  // Para guardar estimación: (nodo, valor)
+    let mut ic_list = Vec::new(); // Para guardar condición inicial: (nodo, valor)
+    let mut nodeset_list = Vec::new(); // Para guardar estimación: (nodo, valor)
     let mut global_temp: Option<f64> = None;
     // Parámetros de simulación electro-térmica
     let mut thermal_tamb: Option<f64> = None;
@@ -222,7 +228,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
 
     // Fase 1: Leer y catalogar subcircuitos (.subckt / .ends), modelos (.model) y líneas raíz
     let mut current_subckt: Option<SubcktTemplate> = None;
-    
+
     // Manejar continuación de línea con '+'
     let mut processed_lines = Vec::new();
     let mut accum_line = String::new();
@@ -262,7 +268,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         if first == ".param" {
             let param_line = tokens[1..].join(" ");
             let clean_param = param_line.replace(" =", "=").replace("= ", "=");
-            let sub_tokens: Vec<String> = clean_param.split_whitespace().map(|s| s.to_string()).collect();
+            let sub_tokens: Vec<String> = clean_param
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
             for token in sub_tokens {
                 if let Some(eq_idx) = token.find('=') {
                     let key = token[..eq_idx].trim().to_lowercase();
@@ -283,7 +292,8 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         } else if first == ".ic" {
             let ic_line = tokens[1..].join(" ");
             let clean_ic = ic_line.replace(" =", "=").replace("= ", "=");
-            let sub_tokens: Vec<String> = clean_ic.split_whitespace().map(|s| s.to_string()).collect();
+            let sub_tokens: Vec<String> =
+                clean_ic.split_whitespace().map(|s| s.to_string()).collect();
             for token in sub_tokens {
                 if let Some(eq_idx) = token.find('=') {
                     let node_part = token[..eq_idx].trim().to_lowercase();
@@ -302,7 +312,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         } else if first == ".nodeset" {
             let nodeset_line = tokens[1..].join(" ");
             let clean_nodeset = nodeset_line.replace(" =", "=").replace("= ", "=");
-            let sub_tokens: Vec<String> = clean_nodeset.split_whitespace().map(|s| s.to_string()).collect();
+            let sub_tokens: Vec<String> = clean_nodeset
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
             for token in sub_tokens {
                 if let Some(eq_idx) = token.find('=') {
                     let node_part = token[..eq_idx].trim().to_lowercase();
@@ -324,7 +337,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             has_thermal_directive = true;
             let thermal_line = tokens[1..].join(" ");
             let clean_thermal = thermal_line.replace(" =", "=").replace("= ", "=");
-            let sub_tokens: Vec<String> = clean_thermal.split_whitespace().map(|s| s.to_string()).collect();
+            let sub_tokens: Vec<String> = clean_thermal
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
             for token in sub_tokens {
                 if let Some(eq_idx) = token.find('=') {
                     let key = token[..eq_idx].trim().to_lowercase();
@@ -367,7 +383,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
 
         if first == ".subckt" {
             if tokens.len() < 3 {
-                return Err("Declaración de .subckt inválida. Formato: .subckt nombre pin1 pin2 ...".to_string());
+                return Err(
+                    "Declaración de .subckt inválida. Formato: .subckt nombre pin1 pin2 ..."
+                        .to_string(),
+                );
             }
             let name = tokens[1].clone();
             // Buscar PARAMS: en la línea para separar pines de parámetros por defecto
@@ -477,14 +496,18 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             'j' => (3, false, false), // JFET (Drain, Gate, Source)
             'm' => (3, false, false),
             'v' | 'i' => (2, false, false),
-            'b' => (2, false, false), // B-source
+            'b' => (2, false, false),       // B-source
             'e' | 'g' => (4, false, false), // VCVS, VCCS
             'f' | 'h' => (2, false, false), // CCCS, CCVS
             'o' => {
                 // Optoacoplador (4 pines) vs Opamp (5 pines).
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "opto" { (4, false, false) } else { (5, false, false) }
+                    if m.model_type == "opto" {
+                        (4, false, false)
+                    } else {
+                        (5, false, false)
+                    }
                 } else {
                     (if tokens.len() >= 7 { 5 } else { 4 }, false, false)
                 }
@@ -493,15 +516,27 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 // SCR: 3 pines (anode, cathode, gate)
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "scr" { (3, false, true) } else { (2, false, false) }
-                } else { (3, false, false) }
+                    if m.model_type == "scr" {
+                        (3, false, true)
+                    } else {
+                        (2, false, false)
+                    }
+                } else {
+                    (3, false, false)
+                }
             }
             't' => {
                 // TRIAC: 3 pines (mt1, mt2, gate)
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "triac" { (3, false, true) } else { (2, false, false) }
-                } else { (3, false, false) }
+                    if m.model_type == "triac" {
+                        (3, false, true)
+                    } else {
+                        (2, false, false)
+                    }
+                } else {
+                    (3, false, false)
+                }
             }
             'y' => {
                 let model_name = tokens.last().unwrap();
@@ -520,7 +555,12 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 let line_lower = line.to_lowercase();
                 if line_lower.contains("not_gate") {
                     (2, true, false)
-                } else if line_lower.contains("and_gate") || line_lower.contains("or_gate") || line_lower.contains("nand_gate") || line_lower.contains("nor_gate") || line_lower.contains("xor_gate") {
+                } else if line_lower.contains("and_gate")
+                    || line_lower.contains("or_gate")
+                    || line_lower.contains("nand_gate")
+                    || line_lower.contains("nor_gate")
+                    || line_lower.contains("xor_gate")
+                {
                     (3, true, false)
                 } else {
                     (5, false, false)
@@ -542,10 +582,15 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             }
 
             // Detectar si hay PARAMS: en la línea de instanciación X
-            let _line_lower_joined = tokens.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>().join(" ");
+            let _line_lower_joined = tokens
+                .iter()
+                .map(|t| t.to_lowercase())
+                .collect::<Vec<_>>()
+                .join(" ");
             let params_keyword_pos = tokens.iter().position(|t| t.to_lowercase() == "params:");
 
-            let (subckt_name, sub_pins, override_params) = if let Some(pk_pos) = params_keyword_pos {
+            let (subckt_name, sub_pins, override_params) = if let Some(pk_pos) = params_keyword_pos
+            {
                 // El nombre del subcircuito es el token justo antes de PARAMS:
                 let name = tokens[pk_pos - 1].clone();
                 let pins = &tokens[1..pk_pos - 1];
@@ -567,10 +612,29 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             };
 
             // Aplanar subcircuito
-            if let Some((tpl, local_models)) = get_subckt_template_and_models(&subckt_name, first_char, &templates, &models, &global_params) {
-                flatten_subcircuit(&id, &tpl, &sub_pins, &override_params, &templates, &local_models, &mut components, &global_params, &mut next_internal_node)?;
+            if let Some((tpl, local_models)) = get_subckt_template_and_models(
+                &subckt_name,
+                first_char,
+                &templates,
+                &models,
+                &global_params,
+            ) {
+                flatten_subcircuit(
+                    &id,
+                    &tpl,
+                    &sub_pins,
+                    &override_params,
+                    &templates,
+                    &local_models,
+                    &mut components,
+                    &global_params,
+                    &mut next_internal_node,
+                )?;
             } else {
-                return Err(format!("Subcircuito o modelo '{}' no encontrado", subckt_name));
+                return Err(format!(
+                    "Subcircuito o modelo '{}' no encontrado",
+                    subckt_name
+                ));
             }
         } else {
             let pins_count = if is_gate {
@@ -579,12 +643,24 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 // Optoacoplador (4 pines) vs Opamp (5 pines) — distinción por modelo o tokens
                 let model_name = tokens.last().unwrap();
                 if let Some(m) = models.get(model_name) {
-                    if m.model_type == "opto" { 4 } else { 5 }
+                    if m.model_type == "opto" {
+                        4
+                    } else {
+                        5
+                    }
                 } else {
-                    if tokens.len() >= 7 { 5 } else { 4 }
+                    if tokens.len() >= 7 {
+                        5
+                    } else {
+                        4
+                    }
                 }
             } else if first_char == 'u' || first_char == 'a' {
-                if tokens.len() >= 7 { 5 } else { num_pins }
+                if tokens.len() >= 7 {
+                    5
+                } else {
+                    num_pins
+                }
             } else {
                 num_pins
             };
@@ -614,30 +690,36 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                     'l' => "inductor".to_string(),
                     'd' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "led" { "led".to_string() } else { "diode".to_string() }
-                        } else { "diode".to_string() }
-                    },
+                            if m.model_type == "led" {
+                                "led".to_string()
+                            } else {
+                                "diode".to_string()
+                            }
+                        } else {
+                            "diode".to_string()
+                        }
+                    }
                     'q' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
                         } else {
                             "npn".to_string()
                         }
-                    },
+                    }
                     'j' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
                         } else {
                             "njf".to_string()
                         }
-                    },
+                    }
                     'm' => {
                         if let Some(m) = models.get(value_or_model) {
                             m.model_type.clone()
                         } else {
                             "nmos".to_string()
                         }
-                    },
+                    }
                     'y' => "verilog_a".to_string(),
                     'v' => "vsource".to_string(),
                     'i' => "isource".to_string(),
@@ -649,30 +731,46 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                         } else {
                             "bvoltage".to_string()
                         }
-                    },
+                    }
                     'e' => "vcvs".to_string(),
                     'g' => "vccs".to_string(),
                     'f' => "cccs".to_string(),
                     'h' => "ccvs".to_string(),
                     'o' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "opto" { "opto".to_string() } else { "opamp".to_string() }
+                            if m.model_type == "opto" {
+                                "opto".to_string()
+                            } else {
+                                "opamp".to_string()
+                            }
                         } else if tokens.len() == 6 {
                             "opto".to_string()
                         } else {
                             "opamp".to_string()
                         }
-                    },
+                    }
                     's' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "scr" { "scr".to_string() } else { "resistor".to_string() }
-                        } else { "scr".to_string() }
-                    },
+                            if m.model_type == "scr" {
+                                "scr".to_string()
+                            } else {
+                                "resistor".to_string()
+                            }
+                        } else {
+                            "scr".to_string()
+                        }
+                    }
                     't' => {
                         if let Some(m) = models.get(value_or_model) {
-                            if m.model_type == "triac" { "triac".to_string() } else { "resistor".to_string() }
-                        } else { "triac".to_string() }
-                    },
+                            if m.model_type == "triac" {
+                                "triac".to_string()
+                            } else {
+                                "resistor".to_string()
+                            }
+                        } else {
+                            "triac".to_string()
+                        }
+                    }
                     _ => "opamp".to_string(),
                 }
             };
@@ -688,25 +786,25 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 let joined_rest = tokens[3..].join(" ");
                 let clean_rest = joined_rest.trim();
                 let lower_clean_rest = clean_rest.to_lowercase();
-                let expr_part = if lower_clean_rest.starts_with("v=") || lower_clean_rest.starts_with("i=") {
-                    clean_rest[2..].trim()
-                } else {
-                    clean_rest
-                };
+                let expr_part =
+                    if lower_clean_rest.starts_with("v=") || lower_clean_rest.starts_with("i=") {
+                        clean_rest[2..].trim()
+                    } else {
+                        clean_rest
+                    };
                 let mut expression = expr_part.to_string();
                 if expression.starts_with('{') && expression.ends_with('}') {
-                    expression = expression[1..expression.len()-1].trim().to_string();
+                    expression = expression[1..expression.len() - 1].trim().to_string();
                 }
                 comp.expression = Some(expression);
             }
 
-            if (comp_type == "cccs" || comp_type == "ccvs")
-                && tokens.len() >= 5 {
-                    comp.controlling_source = Some(tokens[3].clone());
-                    if let Ok(val) = parse_spice_value(&tokens[4]) {
-                        comp.value = val;
-                    }
+            if (comp_type == "cccs" || comp_type == "ccvs") && tokens.len() >= 5 {
+                comp.controlling_source = Some(tokens[3].clone());
+                if let Ok(val) = parse_spice_value(&tokens[4]) {
+                    comp.value = val;
                 }
+            }
 
             // Parsear parámetros de compuertas lógicas si es compuerta
             if is_gate {
@@ -722,7 +820,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                 comp.rise_delay = Some(val);
                             } else if param_name == "fall_delay" || param_name == "tfall" {
                                 comp.fall_delay = Some(val);
-} else if param_name == "vhigh" {
+                            } else if param_name == "vhigh" {
                                 comp.gate_vhigh = Some(val);
                             } else if param_name == "vlow" {
                                 comp.gate_vlow = Some(val);
@@ -735,7 +833,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             if let Ok(val) = parse_spice_value(value_or_model) {
                 comp.value = val;
             } else if value_or_model.starts_with('{') && value_or_model.ends_with('}') {
-                let expr = &value_or_model[1..value_or_model.len()-1];
+                let expr = &value_or_model[1..value_or_model.len() - 1];
                 if let Ok(val) = evaluate_expression(expr, &global_params) {
                     comp.value = val;
                 }
@@ -745,7 +843,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 let mut expr_success = false;
                 if let Some(open) = joined_rest.find('{') {
                     if let Some(close) = joined_rest.find('}') {
-                        let expr = &joined_rest[open+1..close];
+                        let expr = &joined_rest[open + 1..close];
                         if let Ok(val) = evaluate_expression(expr, &global_params) {
                             comp.value = val;
                             expr_success = true;
@@ -754,11 +852,25 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 }
                 if !expr_success {
                     // Modelo
-                if comp.comp_type == "diode" || comp.comp_type == "led" || comp.comp_type == "opto" || comp.comp_type == "scr" || comp.comp_type == "triac" || comp.comp_type == "npn" || comp.comp_type == "pnp" || comp.comp_type == "nmos" || comp.comp_type == "pmos" || comp.comp_type == "njf" || comp.comp_type == "pjf" || comp.comp_type == "verilog_a" {
+                    if comp.comp_type == "diode"
+                        || comp.comp_type == "led"
+                        || comp.comp_type == "opto"
+                        || comp.comp_type == "scr"
+                        || comp.comp_type == "triac"
+                        || comp.comp_type == "npn"
+                        || comp.comp_type == "pnp"
+                        || comp.comp_type == "nmos"
+                        || comp.comp_type == "pmos"
+                        || comp.comp_type == "njf"
+                        || comp.comp_type == "pjf"
+                        || comp.comp_type == "verilog_a"
+                    {
                         if let Some(m) = models.get(value_or_model) {
                             if let Some(bf) = get_evaluated_model_param(m, "bf", &global_params) {
                                 comp.value = bf;
-                            } else if let Some(vto) = get_evaluated_model_param(m, "vto", &global_params) {
+                            } else if let Some(vto) =
+                                get_evaluated_model_param(m, "vto", &global_params)
+                            {
                                 comp.value = vto;
                             } else {
                                 comp.value = 1.0;
@@ -768,18 +880,21 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                 comp.diode_rs = get_evaluated_model_param(m, "rs", &global_params);
                                 comp.diode_n = get_evaluated_model_param(m, "n", &global_params);
                                 comp.diode_tt = get_evaluated_model_param(m, "tt", &global_params);
-                                comp.diode_cjo = get_evaluated_model_param(m, "cjo", &global_params);
+                                comp.diode_cjo =
+                                    get_evaluated_model_param(m, "cjo", &global_params);
                                 comp.diode_vj = get_evaluated_model_param(m, "vj", &global_params);
                                 comp.diode_m = get_evaluated_model_param(m, "m", &global_params);
                                 comp.diode_bv = get_evaluated_model_param(m, "bv", &global_params);
-                                comp.diode_ibv = get_evaluated_model_param(m, "ibv", &global_params);
+                                comp.diode_ibv =
+                                    get_evaluated_model_param(m, "ibv", &global_params);
                             } else if comp.comp_type == "opto" {
-                                comp.opto_ctr  = get_evaluated_model_param(m, "ctr",  &global_params);
-                                comp.opto_is   = get_evaluated_model_param(m, "is",   &global_params);
-                                comp.opto_n    = get_evaluated_model_param(m, "n",    &global_params);
-                                comp.opto_vsat = get_evaluated_model_param(m, "vsat", &global_params);
+                                comp.opto_ctr = get_evaluated_model_param(m, "ctr", &global_params);
+                                comp.opto_is = get_evaluated_model_param(m, "is", &global_params);
+                                comp.opto_n = get_evaluated_model_param(m, "n", &global_params);
+                                comp.opto_vsat =
+                                    get_evaluated_model_param(m, "vsat", &global_params);
                                 comp.diode_is = comp.opto_is;
-                                comp.diode_n  = comp.opto_n;
+                                comp.diode_n = comp.opto_n;
                             } else if comp.comp_type == "npn" || comp.comp_type == "pnp" {
                                 comp.bjt_is = get_evaluated_model_param(m, "is", &global_params);
                                 comp.bjt_bf = get_evaluated_model_param(m, "bf", &global_params);
@@ -792,8 +907,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                 comp.bjt_tr = get_evaluated_model_param(m, "tr", &global_params);
                             } else if comp.comp_type == "njf" || comp.comp_type == "pjf" {
                                 comp.jfet_vto = get_evaluated_model_param(m, "vto", &global_params);
-                                comp.jfet_beta = get_evaluated_model_param(m, "beta", &global_params);
-                                comp.jfet_lambda = get_evaluated_model_param(m, "lambda", &global_params);
+                                comp.jfet_beta =
+                                    get_evaluated_model_param(m, "beta", &global_params);
+                                comp.jfet_lambda =
+                                    get_evaluated_model_param(m, "lambda", &global_params);
                                 comp.jfet_cgs = get_evaluated_model_param(m, "cgs", &global_params);
                                 comp.jfet_cgd = get_evaluated_model_param(m, "cgd", &global_params);
                             } else if comp.comp_type == "verilog_a" {
@@ -802,7 +919,11 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                 if let Some(ref eqs) = m.va_equations {
                                     let mut serialized_eqs = Vec::new();
                                     for (from, to, expr) in eqs {
-                                        serialized_eqs.push((from.clone(), to.clone(), format_va_expr(expr)));
+                                        serialized_eqs.push((
+                                            from.clone(),
+                                            to.clone(),
+                                            format_va_expr(expr),
+                                        ));
                                     }
                                     comp.va_equations = Some(serialized_eqs);
                                 }
@@ -888,4 +1009,3 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         triggers: None,
     })
 }
-

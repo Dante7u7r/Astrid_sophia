@@ -1,4 +1,4 @@
-use crate::solver::{SparseMatrix, SparseLU};
+use crate::solver::{SparseLU, SparseMatrix};
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex;
 
@@ -46,7 +46,8 @@ pub fn arnoldi_poles(
         }
 
         // b. Resolución del sistema disperso: w = C^{-1} * temp
-        let w = c_lu.solve(&temp)
+        let w = c_lu
+            .solve(&temp)
             .ok_or_else(|| "Fallo al resolver sistema triangular en Arnoldi.".to_string())?;
 
         let mut w_orth = w.clone();

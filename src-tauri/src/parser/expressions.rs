@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 #[allow(unused_imports)]
-use super::lexer::*;
-#[allow(unused_imports)]
 use super::devices::*;
+#[allow(unused_imports)]
+use super::lexer::*;
 #[allow(unused_imports)]
 use super::subcircuits::*;
 
@@ -24,7 +24,11 @@ pub enum VaExpr {
 }
 
 impl VaExpr {
-    pub fn evaluate(&self, params: &HashMap<String, f64>, ports: &[crate::dual3::Dual3; 3]) -> Result<crate::dual3::Dual3, String> {
+    pub fn evaluate(
+        &self,
+        params: &HashMap<String, f64>,
+        ports: &[crate::dual3::Dual3; 3],
+    ) -> Result<crate::dual3::Dual3, String> {
         match self {
             VaExpr::Val(v) => Ok(crate::dual3::Dual3::constant(*v)),
             VaExpr::Var(name) => {
@@ -38,7 +42,10 @@ impl VaExpr {
                 } else if let Some(&val) = params.get(&name_lower) {
                     Ok(crate::dual3::Dual3::constant(val))
                 } else {
-                    Err(format!("Variable o parámetro no encontrado en el contexto de Verilog-A: {}", name))
+                    Err(format!(
+                        "Variable o parámetro no encontrado en el contexto de Verilog-A: {}",
+                        name
+                    ))
                 }
             }
             VaExpr::Add(lhs, rhs) => {
@@ -100,19 +107,26 @@ pub fn parse_va_expression(expr_str: &str) -> Result<VaExpr, String> {
     let mut depth = 0;
     for i in (0..chars.len()).rev() {
         let c = chars[i];
-        if c == ')' { depth += 1; }
-        else if c == '(' { depth -= 1; }
-        else if depth == 0 && i > 0 {
-            if c == '+' && chars[i-1] != 'e' && chars[i-1] != 'E' {
+        if c == ')' {
+            depth += 1;
+        } else if c == '(' {
+            depth -= 1;
+        } else if depth == 0 && i > 0 {
+            if c == '+' && chars[i - 1] != 'e' && chars[i - 1] != 'E' {
                 let lhs = parse_va_expression(&clean[..i])?;
-                let rhs = parse_va_expression(&clean[i+1..])?;
+                let rhs = parse_va_expression(&clean[i + 1..])?;
                 return Ok(VaExpr::Add(Box::new(lhs), Box::new(rhs)));
             }
-            if c == '-' && chars[i-1] != 'e' && chars[i-1] != 'E' {
+            if c == '-' && chars[i - 1] != 'e' && chars[i - 1] != 'E' {
                 let prefix = clean[..i].trim();
-                if !prefix.is_empty() && !prefix.ends_with('+') && !prefix.ends_with('-') && !prefix.ends_with('*') && !prefix.ends_with('/') {
+                if !prefix.is_empty()
+                    && !prefix.ends_with('+')
+                    && !prefix.ends_with('-')
+                    && !prefix.ends_with('*')
+                    && !prefix.ends_with('/')
+                {
                     let lhs = parse_va_expression(&clean[..i])?;
-                    let rhs = parse_va_expression(&clean[i+1..])?;
+                    let rhs = parse_va_expression(&clean[i + 1..])?;
                     return Ok(VaExpr::Sub(Box::new(lhs), Box::new(rhs)));
                 }
             }
@@ -123,17 +137,19 @@ pub fn parse_va_expression(expr_str: &str) -> Result<VaExpr, String> {
     depth = 0;
     for i in (0..chars.len()).rev() {
         let c = chars[i];
-        if c == ')' { depth += 1; }
-        else if c == '(' { depth -= 1; }
-        else if depth == 0 {
+        if c == ')' {
+            depth += 1;
+        } else if c == '(' {
+            depth -= 1;
+        } else if depth == 0 {
             if c == '*' {
                 let lhs = parse_va_expression(&clean[..i])?;
-                let rhs = parse_va_expression(&clean[i+1..])?;
+                let rhs = parse_va_expression(&clean[i + 1..])?;
                 return Ok(VaExpr::Mul(Box::new(lhs), Box::new(rhs)));
             }
             if c == '/' {
                 let lhs = parse_va_expression(&clean[..i])?;
-                let rhs = parse_va_expression(&clean[i+1..])?;
+                let rhs = parse_va_expression(&clean[i + 1..])?;
                 return Ok(VaExpr::Div(Box::new(lhs), Box::new(rhs)));
             }
         }
@@ -153,54 +169,61 @@ pub fn parse_va_expression(expr_str: &str) -> Result<VaExpr, String> {
         let mut matching = true;
         let mut d = 0;
         for (i, &ch) in chars.iter().enumerate() {
-            if ch == '(' { d += 1; }
-            else if ch == ')' { d -= 1; }
+            if ch == '(' {
+                d += 1;
+            } else if ch == ')' {
+                d -= 1;
+            }
             if d == 0 && i < chars.len() - 1 {
                 matching = false;
                 break;
             }
         }
         if matching {
-            return parse_va_expression(&clean[1..clean.len()-1]);
+            return parse_va_expression(&clean[1..clean.len() - 1]);
         }
     }
 
     // Nivel 5: Funciones matemáticas
     let clean_lower = clean.to_lowercase();
     if clean_lower.starts_with("exp(") && clean.ends_with(')') {
-        let inner = parse_va_expression(&clean[4..clean.len()-1])?;
+        let inner = parse_va_expression(&clean[4..clean.len() - 1])?;
         return Ok(VaExpr::Exp(Box::new(inner)));
     }
     if clean_lower.starts_with("ln(") && clean.ends_with(')') {
-        let inner = parse_va_expression(&clean[3..clean.len()-1])?;
+        let inner = parse_va_expression(&clean[3..clean.len() - 1])?;
         return Ok(VaExpr::Ln(Box::new(inner)));
     }
     if clean_lower.starts_with("sqrt(") && clean.ends_with(')') {
-        let inner = parse_va_expression(&clean[5..clean.len()-1])?;
+        let inner = parse_va_expression(&clean[5..clean.len() - 1])?;
         return Ok(VaExpr::Sqrt(Box::new(inner)));
     }
     if clean_lower.starts_with("tanh(") && clean.ends_with(')') {
-        let inner = parse_va_expression(&clean[5..clean.len()-1])?;
+        let inner = parse_va_expression(&clean[5..clean.len() - 1])?;
         return Ok(VaExpr::Tanh(Box::new(inner)));
     }
     if clean_lower.starts_with("pow(") && clean.ends_with(')') {
-        let inner_str = &clean[4..clean.len()-1];
+        let inner_str = &clean[4..clean.len() - 1];
         let mut d = 0;
         let mut comma_idx = None;
         let inner_chars: Vec<char> = inner_str.chars().collect();
         for (idx, &ch) in inner_chars.iter().enumerate() {
-            if ch == '(' { d += 1; }
-            else if ch == ')' { d -= 1; }
-            else if ch == ',' && d == 0 {
+            if ch == '(' {
+                d += 1;
+            } else if ch == ')' {
+                d -= 1;
+            } else if ch == ',' && d == 0 {
                 comma_idx = Some(idx);
                 break;
             }
         }
         if let Some(idx) = comma_idx {
             let base_str = &inner_str[..idx];
-            let exp_str = &inner_str[idx+1..].trim();
+            let exp_str = &inner_str[idx + 1..].trim();
             let base_expr = parse_va_expression(base_str)?;
-            let exp_val = exp_str.parse::<f64>().map_err(|e| format!("Exponente pow inválido: {}", e))?;
+            let exp_val = exp_str
+                .parse::<f64>()
+                .map_err(|e| format!("Exponente pow inválido: {}", e))?;
             return Ok(VaExpr::Pow(Box::new(base_expr), exp_val));
         }
     }
@@ -287,15 +310,18 @@ pub fn evaluate_expression(expr: &str, param_env: &HashMap<String, f64>) -> Resu
     }
 
     // Resolver variables por sus valores del entorno de parámetros
-    let resolved: Vec<String> = tokens.iter().map(|t| {
-        if t == "+" || t == "-" || t == "*" || t == "/" || t == "(" || t == ")" {
-            t.clone()
-        } else if let Some(&val) = param_env.get(&t.to_lowercase()) {
-            format!("{}", val)
-        } else {
-            t.clone()
-        }
-    }).collect();
+    let resolved: Vec<String> = tokens
+        .iter()
+        .map(|t| {
+            if t == "+" || t == "-" || t == "*" || t == "/" || t == "(" || t == ")" {
+                t.clone()
+            } else if let Some(&val) = param_env.get(&t.to_lowercase()) {
+                format!("{}", val)
+            } else {
+                t.clone()
+            }
+        })
+        .collect();
 
     // Evaluar con precedencia: primero * y /, luego + y -
     // Paso 1: Convertir tokens a valores numéricos y operadores
@@ -308,7 +334,8 @@ pub fn evaluate_expression(expr: &str, param_env: &HashMap<String, f64>) -> Resu
         if t == "+" || t == "-" || t == "*" || t == "/" {
             ops.push(t.chars().next().unwrap());
         } else {
-            let val = parse_spice_value(t).map_err(|_| format!("No se pudo evaluar '{}' en expresión", t))?;
+            let val = parse_spice_value(t)
+                .map_err(|_| format!("No se pudo evaluar '{}' en expresión", t))?;
             values.push(val);
         }
         idx += 1;
@@ -351,4 +378,3 @@ pub fn evaluate_expression(expr: &str, param_env: &HashMap<String, f64>) -> Resu
 
     Ok(result)
 }
-

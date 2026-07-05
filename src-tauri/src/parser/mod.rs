@@ -1,14 +1,14 @@
-pub mod lexer;
-pub mod expressions;
 pub mod devices;
+pub mod expressions;
+pub mod lexer;
 pub mod subcircuits;
 
 #[cfg(test)]
 mod tests;
 
-pub use lexer::*;
-pub use expressions::*;
 pub use devices::*;
+pub use expressions::*;
+pub use lexer::*;
 pub use subcircuits::*;
 
 use std::fs;
@@ -105,7 +105,11 @@ pub fn resolve_includes_with_section(
                 continue;
             }
             // Si es una definición de sección interna, la ignoramos (pero no su contenido, que se procesará cuando sea incluida selectivamente)
-            if first == ".lib" && tokens.len() >= 2 && !tokens[1].contains('.') && !tokens[1].contains('/') {
+            if first == ".lib"
+                && tokens.len() >= 2
+                && !tokens[1].contains('.')
+                && !tokens[1].contains('/')
+            {
                 continue;
             }
             lines_to_process.push(line);
@@ -131,11 +135,18 @@ pub fn resolve_includes_with_section(
             let file_path = Path::new(raw_path);
 
             if !file_path.exists() {
-                return Err(format!("No se pudo encontrar el archivo de inclusión: {}", raw_path));
+                return Err(format!(
+                    "No se pudo encontrar el archivo de inclusión: {}",
+                    raw_path
+                ));
             }
 
-            let include_content = fs::read_to_string(file_path)
-                .map_err(|e| format!("No se pudo leer el archivo de inclusión {}: {}", raw_path, e))?;
+            let include_content = fs::read_to_string(file_path).map_err(|e| {
+                format!(
+                    "No se pudo leer el archivo de inclusión {}: {}",
+                    raw_path, e
+                )
+            })?;
 
             // Si es .lib y especifica una sección (tokens[2]), la resolvemos selectivamente
             let section = if first == ".lib" && tokens.len() >= 3 {
@@ -144,13 +155,17 @@ pub fn resolve_includes_with_section(
                 None
             };
 
-            let resolved_content = resolve_includes_with_section(&include_content, section, depth + 1)?;
+            let resolved_content =
+                resolve_includes_with_section(&include_content, section, depth + 1)?;
             result.push_str(&resolved_content);
             result.push('\n');
         } else {
             // Ignorar preventivamente directivas no soportadas de fabricantes analógicos comerciales
             if first == ".options" || first == ".plot" || first == ".probe" || first == ".save" {
-                result.push_str(&format!("* Omitida directiva comercial no soportada: {}\n", clean));
+                result.push_str(&format!(
+                    "* Omitida directiva comercial no soportada: {}\n",
+                    clean
+                ));
             } else {
                 result.push_str(&line);
                 result.push('\n');
@@ -160,5 +175,3 @@ pub fn resolve_includes_with_section(
 
     Ok(result)
 }
-
-

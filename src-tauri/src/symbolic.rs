@@ -1,13 +1,12 @@
 #![allow(clippy::needless_range_loop)]
 use crate::solver::SparseMatrix;
 
-
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SymbolicFactorization {
     pub size: usize,
-    pub p: Vec<usize>,                    // Permutación de filas
-    pub q: Vec<usize>,                    // Permutación de columnas
+    pub p: Vec<usize>,                        // Permutación de filas
+    pub q: Vec<usize>,                        // Permutación de columnas
     pub elimination_tree: Vec<Option<usize>>, // Árbol de eliminación (padres de cada nodo)
 }
 

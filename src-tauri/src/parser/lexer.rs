@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
-use super::expressions::*;
-#[allow(unused_imports)]
 use super::devices::*;
+#[allow(unused_imports)]
+use super::expressions::*;
 #[allow(unused_imports)]
 use super::subcircuits::*;
 
@@ -15,11 +15,14 @@ pub fn parse_spice_value(s: &str) -> Result<f64, String> {
     // Encontrar el primer caracter no numérico (excluyendo signo, punto y e/e- para notación científica)
     let mut num_end = clean.len();
     let chars: Vec<char> = clean.chars().collect();
-    
+
     for (i, &c) in chars.iter().enumerate() {
         if c.is_alphabetic() {
             // Verificar si es parte de notación científica (ej: 1e-3)
-            if c == 'e' && i + 1 < chars.len() && (chars[i+1].is_numeric() || chars[i+1] == '-' || chars[i+1] == '+') {
+            if c == 'e'
+                && i + 1 < chars.len()
+                && (chars[i + 1].is_numeric() || chars[i + 1] == '-' || chars[i + 1] == '+')
+            {
                 continue;
             }
             num_end = i;
@@ -28,7 +31,9 @@ pub fn parse_spice_value(s: &str) -> Result<f64, String> {
     }
 
     let num_str = &clean[..num_end];
-    let mut val = num_str.parse::<f64>().map_err(|e| format!("No se pudo parsear número '{}': {}", num_str, e))?;
+    let mut val = num_str
+        .parse::<f64>()
+        .map_err(|e| format!("No se pudo parsear número '{}': {}", num_str, e))?;
 
     let suffix_str = &clean[num_end..];
     if !suffix_str.is_empty() {
@@ -62,10 +67,10 @@ pub fn parse_waveform(wave_str: &str) -> Option<(String, Vec<f64>)> {
     if close_idx <= open_idx {
         return None;
     }
-    
+
     let wave_type = clean[..open_idx].trim().to_lowercase();
     let params_str = &clean[open_idx + 1..close_idx];
-    
+
     let mut params = Vec::new();
     // Separar por espacios o comas
     for token in params_str.split([' ', ',', '\t']) {
@@ -76,6 +81,6 @@ pub fn parse_waveform(wave_str: &str) -> Option<(String, Vec<f64>)> {
             }
         }
     }
-    
+
     Some((wave_type, params))
 }

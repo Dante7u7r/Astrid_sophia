@@ -1,6 +1,6 @@
 use nalgebra::{DMatrix, DVector};
-use wgpu::util::DeviceExt;
 use std::sync::OnceLock;
+use wgpu::util::DeviceExt;
 
 static GPU_RESOURCES: OnceLock<Option<GpuResources>> = OnceLock::new();
 
@@ -150,20 +150,25 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
 fn init_gpu() -> Option<GpuResources> {
     pollster::block_on(async {
         let instance = wgpu::Instance::default();
-        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }).await?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await?;
 
-        let (device, queue) = adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("Astryd Sophia GPU Solver"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-            },
-            None,
-        ).await.ok()?;
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some("Astryd Sophia GPU Solver"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                },
+                None,
+            )
+            .await
+            .ok()?;
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Gauss Elimination WGSL"),
@@ -209,7 +214,11 @@ fn init_gpu() -> Option<GpuResources> {
             entry_point: "main",
         });
 
-        Some(GpuResources { device, queue, pipeline })
+        Some(GpuResources {
+            device,
+            queue,
+            pipeline,
+        })
     })
 }
 
@@ -223,7 +232,13 @@ pub fn solve_schur_on_gpu(s_matrix: &DMatrix<f64>, z: &DVector<f64>) -> Option<D
     let resources_opt = GPU_RESOURCES.get_or_init(init_gpu);
     let resources = resources_opt.as_ref()?;
 
-    let mut flat_data = vec![DoubleSingle { high: 0.0, low: 0.0 }; n * (n + 1)];
+    let mut flat_data = vec![
+        DoubleSingle {
+            high: 0.0,
+            low: 0.0
+        };
+        n * (n + 1)
+    ];
     for r in 0..n {
         for c in 0..n {
             flat_data[r * (n + 1) + c] = DoubleSingle::from_f64(s_matrix[(r, c)]);
@@ -231,18 +246,24 @@ pub fn solve_schur_on_gpu(s_matrix: &DMatrix<f64>, z: &DVector<f64>) -> Option<D
         flat_data[r * (n + 1) + n] = DoubleSingle::from_f64(z[r]);
     }
 
-    let matrix_buffer = resources.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Matrix Data Buffer"),
-        contents: bytemuck::cast_slice(&flat_data),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-    });
+    let matrix_buffer = resources
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Matrix Data Buffer"),
+            contents: bytemuck::cast_slice(&flat_data),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
+        });
 
     let size_data = [n as u32, 0u32];
-    let size_buffer = resources.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Size Info Buffer"),
-        contents: bytemuck::cast_slice(&size_data),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
+    let size_buffer = resources
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Size Info Buffer"),
+            contents: bytemuck::cast_slice(&size_data),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
 
     let readback_buffer = resources.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Readback Buffer"),
@@ -251,24 +272,28 @@ pub fn solve_schur_on_gpu(s_matrix: &DMatrix<f64>, z: &DVector<f64>) -> Option<D
         mapped_at_creation: false,
     });
 
-    let bind_group = resources.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Gauss Bind Group"),
-        layout: &resources.pipeline.get_bind_group_layout(0),
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: matrix_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: size_buffer.as_entire_binding(),
-            },
-        ],
-    });
+    let bind_group = resources
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Gauss Bind Group"),
+            layout: &resources.pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: matrix_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: size_buffer.as_entire_binding(),
+                },
+            ],
+        });
 
-    let mut encoder = resources.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Gauss Command Encoder"),
-    });
+    let mut encoder = resources
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Gauss Command Encoder"),
+        });
 
     {
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -300,7 +325,7 @@ pub fn solve_schur_on_gpu(s_matrix: &DMatrix<f64>, z: &DVector<f64>) -> Option<D
     if receiver.recv().ok()?.is_ok() {
         let data = buffer_slice.get_mapped_range();
         let result_ds: &[DoubleSingle] = bytemuck::cast_slice(&data);
-        
+
         let mut solution = DVector::<f64>::zeros(n);
         for r in 0..n {
             let sol_val = result_ds[r * (n + 1) + n].to_f64();
@@ -309,7 +334,7 @@ pub fn solve_schur_on_gpu(s_matrix: &DMatrix<f64>, z: &DVector<f64>) -> Option<D
             }
             solution[r] = sol_val;
         }
-        
+
         drop(data);
         readback_buffer.unmap();
         Some(solution)
@@ -325,18 +350,20 @@ mod tests {
 
     #[test]
     fn test_gpu_schur_solver() {
-        let s = DMatrix::from_row_slice(3, 3, &[
-            4.0, 1.0, 0.0,
-            1.0, 3.0, 1.0,
-            0.0, 1.0, 2.0,
-        ]);
+        let s = DMatrix::from_row_slice(3, 3, &[4.0, 1.0, 0.0, 1.0, 3.0, 1.0, 0.0, 1.0, 2.0]);
         let z = DVector::from_column_slice(&[1.0, 2.0, 3.0]);
 
         // Para el test reducimos temporalmente el umbral de activación de tamaño a 3
         let n = s.nrows();
         let resources_opt = GPU_RESOURCES.get_or_init(init_gpu);
         if let Some(resources) = resources_opt.as_ref() {
-            let mut flat_data = vec![DoubleSingle { high: 0.0, low: 0.0 }; n * (n + 1)];
+            let mut flat_data = vec![
+                DoubleSingle {
+                    high: 0.0,
+                    low: 0.0
+                };
+                n * (n + 1)
+            ];
             for r in 0..n {
                 for c in 0..n {
                     flat_data[r * (n + 1) + c] = DoubleSingle::from_f64(s[(r, c)]);
@@ -344,18 +371,26 @@ mod tests {
                 flat_data[r * (n + 1) + n] = DoubleSingle::from_f64(z[r]);
             }
 
-            let matrix_buffer = resources.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Matrix Data Buffer"),
-                contents: bytemuck::cast_slice(&flat_data),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-            });
+            let matrix_buffer =
+                resources
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Matrix Data Buffer"),
+                        contents: bytemuck::cast_slice(&flat_data),
+                        usage: wgpu::BufferUsages::STORAGE
+                            | wgpu::BufferUsages::COPY_SRC
+                            | wgpu::BufferUsages::COPY_DST,
+                    });
 
             let size_data = [n as u32, 0u32];
-            let size_buffer = resources.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Size Info Buffer"),
-                contents: bytemuck::cast_slice(&size_data),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
+            let size_buffer =
+                resources
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Size Info Buffer"),
+                        contents: bytemuck::cast_slice(&size_data),
+                        usage: wgpu::BufferUsages::STORAGE,
+                    });
 
             let readback_buffer = resources.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Readback Buffer"),
@@ -364,24 +399,29 @@ mod tests {
                 mapped_at_creation: false,
             });
 
-            let bind_group = resources.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Gauss Bind Group"),
-                layout: &resources.pipeline.get_bind_group_layout(0),
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: matrix_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: size_buffer.as_entire_binding(),
-                    },
-                ],
-            });
+            let bind_group = resources
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("Gauss Bind Group"),
+                    layout: &resources.pipeline.get_bind_group_layout(0),
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: matrix_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: size_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
 
-            let mut encoder = resources.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Gauss Command Encoder"),
-            });
+            let mut encoder =
+                resources
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Gauss Command Encoder"),
+                    });
 
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -417,7 +457,10 @@ mod tests {
                     for c in 0..=n {
                         let idx = r * (n + 1) + c;
                         let ds = result_ds[idx];
-                        println!("Matrix[{}, {}] (idx {}): high: {:e}, low: {:e}", r, c, idx, ds.high, ds.low);
+                        println!(
+                            "Matrix[{}, {}] (idx {}): high: {:e}, low: {:e}",
+                            r, c, idx, ds.high, ds.low
+                        );
                     }
                 }
                 let cpu_sol = s.lu().solve(&z).expect("CPU solve failed");
@@ -426,7 +469,10 @@ mod tests {
                     let gpu_val = gpu_ds.to_f64();
                     assert!(
                         (gpu_val - cpu_sol[i]).abs() < 1e-12,
-                        "Mismatch at index {}: gpu={}, cpu={}", i, gpu_val, cpu_sol[i]
+                        "Mismatch at index {}: gpu={}, cpu={}",
+                        i,
+                        gpu_val,
+                        cpu_sol[i]
                     );
                 }
                 drop(data);

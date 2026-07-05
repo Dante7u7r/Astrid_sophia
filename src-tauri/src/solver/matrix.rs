@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, HashMap};
 pub struct SparseMatrix {
     pub size: usize,
     pub rows: Vec<BTreeMap<usize, f64>>,
-
 }
 
 impl SparseMatrix {
@@ -37,7 +36,6 @@ impl SparseMatrix {
         }
         Self { size, rows }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -47,7 +45,6 @@ pub struct SparseLU {
     pub u: Vec<BTreeMap<usize, f64>>, // Upper triangular
     pub p: Vec<usize>,                // Row permutations
     pub q: Vec<usize>,                // Column permutations
-
 }
 
 impl SparseLU {
@@ -102,21 +99,20 @@ impl SparseLU {
                     if c >= i {
                         if let Some(&val) = matrix.rows[r].get(&c) {
                             let abs_val = val.abs();
-                            if abs_val > 1e-15
-                                && abs_val >= u_threshold * col_max[c] {
-                                    let cost = (r_count[r].saturating_sub(1)) * (c_count[c].saturating_sub(1));
-                                    if cost < min_markowitz {
-                                        min_markowitz = cost;
-                                        best_row = Some(r);
-                                        best_col = Some(c);
-                                        max_pivot_val = abs_val;
-                                    } else if cost == min_markowitz
-                                        && abs_val > max_pivot_val {
-                                            best_row = Some(r);
-                                            best_col = Some(c);
-                                            max_pivot_val = abs_val;
-                                        }
+                            if abs_val > 1e-15 && abs_val >= u_threshold * col_max[c] {
+                                let cost =
+                                    (r_count[r].saturating_sub(1)) * (c_count[c].saturating_sub(1));
+                                if cost < min_markowitz {
+                                    min_markowitz = cost;
+                                    best_row = Some(r);
+                                    best_col = Some(c);
+                                    max_pivot_val = abs_val;
+                                } else if cost == min_markowitz && abs_val > max_pivot_val {
+                                    best_row = Some(r);
+                                    best_col = Some(c);
+                                    max_pivot_val = abs_val;
                                 }
+                            }
                         }
                     }
                 }
@@ -175,7 +171,9 @@ impl SparseLU {
                 q.swap(i, pivot_col);
             }
 
-            let pivot = *matrix.rows[i].get(&i).ok_or_else(|| "Fallo interno en pivot de LU".to_string())?;
+            let pivot = *matrix.rows[i]
+                .get(&i)
+                .ok_or_else(|| "Fallo interno en pivot de LU".to_string())?;
 
             // 6. Eliminar entradas debajo del pivote en columna i
             let row_i_elements: Vec<(usize, f64)> = matrix.rows[i]
@@ -217,7 +215,7 @@ impl SparseLU {
     pub fn solve(&self, b: &DVector<f64>) -> Option<DVector<f64>> {
         let size = self.size;
         let mut y = vec![0.0; size];
-        
+
         // Forward substitution: L * y = P * b
         for r in 0..size {
             let pb_r = b[self.p[r]];
@@ -252,14 +250,12 @@ impl SparseLU {
 
         Some(x)
     }
-
 }
 
 #[derive(Debug, Clone)]
 pub struct ComplexSparseMatrix {
     pub size: usize,
     pub rows: Vec<BTreeMap<usize, Complex<f64>>>,
-
 }
 
 impl ComplexSparseMatrix {
@@ -290,7 +286,6 @@ impl ComplexSparseMatrix {
         }
         Self { size, rows }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -300,7 +295,6 @@ pub struct ComplexSparseLU {
     pub u: Vec<BTreeMap<usize, Complex<f64>>>,
     pub p: Vec<usize>,
     pub q: Vec<usize>,
-
 }
 
 impl ComplexSparseLU {
@@ -355,21 +349,20 @@ impl ComplexSparseLU {
                     if c >= i {
                         if let Some(&val) = matrix.rows[r].get(&c) {
                             let abs_val = val.norm();
-                            if abs_val > 1e-15
-                                && abs_val >= u_threshold * col_max[c] {
-                                    let cost = (r_count[r].saturating_sub(1)) * (c_count[c].saturating_sub(1));
-                                    if cost < min_markowitz {
-                                        min_markowitz = cost;
-                                        best_row = Some(r);
-                                        best_col = Some(c);
-                                        max_pivot_val = abs_val;
-                                    } else if cost == min_markowitz
-                                        && abs_val > max_pivot_val {
-                                            best_row = Some(r);
-                                            best_col = Some(c);
-                                            max_pivot_val = abs_val;
-                                        }
+                            if abs_val > 1e-15 && abs_val >= u_threshold * col_max[c] {
+                                let cost =
+                                    (r_count[r].saturating_sub(1)) * (c_count[c].saturating_sub(1));
+                                if cost < min_markowitz {
+                                    min_markowitz = cost;
+                                    best_row = Some(r);
+                                    best_col = Some(c);
+                                    max_pivot_val = abs_val;
+                                } else if cost == min_markowitz && abs_val > max_pivot_val {
+                                    best_row = Some(r);
+                                    best_col = Some(c);
+                                    max_pivot_val = abs_val;
                                 }
+                            }
                         }
                     }
                 }
@@ -428,7 +421,9 @@ impl ComplexSparseLU {
                 q.swap(i, pivot_col);
             }
 
-            let pivot = *matrix.rows[i].get(&i).ok_or_else(|| "Fallo interno en pivot de LU compleja".to_string())?;
+            let pivot = *matrix.rows[i]
+                .get(&i)
+                .ok_or_else(|| "Fallo interno en pivot de LU compleja".to_string())?;
 
             // 6. Eliminar entradas debajo del pivote en columna i
             let row_i_elements: Vec<(usize, Complex<f64>)> = matrix.rows[i]
@@ -445,7 +440,8 @@ impl ComplexSparseLU {
                     }
 
                     for &(c, val_i_c) in &row_i_elements {
-                        let current_val = *matrix.rows[r].get(&c).unwrap_or(&Complex::new(0.0, 0.0));
+                        let current_val =
+                            *matrix.rows[r].get(&c).unwrap_or(&Complex::new(0.0, 0.0));
                         let new_val = current_val - factor * val_i_c;
                         if new_val.norm() > 1e-15 {
                             matrix.rows[r].insert(c, new_val);
@@ -470,7 +466,7 @@ impl ComplexSparseLU {
     pub fn solve(&self, b: &DVector<Complex<f64>>) -> Option<DVector<Complex<f64>>> {
         let size = self.size;
         let mut y = vec![Complex::new(0.0, 0.0); size];
-        
+
         // Forward substitution: L * y = P * b
         for r in 0..size {
             let pb_r = b[self.p[r]];
@@ -505,22 +501,22 @@ impl ComplexSparseLU {
 
         Some(x)
     }
-
 }
 
 pub fn solve_sparse(matrix: &DMatrix<f64>, b: &DVector<f64>) -> Option<DVector<f64>> {
     let sparse = SparseMatrix::from_dense(matrix);
     let lu = SparseLU::factorize(sparse).ok()?;
     lu.solve(b)
-
 }
 
 #[allow(dead_code)]
-pub fn solve_complex_sparse(matrix: &DMatrix<Complex<f64>>, b: &DVector<Complex<f64>>) -> Option<DVector<Complex<f64>>> {
+pub fn solve_complex_sparse(
+    matrix: &DMatrix<Complex<f64>>,
+    b: &DVector<Complex<f64>>,
+) -> Option<DVector<Complex<f64>>> {
     let sparse = ComplexSparseMatrix::from_dense(matrix);
     let lu = ComplexSparseLU::factorize(sparse).ok()?;
     lu.solve(b)
-
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -528,7 +524,6 @@ pub enum MixedSignalEventType {
     LogicInputCrossing { pin_idx: usize, direction: bool }, // direction: true = HIGH, false = LOW
     LogicOutputTransition { pin_idx: usize, new_state: bool },
     McuPeriodicTick,
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -536,7 +531,6 @@ pub struct MixedSignalEvent {
     pub time: f64,
     pub component_id: String,
     pub event_type: MixedSignalEventType,
-
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -546,7 +540,6 @@ pub struct MixedSignalScheduler {
     pub digital_states: HashMap<String, HashMap<usize, bool>>,
     // Maps component_id -> HashMap<pin_idx -> last analog voltage>
     pub last_analog_v: HashMap<String, HashMap<usize, f64>>,
-
 }
 
 impl MixedSignalScheduler {
@@ -559,7 +552,13 @@ impl MixedSignalScheduler {
     }
 
     pub fn schedule_event(&mut self, event: MixedSignalEvent) {
-        let pos = self.events.binary_search_by(|e| e.time.partial_cmp(&event.time).unwrap_or(std::cmp::Ordering::Equal))
+        let pos = self
+            .events
+            .binary_search_by(|e| {
+                e.time
+                    .partial_cmp(&event.time)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap_or_else(|e| e);
         self.events.insert(pos, event);
     }
@@ -569,16 +568,17 @@ impl MixedSignalScheduler {
     }
 
     pub fn get_state(&self, comp_id: &str, pin_idx: usize) -> bool {
-        self.digital_states.get(comp_id)
+        self.digital_states
+            .get(comp_id)
             .and_then(|m| m.get(&pin_idx))
             .copied()
             .unwrap_or(false)
     }
 
     pub fn set_state(&mut self, comp_id: &str, pin_idx: usize, state: bool) {
-        self.digital_states.entry(comp_id.to_string())
+        self.digital_states
+            .entry(comp_id.to_string())
             .or_default()
             .insert(pin_idx, state);
     }
-
 }

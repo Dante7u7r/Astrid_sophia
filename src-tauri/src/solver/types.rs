@@ -111,9 +111,9 @@ pub struct ComponentData {
     pub va_equations: Option<Vec<(String, String, String)>>, // (from_port, to_port, expr_string)
     // Parámetros térmicos por componente (overridable desde netlist)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rth: Option<f64>,   // Resistencia térmica unión-ambiente (°C/W)
+    pub rth: Option<f64>, // Resistencia térmica unión-ambiente (°C/W)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cth: Option<f64>,   // Capacidad térmica (J/°C)
+    pub cth: Option<f64>, // Capacidad térmica (J/°C)
     // Switch parameters
     #[serde(skip_serializing_if = "Option::is_none")]
     pub switch_ron: Option<f64>,
@@ -128,7 +128,6 @@ pub struct ComponentData {
     // Nombre del subcircuito a instanciar (para componentes tipo 'x')
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subcircuit_name: Option<String>,
-
 }
 
 /// Configuración de simulación electro-térmica acoplada.
@@ -144,7 +143,6 @@ pub struct ThermalConfig {
     pub thermal_tol: f64,
     /// Acoplamiento térmico entre pares de dispositivos: (id1, id2, Rth_mutuo en °C/W)
     pub thermal_coupling: Vec<(String, String, f64)>,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -152,7 +150,6 @@ pub struct ThermalConfig {
 pub struct WireData {
     pub id: String,
     pub nodes: Vec<String>,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -162,7 +159,6 @@ pub struct MutualInductance {
     pub l1_id: String,
     pub l2_id: String,
     pub k_coeff: f64,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -212,5 +208,4 @@ pub struct SimulationResult {
     pub branch_currents: HashMap<String, f64>,
     pub convergence_iterations: usize,
     pub error_log: Option<String>,
-
 }

@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet, VecDeque};
 use crate::solver::CircuitNetlist;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Índice máximo de nodo activo (excluye Tierra "0").
 pub fn max_node_index(netlist: &CircuitNetlist) -> usize {
@@ -140,18 +140,21 @@ pub fn detect_ideal_voltage_loops(netlist: &CircuitNetlist, n: usize) -> Result<
     // Coleccionar aristas que sean fuentes de voltaje ideales
     for comp in &netlist.components {
         let ty = comp.comp_type.as_str();
-        if (ty == "vsource" || ty == "vcvs" || ty == "ccvs")
-            && comp.pins.len() >= 2 {
-                if let (Ok(u), Ok(v)) = (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>()) {
-                    let u_node = if u > n { 0 } else { u };
-                    let v_node = if v > n { 0 } else { v };
-                    adjacency[u_node].insert(v_node);
-                    adjacency[v_node].insert(u_node);
-                    
-                    let edge = if u_node < v_node { (u_node, v_node) } else { (v_node, u_node) };
-                    edge_sources.insert(edge, comp.id.clone());
-                }
+        if (ty == "vsource" || ty == "vcvs" || ty == "ccvs") && comp.pins.len() >= 2 {
+            if let (Ok(u), Ok(v)) = (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>()) {
+                let u_node = if u > n { 0 } else { u };
+                let v_node = if v > n { 0 } else { v };
+                adjacency[u_node].insert(v_node);
+                adjacency[v_node].insert(u_node);
+
+                let edge = if u_node < v_node {
+                    (u_node, v_node)
+                } else {
+                    (v_node, u_node)
+                };
+                edge_sources.insert(edge, comp.id.clone());
             }
+        }
     }
 
     // Buscar ciclos simples en el grafo de fuentes usando búsqueda con retroceso (DFS)
@@ -192,7 +195,11 @@ pub fn detect_ideal_voltage_loops(netlist: &CircuitNetlist, n: usize) -> Result<
                             break;
                         }
                     }
-                    let final_edge = if temp < neighbor { (temp, neighbor) } else { (neighbor, temp) };
+                    let final_edge = if temp < neighbor {
+                        (temp, neighbor)
+                    } else {
+                        (neighbor, temp)
+                    };
                     if let Some(src_id) = edge_sources.get(&final_edge) {
                         loop_sources.push(src_id.clone());
                     }

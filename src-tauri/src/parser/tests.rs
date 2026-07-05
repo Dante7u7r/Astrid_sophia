@@ -1,9 +1,9 @@
 #[allow(unused_imports)]
-use super::lexer::*;
+use super::devices::*;
 #[allow(unused_imports)]
 use super::expressions::*;
 #[allow(unused_imports)]
-use super::devices::*;
+use super::lexer::*;
 #[allow(unused_imports)]
 use super::subcircuits::*;
 
@@ -33,10 +33,10 @@ mod tests {
         X1 1 2 0 lowpass
         Rload 2 0 10k
         ";
-        
+
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
         assert_eq!(parsed.components.len(), 4); // V1, Rload, X1.R1, X1.C1
-        
+
         // Find X1.R1
         let r1 = parsed.components.iter().find(|c| c.id == "X1.R1").unwrap();
         assert_eq!(r1.comp_type, "resistor");
@@ -46,7 +46,11 @@ mod tests {
 
         let c1 = parsed.components.iter().find(|c| c.id == "X1.C1").unwrap();
         assert_eq!(c1.comp_type, "capacitor");
-        assert!((c1.value - 10e-6).abs() < 1e-12, "El valor del capacitor debería ser aproximadamente 10u, obtenido: {}", c1.value);
+        assert!(
+            (c1.value - 10e-6).abs() < 1e-12,
+            "El valor del capacitor debería ser aproximadamente 10u, obtenido: {}",
+            c1.value
+        );
         assert_eq!(c1.pins, vec!["2".to_string(), "0".to_string()]);
     }
 
@@ -63,7 +67,10 @@ mod tests {
 
         let u1 = parsed.components.iter().find(|c| c.id == "U1").unwrap();
         assert_eq!(u1.comp_type, "and_gate");
-        assert_eq!(u1.pins, vec!["1".to_string(), "2".to_string(), "3".to_string()]);
+        assert_eq!(
+            u1.pins,
+            vec!["1".to_string(), "2".to_string(), "3".to_string()]
+        );
         assert!((u1.delay.unwrap() - 10e-9).abs() < 1e-15);
         assert!((u1.rise_delay.unwrap() - 15e-9).abs() < 1e-15);
         assert!((u1.fall_delay.unwrap() - 25e-9).abs() < 1e-15);
@@ -78,11 +85,11 @@ mod tests {
 
     #[test]
     fn test_recursive_library_include() {
-        use std::fs;
         use std::env;
+        use std::fs;
 
         let temp_dir = env::temp_dir();
-        
+
         // Crear un archivo de modelo en sub_model.lib
         let mut model_path = temp_dir.clone();
         model_path.push("sub_model.lib");
@@ -95,22 +102,28 @@ mod tests {
         // Crear una librería intermedia diode_lib.include que incluya a sub_model.lib
         let mut lib_path = temp_dir.clone();
         lib_path.push("diode_lib.include");
-        let lib_content = format!("
+        let lib_content = format!(
+            "
         * Library including the other model
         .include \"{}\"
         .subckt my_diode_sub anode cathode
         D1 anode cathode DInfineon
         .ends
-        ", model_path.to_str().unwrap());
+        ",
+            model_path.to_str().unwrap()
+        );
         fs::write(&lib_path, lib_content).unwrap();
 
         // Netlist raíz que incluye a diode_lib.include
-        let netlist_str = format!("
+        let netlist_str = format!(
+            "
         * Root circuit
         .include \"{}\"
         V1 1 0 5.0
         X1 1 0 my_diode_sub
-        ", lib_path.to_str().unwrap());
+        ",
+            lib_path.to_str().unwrap()
+        );
 
         let parsed = parse_spice_netlist_to_native(&netlist_str).unwrap();
 
@@ -128,8 +141,8 @@ mod tests {
 
     #[test]
     fn test_foundry_pdk_selective_lib_include() {
-        use std::fs;
         use std::env;
+        use std::fs;
 
         let temp_dir = env::temp_dir();
         let mut pdk_path = temp_dir.clone();
@@ -152,11 +165,14 @@ mod tests {
         fs::write(&pdk_path, pdk_content).unwrap();
 
         // 1. Probar la inclusion de la seccion 'tt'
-        let netlist_tt = format!("
+        let netlist_tt = format!(
+            "
         * Root Circuit with TT corner
         .lib \"{}\" tt
         D1 1 0 my_diode
-        ", pdk_path.to_str().unwrap());
+        ",
+            pdk_path.to_str().unwrap()
+        );
 
         let parsed_tt = parse_spice_netlist_to_native(&netlist_tt).unwrap();
         assert_eq!(parsed_tt.components.len(), 1);
@@ -166,11 +182,14 @@ mod tests {
         assert_eq!(d1_tt.diode_rs, Some(0.5));
 
         // 2. Probar la inclusion de la seccion 'ss'
-        let netlist_ss = format!("
+        let netlist_ss = format!(
+            "
         * Root Circuit with SS corner
         .lib \"{}\" ss
         D1 1 0 my_diode
-        ", pdk_path.to_str().unwrap());
+        ",
+            pdk_path.to_str().unwrap()
+        );
 
         let parsed_ss = parse_spice_netlist_to_native(&netlist_ss).unwrap();
         assert_eq!(parsed_ss.components.len(), 1);
@@ -198,13 +217,17 @@ mod tests {
 
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
         assert_eq!(parsed.components.len(), 1);
-        
+
         let j1 = parsed.components.iter().find(|c| c.id == "J1").unwrap();
         assert_eq!(j1.comp_type, "njf");
-        
+
         // VTO = -1.5 + 0.1 = -1.4
-        assert!((j1.jfet_vto.unwrap() - (-1.4)).abs() < 1e-12, "VTO incorrecto, obtenido: {}", j1.jfet_vto.unwrap());
-        
+        assert!(
+            (j1.jfet_vto.unwrap() - (-1.4)).abs() < 1e-12,
+            "VTO incorrecto, obtenido: {}",
+            j1.jfet_vto.unwrap()
+        );
+
         let netlist_diode = "
         * Diode parameter expressions
         .param my_is = 5e-14
@@ -213,7 +236,11 @@ mod tests {
         D2 1 0 fast_diode
         ";
         let parsed_diode = parse_spice_netlist_to_native(netlist_diode).unwrap();
-        let d2 = parsed_diode.components.iter().find(|c| c.id == "D2").unwrap();
+        let d2 = parsed_diode
+            .components
+            .iter()
+            .find(|c| c.id == "D2")
+            .unwrap();
         assert_eq!(d2.diode_is, Some(5e-14));
         assert!((d2.diode_rs.unwrap() - 0.6).abs() < 1e-12);
     }
@@ -221,14 +248,14 @@ mod tests {
     #[test]
     fn test_verilog_a_dual_number_ad() {
         use crate::dual3::Dual3;
-        
+
         // f(x, y) = exp(x * y)
         // en x=2.0, y=3.0
         let x = Dual3::new(2.0, 0);
         let y = Dual3::new(3.0, 1);
-        
+
         let f = (x * y).exp();
-        
+
         assert!((f.val - 403.4287934927351).abs() < 1e-9);
         // df/dx = y * exp(x * y) = 3 * exp(6) = 1210.2863804782054
         assert!((f.deriv[0] - 1210.2863804782054).abs() < 1e-9);
@@ -250,16 +277,20 @@ mod tests {
 
         let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
         assert_eq!(parsed.components.len(), 3);
-        
+
         let y1 = parsed.components.iter().find(|c| c.id == "Y1").unwrap();
         assert_eq!(y1.comp_type, "verilog_a");
         assert_eq!(y1.va_model_name, Some("my_va".to_string()));
-        
+
         let res = crate::solver::solve_dc_circuit(&parsed).unwrap();
-        
+
         // La corriente fluye a través de la rama de Vd
         // I(Vd) = -Ids = -8.45 mA = -0.00845 A
         let i_vd = res.branch_currents.get("Vd").unwrap();
-        assert!((i_vd + 0.00845).abs() < 1e-5, "Corriente de Vd incorrecta, obtenida: {}", i_vd);
+        assert!(
+            (i_vd + 0.00845).abs() < 1e-5,
+            "Corriente de Vd incorrecta, obtenida: {}",
+            i_vd
+        );
     }
 }

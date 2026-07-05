@@ -1,7 +1,7 @@
 #![allow(clippy::needless_range_loop)]
-use crate::solver::{SparseMatrix, ComplexSparseMatrix};
-use num_complex::Complex;
+use crate::solver::{ComplexSparseMatrix, SparseMatrix};
 use nalgebra::DVector;
+use num_complex::Complex;
 use std::collections::BTreeMap;
 
 #[allow(dead_code)]
@@ -17,7 +17,7 @@ pub struct SparseMatrixCSC {
 impl SparseMatrixCSC {
     pub fn from_sparse(matrix: &SparseMatrix) -> Self {
         let size = matrix.size;
-        
+
         let mut elements = Vec::new();
         for (r, row_map) in matrix.rows.iter().enumerate() {
             for (&c, &val) in row_map {
@@ -25,12 +25,9 @@ impl SparseMatrixCSC {
             }
         }
 
-
-        elements.sort_by(|a, b| {
-            match a.1.cmp(&b.1) {
-                std::cmp::Ordering::Equal => a.0.cmp(&b.0),
-                other => other,
-            }
+        elements.sort_by(|a, b| match a.1.cmp(&b.1) {
+            std::cmp::Ordering::Equal => a.0.cmp(&b.0),
+            other => other,
         });
 
         let mut col_pointers = vec![0; size + 1];
@@ -77,7 +74,6 @@ impl SparseMatrixCSC {
         }
     }
 
-
     /// Ejecuta la factorización numérica LU contigua sobre el layout simbólico precalculado.
     /// Utiliza el acumulador SPA provisto en el workspace para operar con cero asignaciones de heap.
     pub fn left_looking_factorize(
@@ -86,7 +82,7 @@ impl SparseMatrixCSC {
         workspace: &mut NumericLUWorkspace,
     ) -> Result<(), String> {
         let n = self.size;
-        
+
         // Resetear valores de L y U a cero
         workspace.l_values.fill(0.0);
         workspace.u_values.fill(0.0);
@@ -101,8 +97,6 @@ impl SparseMatrixCSC {
                 workspace.spa_values[r_perm] = self.values[idx];
                 workspace.spa_occupied[r_perm] = true;
             }
-
-
 
             // 2. Left-Looking: Resolver la columna j usando columnas factorizadas de la izquierda (k < j)
             // Usamos el camino de eliminación precalculado estáticamente en SymbolicLU
@@ -136,18 +130,18 @@ impl SparseMatrixCSC {
 
             let l_col_start = symbolic.l_col_pointers[j];
             let l_col_end = symbolic.l_col_pointers[j + 1];
-            
+
             // El último elemento de la columna en U es el pivote diagonal U_jj
             let mut u_diag_val = if u_col_end > u_col_start {
                 workspace.u_values[u_col_end - 1]
             } else {
                 0.0
             };
-            
+
             if u_diag_val.abs() < 1e-30 {
                 return Err("Error de convergencia o circuito mal condicionado".to_string());
             }
-            
+
             if u_diag_val.abs() < 1e-13 {
                 // Reemplazo Estático de Pivote (Static Pivoting)
                 let sign = if u_diag_val >= 0.0 { 1.0 } else { -1.0 };
@@ -186,7 +180,7 @@ pub struct ComplexSparseMatrixCSC {
 impl ComplexSparseMatrixCSC {
     pub fn from_sparse(matrix: &ComplexSparseMatrix) -> Self {
         let size = matrix.size;
-        
+
         let mut elements = Vec::new();
         for (r, row_map) in matrix.rows.iter().enumerate() {
             for (&c, &val) in row_map {
@@ -194,12 +188,9 @@ impl ComplexSparseMatrixCSC {
             }
         }
 
-
-        elements.sort_by(|a, b| {
-            match a.1.cmp(&b.1) {
-                std::cmp::Ordering::Equal => a.0.cmp(&b.0),
-                other => other,
-            }
+        elements.sort_by(|a, b| match a.1.cmp(&b.1) {
+            std::cmp::Ordering::Equal => a.0.cmp(&b.0),
+            other => other,
         });
 
         let mut col_pointers = vec![0; size + 1];
@@ -338,18 +329,17 @@ impl ComplexSparseMatrixCSC {
     }
 }
 
-
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SymbolicLU {
     pub size: usize,
-    pub p: Vec<usize>,                    // Permutación de filas (ordenado -> original)
-    pub q: Vec<usize>,                    // Permutación de columnas (ordenado -> original)
-    pub inv_p: Vec<usize>,                // Permutación inversa de filas (original -> ordenado)
-    pub inv_q: Vec<usize>,                // Permutación inversa de columnas (original -> ordenado)
-    pub l_col_pointers: Vec<usize>,       // Patrón de columnas de L
+    pub p: Vec<usize>,              // Permutación de filas (ordenado -> original)
+    pub q: Vec<usize>,              // Permutación de columnas (ordenado -> original)
+    pub inv_p: Vec<usize>,          // Permutación inversa de filas (original -> ordenado)
+    pub inv_q: Vec<usize>,          // Permutación inversa de columnas (original -> ordenado)
+    pub l_col_pointers: Vec<usize>, // Patrón de columnas de L
     pub l_row_indices: Vec<usize>,
-    pub u_col_pointers: Vec<usize>,       // Patrón de columnas de U
+    pub u_col_pointers: Vec<usize>, // Patrón de columnas de U
     pub u_row_indices: Vec<usize>,
     pub elimination_paths: Vec<Vec<usize>>, // Caminos de dependencias estáticos k < j
 }
@@ -381,13 +371,12 @@ impl SymbolicLU {
             }
         }
 
-
         let mut l_rows = vec![BTreeMap::new(); size];
         let mut u_rows = vec![BTreeMap::new(); size];
 
         for i in 0..size {
             let row_i = row_patterns[i].clone();
-            
+
             // Registrar diagonal de L
             l_rows[i].insert(i, 1.0);
 
@@ -489,13 +478,8 @@ impl SymbolicLU {
         }
     }
 
-
     /// Resuelve el sistema lineal L * U * x = P * b usando los valores numéricos planos factorizados
-    pub fn solve(
-        &self,
-        workspace: &NumericLUWorkspace,
-        b: &DVector<f64>,
-    ) -> Option<DVector<f64>> {
+    pub fn solve(&self, workspace: &NumericLUWorkspace, b: &DVector<f64>) -> Option<DVector<f64>> {
         let n = self.size;
         let mut x = DVector::zeros(n);
         let mut y = DVector::zeros(n);
@@ -522,18 +506,18 @@ impl SymbolicLU {
         for j in (0..n).rev() {
             let col_start = self.u_col_pointers[j];
             let col_end = self.u_col_pointers[j + 1];
-            
+
             if col_end == col_start {
                 return None;
             }
-            
+
             // El último elemento de la columna en U es el pivote diagonal U_jj
             let diag_idx = col_end - 1;
             let u_jj = workspace.u_values[diag_idx];
             if u_jj.is_nan() || u_jj.abs() < 1e-15 {
                 return None;
             }
-            
+
             let x_j = y[j] / u_jj;
             x[j] = x_j;
 
@@ -584,17 +568,17 @@ impl SymbolicLU {
         for j in (0..n).rev() {
             let col_start = self.u_col_pointers[j];
             let col_end = self.u_col_pointers[j + 1];
-            
+
             if col_end == col_start {
                 return None;
             }
-            
+
             let diag_idx = col_end - 1;
             let u_jj = workspace.u_values[diag_idx];
             if u_jj.re.is_nan() || u_jj.im.is_nan() || u_jj.norm() < 1e-30 {
                 return None;
             }
-            
+
             let x_j = y[j] / u_jj;
             x[j] = x_j;
 
@@ -617,10 +601,10 @@ impl SymbolicLU {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct NumericLUWorkspace {
-    pub spa_values: Vec<f64>,      // Acumulador denso temporal SPA
-    pub spa_occupied: Vec<bool>,   // Marcas booleanas de marcas del SPA
-    pub l_values: Vec<f64>,        // Valores numéricos planos factorizados de L
-    pub u_values: Vec<f64>,        // Valores numéricos planos factorizados de U
+    pub spa_values: Vec<f64>,    // Acumulador denso temporal SPA
+    pub spa_occupied: Vec<bool>, // Marcas booleanas de marcas del SPA
+    pub l_values: Vec<f64>,      // Valores numéricos planos factorizados de L
+    pub u_values: Vec<f64>,      // Valores numéricos planos factorizados de U
 }
 
 #[allow(dead_code)]
@@ -640,10 +624,10 @@ impl NumericLUWorkspace {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ComplexNumericLUWorkspace {
-    pub spa_values: Vec<Complex<f64>>,   // Acumulador complejo temporal (SPA)
+    pub spa_values: Vec<Complex<f64>>, // Acumulador complejo temporal (SPA)
     pub spa_occupied: Vec<bool>,
-    pub l_values: Vec<Complex<f64>>,     // Valores numéricos complejos factorizados de L
-    pub u_values: Vec<Complex<f64>>,     // Valores numéricos complejos factorizados de U
+    pub l_values: Vec<Complex<f64>>, // Valores numéricos complejos factorizados de L
+    pub u_values: Vec<Complex<f64>>, // Valores numéricos complejos factorizados de U
 }
 
 #[allow(dead_code)]
@@ -659,4 +643,3 @@ impl ComplexNumericLUWorkspace {
         }
     }
 }
-

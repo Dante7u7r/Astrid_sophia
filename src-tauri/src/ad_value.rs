@@ -379,8 +379,8 @@ mod tests {
         let b = v2(3.0);
         let r = AdValue::mul(&a, &b);
         assert!((r.value - 15.0).abs() < 1e-15);
-        assert_eq!(r.grad.get(&1), Some(&3.0));  // ∂/∂V1 = V2
-        assert_eq!(r.grad.get(&2), Some(&5.0));  // ∂/∂V2 = V1
+        assert_eq!(r.grad.get(&1), Some(&3.0)); // ∂/∂V1 = V2
+        assert_eq!(r.grad.get(&2), Some(&5.0)); // ∂/∂V2 = V1
     }
 
     #[test]
@@ -491,8 +491,13 @@ mod tests {
             let f_minus = ((v1_val - h).sin()) * v2_val;
             (f_plus - f_minus) / (2.0 * h)
         };
-        assert!((df_dv1_ad - df_dv1_fd).abs() < 1e-6,
-            "∂f/∂V1 AD={} FD={} diff={}", df_dv1_ad, df_dv1_fd, (df_dv1_ad - df_dv1_fd).abs());
+        assert!(
+            (df_dv1_ad - df_dv1_fd).abs() < 1e-6,
+            "∂f/∂V1 AD={} FD={} diff={}",
+            df_dv1_ad,
+            df_dv1_fd,
+            (df_dv1_ad - df_dv1_fd).abs()
+        );
 
         // ∂f/∂V2 = sin(V1) = sin(0.5) ≈ 0.47942
         let df_dv2_ad = *r.grad.get(&2).unwrap_or(&0.0);
@@ -502,8 +507,13 @@ mod tests {
             let f_minus = (v1_val.sin()) * (v2_val - h);
             (f_plus - f_minus) / (2.0 * h)
         };
-        assert!((df_dv2_ad - df_dv2_fd).abs() < 1e-6,
-            "∂f/∂V2 AD={} FD={} diff={}", df_dv2_ad, df_dv2_fd, (df_dv2_ad - df_dv2_fd).abs());
+        assert!(
+            (df_dv2_ad - df_dv2_fd).abs() < 1e-6,
+            "∂f/∂V2 AD={} FD={} diff={}",
+            df_dv2_ad,
+            df_dv2_fd,
+            (df_dv2_ad - df_dv2_fd).abs()
+        );
     }
 
     /// Prueba de estrés: expresión anidada profunda con regla de la cadena

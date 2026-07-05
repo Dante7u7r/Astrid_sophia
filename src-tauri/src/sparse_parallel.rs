@@ -1,19 +1,19 @@
 #![allow(clippy::type_complexity)]
 use crate::solver::SparseMatrix;
-use crate::sparse_csc::{SparseMatrixCSC, SymbolicLU, NumericLUWorkspace};
-use nalgebra::{DVector, DMatrix};
+use crate::sparse_csc::{NumericLUWorkspace, SparseMatrixCSC, SymbolicLU};
+use nalgebra::{DMatrix, DVector};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Clone, Debug)]
 pub struct ParallelBlock {
     pub size: usize,
-    pub original_nodes: Vec<usize>,     // Mapeo local_idx -> original_node
+    pub original_nodes: Vec<usize>, // Mapeo local_idx -> original_node
     pub orig_to_local: HashMap<usize, usize>, // Mapeo original_node -> local_idx
     pub symbolic: SymbolicLU,
     pub workspace: NumericLUWorkspace,
     pub csc_template: SparseMatrixCSC,
-    pub b_cols_active: Vec<usize>,      // Índices de columnas del borde (locales del borde) que tienen elementos en B_i
+    pub b_cols_active: Vec<usize>, // Índices de columnas del borde (locales del borde) que tienen elementos en B_i
     // Elementos estructurales para actualización ultra-rápida:
     // (r_local, c_local, r_orig, c_orig)
     pub a_mappings: Vec<(usize, usize, usize, usize)>,
@@ -26,12 +26,12 @@ pub struct ParallelBlock {
 #[derive(Clone, Debug)]
 pub struct SchurParallelSolver {
     pub size: usize,
-    pub is_monolithic: bool,            // Si es true, el circuito no es particionable y usa resolvedor secuencial
+    pub is_monolithic: bool, // Si es true, el circuito no es particionable y usa resolvedor secuencial
     pub blocks: Vec<ParallelBlock>,
-    pub edge_nodes: Vec<usize>,         // Mapeo edge_idx -> original_node
+    pub edge_nodes: Vec<usize>, // Mapeo edge_idx -> original_node
     pub orig_to_edge: HashMap<usize, usize>, // Mapeo original_node -> edge_idx
-    pub permutation: Vec<usize>,        // original -> BBDF
-    pub inv_permutation: Vec<usize>,    // BBDF -> original
+    pub permutation: Vec<usize>, // original -> BBDF
+    pub inv_permutation: Vec<usize>, // BBDF -> original
     // Mapeo para actualizar la matriz del borde D:
     // (r_edge, c_edge, r_orig, c_orig)
     pub d_mappings: Vec<(usize, usize, usize, usize)>,
@@ -234,7 +234,11 @@ impl SchurParallelSolver {
     }
 
     /// Resuelve el sistema lineal A * x = z en paralelo explotando la estructura de bloques de Schur (BBDF).
-    pub fn solve(&mut self, matrix: &SparseMatrix, z: &DVector<f64>) -> Result<DVector<f64>, String> {
+    pub fn solve(
+        &mut self,
+        matrix: &SparseMatrix,
+        z: &DVector<f64>,
+    ) -> Result<DVector<f64>, String> {
         if self.is_monolithic {
             return Err("El resolvedor paralelo no puede operar en un circuito monolítico. Usa el resolvedor secuencial.".to_string());
         }
@@ -255,65 +259,85 @@ impl SchurParallelSolver {
         // Almacenamos temporalmente los complementos de Schur locales y las proyecciones locales de RHS
         // Para poder procesarlos en paralelo, envolvemos la lógica de cada bloque.
         // Usamos rayon para procesar los bloques en paralelo al 100%.
-        let block_results: Vec<Result<(DMatrix<f64>, DVector<f64>, SparseMatrixCSC, NumericLUWorkspace), String>> = self.blocks
-            .par_iter()
-            .map(|block| {
-                let mut csc_matrix = block.csc_template.clone();
-                
-                // Actualizar los valores numéricos locales de A_i
-                let mut a_local = SparseMatrix::new(block.size);
-                for &(r_local, c_local, r_orig, c_orig) in &block.a_mappings {
-                    let val = *matrix.rows[r_orig].get(&c_orig).unwrap_or(&0.0);
-                    a_local.add_element(r_local, c_local, val);
-                }
-                csc_matrix.update_from_sparse(&a_local);
+        let block_results: Vec<
+            Result<
+                (
+                    DMatrix<f64>,
+                    DVector<f64>,
+                    SparseMatrixCSC,
+                    NumericLUWorkspace,
+                ),
+                String,
+            >,
+        > =
+            self.blocks
+                .par_iter()
+                .map(|block| {
+                    let mut csc_matrix = block.csc_template.clone();
 
-                // Factorización LU local
-                let mut workspace = block.workspace.clone();
-                csc_matrix.left_looking_factorize(&block.symbolic, &mut workspace)
-                    .map_err(|e| format!("Error en subbloque MNA: {}", e))?;
+                    // Actualizar los valores numéricos locales de A_i
+                    let mut a_local = SparseMatrix::new(block.size);
+                    for &(r_local, c_local, r_orig, c_orig) in &block.a_mappings {
+                        let val = *matrix.rows[r_orig].get(&c_orig).unwrap_or(&0.0);
+                        a_local.add_element(r_local, c_local, val);
+                    }
+                    csc_matrix.update_from_sparse(&a_local);
 
-                // Resolver el vector local intermedio: w_i = A_i^-1 * z_i
-                let mut z_i = DVector::<f64>::zeros(block.size);
-                for (r_local, &r_orig) in block.original_nodes.iter().enumerate() {
-                    z_i[r_local] = z[r_orig];
-                }
+                    // Factorización LU local
+                    let mut workspace = block.workspace.clone();
+                    csc_matrix
+                        .left_looking_factorize(&block.symbolic, &mut workspace)
+                        .map_err(|e| format!("Error en subbloque MNA: {}", e))?;
 
-                let w_i = block.symbolic.solve(&workspace, &z_i)
-                    .ok_or_else(|| "Subbloque local singular durante la sustitución".to_string())?;
+                    // Resolver el vector local intermedio: w_i = A_i^-1 * z_i
+                    let mut z_i = DVector::<f64>::zeros(block.size);
+                    for (r_local, &r_orig) in block.original_nodes.iter().enumerate() {
+                        z_i[r_local] = z[r_orig];
+                    }
 
-                // Proyectar contribución local al RHS del borde: v_ci = C_i * w_i
-                let mut v_ci = DVector::<f64>::zeros(n_edge);
-                for &(r_edge, c_local, _, _) in &block.c_mappings {
-                    v_ci[r_edge] += w_i[c_local] * matrix.rows[self.edge_nodes[r_edge]].get(&block.original_nodes[c_local]).unwrap_or(&0.0);
-                }
+                    let w_i = block.symbolic.solve(&workspace, &z_i).ok_or_else(|| {
+                        "Subbloque local singular durante la sustitución".to_string()
+                    })?;
 
-                // Calcular el complemento de Schur local: S_i = C_i * A_i^-1 * B_i
-                // Solo resolvemos para las columnas activas en B_i
-                let mut s_i = DMatrix::<f64>::zeros(n_edge, n_edge);
-                
-                // Construir columnas activas de B_i y resolverlas
-                for &c_edge in &block.b_cols_active {
-                    let mut b_col = DVector::<f64>::zeros(block.size);
-                    for &(r_local, ce, r_orig, c_orig) in &block.b_mappings {
-                        if ce == c_edge {
-                            b_col[r_local] = *matrix.rows[r_orig].get(&c_orig).unwrap_or(&0.0);
+                    // Proyectar contribución local al RHS del borde: v_ci = C_i * w_i
+                    let mut v_ci = DVector::<f64>::zeros(n_edge);
+                    for &(r_edge, c_local, _, _) in &block.c_mappings {
+                        v_ci[r_edge] += w_i[c_local]
+                            * matrix.rows[self.edge_nodes[r_edge]]
+                                .get(&block.original_nodes[c_local])
+                                .unwrap_or(&0.0);
+                    }
+
+                    // Calcular el complemento de Schur local: S_i = C_i * A_i^-1 * B_i
+                    // Solo resolvemos para las columnas activas en B_i
+                    let mut s_i = DMatrix::<f64>::zeros(n_edge, n_edge);
+
+                    // Construir columnas activas de B_i y resolverlas
+                    for &c_edge in &block.b_cols_active {
+                        let mut b_col = DVector::<f64>::zeros(block.size);
+                        for &(r_local, ce, r_orig, c_orig) in &block.b_mappings {
+                            if ce == c_edge {
+                                b_col[r_local] = *matrix.rows[r_orig].get(&c_orig).unwrap_or(&0.0);
+                            }
+                        }
+
+                        // Resolver A_i * y_col = b_col
+                        let y_col = block.symbolic.solve(&workspace, &b_col).ok_or_else(|| {
+                            "Subbloque singular al calcular columna Schur".to_string()
+                        })?;
+
+                        // Multiplicar por C_i y acumular en S_i[:, c_edge]
+                        for &(r_edge, c_local, _, _) in &block.c_mappings {
+                            s_i[(r_edge, c_edge)] += y_col[c_local]
+                                * matrix.rows[self.edge_nodes[r_edge]]
+                                    .get(&block.original_nodes[c_local])
+                                    .unwrap_or(&0.0);
                         }
                     }
 
-                    // Resolver A_i * y_col = b_col
-                    let y_col = block.symbolic.solve(&workspace, &b_col)
-                        .ok_or_else(|| "Subbloque singular al calcular columna Schur".to_string())?;
-
-                    // Multiplicar por C_i y acumular en S_i[:, c_edge]
-                    for &(r_edge, c_local, _, _) in &block.c_mappings {
-                        s_i[(r_edge, c_edge)] += y_col[c_local] * matrix.rows[self.edge_nodes[r_edge]].get(&block.original_nodes[c_local]).unwrap_or(&0.0);
-                    }
-                }
-
-                Ok((s_i, v_ci, csc_matrix, workspace))
-            })
-            .collect();
+                    Ok((s_i, v_ci, csc_matrix, workspace))
+                })
+                .collect();
 
         // 2. Acumular los resultados de los bloques locales en la matriz del borde D y el RHS z_c
         let mut s_total = d_matrix;
@@ -321,7 +345,7 @@ impl SchurParallelSolver {
 
         for (idx, res) in block_results.into_iter().enumerate() {
             let (s_i, v_ci, csc_matrix, workspace) = res?;
-            
+
             // Actualizar el estado de la matriz y el workspace en nuestra estructura de bloques para la sustitución posterior
             self.blocks[idx].csc_template = csc_matrix;
             self.blocks[idx].workspace = workspace;
@@ -335,14 +359,16 @@ impl SchurParallelSolver {
             Some(x) => x,
             None => {
                 let lu_decomp = s_total.lu();
-                lu_decomp.solve(&z_c_star)
-                    .ok_or_else(|| "Matriz del borde singular en el complemento de Schur. Agrega GND.".to_string())?
+                lu_decomp.solve(&z_c_star).ok_or_else(|| {
+                    "Matriz del borde singular en el complemento de Schur. Agrega GND.".to_string()
+                })?
             }
         };
 
         // 4. Resolver en paralelo las soluciones locales finales para cada bloque:
         // x_i = A_i^-1 * (z_i - B_i * x_c)
-        let block_solutions: Vec<Result<DVector<f64>, String>> = self.blocks
+        let block_solutions: Vec<Result<DVector<f64>, String>> = self
+            .blocks
             .par_iter()
             .map(|block| {
                 let mut z_i = DVector::<f64>::zeros(block.size);
@@ -352,13 +378,19 @@ impl SchurParallelSolver {
 
                 // Restar contribución del borde: B_i * x_c
                 for &(r_local, c_edge, r_orig, _) in &block.b_mappings {
-                    let val = *matrix.rows[r_orig].get(&self.edge_nodes[c_edge]).unwrap_or(&0.0);
+                    let val = *matrix.rows[r_orig]
+                        .get(&self.edge_nodes[c_edge])
+                        .unwrap_or(&0.0);
                     z_i[r_local] -= val * x_c[c_edge];
                 }
 
                 // Resolver A_i * x_i = z_i_modified
-                let x_i = block.symbolic.solve(&block.workspace, &z_i)
-                    .ok_or_else(|| "Subbloque local singular en la sustitución final".to_string())?;
+                let x_i = block
+                    .symbolic
+                    .solve(&block.workspace, &z_i)
+                    .ok_or_else(|| {
+                        "Subbloque local singular en la sustitución final".to_string()
+                    })?;
 
                 Ok(x_i)
             })
