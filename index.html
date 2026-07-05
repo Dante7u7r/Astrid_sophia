@@ -33,28 +33,38 @@
             <option value="PVT">🔬 PVT</option>
             <option value="SPAR">📡 S-Param</option>
           </select>
-          <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+          <div class="header-separator"></div>
           <button id="run-sim-btn" class="btn-ctrl btn-run" type="button" data-tooltip="Iniciar simulación activa">
-            <span class="btn-icon">▶</span> Simular
+            <span class="btn-icon" aria-hidden="true">▶</span>
+            <span class="header-action-label">Simular</span>
           </button>
           <button id="stop-sim-btn" class="btn-ctrl" type="button" disabled data-tooltip="Detener simulación activa">
-            <span class="btn-icon">■</span> Detener
+            <span class="btn-icon" aria-hidden="true">■</span>
+            <span class="header-action-label">Detener</span>
           </button>
         </div>
 
         <div class="system-status" id="app-status-bar">
-          <button id="btn-new-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Nuevo circuito">📄 Nuevo</button>
-          <button id="btn-open-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Abrir circuito (.astryd o .spice)">📂 Abrir</button>
-          <select id="btn-open-demo" class="btn-text-only" style="margin-right: 8px;" data-tooltip="Cargar circuitos de ejemplo">
+          <button id="btn-new-circuit" class="btn-text-only" type="button" data-tooltip="Nuevo circuito" aria-label="Nuevo circuito">
+            <span aria-hidden="true">📄</span><span class="header-action-label">Nuevo</span>
+          </button>
+          <button id="btn-open-circuit" class="btn-text-only" type="button" data-tooltip="Abrir circuito (.astryd o .spice)" aria-label="Abrir circuito">
+            <span aria-hidden="true">📂</span><span class="header-action-label">Abrir</span>
+          </button>
+          <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo" aria-label="Cargar circuito de ejemplo">
             <option value="">📋 Demos…</option>
             <option value="01_divisor_rc.astryd">Divisor RC</option>
             <option value="02_puente_rectificador.astryd">Puente rectificador</option>
             <option value="03_blink_8051.astryd">Blink Arduino</option>
             <option value="04_amp_bjt_bode.astryd">Amp BJT (Bode)</option>
           </select>
-          <button id="btn-save-circuit" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Guardar circuito actual">💾 Guardar</button>
-          <div class="dropdown-wrapper" style="position: relative; display: inline-block; margin-right: 8px;">
-            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentos y Diagnósticos">🛠️ Instrumentación</button>
+          <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
+            <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
+          </button>
+          <div class="dropdown-wrapper">
+            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentos y Diagnósticos" aria-label="Instrumentos y diagnósticos">
+              <span aria-hidden="true">🛠️</span><span class="header-action-label">Instrumentación</span>
+            </button>
             <div id="instruments-dropdown" class="dropdown-menu-box" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--bg-glass); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-depth); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); width: 220px; z-index: 1000; padding: 10px;">
               <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Paneles e Interfaz</div>
               <button class="dropdown-menu-item-btn" id="menu-toggle-left" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
@@ -96,8 +106,10 @@
               </button>
             </div>
           </div>
-          <div style="width: 1px; height: 16px; background: var(--border-color); margin-right: 8px;"></div>
-          <button id="settings-trigger-btn" class="btn-text-only" style="margin-right: 8px;" type="button" data-tooltip="Configuración de simulación">⚙️ Ajustes</button>
+          <div class="header-separator"></div>
+          <button id="settings-trigger-btn" class="btn-text-only" type="button" data-tooltip="Configuración de simulación" aria-label="Ajustes de simulación">
+            <span aria-hidden="true">⚙️</span><span class="header-action-label">Ajustes</span>
+          </button>
           <span class="status-indicator active" id="ipc-status-dot"></span>
           <span class="status-text" id="ipc-status-text">Conexión Lista</span>
         </div>
@@ -974,13 +986,13 @@
       <!-- 3. BARRA DE ESTADO (FOOTER) -->
       <footer class="main-footer" id="app-footer">
         <div class="footer-info-group">
-          <div class="info-item"><span class="info-bullet green"></span> Render: 60 FPS</div>
-          <div class="info-item"><span class="info-bullet"></span> Grid Snapping: Activo</div>
-          <div class="info-item" style="margin-left: 16px;"><span class="info-bullet" id="telemetry-ram-dot" style="background-color: var(--accent-cyan, #66fcf1);"></span> RAM: <span id="telemetry-ram-text" style="color: var(--accent-cyan, #66fcf1); font-family: var(--font-mono);">-- MB</span></div>
-          <div class="info-item" style="margin-left: 16px;"><span class="info-bullet" id="telemetry-cpu-dot" style="background-color: var(--accent-purple, #a855f7);"></span> CPU: <span id="telemetry-cpu-text" style="color: var(--accent-purple, #a855f7); font-family: var(--font-mono);">-- %</span></div>
+          <div class="info-item"><span class="info-bullet green"></span><span>60 FPS</span></div>
+          <div class="info-item footer-grid-status"><span class="info-bullet"></span><span>Snap activo</span></div>
+          <div class="info-item"><span class="info-bullet" id="telemetry-ram-dot" style="background-color: var(--accent-cyan, #66fcf1);"></span><span>RAM</span><span id="telemetry-ram-text" style="color: var(--accent-cyan, #66fcf1); font-family: var(--font-mono);">-- MB</span></div>
+          <div class="info-item"><span class="info-bullet" id="telemetry-cpu-dot" style="background-color: var(--accent-purple, #a855f7);"></span><span>CPU</span><span id="telemetry-cpu-text" style="color: var(--accent-purple, #a855f7); font-family: var(--font-mono);">-- %</span></div>
           <div class="sim-rec-indicator" id="sim-rec-indicator"><span class="sim-rec-dot"></span> SOLVER ACTIVO</div>
         </div>
-        <div>Solver: MNA Newton-Raphson (Rust)</div>
+        <div class="footer-solver">Solver: MNA Newton-Raphson (Rust)</div>
       </footer>
     </div>
 

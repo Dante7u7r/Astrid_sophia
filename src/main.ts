@@ -622,7 +622,7 @@ function updatePropertiesPanel(comp: ComponentInstance) {
 // Adaptador puro: convierte el estado global del orchestrator en la
 // netlist eléctrica y actualiza el mapa de terminales a nodos.
 
-function extractNetlist(): CircuitNetlist | null {
+function extractNetlist(reportErrors = false): CircuitNetlist | null {
   if (!orchestrator) return null;
   const result = extractElectricalNetlist(
     orchestrator.components,
@@ -631,8 +631,10 @@ function extractNetlist(): CircuitNetlist | null {
   );
 
   if (result.error) {
-    TelemetryPanel.logError(result.error);
-    addLog(`[Pre-flight ERC] ${result.error}`, "error");
+    if (reportErrors) {
+      TelemetryPanel.logError(result.error);
+      addLog(`[Pre-flight ERC] ${result.error}`, "error");
+    }
     return null;
   }
 
@@ -1263,7 +1265,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (menuRunErc) {
       menuRunErc.addEventListener("click", () => {
-        const netlist = extractNetlist();
+        const netlist = extractNetlist(true);
         if (netlist) {
           const res = runElectricalRuleCheck(
             netlist,
@@ -1332,17 +1334,22 @@ window.addEventListener("DOMContentLoaded", () => {
         mode === 'PVT' ? 'PVT Corner Analysis' : 'Transitorio'
       }]...`, "system");
 
-      const netlist = extractNetlist();
       if (panelLayoutManager) {
         panelLayoutManager.setPanelCollapsed("dock", false);
       }
-      if (!netlist || netlist.components.length === 0) {
+      if (!orchestrator || orchestrator.components.length === 0) {
         addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
         simulationControls?.setSimulationRunning(false);
         return;
       }
 
       // ERC — Chequeo de Reglas Eléctricas (validación topológica)
+      const netlist = extractNetlist(true);
+      if (!netlist) {
+        simulationControls?.setSimulationRunning(false);
+        return;
+      }
+
       const ercResult = runElectricalRuleCheck(
         netlist,
         orchestrator!.components,

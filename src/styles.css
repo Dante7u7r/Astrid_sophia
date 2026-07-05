@@ -282,6 +282,11 @@ body {
 }
 
 @media (max-width: 760px) {
+  :root {
+    --header-h: 86px;
+    --footer-h: 28px;
+  }
+
   .dashboard {
     grid-template-columns: 1fr;
   }

@@ -130,6 +130,20 @@ async function collectMetrics(page) {
       }
     }
 
+    const isClippedBy = (selector, containerSelector) => {
+      const element = document.querySelector(selector);
+      const container = document.querySelector(containerSelector);
+      if (!element || !container) return null;
+      const elementRect = element.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const styles = window.getComputedStyle(element);
+      if (styles.display === "none" || styles.visibility === "hidden") return false;
+      return elementRect.left < containerRect.left - 1
+        || elementRect.right > containerRect.right + 1
+        || elementRect.top < containerRect.top - 1
+        || elementRect.bottom > containerRect.bottom + 1;
+    };
+
     return {
       title: document.title,
       audit: {
@@ -142,6 +156,22 @@ async function collectMetrics(page) {
       cards: document.querySelectorAll(".component-card").length,
       nestedCards: [...document.querySelectorAll(".component-card .component-card")].map((element) => element.id),
       header: rectFor(".main-header"),
+      headerRegions: {
+        logo: rectFor(".logo-area"),
+        simulation: rectFor("#simulation-bar"),
+        actions: rectFor("#app-status-bar"),
+      },
+      headerControlClipping: {
+        analysis: isClippedBy("#analysis-mode-select", "#simulation-bar"),
+        run: isClippedBy("#run-sim-btn", "#simulation-bar"),
+        stop: isClippedBy("#stop-sim-btn", "#simulation-bar"),
+        newCircuit: isClippedBy("#btn-new-circuit", "#app-status-bar"),
+        openCircuit: isClippedBy("#btn-open-circuit", "#app-status-bar"),
+        demos: isClippedBy("#btn-open-demo", "#app-status-bar"),
+        saveCircuit: isClippedBy("#btn-save-circuit", "#app-status-bar"),
+        instruments: isClippedBy("#instruments-menu-btn", "#app-status-bar"),
+        settings: isClippedBy("#settings-trigger-btn", "#app-status-bar"),
+      },
       workspace: rectFor("#workspace-center"),
       canvas: rectFor("#circuit-canvas"),
       leftPanel: {
@@ -156,9 +186,22 @@ async function collectMetrics(page) {
         ...rectFor("#bottom-dock"),
         collapsed: document.querySelector("#bottom-dock")?.classList.contains("collapsed") ?? null,
       },
+      footer: rectFor("#app-footer"),
+      footerInfo: rectFor(".footer-info-group"),
+      footerSolver: rectFor(".footer-solver"),
+      mobileTargets: {
+        expandLeft: rectFor("#btn-expand-left"),
+        expandRight: rectFor("#btn-expand-right"),
+        zoomIn: rectFor("#btn-zoom-in"),
+        run: rectFor("#run-sim-btn"),
+      },
+      canvasHelp: rectFor("#canvas-help-tip"),
       expandLeft: rectFor("#btn-expand-left"),
       expandRight: rectFor("#btn-expand-right"),
       drawerBackdropActive: document.querySelector("#mobile-drawer-backdrop")?.classList.contains("active") ?? false,
+      toasts: [...document.querySelectorAll(".toast-notification")]
+        .slice(0, 5)
+        .map((element) => element.textContent?.trim()),
       nonTransparentCanvasPixels,
       consoleTail: [...document.querySelectorAll(".log-line")]
         .slice(-5)
@@ -195,6 +238,42 @@ function assertViewport(caseConfig, metrics) {
     errors.push("canvas sin pixeles renderizados");
   }
 
+  const containedBy = (child, parent) => child && parent
+    && child.x >= parent.x - 1
+    && child.y >= parent.y - 1
+    && child.x + child.width <= parent.x + parent.width + 1
+    && child.y + child.height <= parent.y + parent.height + 1;
+
+  for (const [name, region] of Object.entries(metrics.headerRegions)) {
+    if (!containedBy(region, metrics.header)) {
+      errors.push(`región de header fuera de límites (${name}): ${JSON.stringify(region)}`);
+    }
+  }
+
+  for (const [name, clipped] of Object.entries(metrics.headerControlClipping)) {
+    if (clipped === true) {
+      errors.push(`control de header recortado: ${name}`);
+    }
+  }
+
+  if (!containedBy(metrics.footerInfo, metrics.footer)) {
+    errors.push(`telemetría fuera del footer: ${JSON.stringify(metrics.footerInfo)}`);
+  }
+  if (metrics.footerSolver?.display !== "none" && !containedBy(metrics.footerSolver, metrics.footer)) {
+    errors.push(`texto del solver fuera del footer: ${JSON.stringify(metrics.footerSolver)}`);
+  }
+
+  if (caseConfig.name === "mobile") {
+    for (const [name, target] of Object.entries(metrics.mobileTargets)) {
+      if (!target || target.width < 34 || target.height < 30) {
+        errors.push(`objetivo táctil insuficiente (${name}): ${JSON.stringify(target)}`);
+      }
+    }
+    if (metrics.canvasHelp?.display !== "none") {
+      errors.push("la ayuda larga del canvas debe ocultarse en móvil");
+    }
+  }
+
   for (const [key, expectedValue] of Object.entries(caseConfig.expected)) {
     const actualValue = key === "leftCollapsed"
       ? metrics.leftPanel.collapsed
@@ -211,8 +290,29 @@ function assertViewport(caseConfig, metrics) {
   }
 }
 
+async function auditKeyboardFocus(page) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await page.keyboard.press("Tab");
+    const focusState = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (!(element instanceof HTMLElement) || element === document.body) return null;
+      const styles = window.getComputedStyle(element);
+      return {
+        id: element.id,
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: parseFloat(styles.outlineWidth) || 0,
+      };
+    });
+    if (focusState && focusState.outlineStyle !== "none" && focusState.outlineWidth >= 2) return;
+  }
+  fail("No se encontró un foco de teclado claramente visible");
+}
+
 function assertDrawerState(label, metrics, expected) {
   const errors = [];
+  if (metrics.toasts.length > 0) {
+    errors.push(`toast inesperado durante navegación: ${metrics.toasts.join(" | ")}`);
+  }
   if (metrics.leftPanel.collapsed !== expected.leftCollapsed) {
     errors.push(`leftCollapsed: esperado=${expected.leftCollapsed}, actual=${metrics.leftPanel.collapsed}`);
   }
@@ -394,6 +494,7 @@ async function runAudit() {
       const screenshotPath = resolve(OUTPUT_DIR, `${caseConfig.name}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: false, timeout: 10_000 });
       if (caseConfig.name === "desktop") {
+        await auditKeyboardFocus(page);
         await auditRenderIsolation(page);
       } else {
         await auditMobileDrawers(page);

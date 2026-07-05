@@ -18,6 +18,15 @@ Todas las mejoras y cambios importantes en este proyecto.
   de tamaño, alineación y composición de sus palabras de 32 bits.
 - Las declaraciones WinAPI quedan privadas al módulo que las utiliza.
 
+### Pulido UX responsive
+- Header móvil reorganizado en dos filas con acciones compactas y controles sin recorte.
+- Footer de telemetría reducido a una sola línea estable en pantallas pequeñas.
+- Objetivos táctiles ampliados, foco de teclado visible y soporte para movimiento reducido.
+- La sincronización rutinaria del netlist ya no muestra errores ERC hasta que el usuario
+  solicita una simulación o un chequeo explícito.
+- La auditoría Playwright detecta controles recortados, regiones fuera de su banda,
+  objetivos táctiles insuficientes, foco invisible y toasts inesperados.
+
 ### Planificado para v1.0
 - [ ] Scripts de build (`build.sh`, `build.bat`)
 - [ ] Tests de integración end-to-end
