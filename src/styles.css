@@ -192,8 +192,16 @@ body {
 .sidebar-left.collapsed,
 .sidebar-right.collapsed {
   width: 0;
+  min-width: 0;
   margin: 12px 0;
+  border-width: 0;
   opacity: 0;
+  pointer-events: none;
+}
+
+.resize-handle.panel-collapsed {
+  width: 0;
+  margin-inline: 0;
   pointer-events: none;
 }
 

@@ -485,6 +485,12 @@
   box-shadow: 0 6px 24px rgba(0,0,0,0.6), 0 0 18px rgba(91,243,228,0.25);
 }
 
+@media (min-width: 761px) {
+  .btn-sidebar-edge-toggle {
+    display: none !important;
+  }
+}
+
 .btn-floating {
   width: 34px;
   height: 34px;
@@ -1361,8 +1367,13 @@ select.btn-text-only.sim-locked {
   }
 
   .btn-sidebar-edge-toggle {
+    width: 44px;
+    height: 56px;
     min-height: 44px;
-    padding: 9px 12px;
+    padding: 0;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.25rem;
     letter-spacing: 0;
   }
 

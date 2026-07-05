@@ -152,6 +152,8 @@ export class PanelLayoutManager {
     if (this.sidebarRight) {
       this.sidebarRight.classList.toggle("collapsed", this.layout.rightCollapsed);
     }
+    this.root.querySelector("#resize-handle-left")?.classList.toggle("panel-collapsed", this.layout.leftCollapsed);
+    this.root.querySelector("#resize-handle-right")?.classList.toggle("panel-collapsed", this.layout.rightCollapsed);
     if (this.bottomDock) {
       this.bottomDock.classList.toggle("collapsed", this.layout.dockCollapsed);
     }
@@ -186,6 +188,7 @@ export class PanelLayoutManager {
     }
     if (btnDockRight) {
       btnDockRight.classList.toggle("active", !this.layout.rightCollapsed);
+      btnDockRight.textContent = this.layout.rightCollapsed ? "Propiedades ◀" : "Propiedades ◨";
     }
     if (btnExpandRight) {
       btnExpandRight.style.display = this.layout.rightCollapsed ? "block" : "none";

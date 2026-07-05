@@ -366,6 +366,39 @@ async function auditMobileDrawers(page) {
   });
 }
 
+async function auditDesktopPanelCollapse(page) {
+  const before = await collectMetrics(page);
+  await page.click("#btn-dock-toggle-right");
+  await page.waitForTimeout(350);
+  const collapsed = await collectMetrics(page);
+
+  const errors = [];
+  if (!collapsed.rightPanel.collapsed || collapsed.rightPanel.width > 1) {
+    errors.push(`el panel derecho sigue reservando espacio: ${JSON.stringify(collapsed.rightPanel)}`);
+  }
+  if (!before.workspace || !collapsed.workspace || collapsed.workspace.width < before.workspace.width + 180) {
+    errors.push(`el lienzo no recuperó el ancho del panel: antes=${JSON.stringify(before.workspace)}, después=${JSON.stringify(collapsed.workspace)}`);
+  }
+  if (collapsed.expandRight?.display !== "none") {
+    errors.push(`el tirador flotante derecho debe ocultarse en escritorio: ${JSON.stringify(collapsed.expandRight)}`);
+  }
+  if (errors.length > 0) {
+    fail("Colapso del panel derecho inválido en escritorio", { errors });
+  }
+  await page.screenshot({
+    path: resolve(OUTPUT_DIR, "desktop-properties-collapsed.png"),
+    fullPage: false,
+    timeout: 10_000,
+  });
+
+  await page.click("#btn-dock-toggle-right");
+  await page.waitForTimeout(350);
+  const restored = await collectMetrics(page);
+  if (restored.rightPanel.collapsed || restored.workspace?.width !== before.workspace?.width) {
+    fail("El panel derecho no restauró su layout", { before: before.workspace, restored });
+  }
+}
+
 async function auditRenderIsolation(page) {
   console.log("[audit] expandiendo dock para comprobar aislamiento de render");
   await page.evaluate(() => {
@@ -495,6 +528,7 @@ async function runAudit() {
       await page.screenshot({ path: screenshotPath, fullPage: false, timeout: 10_000 });
       if (caseConfig.name === "desktop") {
         await auditKeyboardFocus(page);
+        await auditDesktopPanelCollapse(page);
         await auditRenderIsolation(page);
       } else {
         await auditMobileDrawers(page);
