@@ -31,10 +31,42 @@ export class InstrumentsDock {
 
   private init(orchestrator: CanvasOrchestrator, callbacks: any) {
     // 1. Vincular clics de pestañas
-    this.tabs.forEach((tab) => {
+    const tabList = this.container.querySelector(".instruments-tabs-bar");
+    tabList?.setAttribute("role", "tablist");
+    tabList?.setAttribute("aria-label", "Instrumentos disponibles");
+
+    this.tabs.forEach((tab, index) => {
       tab.addEventListener("click", () => {
         const targetTab = tab.getAttribute("data-tab");
         if (targetTab) this.switchTab(targetTab);
+      });
+
+      const targetTab = tab.getAttribute("data-tab");
+      if (!targetTab) return;
+      const panel = this.container.querySelector(`#inst-${targetTab}`);
+      const tabId = `instrument-tab-${targetTab}`;
+      tab.id = tabId;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", `inst-${targetTab}`);
+      tab.setAttribute("aria-selected", String(index === 0));
+      tab.tabIndex = index === 0 ? 0 : -1;
+      panel?.setAttribute("role", "tabpanel");
+      panel?.setAttribute("aria-labelledby", tabId);
+
+      tab.addEventListener("keydown", (event) => {
+        const tabs = [...this.tabs];
+        let nextIndex = tabs.indexOf(tab);
+        if (event.key === "ArrowRight") nextIndex = (nextIndex + 1) % tabs.length;
+        else if (event.key === "ArrowLeft") nextIndex = (nextIndex - 1 + tabs.length) % tabs.length;
+        else if (event.key === "Home") nextIndex = 0;
+        else if (event.key === "End") nextIndex = tabs.length - 1;
+        else return;
+
+        event.preventDefault();
+        const nextTab = tabs[nextIndex];
+        const nextTarget = nextTab.getAttribute("data-tab");
+        if (nextTarget) this.switchTab(nextTarget);
+        nextTab.focus();
       });
     });
 
@@ -68,12 +100,15 @@ export class InstrumentsDock {
       const isTarget = tab.getAttribute("data-tab") === tabId;
       tab.classList.toggle("active", isTarget);
       tab.style.color = isTarget ? "var(--cyan)" : "var(--text-muted)";
+      tab.setAttribute("aria-selected", String(isTarget));
+      tab.tabIndex = isTarget ? 0 : -1;
     });
 
     // Actualizar visibilidad de cajas de contenido
     this.contents.forEach((box) => {
       const isTarget = box.id === `inst-${tabId}`;
       box.style.display = isTarget ? (tabId === "oscilloscope" ? "flex" : "flex") : "none";
+      box.toggleAttribute("hidden", !isTarget);
     });
 
     // Notificar redibujado

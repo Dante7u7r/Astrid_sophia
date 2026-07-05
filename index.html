@@ -76,7 +76,7 @@
                 <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+2</span>
               </button>
               <button class="dropdown-menu-item-btn" id="menu-toggle-dock" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
-                <span>📊 Osciloscopio & Logs</span>
+                <span>▦ Centro de instrumentos</span>
                 <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+3</span>
               </button>
               
@@ -648,16 +648,41 @@
           </section>
 
           <!-- DOCK INFERIOR (OSCILOSCOPIO + CONSOLA) -->
-          <section class="bottom-dock" id="bottom-dock">
+          <div class="instrument-center-backdrop" id="instrument-center-backdrop" hidden></div>
+
+          <section
+            class="bottom-dock"
+            id="bottom-dock"
+            role="dialog"
+            aria-modal="true"
+            aria-hidden="true"
+            aria-labelledby="instrument-center-title"
+          >
+            <header class="instrument-center-header">
+              <div class="instrument-center-heading">
+                <span class="instrument-center-mark" aria-hidden="true">▦</span>
+                <div>
+                  <h2 id="instrument-center-title">Centro de instrumentos</h2>
+                  <span>Medición y diagnóstico</span>
+                </div>
+              </div>
+              <button
+                id="instrument-center-close"
+                class="instrument-center-close"
+                type="button"
+                aria-label="Cerrar centro de instrumentos"
+                data-tooltip="Cerrar instrumentos"
+              >×</button>
+            </header>
             <!-- Columna Izquierda: Panel de Instrumentación con Pestañas -->
             <div class="instruments-panel" id="instruments-panel" style="display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.05);">
               <!-- Barra de pestañas de Instrumentos -->
               <div class="instruments-tabs-bar" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid var(--border-color); height: 32px; align-items: center; padding: 0 10px; gap: 4px; flex-shrink: 0;">
-                <button class="inst-tab active" data-tab="oscilloscope" style="background: none; border: none; color: var(--cyan); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📊 Osciloscopio</button>
-                <button class="inst-tab" data-tab="generator" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⚡ Generador</button>
-                <button class="inst-tab" data-tab="logic" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⌗ Lógico</button>
-                <button class="inst-tab" data-tab="fft" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
-                <button class="inst-tab" data-tab="tracer" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">🔬 Trazador I-V</button>
+                <button class="inst-tab active" data-tab="oscilloscope" data-short-label="OSC" style="background: none; border: none; color: var(--cyan); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📊 Osciloscopio</button>
+                <button class="inst-tab" data-tab="generator" data-short-label="GEN" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⚡ Generador</button>
+                <button class="inst-tab" data-tab="logic" data-short-label="LOG" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⌗ Lógico</button>
+                <button class="inst-tab" data-tab="fft" data-short-label="FFT" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
+                <button class="inst-tab" data-tab="tracer" data-short-label="I-V" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">🔬 Trazador I-V</button>
               </div>
 
               <!-- Contenedores de cada instrumento -->

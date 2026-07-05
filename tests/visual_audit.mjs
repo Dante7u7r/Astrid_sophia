@@ -400,16 +400,79 @@ async function auditDesktopPanelCollapse(page) {
 }
 
 async function auditRenderIsolation(page) {
-  console.log("[audit] expandiendo dock para comprobar aislamiento de render");
-  await page.evaluate(() => {
-    document.querySelector("#menu-toggle-dock")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
+  console.log("[audit] abriendo centro de instrumentos y comprobando aislamiento");
+  const workspaceBefore = (await collectMetrics(page)).workspace;
+  await page.click("#instruments-menu-btn");
+  await page.click("#menu-toggle-dock");
   await page.waitForTimeout(650);
 
-  const dockExpanded = await page.evaluate(
-    () => !document.querySelector("#bottom-dock")?.classList.contains("collapsed"),
+  const centerState = await page.evaluate(() => {
+    const center = document.querySelector("#bottom-dock");
+    const backdrop = document.querySelector("#instrument-center-backdrop");
+    const instruments = document.querySelector("#instruments-panel");
+    const consolePanel = document.querySelector("#console-panel");
+    const rect = (element) => {
+      if (!(element instanceof HTMLElement)) return null;
+      const bounds = element.getBoundingClientRect();
+      return { width: Math.round(bounds.width), height: Math.round(bounds.height) };
+    };
+    return {
+      collapsed: center?.classList.contains("collapsed") ?? true,
+      ariaHidden: center?.getAttribute("aria-hidden"),
+      position: center instanceof HTMLElement ? getComputedStyle(center).position : null,
+      backdropHidden: backdrop?.hasAttribute("hidden") ?? true,
+      center: rect(center),
+      instruments: rect(instruments),
+      consolePanel: rect(consolePanel),
+      focusedId: document.activeElement?.id ?? null,
+      focusedTag: document.activeElement?.tagName ?? null,
+      focusedText: document.activeElement?.textContent?.trim().slice(0, 80) ?? null,
+    };
+  });
+  const workspaceOpen = (await collectMetrics(page)).workspace;
+  const centerErrors = [];
+  if (centerState.collapsed || centerState.ariaHidden !== "false" || centerState.position !== "fixed") {
+    centerErrors.push(`estado inválido: ${JSON.stringify(centerState)}`);
+  }
+  if (centerState.backdropHidden || centerState.focusedId !== "instrument-center-close") {
+    centerErrors.push(`backdrop o foco inválido: ${JSON.stringify(centerState)}`);
+  }
+  if (!centerState.instruments || centerState.instruments.width < 500 || centerState.instruments.height < 400) {
+    centerErrors.push(`área de instrumentos insuficiente: ${JSON.stringify(centerState.instruments)}`);
+  }
+  if (!centerState.consolePanel || centerState.consolePanel.width < 280 || centerState.consolePanel.height < 400) {
+    centerErrors.push(`área de logs insuficiente: ${JSON.stringify(centerState.consolePanel)}`);
+  }
+  if (workspaceOpen?.width !== workspaceBefore?.width || workspaceOpen?.height !== workspaceBefore?.height) {
+    centerErrors.push(`el centro alteró el workspace: antes=${JSON.stringify(workspaceBefore)}, abierto=${JSON.stringify(workspaceOpen)}`);
+  }
+  if (centerErrors.length > 0) {
+    fail("Centro de instrumentos inválido en escritorio", { errors: centerErrors });
+  }
+  await page.screenshot({
+    path: resolve(OUTPUT_DIR, "desktop-instrument-center.png"),
+    fullPage: false,
+    timeout: 10_000,
+  });
+
+  for (const tabId of ["generator", "logic", "fft", "tracer", "oscilloscope"]) {
+    await page.click(`#instrument-tab-${tabId}`);
+    const tabState = await page.evaluate((activeTabId) => ({
+      selected: document.querySelector(`#instrument-tab-${activeTabId}`)?.getAttribute("aria-selected"),
+      panelHidden: document.querySelector(`#inst-${activeTabId}`)?.hasAttribute("hidden"),
+    }), tabId);
+    if (tabState.selected !== "true" || tabState.panelHidden) {
+      fail(`No se pudo activar el instrumento ${tabId}`, { tabState });
+    }
+  }
+  await page.keyboard.press("ArrowRight");
+  const keyboardTab = await page.evaluate(
+    () => document.querySelector("#instrument-tab-generator")?.getAttribute("aria-selected"),
   );
-  if (!dockExpanded) fail("No se pudo expandir el dock para probar el aislamiento de render");
+  if (keyboardTab !== "true") {
+    fail("Las pestañas de instrumentos no responden a flechas de teclado");
+  }
+  await page.keyboard.press("ArrowLeft");
 
   const canvasFingerprint = async (selector) => page.evaluate((canvasSelector) => {
     const canvas = document.querySelector(canvasSelector);
@@ -434,6 +497,17 @@ async function auditRenderIsolation(page) {
 
   const schematicBefore = await canvasFingerprint("#circuit-canvas");
   const oscilloscopeBefore = await canvasFingerprint("#osc-canvas");
+  await page.click("#instrument-center-close");
+  await page.waitForTimeout(300);
+  const closed = await page.evaluate(() => ({
+    collapsed: document.querySelector("#bottom-dock")?.classList.contains("collapsed") ?? false,
+    backdropHidden: document.querySelector("#instrument-center-backdrop")?.hasAttribute("hidden") ?? false,
+    focusedId: document.activeElement?.id ?? null,
+  }));
+  if (!closed.collapsed || !closed.backdropHidden || closed.focusedId !== "instruments-menu-btn") {
+    fail("El centro de instrumentos no cerró limpiamente", { closed });
+  }
+
   console.log("[audit] huellas iniciales obtenidas; aplicando zoom");
   await page.click("#btn-zoom-in");
   await page.waitForTimeout(250);
@@ -449,6 +523,52 @@ async function auditRenderIsolation(page) {
   if (oscilloscopeBefore !== oscilloscopeAfter) {
     fail("El render del esquema modificó el osciloscopio", { oscilloscopeBefore, oscilloscopeAfter });
   }
+}
+
+async function auditMobileInstrumentCenter(page) {
+  await page.evaluate(() => {
+    document.querySelector("#menu-toggle-dock")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await page.waitForTimeout(450);
+
+  const state = await page.evaluate(() => {
+    const rect = (selector) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) return null;
+      const bounds = element.getBoundingClientRect();
+      return { width: Math.round(bounds.width), height: Math.round(bounds.height) };
+    };
+    return {
+      center: rect("#bottom-dock"),
+      instruments: rect("#instruments-panel"),
+      consolePanel: rect("#console-panel"),
+      consoleDisplay: getComputedStyle(document.querySelector("#console-panel")).display,
+      collapsed: document.querySelector("#bottom-dock")?.classList.contains("collapsed") ?? true,
+    };
+  });
+  const errors = [];
+  if (state.collapsed || !state.center || state.center.width < 360 || state.center.height < 680) {
+    errors.push(`centro móvil insuficiente: ${JSON.stringify(state.center)}`);
+  }
+  if (!state.instruments || state.instruments.height < 300) {
+    errors.push(`instrumentos móviles insuficientes: ${JSON.stringify(state.instruments)}`);
+  }
+  if (!state.consolePanel || state.consolePanel.height < 140 || state.consoleDisplay === "none") {
+    errors.push(`logs móviles inaccesibles: ${JSON.stringify(state)}`);
+  }
+  if (errors.length > 0) fail("Centro de instrumentos inválido en móvil", { errors });
+
+  await page.screenshot({
+    path: resolve(OUTPUT_DIR, "mobile-instrument-center.png"),
+    fullPage: false,
+    timeout: 10_000,
+  });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const closed = await page.evaluate(
+    () => document.querySelector("#bottom-dock")?.classList.contains("collapsed") ?? false,
+  );
+  if (!closed) fail("Escape no cerró el centro de instrumentos en móvil");
 }
 
 async function runProductionGuard() {
@@ -532,6 +652,7 @@ async function runAudit() {
         await auditRenderIsolation(page);
       } else {
         await auditMobileDrawers(page);
+        await auditMobileInstrumentCenter(page);
       }
       console.log(`[audit] interacciones verificadas para ${caseConfig.name}`);
       if (pageErrors.length > 0) {

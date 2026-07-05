@@ -105,6 +105,7 @@ let ch4ProbeNode: string | null = "4";
 let renderFramePending = false;
 let oscilloscopeFramePending = false;
 let drawerBackdrop: HTMLElement | null = null;
+let instrumentCenterReturnFocus: HTMLElement | null = null;
 const compactDrawerMedia = window.matchMedia("(max-width: 760px)");
 
 function doCanvasRender(): void {
@@ -610,6 +611,93 @@ function initSidebars() {
   window.setTimeout(() => syncDrawerState(), 420);
 }
 
+function initInstrumentCenter(): void {
+  const center = document.querySelector("#bottom-dock") as HTMLElement | null;
+  const backdrop = document.querySelector("#instrument-center-backdrop") as HTMLElement | null;
+  const closeButton = document.querySelector("#instrument-center-close") as HTMLButtonElement | null;
+  const menuButton = document.querySelector("#instruments-menu-btn") as HTMLButtonElement | null;
+  if (!center || !backdrop || !closeButton) return;
+
+  let wasOpen = false;
+  let focusTimer: number | null = null;
+
+  const closeCenter = (): void => {
+    panelLayoutManager?.setPanelCollapsed("dock", true);
+  };
+
+  const syncCenterState = (): void => {
+    const isOpen = !center.classList.contains("collapsed");
+    center.setAttribute("aria-hidden", String(!isOpen));
+    backdrop.toggleAttribute("hidden", !isOpen);
+    document.body.classList.toggle("instrument-center-open", isOpen);
+
+    if (isOpen && !wasOpen) {
+      const activeElement = document.activeElement as HTMLElement | null;
+      instrumentCenterReturnFocus = !activeElement || activeElement === document.body || activeElement.closest("#instruments-dropdown")
+        ? menuButton
+        : activeElement;
+      if (focusTimer !== null) window.clearTimeout(focusTimer);
+      focusTimer = window.setTimeout(() => {
+        closeButton.focus({ preventScroll: true });
+        focusTimer = null;
+      }, 220);
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    } else if (!isOpen && wasOpen) {
+      if (focusTimer !== null) {
+        window.clearTimeout(focusTimer);
+        focusTimer = null;
+      }
+      requestAnimationFrame(() => {
+        if (instrumentCenterReturnFocus?.isConnected) {
+          instrumentCenterReturnFocus.focus();
+        } else {
+          menuButton?.focus();
+        }
+        instrumentCenterReturnFocus = null;
+      });
+    }
+
+    wasOpen = isOpen;
+  };
+
+  closeButton.addEventListener("click", closeCenter);
+  backdrop.addEventListener("click", closeCenter);
+
+  document.addEventListener("keydown", (event) => {
+    if (center.classList.contains("collapsed")) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCenter();
+      return;
+    }
+
+    if (event.key !== "Tab") return;
+    const focusable = [...center.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => element.getClientRects().length > 0);
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!center.contains(document.activeElement)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+
+  window.addEventListener("panel-layout-change", syncCenterState);
+  syncCenterState();
+}
+
 // --- ACTUALIZACIÓN DE PROPIEDADES EN EL PANEL DERECHO DELEGADO ---
 
 function updatePropertiesPanel(comp: ComponentInstance) {
@@ -796,7 +884,7 @@ function initCanvasCAD() {
   if (visualAudit.isStep("layout")) return;
 
   const bottomDock = document.querySelector("#bottom-dock") as HTMLElement;
-  if (bottomDock && orchestrator && !visualAudit.enabled) {
+  if (bottomDock && orchestrator) {
     instrumentsDock = new InstrumentsDock(bottomDock, orchestrator, {
       onCanvasModified: () => {
         markCurrentTabAsModified();
@@ -1221,6 +1309,7 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   initSidebars();
+  initInstrumentCenter();
   propertyEditor!.init();
   exporterPanel!.init();
 
@@ -1261,6 +1350,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (menuToggleDock) {
       menuToggleDock.addEventListener("click", () => {
         panelLayoutManager?.togglePanel("dock");
+        instrumentsDropdown.style.display = "none";
       });
     }
     if (menuRunErc) {
