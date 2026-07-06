@@ -33,6 +33,7 @@ import { type CircuitNetlist } from "./netlist_extractor";
 /** Cuadro (frame) de resultados analógicos transmitido por el solver Rust
  *  vía el canal IPC 'sim-frame-update' de Tauri v2. */
 export interface SimulationFrame {
+  readonly runId: number;
   readonly time: number;
   readonly nodeVoltages: Readonly<Record<string, number>>;
   readonly branchCurrents: Readonly<Record<string, number>>;
@@ -43,22 +44,32 @@ export interface SimulationFrame {
   readonly triggerEvent: AnalogEventTrigger | null;
 }
 
+export interface SimulationRunContext {
+  readonly runId: number;
+  readonly ownerTabId: string;
+}
+
+interface SimulationStreamError {
+  readonly runId: number;
+  readonly error: unknown;
+}
+
 /** Pipeline de notificación asíncrona hacia la capa de UI.
  *  Todos los métodos son síncronos; la UI decide si actualiza
  *  el DOM, el canvas, el osciloscopio o los actuadores. */
 export interface SimulationRunnerCallbacks {
   /** Se invoca por cada frame analógico recibido, después de que
    *  executeCycleWithInterrupts() haya sincronizado los MCUs. */
-  onFrameReceived: (frame: SimulationFrame) => void;
+  onFrameReceived: (frame: SimulationFrame, context: SimulationRunContext) => void;
   /** Se invoca cuando el backend Rust reporta un error en el
    *  canal 'sim-frame-error'. */
-  onSimulationError: (error: string) => void;
+  onSimulationError: (error: string, context: SimulationRunContext) => void;
   /** Se invoca cuando se recibe el frame con isFinal = true. */
-  onSimulationComplete: (finalTime: number) => void;
+  onSimulationComplete: (finalTime: number, context: SimulationRunContext) => void;
   /** Se invoca al iniciar (active=true) y al detener (active=false)
    *  la simulación, permitiendo a la UI sincronizar flags como
    *  orchestrator.simulationActive. */
-  onSimulationStateChanged: (active: boolean) => void;
+  onSimulationStateChanged: (active: boolean, context: SimulationRunContext) => void;
 }
 
 /** Interfaz pública del runner. */
@@ -69,6 +80,7 @@ export interface SimulationRunner {
   startInteractiveTransient(
     netlist: CircuitNetlist,
     settings: Readonly<{ dt: number; tMax: number }>,
+    ownerTabId: string,
   ): Promise<void>;
   /** Detiene la simulación, desregistra el stream IPC, limpia los
    *  runtimes MCU y notifica el cambio de estado. */
@@ -96,12 +108,15 @@ let unlistenError: (() => void) | null = null;
 /** Latch del paso temporal dt. Se actualiza en cada llamada a
  *  startInteractiveTransient() y es consumido por el listener IPC. */
 let currentDt: number = 1e-4;
+let nextRunId = 1;
 
 // ==========================================================================
 // Factory: creación del runner con inyección de callbacks
 // ==========================================================================
 
 export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): SimulationRunner {
+  let activeContext: SimulationRunContext | null = null;
+
   const releaseLocalResources = (): void => {
     if (coSimulationWorker) {
       coSimulationWorker.terminate();
@@ -119,9 +134,14 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
     }
   };
 
-  const completeSimulation = (finalTime: number): void => {
-    callbacks.onSimulationComplete(finalTime);
-    callbacks.onSimulationStateChanged(false);
+  const completeSimulation = (
+    finalTime: number,
+    context: SimulationRunContext,
+  ): void => {
+    if (activeContext?.runId !== context.runId) return;
+    callbacks.onSimulationComplete(finalTime, context);
+    callbacks.onSimulationStateChanged(false, context);
+    activeContext = null;
     releaseLocalResources();
   };
 
@@ -129,16 +149,27 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
     async startInteractiveTransient(
       netlist: CircuitNetlist,
       settings: Readonly<{ dt: number; tMax: number }>,
+      ownerTabId: string,
     ): Promise<void> {
       // ENMIENDA 2: Blindaje de doble listener
-      if (unlistenStream) {
+      if (activeContext) {
+        const previousContext = activeContext;
+        await invoke("stop_interactive_transient", { runId: previousContext.runId });
+        callbacks.onSimulationStateChanged(false, previousContext);
         releaseLocalResources();
       }
+
+      const context: SimulationRunContext = {
+        runId: nextRunId,
+        ownerTabId,
+      };
+      nextRunId += 1;
+      activeContext = context;
 
       // Actualizar latch dt para el closure asíncrono
       currentDt = settings.dt;
 
-      callbacks.onSimulationStateChanged(true);
+      callbacks.onSimulationStateChanged(true, context);
 
       // Crear el worker de co-simulación
       coSimulationWorker = new Worker(
@@ -164,10 +195,14 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       // Manejar respuestas del worker
       coSimulationWorker.onmessage = (e) => {
         const data = e.data;
-        if (data.type === "frame_processed") {
-          callbacks.onFrameReceived(data.frame);
+        if (
+          data.type === "frame_processed"
+          && data.frame.runId === context.runId
+          && activeContext?.runId === context.runId
+        ) {
+          callbacks.onFrameReceived(data.frame, context);
           if (data.frame.isFinal) {
-            completeSimulation(data.frame.time);
+            completeSimulation(data.frame.time, context);
           }
         }
       };
@@ -175,6 +210,12 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       // Registrar listener IPC para frames analógicos entrantes
       unlistenStream = await listen<SimulationFrame>('sim-frame-update', (event) => {
         const frame = event.payload;
+        if (
+          frame.runId !== context.runId
+          || activeContext?.runId !== context.runId
+        ) {
+          return;
+        }
 
         // Delegar procesamiento del MCU al Web Worker
         if (coSimulationWorker) {
@@ -184,39 +225,62 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
             dt: currentDt
           });
         } else {
-          callbacks.onFrameReceived(frame);
+          callbacks.onFrameReceived(frame, context);
           if (frame.isFinal) {
-            completeSimulation(frame.time);
+            completeSimulation(frame.time, context);
           }
         }
       });
 
       // Registrar listener IPC para errores de simulación
-      unlistenError = await listen<string>('sim-frame-error', (event) => {
-        callbacks.onSimulationError(event.payload);
+      unlistenError = await listen<SimulationStreamError>('sim-frame-error', (event) => {
+        if (
+          event.payload.runId !== context.runId
+          || activeContext?.runId !== context.runId
+        ) {
+          return;
+        }
+        const error = typeof event.payload.error === "string"
+          ? event.payload.error
+          : JSON.stringify(event.payload.error);
+        callbacks.onSimulationError(error, context);
       });
 
       // Arrancar el backend Rust
       try {
-        await invoke('start_interactive_transient', { netlist, settings });
+        await invoke('start_interactive_transient', {
+          netlist,
+          settings,
+          runId: context.runId,
+        });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(errorMsg);
-        callbacks.onSimulationStateChanged(false);
-        releaseLocalResources();
-        callbacks.onSimulationError(errorMsg);
+        if (activeContext?.runId === context.runId) {
+          callbacks.onSimulationStateChanged(false, context);
+          activeContext = null;
+          releaseLocalResources();
+          callbacks.onSimulationError(errorMsg, context);
+        }
         throw err;
       }
     },
 
     async stopInteractiveTransient(): Promise<void> {
+      const context = activeContext;
       try {
-        await invoke('stop_interactive_transient');
+        await invoke(
+          'stop_interactive_transient',
+          context ? { runId: context.runId } : {},
+        );
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(errorMsg);
       } finally {
-        callbacks.onSimulationStateChanged(false);
+        if (context && activeContext?.runId === context.runId) {
+          callbacks.onSimulationStateChanged(false, context);
+          activeContext = null;
+        }
 
         // ENMIENDA 3: Limpiar runtimes y desregistrar streams
         releaseLocalResources();

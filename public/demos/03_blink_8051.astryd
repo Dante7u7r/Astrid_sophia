@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
+  "version": "3.0",
   "components": [
     { "id": "V1", "type": "vsource", "value": 5, "x": -320, "y": 0, "rotation": 0 },
     { "id": "R1", "type": "resistor", "value": 330, "x": 0, "y": 0, "rotation": 0 },

@@ -14,8 +14,8 @@ describe("Tauri web mock streaming", () => {
   });
 
   it("emite frames transitorios y termina con un frame final", async () => {
-    const frames: Array<{ time: number; isFinal: boolean }> = [];
-    const unlisten = await safeListen<{ time: number; isFinal: boolean }>(
+    const frames: Array<{ runId: number; time: number; isFinal: boolean }> = [];
+    const unlisten = await safeListen<{ runId: number; time: number; isFinal: boolean }>(
       "sim-frame-update",
       (event) => frames.push(event.payload),
     );
@@ -23,11 +23,12 @@ describe("Tauri web mock streaming", () => {
     await safeInvoke("start_interactive_transient", {
       netlist: { components: [], wires: [] },
       settings: { dt: 1e-4, tMax: 0.05 },
+      runId: 42,
     });
     await vi.advanceTimersByTimeAsync(2_500);
 
     expect(frames).toHaveLength(60);
-    expect(frames.at(-1)).toMatchObject({ time: 0.05, isFinal: true });
+    expect(frames.at(-1)).toMatchObject({ runId: 42, time: 0.05, isFinal: true });
     unlisten();
   });
 
@@ -48,6 +49,31 @@ describe("Tauri web mock streaming", () => {
 
     expect(frames.length).toBeGreaterThan(0);
     expect(frames.some((frame) => frame.isFinal)).toBe(false);
+    unlisten();
+  });
+
+  it("ignora una cancelacion tardia de una corrida anterior", async () => {
+    const frames: Array<{ runId: number; isFinal: boolean }> = [];
+    const unlisten = await safeListen<{ runId: number; isFinal: boolean }>(
+      "sim-frame-update",
+      (event) => frames.push(event.payload),
+    );
+
+    await safeInvoke("start_interactive_transient", {
+      netlist: { components: [], wires: [] },
+      settings: { dt: 1e-4, tMax: 0.05 },
+      runId: 100,
+    });
+    await safeInvoke("start_interactive_transient", {
+      netlist: { components: [], wires: [] },
+      settings: { dt: 1e-4, tMax: 0.05 },
+      runId: 101,
+    });
+    await safeInvoke("stop_interactive_transient", { runId: 100 });
+    await vi.advanceTimersByTimeAsync(2_500);
+
+    expect(frames.some(frame => frame.runId === 100)).toBe(false);
+    expect(frames.at(-1)).toMatchObject({ runId: 101, isFinal: true });
     unlisten();
   });
 });

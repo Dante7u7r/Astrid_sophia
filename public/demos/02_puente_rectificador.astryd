@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
+  "version": "3.0",
   "components": [
     { "id": "V1", "type": "vsource", "value": 0, "x": -240, "y": 0, "rotation": 0, "waveType": "sine", "amplitude": 10, "frequency": 50, "offset": 0 },
     { "id": "D1", "type": "diode", "value": 0, "x": 0, "y": -80, "rotation": 0 },

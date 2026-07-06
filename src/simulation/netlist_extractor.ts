@@ -1,9 +1,22 @@
-import { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
+import {
+  ComponentInstance,
+  PinInstance,
+  WireInstance,
+  findDuplicateComponentIds,
+  isValidComponentId,
+} from "../canvas_orchestrator";
 import {
   parseLampActuatorModel,
   parseBuzzerActuatorModel,
   parseRelayActuatorModel,
 } from "../ui/actuator_helpers";
+import {
+  DMM_CURRENT_SHUNT_RESISTANCE,
+  DMM_RESISTANCE_GUARD,
+  DMM_RESISTANCE_TEST_CURRENT,
+  DMM_VOLTAGE_INPUT_RESISTANCE,
+  normalizeDmmMode,
+} from "./dmm";
 
 // ==========================================================================
 // INTERFACES DE LA NETLIST ELÉCTRICA
@@ -22,8 +35,11 @@ export interface ExtractedComponent {
   readonly switchState?: boolean;
   readonly switchRon?: number;
   readonly switchRoff?: number;
+  readonly switchVth?: number;
+  readonly switchVh?: number;
   readonly subcircuitName?: string;
   readonly firmware?: Uint8Array;
+  readonly mcuClockSpeed?: number;
 }
 
 export interface MutualInductance {
@@ -44,6 +60,61 @@ export interface NetlistExtractionResult {
   readonly netlist: CircuitNetlist;
   readonly pinToNodeMap: Readonly<Record<string, string>>;
   readonly error?: string;
+}
+
+export function validateSchematicIntegrity(
+  components: readonly ComponentInstance[],
+  wires: readonly WireInstance[],
+  getPins: (comp: ComponentInstance) => readonly PinInstance[],
+): string | undefined {
+  const invalidIds = components
+    .map(component => component.id)
+    .filter(id => !isValidComponentId(id));
+  if (invalidIds.length > 0) {
+    return `Identificador de componente invalido: ${invalidIds.map(id => `[${id || "(vacio)"}]`).join(", ")}.`;
+  }
+
+  const duplicateIds = findDuplicateComponentIds(components);
+  if (duplicateIds.length > 0) {
+    return `Identificadores de componente duplicados: ${duplicateIds.map(id => `[${id}]`).join(", ")}.`;
+  }
+
+  const componentIds = new Set(components.map(component => component.id));
+  const danglingWires = wires.filter(wire =>
+    !componentIds.has(wire.from.componentId)
+    || !componentIds.has(wire.to.componentId),
+  );
+  if (danglingWires.length > 0) {
+    return `Cables con referencias a componentes inexistentes: ${danglingWires.map(wire => `[${wire.id}]`).join(", ")}.`;
+  }
+
+  const componentById = new Map(components.map(component => [component.id, component]));
+  const wiresWithInvalidPins = wires.filter(wire => {
+    const fromComponent = componentById.get(wire.from.componentId);
+    const toComponent = componentById.get(wire.to.componentId);
+    if (!fromComponent || !toComponent) return false;
+
+    const fromPinExists = getPins(fromComponent).some(pin => pin.pinIndex === wire.from.pinIndex);
+    const toPinExists = getPins(toComponent).some(pin => pin.pinIndex === wire.to.pinIndex);
+    return !fromPinExists || !toPinExists;
+  });
+  if (wiresWithInvalidPins.length > 0) {
+    return `Cables conectados a terminales inexistentes: ${wiresWithInvalidPins.map(wire => `[${wire.id}]`).join(", ")}.`;
+  }
+
+  const seenWireIds = new Set<string>();
+  const duplicateWireIds = new Set<string>();
+  for (const wire of wires) {
+    if (!wire.id.trim()) return "Hay un cable sin identificador.";
+    const normalized = wire.id.trim().toUpperCase();
+    if (seenWireIds.has(normalized)) duplicateWireIds.add(wire.id);
+    seenWireIds.add(normalized);
+  }
+  if (duplicateWireIds.size > 0) {
+    return `Identificadores de cable duplicados: ${[...duplicateWireIds].map(id => `[${id}]`).join(", ")}.`;
+  }
+
+  return undefined;
 }
 
 // ==========================================================================
@@ -105,6 +176,15 @@ export function extractElectricalNetlist(
   wires: readonly WireInstance[],
   getPins: (comp: ComponentInstance) => readonly PinInstance[],
 ): NetlistExtractionResult {
+  const emptyResult = (error: string): NetlistExtractionResult => ({
+    netlist: { components: [], wires: [] },
+    pinToNodeMap: {},
+    error,
+  });
+
+  const integrityError = validateSchematicIntegrity(components, wires, getPins);
+  if (integrityError) return emptyResult(integrityError);
+
   const dsu = new DisjointSetUnion();
 
   // 1. Declarar cada pin de cada componente en el DSU
@@ -231,15 +311,30 @@ export function extractElectricalNetlist(
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
 
-      const mode = comp.value?.toString() ?? "V";
-      const rVal = mode === "A" ? 0.01 : 10e6;
-
-      extractedComponents.push({
-        id: comp.id,
-        type: 'resistor',
-        value: rVal,
-        pins: [pin0Node, pin1Node],
-      });
+      const mode = normalizeDmmMode(comp.value);
+      if (mode === "R") {
+        extractedComponents.push({
+          id: `${comp.id}__test`,
+          type: "isource",
+          value: DMM_RESISTANCE_TEST_CURRENT,
+          pins: [pin0Node, pin1Node],
+        });
+        extractedComponents.push({
+          id: `${comp.id}__guard`,
+          type: "resistor",
+          value: DMM_RESISTANCE_GUARD,
+          pins: [pin0Node, pin1Node],
+        });
+      } else {
+        extractedComponents.push({
+          id: comp.id,
+          type: "resistor",
+          value: mode === "A"
+            ? DMM_CURRENT_SHUNT_RESISTANCE
+            : DMM_VOLTAGE_INPUT_RESISTANCE,
+          pins: [pin0Node, pin1Node],
+        });
+      }
     } else if (comp.type === 'thermistor') {
       const pinsMapped = pinsKeys.map(pk => {
         const root = dsu.find(pk);
@@ -467,8 +562,11 @@ export function extractElectricalNetlist(
         switchState: comp.type === 'switch' ? (comp.switchState ?? false) : undefined,
         switchRon: comp.switchRon,
         switchRoff: comp.switchRoff,
+        switchVth: comp.switchVth,
+        switchVh: comp.switchVh,
         subcircuitName,
         firmware: comp.firmware,
+        mcuClockSpeed: comp.mcuClockSpeed,
       });
     }
   }

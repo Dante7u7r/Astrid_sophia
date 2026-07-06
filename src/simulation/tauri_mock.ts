@@ -6,6 +6,7 @@ type WebEventHandler = (event: Event<unknown>) => void;
 const webEventListeners = new Map<string, Set<WebEventHandler>>();
 const loggedMockCommands = new Set<string>();
 let webTransientRunId = 0;
+let webActiveExternalRunId: number | null = null;
 let webTransientTimers: ReturnType<typeof setTimeout>[] = [];
 
 function isTauriEnvironment(): boolean {
@@ -20,26 +21,37 @@ function emitWebEvent<T>(eventName: string, payload: T, id: number): void {
   handlers.forEach((handler) => handler(event as Event<unknown>));
 }
 
-function stopWebTransient(): void {
+function stopWebTransient(expectedRunId?: number): void {
+  if (
+    expectedRunId !== undefined
+    && webActiveExternalRunId !== null
+    && expectedRunId !== webActiveExternalRunId
+  ) {
+    return;
+  }
   webTransientRunId += 1;
+  webActiveExternalRunId = null;
   webTransientTimers.forEach((timer) => clearTimeout(timer));
   webTransientTimers = [];
 }
 
 function startWebTransient(args?: Record<string, unknown>): void {
   stopWebTransient();
-  const runId = webTransientRunId;
+  const cancellationId = webTransientRunId;
+  const runId = typeof args?.runId === "number" ? args.runId : cancellationId;
+  webActiveExternalRunId = runId;
   const settings = args?.settings as { dt?: number; tMax?: number } | undefined;
   const tMax = Math.max(settings?.tMax ?? 0.05, settings?.dt ?? 1e-4);
   const frameCount = 60;
 
   for (let index = 0; index < frameCount; index += 1) {
     const timer = setTimeout(() => {
-      if (runId !== webTransientRunId) return;
+      if (cancellationId !== webTransientRunId) return;
 
       const time = tMax * (index / (frameCount - 1));
       const isFinal = index === frameCount - 1;
       emitWebEvent("sim-frame-update", {
+        runId,
         time,
         nodeVoltages: {
           "0": 0,
@@ -175,7 +187,7 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
       return undefined as T;
 
     case "stop_interactive_transient":
-      stopWebTransient();
+      stopWebTransient(typeof args?.runId === "number" ? args.runId : undefined);
       return undefined as T;
 
     case "inject_live_mutation":

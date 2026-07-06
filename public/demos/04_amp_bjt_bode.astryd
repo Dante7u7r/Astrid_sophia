@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
+  "version": "3.0",
   "components": [
     { "id": "VCC", "type": "vsource", "value": 12, "x": 0, "y": -160, "rotation": 90 },
     { "id": "Vin", "type": "vsource", "value": 0, "x": -240, "y": 0, "rotation": 0, "waveType": "sine", "amplitude": 0.01, "frequency": 1000, "offset": 0 },

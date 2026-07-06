@@ -1,6 +1,10 @@
 import { type McuRuntime } from "./simulation/mcu-runtime";
 import { type McuSpiceBridge } from "./simulation/mcu-spice-bridge";
 import { drawComponentSymbol } from "./canvas/component_renderer";
+import {
+  DMM_INITIAL_DISPLAY,
+  normalizeDmmMode,
+} from "./simulation/dmm";
 
 export interface Point2D {
   x: number;
@@ -83,8 +87,127 @@ export interface WireInstance {
   points: Point2D[]; // Path points for rendering
 }
 
+const COMPONENT_ID_PREFIXES: Record<ComponentInstance["type"], string> = {
+  resistor: "R",
+  capacitor: "C",
+  inductor: "L",
+  diode: "D",
+  vsource: "V",
+  ground: "GND",
+  nmos: "M",
+  opamp: "U",
+  pmos: "M",
+  npn: "Q",
+  pnp: "Q",
+  lamp: "LP",
+  relay: "RY",
+  buzzer: "BZ",
+  mcu_8051: "U",
+  mcu_avr: "U",
+  arduino_uno: "U",
+  esp32: "U",
+  raspberry_pi_pico: "U",
+  isource: "I",
+  led: "LED",
+  transformer: "T",
+  switch: "SW",
+  x: "X",
+  potentiometer: "RV",
+  ldr: "LDR",
+  thermistor: "RT",
+  dmm: "DMM",
+};
+
+export function normalizeComponentId(id: string): string {
+  return id.trim().toUpperCase();
+}
+
+export function isValidComponentId(id: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9_]*$/.test(id.trim());
+}
+
+export function findDuplicateComponentIds(
+  components: readonly Pick<ComponentInstance, "id">[],
+): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const component of components) {
+    const normalized = normalizeComponentId(component.id);
+    if (seen.has(normalized)) {
+      duplicates.add(normalized);
+    } else {
+      seen.add(normalized);
+    }
+  }
+
+  return [...duplicates].sort();
+}
+
+export function copyComponentConfiguration(
+  source: ComponentInstance,
+  target: ComponentInstance,
+): void {
+  Object.assign(target, {
+    value: source.value,
+    rotation: source.rotation,
+    mirror: source.mirror,
+    wiperPosition: source.wiperPosition,
+    lux: source.lux,
+    temperatureCelsius: source.temperatureCelsius,
+    waveType: source.waveType,
+    amplitude: source.amplitude,
+    frequency: source.frequency,
+    offset: source.offset,
+    offsetVoltage: source.offsetVoltage,
+    openLoopGain: source.openLoopGain,
+    dutyCycle: source.dutyCycle,
+    mcuClockSpeed: source.mcuClockSpeed,
+    primaryInductance: source.primaryInductance,
+    secondaryInductance: source.secondaryInductance,
+    couplingCoefficient: source.couplingCoefficient,
+    switchRon: source.switchRon,
+    switchRoff: source.switchRoff,
+    switchVth: source.switchVth,
+    switchVh: source.switchVh,
+    switchState: source.switchState,
+    spiceMacro: source.spiceMacro,
+    pinCount: source.pinCount,
+    firmwareHex: source.firmwareHex,
+  });
+  target.firmware = source.firmware ? source.firmware.slice() : undefined;
+  target.dmmValue = source.type === "dmm" ? DMM_INITIAL_DISPLAY : undefined;
+}
+
+export function generateUniqueComponentId(
+  components: readonly Pick<ComponentInstance, "id">[],
+  type: ComponentInstance["type"],
+): string {
+  const prefix = COMPONENT_ID_PREFIXES[type];
+  const normalizedIds = new Set(components.map(component => normalizeComponentId(component.id)));
+  const suffixPattern = new RegExp(`^${prefix}(\\d+)$`, "i");
+  let highestSuffix = 0;
+
+  for (const component of components) {
+    const match = component.id.trim().match(suffixPattern);
+    if (match) highestSuffix = Math.max(highestSuffix, Number.parseInt(match[1], 10));
+  }
+
+  let suffix = highestSuffix + 1;
+  let candidate = `${prefix}${suffix}`;
+  while (normalizedIds.has(normalizeComponentId(candidate))) {
+    suffix += 1;
+    candidate = `${prefix}${suffix}`;
+  }
+  return candidate;
+}
+
 export function wireEndpointKey(ep: WireEndpoint): string {
   return `${ep.componentId}:${ep.pinIndex}`;
+}
+
+function createWireId(from: WireEndpoint, to: WireEndpoint): string {
+  return `wire_${from.componentId}_p${from.pinIndex}_to_${to.componentId}_p${to.pinIndex}`;
 }
 
 /** Half-extents (local space, pre-rotation) aligned with render() geometry. */
@@ -914,30 +1037,13 @@ export class CanvasOrchestrator {
 
   // --- ACTIONS & OPERATIONS ---
 
-  public addComponent(type: ComponentInstance['type'], x: number, y: number, value: number): ComponentInstance {
-    // Generate incremental ID
-    const count = this.components.filter(c => c.type === type).length + 1;
-    let prefix = "R";
-    switch (type) {
-      case 'capacitor': prefix = "C"; break;
-      case 'inductor': prefix = "L"; break;
-      case 'diode': prefix = "D"; break;
-      case 'nmos': prefix = "M"; break;
-      case 'pmos': prefix = "M"; break;
-      case 'npn': prefix = "Q"; break;
-      case 'pnp': prefix = "Q"; break;
-      case 'vsource': prefix = "V"; break;
-      case 'ground': prefix = "GND"; break;
-      case 'lamp': prefix = "LP"; break;
-      case 'relay': prefix = "RY"; break;
-      case 'buzzer': prefix = "BZ"; break;
-      case 'isource': prefix = "I"; break;
-      case 'led': prefix = "LED"; break;
-      case 'switch': prefix = "SW"; break;
-      case 'transformer': prefix = "T"; break;
-      case 'x': prefix = "X"; break;
-    }
-    const id = prefix === "GND" ? `GND${count}` : `${prefix}${count}`;
+  public addComponent(
+    type: ComponentInstance['type'],
+    x: number,
+    y: number,
+    value: number | string,
+  ): ComponentInstance {
+    const id = generateUniqueComponentId(this.components, type);
 
     const newComp: ComponentInstance = {
       id,
@@ -948,8 +1054,68 @@ export class CanvasOrchestrator {
       rotation: 0,
     };
 
+    if (type === "dmm") {
+      newComp.value = normalizeDmmMode(value);
+      newComp.dmmValue = DMM_INITIAL_DISPLAY;
+    } else if (type === "potentiometer") {
+      newComp.wiperPosition = 0.5;
+    } else if (type === "ldr") {
+      newComp.lux = 100;
+    } else if (type === "thermistor") {
+      newComp.temperatureCelsius = 25;
+    } else if (type === "transformer") {
+      const inductance = typeof value === "number" && value > 0 ? value : 1e-3;
+      newComp.primaryInductance = inductance;
+      newComp.secondaryInductance = inductance;
+      newComp.couplingCoefficient = 0.9;
+    } else if (type === "switch") {
+      newComp.switchRon = 0.01;
+      newComp.switchRoff = 1e9;
+      newComp.switchVth = 0.5;
+      newComp.switchVh = 0.05;
+      newComp.switchState = false;
+    } else if (type === "opamp") {
+      newComp.offsetVoltage = 0.002;
+      newComp.openLoopGain = 100_000;
+    } else if (type === "mcu_8051" || type === "mcu_avr") {
+      const defaultClock = type === "mcu_avr" ? 16e6 : 12e6;
+      newComp.mcuClockSpeed = typeof value === "number" && value > 0
+        ? value
+        : defaultClock;
+    } else if (type === "x") {
+      newComp.pinCount = 4;
+    }
+
     this.components.push(newComp);
     return newComp;
+  }
+
+  public renameComponent(component: ComponentInstance, requestedId: string): string | null {
+    const newId = requestedId.trim();
+    const oldId = component.id;
+
+    if (!isValidComponentId(newId)) {
+      return "El identificador debe comenzar con una letra y contener solo letras, numeros o guion bajo.";
+    }
+
+    const normalizedNewId = normalizeComponentId(newId);
+    const duplicate = this.components.some(
+      candidate => candidate !== component && normalizeComponentId(candidate.id) === normalizedNewId,
+    );
+    if (duplicate) {
+      return `El identificador [${newId}] ya existe en el circuito.`;
+    }
+
+    if (newId === oldId) return null;
+
+    component.id = newId;
+    for (const wire of this.wires) {
+      if (wire.from.componentId === oldId) wire.from.componentId = newId;
+      if (wire.to.componentId === oldId) wire.to.componentId = newId;
+      wire.id = createWireId(wire.from, wire.to);
+    }
+    this.syncWireConnections();
+    return null;
   }
 
   public removeComponent(id: string): void {
@@ -1183,7 +1349,7 @@ export class CanvasOrchestrator {
 
     if (exists) return;
 
-    const id = `wire_${from.componentId}_p${from.pinIndex}_to_${to.componentId}_p${to.pinIndex}`;
+    const id = createWireId(from, to);
     this.wires.push({
       id,
       from: { componentId: from.componentId, pinIndex: from.pinIndex },
@@ -1230,17 +1396,8 @@ export class CanvasOrchestrator {
     if (this.selectedComponents.length > 0) {
       const newSelection: ComponentInstance[] = [];
       for (const comp of this.selectedComponents) {
-        const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, Number(comp.value) || 0);
-        dup.rotation = comp.rotation;
-        dup.mirror = comp.mirror;
-        dup.wiperPosition = comp.wiperPosition;
-        dup.lux = comp.lux;
-        dup.temperatureCelsius = comp.temperatureCelsius;
-        dup.waveType = comp.waveType;
-        dup.amplitude = comp.amplitude;
-        dup.frequency = comp.frequency;
-        dup.offset = comp.offset;
-        dup.dutyCycle = comp.dutyCycle;
+        const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, comp.value);
+        copyComponentConfiguration(comp, dup);
         newSelection.push(dup);
       }
       for (const comp of this.selectedComponents) {
@@ -1252,17 +1409,8 @@ export class CanvasOrchestrator {
       }
     } else if (this.selectedComponent) {
       const comp = this.selectedComponent;
-      const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, Number(comp.value) || 0);
-      dup.rotation = comp.rotation;
-      dup.mirror = comp.mirror;
-      dup.wiperPosition = comp.wiperPosition;
-      dup.lux = comp.lux;
-      dup.temperatureCelsius = comp.temperatureCelsius;
-      dup.waveType = comp.waveType;
-      dup.amplitude = comp.amplitude;
-      dup.frequency = comp.frequency;
-      dup.offset = comp.offset;
-      dup.dutyCycle = comp.dutyCycle;
+      const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, comp.value);
+      copyComponentConfiguration(comp, dup);
       this.selectedComponent = dup;
     }
   }

@@ -497,7 +497,7 @@ export function attachCanvasDrop(
 ): () => void {
   const placeComponent = (
     type: ComponentInstance["type"],
-    value: number,
+    value: ComponentInstance["value"],
     clientX: number,
     clientY: number,
   ): boolean => {
@@ -531,7 +531,10 @@ export function attachCanvasDrop(
     try {
       const rawData = e.dataTransfer?.getData("text/plain");
       if (!rawData) return;
-      const { type, value } = JSON.parse(rawData) as { type: ComponentInstance["type"]; value: number };
+      const { type, value } = JSON.parse(rawData) as {
+        type: ComponentInstance["type"];
+        value: ComponentInstance["value"];
+      };
       placeComponent(type, value, e.clientX, e.clientY);
     } catch {
       callbacks.log("Error al colocar componente.", "error");
@@ -557,10 +560,17 @@ export function attachCanvasDrop(
     let dragging = false;
     let ghost: HTMLElement | null = null;
 
-    const getComponentData = () => ({
-      type: (card.dataset.type || "resistor") as ComponentInstance["type"],
-      value: Number.parseFloat(card.dataset.default || "1000"),
-    });
+    const getComponentData = (): {
+      type: ComponentInstance["type"];
+      value: ComponentInstance["value"];
+    } => {
+      const rawValue = card.dataset.default || "1000";
+      const numericValue = Number.parseFloat(rawValue);
+      return {
+        type: (card.dataset.type || "resistor") as ComponentInstance["type"],
+        value: Number.isFinite(numericValue) ? numericValue : rawValue,
+      };
+    };
 
     const isInsideViewport = (clientX: number, clientY: number): boolean => {
       const rect = canvasViewport.getBoundingClientRect();

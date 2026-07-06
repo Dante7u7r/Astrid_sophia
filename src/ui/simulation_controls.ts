@@ -21,6 +21,7 @@ export interface SimulationControlHandlers {
 
 export interface SimulationControls {
   setSimulationRunning: (running: boolean) => void;
+  isSimulationRunning: () => boolean;
   setActiveModeButton: (mode: AnalysisMode) => void;
   destroy: () => void;
 }
@@ -44,8 +45,10 @@ export function initSimulationControls(
   analysisModeSelect = document.querySelector('#analysis-mode-select') as HTMLSelectElement | null;
   runSimBtn = document.querySelector('#run-sim-btn') as HTMLButtonElement | null;
   stopSimBtn = document.querySelector('#stop-sim-btn') as HTMLButtonElement | null;
+  let simulationRunning = false;
 
   function applySimulationVisualState(running: boolean): void {
+    simulationRunning = running;
     if (!runSimBtn || !stopSimBtn) return;
 
     runSimBtn.disabled = running;
@@ -117,6 +120,10 @@ export function initSimulationControls(
   return {
     setSimulationRunning(running: boolean): void {
       applySimulationVisualState(running);
+    },
+
+    isSimulationRunning(): boolean {
+      return simulationRunning;
     },
 
     setActiveModeButton(mode: AnalysisMode): void {

@@ -178,7 +178,13 @@ export class McuDebugPanel {
       if (!this.currentComponent) return;
       const content = event.target?.result;
       
-      const def = this.currentComponent.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
+      const baseDefinition = this.currentComponent.type === 'mcu_avr'
+        ? ATMEGA328P_DEFINITIONS
+        : STANDARD_8051_DEFINITION;
+      const def = {
+        ...baseDefinition,
+        clockSpeed: this.currentComponent.mcuClockSpeed ?? baseDefinition.clockSpeed,
+      };
       
       if (isHex && typeof content === "string") {
         this.currentComponent.firmwareHex = content;
@@ -266,7 +272,13 @@ export class McuDebugPanel {
       
       // Initialize runtime if not already done
       if (!comp.mcuRuntime) {
-        const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
+        const baseDefinition = comp.type === 'mcu_avr'
+          ? ATMEGA328P_DEFINITIONS
+          : STANDARD_8051_DEFINITION;
+        const def = {
+          ...baseDefinition,
+          clockSpeed: comp.mcuClockSpeed ?? baseDefinition.clockSpeed,
+        };
         comp.mcuRuntime = createMcuRuntime({
           definition: def,
           firmware: comp.firmware

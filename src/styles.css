@@ -418,6 +418,26 @@ body {
   min-height: 0;
 }
 
+@media (max-width: 1050px) and (min-width: 761px) {
+  .bottom-dock {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 50px minmax(240px, 1fr) minmax(110px, 0.38fr);
+  }
+
+  #bottom-dock > .instruments-panel {
+    grid-column: 1;
+    grid-row: 2;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  #bottom-dock > .console-panel {
+    grid-column: 1;
+    grid-row: 3;
+    border-left: 0;
+  }
+}
+
 .mobile-drawer-backdrop {
   display: none;
 }

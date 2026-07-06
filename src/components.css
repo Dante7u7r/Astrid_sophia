@@ -849,6 +849,9 @@ body.palette-drag-active * {
 .modal-box {
   width: 90%;
   max-width: 480px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
   background: rgba(8, 12, 22, 0.92);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,0.1);
@@ -857,6 +860,11 @@ body.palette-drag-active * {
   overflow: hidden;
   transform: scale(0.9) translateY(20px);
   transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.modal-box > .panel-body {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .modal-overlay.open .modal-box {

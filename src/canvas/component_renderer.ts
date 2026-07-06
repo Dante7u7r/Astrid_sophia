@@ -1,4 +1,8 @@
 import { type ComponentInstance } from "../canvas_orchestrator";
+import {
+  DMM_INITIAL_DISPLAY,
+  normalizeDmmMode,
+} from "../simulation/dmm";
 
 export function drawComponentSymbol(
   ctx: CanvasRenderingContext2D,
@@ -66,8 +70,8 @@ export function drawComponentSymbol(
       ctx.font = "bold 8px var(--font-mono)";
       ctx.textAlign = "center";
 
-      const mode = comp.value?.toString() ?? "V";
-      const valStr = comp.dmmValue !== undefined ? comp.dmmValue : "--";
+      const mode = normalizeDmmMode(comp.value);
+      const valStr = comp.dmmValue ?? DMM_INITIAL_DISPLAY;
       ctx.fillText(valStr, 0, -18);
 
       ctx.fillStyle = "rgba(57, 255, 20, 0.4)";
@@ -1085,7 +1089,7 @@ export function drawComponentSymbol(
     } else if (comp.type === 'switch') {
       formattedVal = comp.switchState ? "Cerrado" : "Abierto";
     } else if (comp.type === 'transformer') {
-      formattedVal = `${comp.primaryInductance || 1e-3} H / ${comp.secondaryInductance || 1e-3} H (k=${comp.couplingCoefficient || 0.9})`;
+      formattedVal = `${comp.primaryInductance ?? 1e-3} H / ${comp.secondaryInductance ?? 1e-3} H (k=${comp.couplingCoefficient ?? 0.9})`;
     }
     ctx.fillText(formattedVal, 0, valY);
   }

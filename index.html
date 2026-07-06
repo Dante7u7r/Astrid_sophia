@@ -23,7 +23,7 @@
         </div>
 
         <div class="simulation-controls" id="simulation-bar">
-          <select id="analysis-mode-select" class="prop-input" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-bright); border-radius: 8px; font-size: 0.72rem; padding: 4px 10px; cursor: pointer; outline: none;">
+          <select id="analysis-mode-select" class="prop-input" aria-label="Tipo de análisis" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-bright); border-radius: 8px; font-size: 0.72rem; padding: 4px 10px; cursor: pointer; outline: none;">
             <option value="DC">⚖️ Análisis CC</option>
             <option value="AC">📈 Barrido CA</option>
             <option value="TRAN">⏱️ Transitorio</option>
@@ -34,11 +34,11 @@
             <option value="SPAR">📡 S-Param</option>
           </select>
           <div class="header-separator"></div>
-          <button id="run-sim-btn" class="btn-ctrl btn-run" type="button" data-tooltip="Iniciar simulación activa">
+          <button id="run-sim-btn" class="btn-ctrl btn-run" type="button" data-tooltip="Iniciar simulación activa" aria-label="Iniciar simulación">
             <span class="btn-icon" aria-hidden="true">▶</span>
             <span class="header-action-label">Simular</span>
           </button>
-          <button id="stop-sim-btn" class="btn-ctrl" type="button" disabled data-tooltip="Detener simulación activa">
+          <button id="stop-sim-btn" class="btn-ctrl" type="button" disabled data-tooltip="Detener simulación activa" aria-label="Detener simulación">
             <span class="btn-icon" aria-hidden="true">■</span>
             <span class="header-action-label">Detener</span>
           </button>
@@ -62,10 +62,10 @@
             <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
           </button>
           <div class="dropdown-wrapper">
-            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentos y Diagnósticos" aria-label="Instrumentos y diagnósticos">
+            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentos y Diagnósticos" aria-label="Instrumentos y diagnósticos" aria-haspopup="menu" aria-expanded="false" aria-controls="instruments-dropdown">
               <span aria-hidden="true">🛠️</span><span class="header-action-label">Instrumentación</span>
             </button>
-            <div id="instruments-dropdown" class="dropdown-menu-box" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--bg-glass); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-depth); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); width: 220px; z-index: 1000; padding: 10px;">
+            <div id="instruments-dropdown" class="dropdown-menu-box" role="menu" hidden style="display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--bg-glass); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-depth); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); width: 220px; z-index: 1000; padding: 10px;">
               <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Paneles e Interfaz</div>
               <button class="dropdown-menu-item-btn" id="menu-toggle-left" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
                 <span>📦 Panel Componentes</span>
@@ -121,7 +121,7 @@
         <aside class="sidebar-panel sidebar-left" id="sidebar-left">
           <div class="panel-header" id="left-panel-header">
             <h3>Componentes</h3>
-            <button id="btn-toggle-left" class="btn-text-only" type="button">◀ Colapsar</button>
+            <button id="btn-toggle-left" class="btn-text-only" type="button" aria-controls="sidebar-left" aria-expanded="true">◀ Colapsar</button>
           </div>
           <div class="panel-body" id="left-panel-body">
             <div class="search-box">
@@ -451,7 +451,7 @@
                 </div>
                 <div class="category-content" id="cat-actuadores">
                   <!-- Lámpara -->
-                  <div class="component-card" draggable="true" id="comp-lamp" data-type="lamp" data-default="12">
+                  <div class="component-card" draggable="true" id="comp-lamp" data-type="lamp" data-default="120;rhot=120;rcold=26.4;vnom=12;pnom=1.2;heat=90;cool=160">
                     <div class="comp-icon-box">
                       <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                         <circle cx="20" cy="20" r="12" fill="currentColor" fill-opacity="0.1" />
@@ -465,7 +465,7 @@
                     </div>
                   </div>
                   <!-- Relé -->
-                  <div class="component-card" draggable="true" id="comp-relay" data-type="relay" data-default="5">
+                  <div class="component-card" draggable="true" id="comp-relay" data-type="relay" data-default="80m;rcoil=120;pull=30m;hold=16m;ron=50m;roff=100Meg;ton=2.5;toff=1.2">
                     <div class="comp-icon-box">
                       <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                         <rect x="8" y="12" width="12" height="16" rx="2" fill="currentColor" fill-opacity="0.1" />
@@ -481,7 +481,7 @@
                     </div>
                   </div>
                   <!-- Zumbador -->
-                  <div class="component-card" draggable="true" id="comp-buzzer" data-type="buzzer" data-default="5">
+                  <div class="component-card" draggable="true" id="comp-buzzer" data-type="buzzer" data-default="90;ron=65;roff=252;vnom=5;vstart=1.1;tone=2400;q=1.8;ton=7;toff=18">
                     <div class="comp-icon-box">
                       <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                         <path d="M 10 12 H 18 L 28 6 V 34 L 18 28 H 10 Z" fill="currentColor" fill-opacity="0.1" />
@@ -633,14 +633,14 @@
             <button id="btn-expand-right" class="btn-sidebar-edge-toggle right" aria-label="Mostrar panel de propiedades" data-tooltip="Mostrar Propiedades" type="button" style="display: none;">‹</button>
 
             <div class="canvas-controls-floating" id="canvas-floater-menu">
-              <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" type="button">+</button>
-              <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" type="button">-</button>
-              <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" type="button">🌐</button>
-              <button id="btn-clear-canvas" class="btn-floating" data-tooltip="Limpiar Todo" style="color: var(--danger);" type="button">🗑️</button>
+              <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" aria-label="Aumentar zoom" type="button">+</button>
+              <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" aria-label="Disminuir zoom" type="button">-</button>
+              <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" aria-label="Desactivar ajuste a rejilla" aria-pressed="true" type="button">🌐</button>
+              <button id="btn-clear-canvas" class="btn-floating" data-tooltip="Limpiar Todo" aria-label="Limpiar esquema" style="color: var(--danger);" type="button">🗑️</button>
             </div>
             
             <!-- Canvas Interactivo Principal -->
-            <canvas id="circuit-canvas"></canvas>
+            <canvas id="circuit-canvas" tabindex="0" aria-label="Lienzo del esquema electrónico"></canvas>
 
             <div class="canvas-help-tip" id="canvas-help-tip">
               Arrastra componentes del panel izquierdo para diseñar tu circuito.
@@ -729,7 +729,7 @@
                       <!-- Time/Div -->
                       <div style="display: flex; flex-direction: column; gap: 2px;">
                         <label style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Tiempo / Div</label>
-                        <select id="osc-time-div" class="prop-input" style="font-size: 0.68rem; padding: 3px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; cursor: pointer; width: 100%;">
+                        <select id="osc-time-div" class="prop-input" aria-label="Tiempo por división" style="font-size: 0.68rem; padding: 3px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; cursor: pointer; width: 100%;">
                           <option value="0.005">5 ms/div</option>
                           <option value="0.01">10 ms/div</option>
                           <option value="0.02" selected>20 ms/div</option>
@@ -746,14 +746,14 @@
                         <div style="background: rgba(102, 252, 241, 0.04); border: 1px solid rgba(102, 252, 241, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
                           <div style="font-size: 0.65rem; color: #66fcf1; font-weight: bold;">Canal 1</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch1" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                            <select id="osc-volts-ch1" class="prop-input" aria-label="Voltios por división del canal 1" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
                               <option value="0.2">0.2 V/div</option>
                               <option value="0.5">0.5 V/div</option>
                               <option value="1.0" selected>1.0 V/div</option>
                               <option value="2.0">2.0 V/div</option>
                               <option value="5.0">5.0 V/div</option>
                             </select>
-                            <input id="osc-offset-ch1" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                            <input id="osc-offset-ch1" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 1" />
                           </div>
                         </div>
                         
@@ -761,14 +761,14 @@
                         <div style="background: rgba(168, 85, 247, 0.04); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
                           <div style="font-size: 0.65rem; color: #a855f7; font-weight: bold;">Canal 2</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch2" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                            <select id="osc-volts-ch2" class="prop-input" aria-label="Voltios por división del canal 2" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
                               <option value="0.2">0.2 V/div</option>
                               <option value="0.5">0.5 V/div</option>
                               <option value="1.0" selected>1.0 V/div</option>
                               <option value="2.0">2.0 V/div</option>
                               <option value="5.0">5.0 V/div</option>
                             </select>
-                            <input id="osc-offset-ch2" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                            <input id="osc-offset-ch2" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 2" />
                           </div>
                         </div>
                         
@@ -776,14 +776,14 @@
                         <div style="background: rgba(249, 115, 22, 0.04); border: 1px solid rgba(249, 115, 22, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
                           <div style="font-size: 0.65rem; color: #f97316; font-weight: bold;">Canal 3</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch3" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                            <select id="osc-volts-ch3" class="prop-input" aria-label="Voltios por división del canal 3" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
                               <option value="0.2">0.2 V/div</option>
                               <option value="0.5">0.5 V/div</option>
                               <option value="1.0" selected>1.0 V/div</option>
                               <option value="2.0">2.0 V/div</option>
                               <option value="5.0">5.0 V/div</option>
                             </select>
-                            <input id="osc-offset-ch3" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                            <input id="osc-offset-ch3" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 3" />
                           </div>
                         </div>
 
@@ -791,14 +791,14 @@
                         <div style="background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
                           <div style="font-size: 0.65rem; color: #22c55e; font-weight: bold;">Canal 4</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch4" class="prop-input" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                            <select id="osc-volts-ch4" class="prop-input" aria-label="Voltios por división del canal 4" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
                               <option value="0.2">0.2 V/div</option>
                               <option value="0.5">0.5 V/div</option>
                               <option value="1.0" selected>1.0 V/div</option>
                               <option value="2.0">2.0 V/div</option>
                               <option value="5.0">5.0 V/div</option>
                             </select>
-                            <input id="osc-offset-ch4" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" title="Offset Vertical" />
+                            <input id="osc-offset-ch4" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 4" />
                           </div>
                         </div>
                       </div>
@@ -807,20 +807,20 @@
                       <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 2px; display: flex; flex-direction: column; gap: 3px;">
                         <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold;">Disparo (Trigger)</div>
                         <div style="display: flex; gap: 4px; align-items: center;">
-                          <select id="osc-trigger-mode" class="prop-input" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                          <select id="osc-trigger-mode" class="prop-input" aria-label="Canal de disparo" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
                             <option value="ch1">CH1</option>
                             <option value="ch2">CH2</option>
                             <option value="ch3">CH3</option>
                             <option value="ch4">CH4</option>
                           </select>
-                          <select id="osc-trigger-edge" class="prop-input" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
+                          <select id="osc-trigger-edge" class="prop-input" aria-label="Flanco de disparo" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
                             <option value="rising">↑ Subida</option>
                             <option value="falling">↓ Bajada</option>
                           </select>
                         </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 0.6rem; color: var(--text-muted);">
                           <span>Nivel:</span>
-                          <input id="osc-trigger-level" type="range" min="-150" max="150" value="0" style="width: 100px; height: 12px;" />
+                          <input id="osc-trigger-level" type="range" min="-150" max="150" value="0" aria-label="Nivel de disparo" style="width: 100px; height: 12px;" />
                         </div>
                       </div>
                     </div>
@@ -867,7 +867,7 @@
         <!-- PANEL DERECHO: DETALLES Y PROPIEDADES CONTEXTUALES -->
         <aside class="sidebar-panel sidebar-right" id="sidebar-right">
           <div class="panel-header" id="right-panel-header">
-            <button id="btn-toggle-right" class="btn-text-only" type="button">Colapsar ▶</button>
+            <button id="btn-toggle-right" class="btn-text-only" type="button" aria-controls="sidebar-right" aria-expanded="true">Colapsar ▶</button>
             <h3>Propiedades</h3>
           </div>
           <div class="panel-body" id="right-panel-body">
@@ -881,10 +881,10 @@
                 <label class="property-label">Valor Nominal</label>
                 <div class="property-input-wrapper">
                 <input id="prop-val-input" class="prop-input" type="text" inputmode="decimal" value="1000" />
-                  <button id="prop-val-dec" class="btn-adj" type="button">-</button>
-                  <button id="prop-val-inc" class="btn-adj" type="button">+</button>
+                  <button id="prop-val-dec" class="btn-adj" type="button" aria-label="Disminuir valor">-</button>
+                  <button id="prop-val-inc" class="btn-adj" type="button" aria-label="Aumentar valor">+</button>
                 </div>
-                <input id="prop-val-slider" class="prop-slider" type="range" min="1" max="10000" value="1000" />
+                <input id="prop-val-slider" class="prop-slider" type="range" min="1" max="10000" value="1000" aria-label="Valor nominal" />
               </div>
 
                <div class="property-group" id="group-comp-unit">
@@ -970,6 +970,44 @@
                 </div>
               </div>
 
+              <div id="switch-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-switch-state">Estado inicial</label>
+                  <input id="prop-switch-state" type="checkbox" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-switch-ron">Resistencia cerrada (Ohm)</label>
+                  <input id="prop-switch-ron" class="prop-input" type="number" min="0.000001" step="0.001" value="0.01" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-switch-roff">Resistencia abierta (Ohm)</label>
+                  <input id="prop-switch-roff" class="prop-input" type="number" min="1" step="1000000" value="1000000000" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-switch-vth">Umbral de control (V)</label>
+                  <input id="prop-switch-vth" class="prop-input" type="number" min="-1000" step="0.05" value="0.5" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-switch-vh">Histéresis (V)</label>
+                  <input id="prop-switch-vh" class="prop-input" type="number" min="0" step="0.01" value="0.05" />
+                </div>
+              </div>
+
+              <div id="transformer-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-transformer-l1">Inductancia primaria (H)</label>
+                  <input id="prop-transformer-l1" class="prop-input" type="number" min="0.000000001" step="0.0001" value="0.001" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-transformer-l2">Inductancia secundaria (H)</label>
+                  <input id="prop-transformer-l2" class="prop-input" type="number" min="0.000000001" step="0.0001" value="0.001" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-transformer-k">Coeficiente de acoplamiento</label>
+                  <input id="prop-transformer-k" class="prop-input" type="number" min="0" max="0.9999" step="0.01" value="0.9" />
+                </div>
+              </div>
+
               <!-- Contenedor del Op-Amp -->
               <div id="opamp-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
@@ -1022,23 +1060,23 @@
     </div>
 
     <!-- 4. MODALES DINÁMICOS (AJUSTES DE SIMULACIÓN) -->
-    <div class="modal-overlay" id="settings-modal">
+    <div class="modal-overlay" id="settings-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="settings-title">
       <div class="modal-box" id="settings-box">
         <div class="panel-header">
-          <h3>Ajustes del Motor Físico</h3>
+          <h3 id="settings-title">Ajustes del Motor Físico</h3>
         </div>
         <div class="panel-body">
           <form class="properties-form" id="settings-form">
             <div class="property-group">
-              <label class="property-label">Paso de Tiempo (dt)</label>
+              <label class="property-label" for="settings-dt-input">Paso de Tiempo (dt)</label>
               <input id="settings-dt-input" class="prop-input" type="number" step="0.000001" value="0.0001" />
             </div>
             <div class="property-group">
-              <label class="property-label">Tolerancia de Convergencia</label>
+              <label class="property-label" for="settings-tol-input">Tolerancia de Convergencia</label>
               <input id="settings-tol-input" class="prop-input" type="number" step="0.000001" value="0.00001" />
             </div>
             <div class="property-group">
-              <label class="property-label">Máximas Iteraciones Newton</label>
+              <label class="property-label" for="settings-iter-input">Máximas Iteraciones Newton</label>
               <input id="settings-iter-input" class="prop-input" type="number" value="100" />
             </div>
           </form>

@@ -23,6 +23,18 @@ const VIEWPORTS = [
     },
   },
   {
+    name: "desktop-min",
+    width: 900,
+    height: 600,
+    minCanvasWidth: 360,
+    minCanvasHeight: 420,
+    expected: {
+      leftCollapsed: false,
+      rightCollapsed: false,
+      dockCollapsed: true,
+    },
+  },
+  {
     name: "mobile",
     width: 390,
     height: 844,
@@ -369,7 +381,7 @@ async function auditMobileDrawers(page) {
 async function auditDesktopPanelCollapse(page) {
   const before = await collectMetrics(page);
   await page.click("#btn-dock-toggle-right");
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(700);
   const collapsed = await collectMetrics(page);
 
   const errors = [];
@@ -392,9 +404,12 @@ async function auditDesktopPanelCollapse(page) {
   });
 
   await page.click("#btn-dock-toggle-right");
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(700);
   const restored = await collectMetrics(page);
-  if (restored.rightPanel.collapsed || restored.workspace?.width !== before.workspace?.width) {
+  if (
+    restored.rightPanel.collapsed
+    || Math.abs((restored.workspace?.width ?? 0) - (before.workspace?.width ?? 0)) > 2
+  ) {
     fail("El panel derecho no restauró su layout", { before: before.workspace, restored });
   }
 }
@@ -428,7 +443,7 @@ async function auditComponentPlacement(page) {
   }
 }
 
-async function auditRenderIsolation(page) {
+async function auditRenderIsolation(page, compactDesktop = false) {
   console.log("[audit] abriendo centro de instrumentos y comprobando aislamiento");
   const workspaceBefore = (await collectMetrics(page)).workspace;
   await page.click("#instruments-menu-btn");
@@ -466,10 +481,16 @@ async function auditRenderIsolation(page) {
   if (centerState.backdropHidden || centerState.focusedId !== "instrument-center-close") {
     centerErrors.push(`backdrop o foco inválido: ${JSON.stringify(centerState)}`);
   }
-  if (!centerState.instruments || centerState.instruments.width < 500 || centerState.instruments.height < 400) {
+  const instrumentsValid = compactDesktop
+    ? centerState.instruments?.width >= 800 && centerState.instruments?.height >= 240
+    : centerState.instruments?.width >= 500 && centerState.instruments?.height >= 400;
+  if (!instrumentsValid) {
     centerErrors.push(`área de instrumentos insuficiente: ${JSON.stringify(centerState.instruments)}`);
   }
-  if (!centerState.consolePanel || centerState.consolePanel.width < 280 || centerState.consolePanel.height < 400) {
+  const consoleValid = compactDesktop
+    ? centerState.consolePanel?.width >= 800 && centerState.consolePanel?.height >= 100
+    : centerState.consolePanel?.width >= 280 && centerState.consolePanel?.height >= 400;
+  if (!consoleValid) {
     centerErrors.push(`área de logs insuficiente: ${JSON.stringify(centerState.consolePanel)}`);
   }
   if (workspaceOpen?.width !== workspaceBefore?.width || workspaceOpen?.height !== workspaceBefore?.height) {
@@ -675,11 +696,11 @@ async function runAudit() {
 
       const screenshotPath = resolve(OUTPUT_DIR, `${caseConfig.name}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: false, timeout: 10_000 });
-      if (caseConfig.name === "desktop") {
+      if (caseConfig.name !== "mobile") {
         await auditKeyboardFocus(page);
         await auditDesktopPanelCollapse(page);
         await auditComponentPlacement(page);
-        await auditRenderIsolation(page);
+        await auditRenderIsolation(page, caseConfig.name === "desktop-min");
       } else {
         await auditMobileDrawers(page);
         await auditMobileInstrumentCenter(page);

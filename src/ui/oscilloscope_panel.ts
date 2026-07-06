@@ -1,4 +1,5 @@
 import type { PvtConfig, SParameterResult } from "../simulation/mcu-types";
+import type { PersistedOscilloscopeState } from "../persistence/circuit_file";
 
 export interface PvtRunResult {
   readonly config: PvtConfig;
@@ -117,6 +118,92 @@ export class OscilloscopePanel {
   private oscMouseX: number | null = null;
   private oscMouseY: number | null = null;
   private animationFrameId: number | null = null;
+
+  public getPersistentState(): PersistedOscilloscopeState {
+    return {
+      channelsEnabled: [
+        this.oscCh1Btn?.classList.contains("active") ?? true,
+        this.oscCh2Btn?.classList.contains("active") ?? false,
+        this.oscCh3Btn?.classList.contains("active") ?? false,
+        this.oscCh4Btn?.classList.contains("active") ?? false,
+      ],
+      voltsPerDiv: [
+        this.voltsPerDivCh1,
+        this.voltsPerDivCh2,
+        this.voltsPerDivCh3,
+        this.voltsPerDivCh4,
+      ],
+      offsets: [this.offsetCh1, this.offsetCh2, this.offsetCh3, this.offsetCh4],
+      timeDivValue: this.timeDivValue,
+      isXyMode: this.isXyMode,
+      isCursorsEnabled: this.isCursorsEnabled,
+      triggerChannel: this.triggerChannel,
+      triggerEdge: this.triggerEdge,
+      triggerLevel: this.triggerLevel,
+      cursorT1: this.cursorT1,
+      cursorT2: this.cursorT2,
+      cursorV1: this.cursorV1,
+      cursorV2: this.cursorV2,
+    };
+  }
+
+  public applyPersistentState(state: PersistedOscilloscopeState): void {
+    [
+      this.voltsPerDivCh1,
+      this.voltsPerDivCh2,
+      this.voltsPerDivCh3,
+      this.voltsPerDivCh4,
+    ] = state.voltsPerDiv;
+    [this.offsetCh1, this.offsetCh2, this.offsetCh3, this.offsetCh4] = state.offsets;
+    this.timeDivValue = state.timeDivValue;
+    this.isXyMode = state.isXyMode;
+    this.isCursorsEnabled = state.isCursorsEnabled;
+    this.triggerChannel = state.triggerChannel;
+    this.triggerEdge = state.triggerEdge;
+    this.triggerLevel = state.triggerLevel;
+    this.cursorT1 = state.cursorT1;
+    this.cursorT2 = state.cursorT2;
+    this.cursorV1 = state.cursorV1;
+    this.cursorV2 = state.cursorV2;
+
+    const channelButtons = [this.oscCh1Btn, this.oscCh2Btn, this.oscCh3Btn, this.oscCh4Btn];
+    channelButtons.forEach((button, index) => {
+      button?.classList.toggle("active", state.channelsEnabled[index]);
+    });
+
+    const voltsSelects = [
+      this.voltsCh1Select,
+      this.voltsCh2Select,
+      this.voltsCh3Select,
+      this.voltsCh4Select,
+    ];
+    voltsSelects.forEach((select, index) => {
+      if (select) select.value = state.voltsPerDiv[index].toString();
+    });
+
+    const offsetSliders = [
+      this.offsetCh1Slider,
+      this.offsetCh2Slider,
+      this.offsetCh3Slider,
+      this.offsetCh4Slider,
+    ];
+    offsetSliders.forEach((slider, index) => {
+      if (slider) slider.value = state.offsets[index].toString();
+    });
+
+    if (this.timeDivSelect) this.timeDivSelect.value = state.timeDivValue.toString();
+    if (this.triggerModeSelect) this.triggerModeSelect.value = state.triggerChannel;
+    if (this.triggerEdgeSelect) this.triggerEdgeSelect.value = state.triggerEdge;
+    if (this.triggerLevelSlider) this.triggerLevelSlider.value = (state.triggerLevel * 30).toString();
+
+    this.modeTyBtn?.classList.toggle("active", !state.isXyMode);
+    this.modeXyBtn?.classList.toggle("active", state.isXyMode);
+    if (this.cursorsBtn) {
+      this.cursorsBtn.textContent = state.isCursorsEnabled ? "📏 Cursores: ON" : "📏 Cursores: OFF";
+      this.cursorsBtn.classList.toggle("active", state.isCursorsEnabled);
+    }
+    this.draw();
+  }
 
   constructor() {
     this.oscCanvas = document.querySelector("#osc-canvas");

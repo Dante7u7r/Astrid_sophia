@@ -4,7 +4,11 @@ import { TelemetryPanel } from "./ui/telemetry_panel";
 import { SettingsModal, SimulationSettings } from "./ui/settings_modal";
 import { OscilloscopePanel, TimeStepResult, PvtRunResult, PvtTrace } from "./ui/oscilloscope_panel";
 import { parseBuzzerActuatorModel } from "./ui/actuator_helpers";
-import { extractElectricalNetlist, type CircuitNetlist } from "./simulation/netlist_extractor";
+import {
+  extractElectricalNetlist,
+  validateSchematicIntegrity,
+  type CircuitNetlist,
+} from "./simulation/netlist_extractor";
 import { McuDebugPanel } from "./ui/mcu_debug_panel";
 import {
   runCycles,
@@ -31,7 +35,15 @@ import { ExporterPanel } from "./ui/exporter_panel";
 import { CommandHistory } from "./canvas/command_history";
 import { PanelLayoutManager } from "./ui/panel_layout_manager";
 import { InstrumentsDock } from "./ui/instruments_dock";
+import { AccessibleMenu } from "./ui/accessible_menu";
 import { resolveVisualAuditConfig } from "./testing/visual_audit_config";
+import { formatTouchstone } from "./simulation/touchstone";
+import { updateDmmReadings } from "./simulation/dmm";
+import {
+  parseCircuitFile,
+  serializeCircuitFile,
+  type CircuitFileData,
+} from "./persistence/circuit_file";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 const visualAudit = resolveVisualAuditConfig(window.location.search, {
@@ -124,6 +136,13 @@ function doCanvasRender(): void {
   const ch4Node = oscilloscopePanel ? oscilloscopePanel.ch4ProbeNode : ch4ProbeNode;
 
   if (orchestrator) {
+    updateDmmReadings(
+      orchestrator.components,
+      orchestrator.wires,
+      circuitState.getPinToNodeMap(),
+      circuitState.getVoltageMap(),
+    );
+
     const sparMarkers: { index: number; x: number; y: number }[] = [];
     for (const sp of sparPorts) {
       for (const comp of orchestrator.components) {
@@ -242,10 +261,24 @@ async function runPvtAnalysis(netlist: CircuitNetlist): Promise<void> {
     btn.className = 'btn-ctrl pvt-profile-btn';
     btn.type = 'button';
     btn.textContent = profile.label;
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.pvt-profile-btn').forEach(b => b.classList.remove('active'));
+    btn.addEventListener('click', async () => {
+      const profileButtons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('.pvt-profile-btn'),
+      );
+      profileButtons.forEach((profileButton) => {
+        profileButton.classList.remove('active');
+        profileButton.disabled = true;
+      });
       btn.classList.add('active');
-      executePvtAnalysisMatrix(netlist, [...profile.configs]);
+      simulationControls?.setSimulationRunning(true);
+      try {
+        await executePvtAnalysisMatrix(netlist, [...profile.configs]);
+      } finally {
+        profileButtons.forEach((profileButton) => {
+          profileButton.disabled = false;
+        });
+        simulationControls?.setSimulationRunning(false);
+      }
     });
     const separator = container.querySelector('div[style*="width: 1px"]');
     if (separator) {
@@ -267,7 +300,13 @@ async function executePvtAnalysisMatrix(netlist: CircuitNetlist, pvtConfigs: Pvt
   if (oscilloscopePanel.ch3ProbeNode) monitoredNodes.push(oscilloscopePanel.ch3ProbeNode);
   if (oscilloscopePanel.ch4ProbeNode) monitoredNodes.push(oscilloscopePanel.ch4ProbeNode);
 
-  const settings = { dt: simSettings.dt, tMax: 0.05 };
+  const pvtDuration = 0.05;
+  const pvtMaxTimeSteps = 2_000;
+  const settings = {
+    dt: Math.max(simSettings.dt, pvtDuration / pvtMaxTimeSteps),
+    tMax: pvtDuration,
+    fixedStep: true,
+  };
 
   try {
     const results = await invoke<PvtRunResult[]>('run_pvt_matrix_analysis', {
@@ -323,8 +362,8 @@ async function runSparamExport(netlist: CircuitNetlist): Promise<void> {
 
   if (sparPorts.length === 0) {
     addLog('Modo Selección de Puertos RF: Haz clic en los nodos del circuito para designarlos como puertos.', 'system');
-    probePlacementMode = 'CH1'; // Reutilizamos el mecanismo de selección de sondas
-    addLog('Usa la sonda CH1 para seleccionar el nodo positivo de cada puerto (GND = referencia automática).', 'system');
+    probePlacementMode = null;
+    addLog('Selecciona uno o más terminales y vuelve a pulsar Simular. GND se usa como referencia.', 'system');
     return;
   }
 
@@ -395,76 +434,6 @@ async function runSparamExport(netlist: CircuitNetlist): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
     addLog(`Error en extracción de parámetros S: ${errorMsg}`, 'error');
   }
-}
-
-/** Formatea un resultado de parámetros S a string Touchstone v2.0.
- *  Compatible con el estándar IEEE 1597.1-2008. */
-function formatTouchstone(result: SParameterResult): string {
-  const n = result.sMatrices.length > 0 ? result.sMatrices[0].length : 0;
-  if (n === 0) return '';
-
-  const lines: string[] = [];
-  lines.push('! Touchstone file generated by Astrid Sophia');
-  lines.push(`! S-Parameter Matrix: ${n}-port`);
-  lines.push(`! Date: ${new Date().toISOString()}`);
-  lines.push(`! Reference impedance: ${result.referenceImpedance} ohm`);
-  const fmtStr = result.format === 'ma' ? 'MA' : 'RI';
-  lines.push(`# Hz S ${fmtStr} R ${result.referenceImpedance}`);
-
-  for (let fi = 0; fi < result.frequencies.length; fi++) {
-    const freq = result.frequencies[fi];
-    const s = result.sMatrices[fi];
-
-    if (n <= 2) {
-      // Una sola línea con todos los datos
-      let rowParts = `${freq.toExponential(6)}`;
-      for (let j = 0; j < n; j++) {
-        for (let i = 0; i < n; i++) {
-          const val = s[j][i];
-          if (fmtStr === 'MA') {
-            const mag = Math.sqrt(val.re * val.re + val.im * val.im);
-            const ang = Math.atan2(val.im, val.re) * (180 / Math.PI);
-            rowParts += `  ${mag.toExponential(6)} ${ang.toFixed(3)}`;
-          } else {
-            rowParts += `  ${val.re.toExponential(6)}  ${val.im.toExponential(6)}`;
-          }
-        }
-      }
-      lines.push(rowParts);
-    } else {
-      // Una línea por fila de la matriz (estándar Touchstone v2.0 para N≥3)
-      let firstLine = `${freq.toExponential(6)}`;
-      for (let i = 0; i < n; i++) {
-        const val = s[0][i];
-        if (fmtStr === 'MA') {
-          const mag = Math.sqrt(val.re * val.re + val.im * val.im);
-          const ang = Math.atan2(val.im, val.re) * (180 / Math.PI);
-          firstLine += `  ${mag.toExponential(6)} ${ang.toFixed(3)}`;
-        } else {
-          firstLine += `  ${val.re.toExponential(6)}  ${val.im.toExponential(6)}`;
-        }
-      }
-      lines.push(firstLine);
-      for (let j = 1; j < n; j++) {
-        let rowLine = '  ';
-        for (let i = 0; i < n; i++) {
-          const val = s[j][i];
-          if (i > 0) rowLine += '  ';
-          if (fmtStr === 'MA') {
-            const mag = Math.sqrt(val.re * val.re + val.im * val.im);
-            const ang = Math.atan2(val.im, val.re) * (180 / Math.PI);
-            rowLine += `${mag.toExponential(6)} ${ang.toFixed(3)}`;
-          } else {
-            rowLine += `${val.re.toExponential(6)}  ${val.im.toExponential(6)}`;
-          }
-        }
-        lines.push(rowLine);
-      }
-    }
-  }
-
-  lines.push('');
-  return lines.join('\n');
 }
 
 function getTimestamp(): string {
@@ -1055,6 +1024,11 @@ function initCanvasCAD() {
     btnSnapGrid.addEventListener("click", () => {
       snapEnabled = !snapEnabled;
       btnSnapGrid.classList.toggle("btn-active", snapEnabled);
+      btnSnapGrid.setAttribute("aria-pressed", String(snapEnabled));
+      btnSnapGrid.setAttribute(
+        "aria-label",
+        snapEnabled ? "Desactivar ajuste a rejilla" : "Activar ajuste a rejilla",
+      );
       // Override gridSize to 1 (no snap) or 20 (full snap)
       (orchestrator as any).gridSize = snapEnabled ? 20 : 1;
       addLog(snapEnabled ? "Alineación a rejilla activada." : "Alineación a rejilla desactivada.", "system");
@@ -1091,9 +1065,27 @@ window.addEventListener("DOMContentLoaded", () => {
     updateCanvasRendering: () => updateCanvasRendering(),
     getActiveAnalysisMode: () => activeAnalysisMode,
     setActiveAnalysisMode: (mode) => { activeAnalysisMode = mode; },
-    getProbes: () => ({ ch1: ch1ProbeNode, ch2: ch2ProbeNode }),
-    setProbes: (ch1, ch2) => { ch1ProbeNode = ch1; ch2ProbeNode = ch2; },
+    getProbes: () => ({
+      ch1: ch1ProbeNode,
+      ch2: ch2ProbeNode,
+      ch3: ch3ProbeNode,
+      ch4: ch4ProbeNode,
+    }),
+    setProbes: (probes) => {
+      ch1ProbeNode = probes.ch1;
+      ch2ProbeNode = probes.ch2;
+      ch3ProbeNode = probes.ch3;
+      ch4ProbeNode = probes.ch4;
+    },
+    getSparPorts: () => sparPorts,
     setSparPorts: (ports) => { sparPorts = ports; },
+    getVoltageSnapshot: () => circuitState.getVoltageMap(),
+    setVoltageSnapshot: (voltages) => circuitState.setVoltagesFromSnapshot(voltages),
+    resetRuntimeState: () => {
+      circuitState.actuatorHistory.clear();
+      circuitState.audioOrchestrator.stopAll();
+    },
+    canChangeActiveTab: () => !(simulationControls?.isSimulationRunning() ?? false),
     serializeCircuit,
     addLog,
     invokeTauri: invoke,
@@ -1125,15 +1117,22 @@ window.addEventListener("DOMContentLoaded", () => {
   // Inicializar el runner de simulación interactiva con callbacks
   // que desacoplan el motor del DOM/UI/Canvas.
   simulationRunner = createSimulationRunner({
-    onFrameReceived: (frame) => {
+    onFrameReceived: (frame, context) => {
+      const ownerTab = tabManager?.tabs.find(tab => tab.id === context.ownerTabId);
+      if (!ownerTab) return;
+
+      ownerTab.transientResults.push({
+        time: frame.time,
+        nodeVoltages: { ...frame.nodeVoltages } as Record<string, number>,
+        branchCurrents: { ...frame.branchCurrents } as Record<string, number>,
+      });
+      ownerTab.voltageSnapshot = { ...frame.nodeVoltages };
+
+      if (tabManager?.activeTabId !== context.ownerTabId) return;
       circuitState.setVoltagesFromFrame(frame);
 
       if (oscilloscopePanel) {
-        oscilloscopePanel.transientResults.push({
-          time: frame.time,
-          nodeVoltages: { ...frame.nodeVoltages } as Record<string, number>,
-          branchCurrents: { ...frame.branchCurrents } as Record<string, number>,
-        });
+        oscilloscopePanel.transientResults = ownerTab.transientResults;
         updateOscilloscopeRendering();
       }
 
@@ -1146,15 +1145,18 @@ window.addEventListener("DOMContentLoaded", () => {
         }
       }
     },
-    onSimulationError: (error) => {
+    onSimulationError: (error, context) => {
+      if (tabManager?.activeTabId !== context.ownerTabId) return;
       addLog(`Error en simulación: ${error}`, 'error');
       simulationRunner?.stopInteractiveTransient();
       TelemetryPanel.logError(`Error en simulación transitoria: ${error}`);
     },
-    onSimulationComplete: (finalTime) => {
+    onSimulationComplete: (finalTime, context) => {
+      if (tabManager?.activeTabId !== context.ownerTabId) return;
       addLog(`Simulación completada en t = ${finalTime.toFixed(6)} s.`, 'receive');
     },
-    onSimulationStateChanged: (active) => {
+    onSimulationStateChanged: (active, context) => {
+      if (tabManager?.activeTabId !== context.ownerTabId) return;
       if (orchestrator) orchestrator.simulationActive = active;
       simulationControls?.setSimulationRunning(active);
     },
@@ -1207,7 +1209,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
               // Sincronizar runtime del MCU si está seleccionado y cargado
               if (orchestrator.selectedComponent?.id === comp.id && comp.mcuRuntime) {
-                const clockSpeed = comp.type === 'mcu_avr' ? 16e6 : 12e6;
+                const clockSpeed = comp.mcuClockSpeed
+                  ?? (comp.type === 'mcu_avr' ? 16e6 : 12e6);
                 const targetCycle = Math.round(sweepTime * clockSpeed);
                 if (comp.mcuRuntime.state.cycle < targetCycle) {
                   const diff = targetCycle - comp.mcuRuntime.state.cycle;
@@ -1223,45 +1226,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
           // ─── 5 INSTRUMENTOS VIRTUALES DATA FEED ───
 
-          // 1. Multímetros digitales (DMM)
-          for (const comp of orchestrator.components) {
-            if (comp.type === 'dmm') {
-              const pin0Node = circuitState.getPinNode(`${comp.id}:0`);
-              const pin1Node = circuitState.getPinNode(`${comp.id}:1`);
-              if (pin0Node !== undefined && pin1Node !== undefined) {
-                const v0 = closest.nodeVoltages[pin0Node] ?? 0.0;
-                const v1 = closest.nodeVoltages[pin1Node] ?? 0.0;
-                const mode = comp.value?.toString() ?? "V";
-
-                if (mode === "V") {
-                  const diff = v0 - v1;
-                  comp.dmmValue = diff.toFixed(3) + " V";
-                } else if (mode === "A") {
-                  const diff = v0 - v1;
-                  const iVal = diff / 0.01; // Ley de Ohm a través del shunt de 10mOhm
-                  if (Math.abs(iVal) < 1e-3) {
-                    comp.dmmValue = (iVal * 1e6).toFixed(1) + " uA";
-                  } else if (Math.abs(iVal) < 1) {
-                    comp.dmmValue = (iVal * 1e3).toFixed(2) + " mA";
-                  } else {
-                    comp.dmmValue = iVal.toFixed(3) + " A";
-                  }
-                } else {
-                  // Modo ohmiómetro: aproximación local
-                  comp.dmmValue = "-- Ω";
-                }
-              } else {
-                comp.dmmValue = "OPEN";
-              }
-            }
-          }
-
-          // 2. Analizador lógico
+          // 1. Analizador lógico
           if (instrumentsDock && instrumentsDock.logicAnalyzer) {
             instrumentsDock.logicAnalyzer.recordTimeStep(closest.time, closest.nodeVoltages);
           }
 
-          // 3. Analizador de Espectro (FFT)
+          // 2. Analizador de Espectro (FFT)
           if (instrumentsDock && instrumentsDock.fftAnalyzer && oscilloscopePanel) {
             const ch1Data = oscilloscopePanel.transientResults.map(r => ({
               time: r.time,
@@ -1308,17 +1278,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const instrumentsDropdown = document.querySelector("#instruments-dropdown") as HTMLElement | null;
 
   if (instrumentsMenuBtn && instrumentsDropdown) {
-    instrumentsMenuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const open = instrumentsDropdown.style.display === "block";
-      instrumentsDropdown.style.display = open ? "none" : "block";
-    });
-
-    document.addEventListener("click", (e) => {
-      if (instrumentsDropdown && !instrumentsDropdown.contains(e.target as Node)) {
-        instrumentsDropdown.style.display = "none";
-      }
-    });
+    const instrumentsMenu = new AccessibleMenu(instrumentsMenuBtn, instrumentsDropdown);
 
     // Wire buttons inside the menu
     const menuToggleLeft = instrumentsDropdown.querySelector("#menu-toggle-left");
@@ -1340,7 +1300,6 @@ window.addEventListener("DOMContentLoaded", () => {
     if (menuToggleDock) {
       menuToggleDock.addEventListener("click", () => {
         panelLayoutManager?.togglePanel("dock");
-        instrumentsDropdown.style.display = "none";
       });
     }
     if (menuRunErc) {
@@ -1386,8 +1345,12 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (menuSettings) {
       menuSettings.addEventListener("click", () => {
+        instrumentsMenu.close(false);
         const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement | null;
-        if (trigger) trigger.click();
+        if (trigger) {
+          trigger.focus();
+          trigger.click();
+        }
       });
     }
   }
@@ -1490,11 +1453,22 @@ window.addEventListener("DOMContentLoaded", () => {
         }
         oscilloscopePanel.start();
       }
+      const simulationOwnerId = tabManager?.activeTabId;
+      if (!simulationOwnerId) {
+        simulationControls?.setSimulationRunning(false);
+        addLog("No hay una pestaña activa para asociar la simulación.", "error");
+        return;
+      }
+      const simulationOwner = tabManager?.tabs.find(tab => tab.id === simulationOwnerId);
+      if (simulationOwner && oscilloscopePanel) {
+        simulationOwner.transientResults = oscilloscopePanel.transientResults;
+      }
 
       // Despachar al orquestador de solvers (Rust IPC + fallback TS)
       await dispatchSimulation(netlist, mode, {
         simSettings,
         transientDuration,
+        simulationOwnerId,
         simulationRunner,
         solveCircuitTS,
         solveTransientCircuitLocal,
@@ -1610,63 +1584,79 @@ window.addEventListener("DOMContentLoaded", () => {
 // --- SISTEMA DE PERSISTENCIA LOCAL DE CIRCUITOS (FASE 10) ---
 
 function serializeCircuit(): string {
-  if (!orchestrator) return "{}";
+  if (!orchestrator || !oscilloscopePanel) return "{}";
 
-  const circuitData = {
-    version: "2.0",
-    components: orchestrator.components.map(c => ({
-      id: c.id,
-      type: c.type,
-      value: c.value,
-      x: c.x,
-      y: c.y,
-      rotation: c.rotation,
-      waveType: c.waveType,
-      amplitude: c.amplitude,
-      frequency: c.frequency,
-      offset: c.offset,
-      dutyCycle: c.dutyCycle
-    })),
-    wires: orchestrator.wires.map(w => ({
-      id: w.id,
-      from: { componentId: w.from.componentId, pinIndex: w.from.pinIndex },
-      to: { componentId: w.to.componentId, pinIndex: w.to.pinIndex },
-      points: w.points
-    })),
+  return serializeCircuitFile({
+    components: orchestrator.components,
+    wires: orchestrator.wires,
     viewport: {
       zoom: orchestrator.zoom,
       offsetX: orchestrator.offsetX,
-      offsetY: orchestrator.offsetY
+      offsetY: orchestrator.offsetY,
     },
     simSettings: {
       dt: simSettings.dt,
       tolerance: simSettings.tolerance,
-      maxIterations: simSettings.maxIterations
+      maxIterations: simSettings.maxIterations,
     },
-    activeAnalysisMode: activeAnalysisMode,
+    activeAnalysisMode,
     probes: {
-      ch1ProbeNode: ch1ProbeNode,
-      ch2ProbeNode: ch2ProbeNode
-    }
-  };
-
-  return JSON.stringify(circuitData, null, 2);
+      ch1ProbeNode: oscilloscopePanel.ch1ProbeNode,
+      ch2ProbeNode: oscilloscopePanel.ch2ProbeNode,
+      ch3ProbeNode: oscilloscopePanel.ch3ProbeNode,
+      ch4ProbeNode: oscilloscopePanel.ch4ProbeNode,
+    },
+    sparPorts,
+    oscilloscope: oscilloscopePanel.getPersistentState(),
+  });
 }
 
-function deserializeCircuit(jsonStr: string): boolean {
+interface ValidatedCircuitFile {
+  data: CircuitFileData;
+  migratedFrom: string | null;
+}
+
+function validateCircuitFileForLoad(jsonStr: string): ValidatedCircuitFile | null {
+  if (!orchestrator) return null;
+
+  const parsed = parseCircuitFile(jsonStr);
+  if (!parsed.ok) {
+    addLog(parsed.error, "error");
+    TelemetryPanel.logError(parsed.error);
+    return null;
+  }
+
+  const integrityError = validateSchematicIntegrity(
+    parsed.data.components,
+    parsed.data.wires,
+    component => orchestrator!.getComponentPins(component),
+  );
+  if (integrityError) {
+    const message = `Archivo .astryd rechazado: ${integrityError}`;
+    addLog(message, "error");
+    TelemetryPanel.logError(message);
+    return null;
+  }
+
+  return { data: parsed.data, migratedFrom: parsed.migratedFrom };
+}
+
+function deserializeCircuit(
+  jsonStr: string,
+  validatedFile?: ValidatedCircuitFile,
+): boolean {
   if (!orchestrator) return false;
 
+  const candidate = validatedFile ?? validateCircuitFileForLoad(jsonStr);
+  if (!candidate) return false;
+
   try {
-    const data = JSON.parse(jsonStr);
+    const data = candidate.data;
 
-    if (!data.components || !data.wires) {
-      addLog("Error: El archivo de esquemático no es válido o está corrupto.", "error");
-      return false;
-    }
-
-    // 1. Limpiar estado actual por completo
-    orchestrator.components = [];
-    orchestrator.wires = [];
+    // Reemplazar el estado solo despues de validar el archivo completo.
+    circuitState.prepareForDemoLoad(oscilloscopePanel, orchestrator);
+    orchestrator.components = data.components;
+    orchestrator.wires = data.wires;
     orchestrator.selectedComponent = null;
     orchestrator.selectedComponents = [];
     orchestrator.selectedWire = null;
@@ -1682,73 +1672,44 @@ function deserializeCircuit(jsonStr: string): boolean {
       oscilloscopePanel.sweepTime = 0.0;
     }
 
-    // 2. Restaurar componentes
-    for (const comp of data.components) {
-      orchestrator.components.push({
-        id: comp.id,
-        type: comp.type,
-        value: comp.value,
-        x: comp.x,
-        y: comp.y,
-        rotation: comp.rotation,
-        waveType: comp.waveType,
-        amplitude: comp.amplitude,
-        frequency: comp.frequency,
-        offset: comp.offset,
-        dutyCycle: comp.dutyCycle
-      });
-    }
-
-    // 3. Restaurar cables (wires)
-    for (const wire of data.wires) {
-      orchestrator.wires.push({
-        id: wire.id,
-        from: { componentId: wire.from.componentId, pinIndex: wire.from.pinIndex },
-        to: { componentId: wire.to.componentId, pinIndex: wire.to.pinIndex },
-        points: wire.points || []
-      });
-    }
-
     orchestrator!.syncWireConnections();
 
-    // 4. Restaurar cámara/viewport
-    if (data.viewport) {
-      orchestrator.zoom = data.viewport.zoom || 1.0;
-      orchestrator.offsetX = data.viewport.offsetX || 0;
-      orchestrator.offsetY = data.viewport.offsetY || 0;
+    orchestrator.zoom = data.viewport.zoom;
+    orchestrator.offsetX = data.viewport.offsetX;
+    orchestrator.offsetY = data.viewport.offsetY;
+
+    simSettings.dt = data.simSettings.dt;
+    simSettings.tolerance = data.simSettings.tolerance;
+    simSettings.maxIterations = data.simSettings.maxIterations;
+
+    activeAnalysisMode = data.activeAnalysisMode;
+    simulationControls?.setActiveModeButton(activeAnalysisMode);
+
+    ch1ProbeNode = data.probes.ch1ProbeNode;
+    ch2ProbeNode = data.probes.ch2ProbeNode;
+    ch3ProbeNode = data.probes.ch3ProbeNode;
+    ch4ProbeNode = data.probes.ch4ProbeNode;
+    sparPorts = data.sparPorts.map(port => ({ ...port }));
+
+    if (oscilloscopePanel) {
+      oscilloscopePanel.ch1ProbeNode = ch1ProbeNode;
+      oscilloscopePanel.ch2ProbeNode = ch2ProbeNode;
+      oscilloscopePanel.ch3ProbeNode = ch3ProbeNode;
+      oscilloscopePanel.ch4ProbeNode = ch4ProbeNode;
+      oscilloscopePanel.activeAnalysisMode = activeAnalysisMode;
+      oscilloscopePanel.applyPersistentState(data.oscilloscope);
     }
 
-    // 5. Restaurar ajustes de simulación
-    if (data.simSettings) {
-      simSettings.dt = data.simSettings.dt || 0.0001;
-      simSettings.tolerance = data.simSettings.tolerance || 0.00001;
-      simSettings.maxIterations = data.simSettings.maxIterations || 100;
-    }
-
-    // 6. Restaurar modo de simulación
-    if (data.activeAnalysisMode) {
-      activeAnalysisMode = data.activeAnalysisMode;
-      simulationControls?.setActiveModeButton(activeAnalysisMode);
-    }
-
-    // 7. Restaurar asignaciones de osciloscopio
-    if (data.probes) {
-      ch1ProbeNode = data.probes.ch1ProbeNode || null;
-      ch2ProbeNode = data.probes.ch2ProbeNode || null;
-      if (oscilloscopePanel) {
-        oscilloscopePanel.ch1ProbeNode = ch1ProbeNode;
-        oscilloscopePanel.ch2ProbeNode = ch2ProbeNode;
-      }
-    }
-
-    // Actualizar renderizado y recalcular nodos eléctricos
     extractNetlist();
     updateCanvasRendering();
     updateOscilloscopeRendering();
 
+    if (candidate.migratedFrom) {
+      addLog(`Archivo migrado de la version ${candidate.migratedFrom} a la ${data.version}.`, "system");
+    }
     return true;
   } catch (err) {
-    addLog(`Error al deserializar esquemático: ${(err as Error).message}`, "error");
+    addLog(`Error al aplicar el archivo .astryd: ${(err as Error).message}`, "error");
     return false;
   }
 }
@@ -1768,9 +1729,6 @@ function initFilePersistence() {
       demoSelect.value = "";
       if (!file) return;
       
-      // Limpiar explícitamente todo el estado (osciloscopio, MCU, netlist, voltajes) antes de cargar la demo
-      circuitState.prepareForDemoLoad(oscilloscopePanel, orchestrator);
-
       try {
         addLog(`Cargando demo: ${file}…`, "system");
         const resp = await fetch(`/demos/${file}`);
@@ -1779,8 +1737,15 @@ function initFilePersistence() {
           return;
         }
         const content = await resp.text();
-        tabManager!.createNewTab(file.replace(".astryd", ""), { components: [], wires: [], filePath: null });
-        if (deserializeCircuit(content)) {
+        const candidate = validateCircuitFileForLoad(content);
+        if (!candidate) return;
+
+        const demoTab = tabManager!.createNewTab(
+          file.replace(".astryd", ""),
+          { components: [], wires: [], filePath: null },
+        );
+        if (!demoTab) return;
+        if (deserializeCircuit(content, candidate)) {
           const tab = tabManager!.tabs.find(t => t.id === tabManager!.activeTabId);
           if (tab) {
             tab.name = file.replace(".astryd", "");
@@ -1788,6 +1753,8 @@ function initFilePersistence() {
           }
           tabManager!.renderTabsBar();
           addLog(`Demo [${file}] cargada correctamente.`, "receive");
+        } else {
+          await tabManager!.closeTab(demoTab.id);
         }
       } catch (err) {
         addLog(`Error al cargar demo: ${err}`, "error");
@@ -1803,6 +1770,8 @@ function initFilePersistence() {
         const result = await invoke<[string, string]>("open_circuit_file");
         if (result && Array.isArray(result)) {
           const [filePath, content] = result;
+          const candidate = validateCircuitFileForLoad(content);
+          if (!candidate) return;
           
           // Verificar si la pestaña activa está limpia/vacía
           const currentTab = tabManager!.tabs.find(t => t.id === tabManager!.activeTabId);
@@ -1813,22 +1782,29 @@ function initFilePersistence() {
                           !currentTab.unsaved;
           
           let tabToLoad: Tab;
+          let createdTab: Tab | null = null;
           const filename = filePath.split(/[/\\]/).pop() || "esquematico.astryd";
           
           if (isEmpty && currentTab) {
             tabToLoad = currentTab;
-            tabToLoad.name = filename;
-            tabToLoad.filePath = filePath;
           } else {
-            tabToLoad = tabManager!.createNewTab(filename, { components: [], wires: [], filePath });
+            createdTab = tabManager!.createNewTab(
+              filename,
+              { components: [], wires: [], filePath: null },
+            );
+            if (!createdTab) return;
+            tabToLoad = createdTab;
           }
 
-          const success = deserializeCircuit(content);
+          const success = deserializeCircuit(content, candidate);
           if (success) {
+            tabToLoad.name = filename;
             tabToLoad.filePath = filePath;
             tabToLoad.unsaved = false;
             tabManager!.renderTabsBar();
             addLog(`Esquemático [${tabToLoad.name}] cargado con éxito.`, "receive");
+          } else if (createdTab) {
+            await tabManager!.closeTab(createdTab.id);
           }
         }
       } catch (err) {

@@ -113,6 +113,7 @@ export class PanelLayoutManager {
       handleLeft.className = "resize-handle resize-handle-col";
       handleLeft.id = "resize-handle-left";
       handleLeft.dataset.tooltip = "Arrastrar para redimensionar · Doble-clic para restaurar";
+      this.configureSeparator(handleLeft, "left");
       dashboard.insertBefore(handleLeft, workspaceCenter);
     }
 
@@ -122,6 +123,7 @@ export class PanelLayoutManager {
       handleRight.className = "resize-handle resize-handle-col";
       handleRight.id = "resize-handle-right";
       handleRight.dataset.tooltip = "Arrastrar para redimensionar · Doble-clic para restaurar";
+      this.configureSeparator(handleRight, "right");
       dashboard.insertBefore(handleRight, this.sidebarRight);
     }
 
@@ -131,8 +133,21 @@ export class PanelLayoutManager {
       handleDock.className = "resize-handle resize-handle-row";
       handleDock.id = "resize-handle-dock";
       handleDock.dataset.tooltip = "Arrastrar para redimensionar el dock inferior";
+      this.configureSeparator(handleDock, "dock");
       this.bottomDock.insertBefore(handleDock, this.bottomDock.firstChild);
     }
+  }
+
+  private configureSeparator(handle: HTMLElement, panel: "left" | "right" | "dock"): void {
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-label", panel === "left"
+      ? "Redimensionar panel de componentes"
+      : panel === "right"
+        ? "Redimensionar panel de propiedades"
+        : "Redimensionar centro de instrumentos");
+    handle.setAttribute("aria-orientation", panel === "dock" ? "horizontal" : "vertical");
+    handle.addEventListener("keydown", (event) => this.resizeByKeyboard(event, panel));
   }
 
   // ─── Aplicación del Layout ─────────────────────────
@@ -160,6 +175,7 @@ export class PanelLayoutManager {
 
     // Actualizar botones de toggle existentes
     this.syncToggleButtons();
+    this.syncSeparatorValues();
     this.dispatchLayoutChange();
 
     this.scheduleResizeNotification();
@@ -277,6 +293,7 @@ export class PanelLayoutManager {
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
     this.saveLayout();
+    this.syncSeparatorValues();
   }
 
   private resetDimension(handle: "left" | "right" | "dock") {
@@ -291,7 +308,61 @@ export class PanelLayoutManager {
       document.documentElement.style.setProperty("--osc-panel-height", `${DEFAULT_LAYOUT.dockHeight}px`);
     }
     this.saveLayout();
+    this.syncSeparatorValues();
     this.notifyResize();
+  }
+
+  private resizeByKeyboard(event: KeyboardEvent, panel: "left" | "right" | "dock"): void {
+    const direction = panel === "dock"
+      ? (event.key === "ArrowUp" ? 1 : event.key === "ArrowDown" ? -1 : 0)
+      : (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0);
+    if (direction === 0 && event.key !== "Home") return;
+    event.preventDefault();
+
+    if (event.key === "Home") {
+      this.resetDimension(panel);
+      return;
+    }
+
+    const step = event.shiftKey ? 25 : 10;
+    if (panel === "left") {
+      this.layout.leftWidth = Math.max(
+        LIMITS.leftMin,
+        Math.min(LIMITS.leftMax, this.layout.leftWidth + direction * step),
+      );
+      document.documentElement.style.setProperty("--left-panel-width", `${this.layout.leftWidth}px`);
+    } else if (panel === "right") {
+      this.layout.rightWidth = Math.max(
+        LIMITS.rightMin,
+        Math.min(LIMITS.rightMax, this.layout.rightWidth - direction * step),
+      );
+      document.documentElement.style.setProperty("--right-panel-width", `${this.layout.rightWidth}px`);
+    } else {
+      const maxPx = window.innerHeight * (LIMITS.dockMaxVh / 100);
+      this.layout.dockHeight = Math.max(
+        LIMITS.dockMin,
+        Math.min(maxPx, this.layout.dockHeight + direction * step),
+      );
+      document.documentElement.style.setProperty("--osc-panel-height", `${this.layout.dockHeight}px`);
+    }
+    this.saveLayout();
+    this.syncSeparatorValues();
+    this.notifyResize();
+  }
+
+  private syncSeparatorValues(): void {
+    const dockMax = Math.max(LIMITS.dockMin, Math.floor(window.innerHeight * (LIMITS.dockMaxVh / 100)));
+    const values: Array<["left" | "right" | "dock", number, number, number]> = [
+      ["left", this.layout.leftWidth, LIMITS.leftMin, LIMITS.leftMax],
+      ["right", this.layout.rightWidth, LIMITS.rightMin, LIMITS.rightMax],
+      ["dock", this.layout.dockHeight, LIMITS.dockMin, dockMax],
+    ];
+    values.forEach(([panel, value, min, max]) => {
+      const handle = this.root.querySelector(`#resize-handle-${panel}`);
+      handle?.setAttribute("aria-valuemin", String(min));
+      handle?.setAttribute("aria-valuemax", String(max));
+      handle?.setAttribute("aria-valuenow", String(Math.round(value)));
+    });
   }
 
   // ─── Doble-Clic en Headers ─────────────────────────

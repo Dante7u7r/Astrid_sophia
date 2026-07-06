@@ -271,6 +271,7 @@ export function runElectricalRuleCheck(
 export interface DispatchConfig {
   readonly simSettings: Readonly<{ dt: number }>;
   readonly transientDuration: number;
+  readonly simulationOwnerId?: string;
   readonly simulationRunner?: SimulationRunner | null;
   readonly solveCircuitTS?: (netlist: CircuitNetlist) => TSResult | string;
   readonly solveTransientCircuitLocal?:
@@ -317,8 +318,12 @@ export async function dispatchSimulation(
   clearPendingTimeouts();
   // --- Modos especiales (PVT, SPAR) — delegan a main.ts ---
   if (mode === 'PVT' || mode === 'SPAR') {
-    if (config.onSpecialMode) {
-      await config.onSpecialMode(netlist, mode);
+    try {
+      if (config.onSpecialMode) {
+        await config.onSpecialMode(netlist, mode);
+      }
+    } finally {
+      callbacks.onSimulationFinished?.();
     }
     return;
   }
@@ -332,7 +337,11 @@ export async function dispatchSimulation(
         }
         callbacks.addLog("Iniciando simulación transitoria interactiva (streaming)...", "send");
         const settings = { dt: config.simSettings.dt, tMax: config.transientDuration };
-        await config.simulationRunner.startInteractiveTransient(netlist, settings);
+        await config.simulationRunner.startInteractiveTransient(
+          netlist,
+          settings,
+          config.simulationOwnerId ?? "unknown",
+        );
         callbacks.onIpcStatusUpdate("Solucionador Rust Activo", "var(--accent-cyan)");
         break;
       }

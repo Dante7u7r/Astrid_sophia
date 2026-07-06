@@ -6,6 +6,7 @@ import { ATMEGA328P_DEFINITIONS } from "./mcu-avr";
 import { type CircuitNetlist } from "./netlist_extractor";
 
 export interface SimulationFrame {
+  readonly runId: number;
   readonly time: number;
   readonly nodeVoltages: Readonly<Record<string, number>>;
   readonly branchCurrents: Readonly<Record<string, number>>;
@@ -26,9 +27,15 @@ self.onmessage = (e: MessageEvent) => {
     const runtimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> = {};
     for (const comp of netlist.components) {
       if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
-        const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
+        const baseDefinition = comp.type === 'mcu_avr'
+          ? ATMEGA328P_DEFINITIONS
+          : STANDARD_8051_DEFINITION;
+        const definition = {
+          ...baseDefinition,
+          clockSpeed: comp.mcuClockSpeed ?? baseDefinition.clockSpeed,
+        };
         const runtime = createMcuRuntime({
-          definition: def,
+          definition,
           firmware: componentFirmware[comp.id],
         });
         runtime.pendingInterruptVector = null;
@@ -51,7 +58,7 @@ self.onmessage = (e: MessageEvent) => {
 
       // 2. Avanzar cada MCU en dt ciclos de reloj
       for (const entry of Object.values(interactiveMcuRuntimes)) {
-        const clockSpeed = entry.type === 'mcu_avr' ? 16e6 : 12e6;
+        const clockSpeed = entry.runtime.definition.clockSpeed;
         const cyclesToRun = Math.round(dt * clockSpeed);
         runCycles(entry.runtime, Math.min(cyclesToRun, 200_000));
       }

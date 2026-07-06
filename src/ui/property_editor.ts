@@ -2,6 +2,30 @@ import { type ComponentInstance, type CanvasOrchestrator } from "../canvas_orche
 import { type McuDebugPanel } from "./mcu_debug_panel";
 import { type SimulationRunner } from "../simulation/simulation_runner";
 import { parseSpiceValue, formatSpiceValue } from "../simulation/spice_value_parser";
+import {
+  DMM_INITIAL_DISPLAY,
+  normalizeDmmMode,
+} from "../simulation/dmm";
+
+const DEDICATED_VALUE_EDITORS = new Set<ComponentInstance["type"]>([
+  "dmm",
+  "ldr",
+  "thermistor",
+  "opamp",
+  "switch",
+  "transformer",
+  "x",
+]);
+const ACTUATOR_MODEL_EDITORS = new Set<ComponentInstance["type"]>([
+  "lamp",
+  "relay",
+  "buzzer",
+]);
+
+function finiteOr(value: string, fallback: number): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
@@ -58,8 +82,11 @@ export class PropertyEditor {
     if (!this.propIdInput || !this.propValInput || !this.propValSlider || !this.propUnitInput) return;
 
     this.propIdInput.value = comp.id;
-    this.propValInput.value = formatSpiceValue(Number(comp.value) || 0);
-    this.propValSlider.value = comp.value.toString();
+    const usesActuatorModel = ACTUATOR_MODEL_EDITORS.has(comp.type);
+    this.propValInput.value = usesActuatorModel
+      ? comp.value.toString()
+      : formatSpiceValue(Number(comp.value) || 0);
+    this.propValSlider.value = usesActuatorModel ? "0" : comp.value.toString();
 
     const mcuDebugPanel = this.callbacks.getMcuDebugPanel();
     if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
@@ -73,7 +100,11 @@ export class PropertyEditor {
     const valLabel = document.querySelector("#group-comp-val .property-label") as HTMLElement;
 
     if (valGroup && unitGroup) {
-      if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
+      if (usesActuatorModel) {
+        valGroup.style.display = "flex";
+        unitGroup.style.display = "none";
+        if (valLabel) valLabel.textContent = "Modelo eléctrico";
+      } else if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
         valGroup.style.display = "none";
         unitGroup.style.display = "none";
       } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
@@ -86,6 +117,9 @@ export class PropertyEditor {
         if (valLabel) valLabel.textContent = "Valor Nominal";
       }
     }
+    this.propValSlider.style.display = usesActuatorModel ? "none" : "";
+    if (this.propValInc) this.propValInc.style.display = usesActuatorModel ? "none" : "";
+    if (this.propValDec) this.propValDec.style.display = usesActuatorModel ? "none" : "";
 
     const waveContainer = document.querySelector("#wave-properties-container") as HTMLElement;
     const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
@@ -169,9 +203,39 @@ export class PropertyEditor {
     if (dmmContainer && dmmModeSelect) {
       if (comp.type === 'dmm') {
         dmmContainer.style.display = "flex";
-        dmmModeSelect.value = comp.value?.toString() ?? "V";
+        dmmModeSelect.value = normalizeDmmMode(comp.value);
       } else {
         dmmContainer.style.display = "none";
+      }
+    }
+
+    const switchContainer = document.querySelector("#switch-properties-container") as HTMLElement;
+    const switchState = document.querySelector("#prop-switch-state") as HTMLInputElement;
+    const switchRon = document.querySelector("#prop-switch-ron") as HTMLInputElement;
+    const switchRoff = document.querySelector("#prop-switch-roff") as HTMLInputElement;
+    const switchVth = document.querySelector("#prop-switch-vth") as HTMLInputElement;
+    const switchVh = document.querySelector("#prop-switch-vh") as HTMLInputElement;
+    if (switchContainer && switchState && switchRon && switchRoff && switchVth && switchVh) {
+      switchContainer.style.display = comp.type === "switch" ? "flex" : "none";
+      if (comp.type === "switch") {
+        switchState.checked = comp.switchState ?? false;
+        switchRon.value = (comp.switchRon ?? 0.01).toString();
+        switchRoff.value = (comp.switchRoff ?? 1e9).toString();
+        switchVth.value = (comp.switchVth ?? 0.5).toString();
+        switchVh.value = (comp.switchVh ?? 0.05).toString();
+      }
+    }
+
+    const transformerContainer = document.querySelector("#transformer-properties-container") as HTMLElement;
+    const transformerL1 = document.querySelector("#prop-transformer-l1") as HTMLInputElement;
+    const transformerL2 = document.querySelector("#prop-transformer-l2") as HTMLInputElement;
+    const transformerK = document.querySelector("#prop-transformer-k") as HTMLInputElement;
+    if (transformerContainer && transformerL1 && transformerL2 && transformerK) {
+      transformerContainer.style.display = comp.type === "transformer" ? "flex" : "none";
+      if (comp.type === "transformer") {
+        transformerL1.value = (comp.primaryInductance ?? 1e-3).toString();
+        transformerL2.value = (comp.secondaryInductance ?? 1e-3).toString();
+        transformerK.value = (comp.couplingCoefficient ?? 0.9).toString();
       }
     }
 
@@ -192,7 +256,7 @@ export class PropertyEditor {
       }
     }
 
-    if (comp.type === 'x' || comp.type === 'ldr' || comp.type === 'thermistor' || comp.type === 'dmm' || comp.type === 'opamp') {
+    if (DEDICATED_VALUE_EDITORS.has(comp.type)) {
       if (valGroup) valGroup.style.display = "none";
       if (unitGroup) unitGroup.style.display = "none";
     }
@@ -305,13 +369,10 @@ export class PropertyEditor {
         const orchestrator = this.callbacks.getOrchestrator();
         const selected = orchestrator ? orchestrator.selectedComponent : null;
         if (selected && selected.type === 'dmm') {
-          selected.value = dmmModeSelect.value;
-          selected.dmmValue = undefined; // reset screen
+          selected.value = normalizeDmmMode(dmmModeSelect.value);
+          selected.dmmValue = DMM_INITIAL_DISPLAY;
           this.callbacks.updateCanvasRendering();
           this.callbacks.markCurrentTabAsModified();
-          if (this.btnApplyProperties) {
-            this.btnApplyProperties.click();
-          }
         }
       });
     }
@@ -397,16 +458,23 @@ export class PropertyEditor {
           const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
 
           if (newId.length > 0 && newId !== oldId) {
-            const duplicate = activeOrchestrator.components.some(c => c.id === newId);
-            if (!duplicate) {
-              selected.id = newId;
-            } else {
-              this.callbacks.addLog(`Error: El identificador [${newId}] ya existe en el circuito.`, "error");
+            const renameError = activeOrchestrator.renameComponent(selected, newId);
+            if (renameError) {
+              this.propIdInput!.value = oldId;
+              this.callbacks.addLog(`Error: ${renameError}`, "error");
             }
           }
 
-          selected.value = newVal;
-          this.propValInput!.value = formatSpiceValue(newVal);
+          if (selected.type === "dmm") {
+            const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
+            selected.value = normalizeDmmMode(dmmModeSelect?.value);
+            selected.dmmValue = DMM_INITIAL_DISPLAY;
+          } else if (ACTUATOR_MODEL_EDITORS.has(selected.type)) {
+            selected.value = this.propValInput!.value.trim() || selected.value;
+          } else if (!DEDICATED_VALUE_EDITORS.has(selected.type)) {
+            selected.value = newVal;
+            this.propValInput!.value = formatSpiceValue(newVal);
+          }
 
           if (selected.type === 'vsource' || selected.type === 'isource') {
             const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
@@ -472,10 +540,48 @@ export class PropertyEditor {
             }
           }
 
+          if (selected.type === "switch") {
+            const state = document.querySelector("#prop-switch-state") as HTMLInputElement;
+            const ron = document.querySelector("#prop-switch-ron") as HTMLInputElement;
+            const roff = document.querySelector("#prop-switch-roff") as HTMLInputElement;
+            const vth = document.querySelector("#prop-switch-vth") as HTMLInputElement;
+            const vh = document.querySelector("#prop-switch-vh") as HTMLInputElement;
+            selected.switchState = state?.checked ?? false;
+            selected.switchRon = Math.max(1e-6, finiteOr(ron?.value ?? "", 0.01));
+            selected.switchRoff = Math.max(
+              selected.switchRon,
+              finiteOr(roff?.value ?? "", 1e9),
+            );
+            selected.switchVth = finiteOr(vth?.value ?? "", 0.5);
+            selected.switchVh = Math.max(0, finiteOr(vh?.value ?? "", 0.05));
+          }
+
+          if (selected.type === "transformer") {
+            const l1 = document.querySelector("#prop-transformer-l1") as HTMLInputElement;
+            const l2 = document.querySelector("#prop-transformer-l2") as HTMLInputElement;
+            const k = document.querySelector("#prop-transformer-k") as HTMLInputElement;
+            selected.primaryInductance = Math.max(1e-9, finiteOr(l1?.value ?? "", 1e-3));
+            selected.secondaryInductance = Math.max(1e-9, finiteOr(l2?.value ?? "", 1e-3));
+            selected.couplingCoefficient = Math.min(
+              0.9999,
+              Math.max(0, finiteOr(k?.value ?? "", 0.9)),
+            );
+            selected.value = selected.primaryInductance;
+          }
+
           const simulationRunner = this.callbacks.getSimulationRunner();
-          if (simulationRunner?.isSimulationActive() ?? false) {
+          const supportsLiveMutation = [
+            "resistor",
+            "vsource",
+            "isource",
+            "switch",
+            "opamp",
+          ].includes(selected.type);
+          if ((simulationRunner?.isSimulationActive() ?? false) && supportsLiveMutation) {
             const mutations: { componentId: string; field: string; value: number }[] = [];
-            mutations.push({ componentId: selected.id, field: 'value', value: newVal });
+            if (selected.type !== "switch" && selected.type !== "opamp") {
+              mutations.push({ componentId: selected.id, field: 'value', value: newVal });
+            }
             if (selected.amplitude !== undefined) {
               mutations.push({ componentId: selected.id, field: 'amplitude', value: selected.amplitude });
             }
@@ -494,6 +600,19 @@ export class PropertyEditor {
             if (selected.switchRoff !== undefined) {
               mutations.push({ componentId: selected.id, field: 'switch_roff', value: selected.switchRoff });
             }
+            if (selected.switchVth !== undefined) {
+              mutations.push({ componentId: selected.id, field: 'switch_vth', value: selected.switchVth });
+            }
+            if (selected.switchVh !== undefined) {
+              mutations.push({ componentId: selected.id, field: 'switch_vh', value: selected.switchVh });
+            }
+            if (selected.type === "switch") {
+              mutations.push({
+                componentId: selected.id,
+                field: "switch_state",
+                value: selected.switchState ? 1 : 0,
+              });
+            }
             if (selected.type === 'opamp') {
               mutations.push({ componentId: `${selected.id}__vos`, field: 'value', value: selected.offsetVoltage ?? 0.002 });
               mutations.push({ componentId: selected.id, field: 'value', value: selected.openLoopGain ?? 100000.0 });
@@ -504,11 +623,19 @@ export class PropertyEditor {
               });
             }
             this.callbacks.addLog(`Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`, "send");
+          } else if (simulationRunner?.isSimulationActive() ?? false) {
+            this.callbacks.addLog(
+              `Los cambios de [${selected.id}] se aplicarán en la próxima simulación.`,
+              "system",
+            );
           }
 
           this.callbacks.updateCanvasRendering();
           this.callbacks.markCurrentTabAsModified();
-          this.callbacks.addLog(`Propiedades aplicadas a [${selected.id}]: Valor = [${newVal}]`, "system");
+          this.callbacks.addLog(
+            `Propiedades aplicadas a [${selected.id}]: Valor = [${selected.value}]`,
+            "system",
+          );
         }
       });
     }

@@ -57,7 +57,8 @@ function parseEngineeringValue(raw: string, defaultValue: number): number {
     'meg': 1e6, 'mega': 1e6,
     'g': 1e9,   'giga': 1e9
   };
-  for (const prefix in multipliers) {
+  const prefixes = Object.keys(multipliers).sort((left, right) => right.length - left.length);
+  for (const prefix of prefixes) {
     if (unit.startsWith(prefix)) {
       return num * multipliers[prefix];
     }

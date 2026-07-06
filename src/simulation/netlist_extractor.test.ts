@@ -207,4 +207,100 @@ describe("extractElectricalNetlist", () => {
     // At 25 C (298.15 K), R must be exactly r0 = 10000 Ohms
     expect(rTh!.value).toBeCloseTo(10000);
   });
+
+  test("extrae los tres modos del multimetro con modelos electricos validos", () => {
+    const getPins = (component: ComponentInstance): PinInstance[] => [
+      { componentId: component.id, pinIndex: 0, x: 0, y: 0 },
+      { componentId: component.id, pinIndex: 1, x: 40, y: 0 },
+    ];
+
+    const voltage = extractElectricalNetlist([{
+      id: "DMM1", type: "dmm", value: "V", x: 0, y: 0, rotation: 0,
+    }], [], getPins);
+    const current = extractElectricalNetlist([{
+      id: "DMM1", type: "dmm", value: "A", x: 0, y: 0, rotation: 0,
+    }], [], getPins);
+    const resistance = extractElectricalNetlist([{
+      id: "DMM1", type: "dmm", value: "R", x: 0, y: 0, rotation: 0,
+    }], [], getPins);
+
+    expect(voltage.netlist.components[0]).toMatchObject({ type: "resistor", value: 10e6 });
+    expect(current.netlist.components[0]).toMatchObject({ type: "resistor", value: 0.01 });
+    expect(resistance.netlist.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "DMM1__test", type: "isource", value: 10e-6 }),
+      expect.objectContaining({ id: "DMM1__guard", type: "resistor", value: 1e9 }),
+    ]));
+  });
+
+  test("transfiere parametros completos de switch y transformador", () => {
+    const components: ComponentInstance[] = [
+      {
+        id: "SW1",
+        type: "switch",
+        value: 0,
+        switchState: true,
+        switchRon: 0.02,
+        switchRoff: 2e9,
+        switchVth: 1.2,
+        switchVh: 0.15,
+        x: 0,
+        y: 0,
+        rotation: 0,
+      },
+      {
+        id: "T1",
+        type: "transformer",
+        value: 0.002,
+        primaryInductance: 0.002,
+        secondaryInductance: 0.008,
+        couplingCoefficient: 0.97,
+        x: 100,
+        y: 0,
+        rotation: 0,
+      },
+    ];
+    const getPins = (component: ComponentInstance): PinInstance[] => {
+      const count = component.type === "transformer" ? 4 : 2;
+      return Array.from({ length: count }, (_, pinIndex) => ({
+        componentId: component.id,
+        pinIndex,
+        x: pinIndex * 40,
+        y: 0,
+      }));
+    };
+
+    const { netlist } = extractElectricalNetlist(components, [], getPins);
+    const switchComponent = netlist.components.find(component => component.id === "SW1");
+
+    expect(switchComponent).toMatchObject({
+      switchState: true,
+      switchRon: 0.02,
+      switchRoff: 2e9,
+      switchVth: 1.2,
+      switchVh: 0.15,
+    });
+    expect(netlist.components.find(component => component.id === "T1__L1")?.value).toBe(0.002);
+    expect(netlist.components.find(component => component.id === "T1__L2")?.value).toBe(0.008);
+    expect(netlist.mutual_inductances?.[0]?.k_coeff).toBe(0.97);
+  });
+
+  test("conserva la frecuencia configurada del MCU en la netlist", () => {
+    const mcu: ComponentInstance = {
+      id: "U1",
+      type: "mcu_8051",
+      value: 8e6,
+      mcuClockSpeed: 8e6,
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    const { netlist } = extractElectricalNetlist([mcu], [], component => [{
+      componentId: component.id,
+      pinIndex: 0,
+      x: 0,
+      y: 0,
+    }]);
+
+    expect(netlist.components[0].mcuClockSpeed).toBe(8e6);
+  });
 });

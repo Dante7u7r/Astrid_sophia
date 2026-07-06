@@ -2,6 +2,10 @@
 
 > Simulador de circuitos electrónicos de grado industrial (37 fases completadas).  
 > **Stack:** Tauri + Rust (backend MNA) + TypeScript/Canvas (frontend)  
+
+> **Prioridad actual:** estabilizacion exclusiva de Tauri escritorio en
+> Windows. El navegador independiente y los layouts moviles quedan congelados.
+> Consulta [`docs/desktop-roadmap.md`](docs/desktop-roadmap.md).
 > **Última actualización:** 23 de junio de 2026
 
 ---

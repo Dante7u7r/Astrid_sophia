@@ -305,9 +305,15 @@ export function solveTransientCircuitTS(
   const mcuRuntimes: Record<string, { runtime: McuRuntime; bridge: McuSpiceBridge; type: string; pins: readonly string[] }> = {};
   for (const comp of netlist.components) {
     if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
-      const def = comp.type === 'mcu_avr' ? ATMEGA328P_DEFINITIONS : STANDARD_8051_DEFINITION;
+      const baseDefinition = comp.type === 'mcu_avr'
+        ? ATMEGA328P_DEFINITIONS
+        : STANDARD_8051_DEFINITION;
+      const definition = {
+        ...baseDefinition,
+        clockSpeed: comp.mcuClockSpeed ?? baseDefinition.clockSpeed,
+      };
       const runtime = createMcuRuntime({
-        definition: def,
+        definition,
         firmware: componentFirmware[comp.id],
       });
       const bridge = createMcuSpiceBridge(runtime, comp.pins.length);
@@ -347,7 +353,7 @@ export function solveTransientCircuitTS(
         item.bridge.config.spiceNodeVoltages = nodeVoltagesMap;
         updateGpioInputs(item.bridge);
 
-        const clockSpeed = item.type === 'mcu_avr' ? 16e6 : 12e6;
+        const clockSpeed = item.runtime.definition.clockSpeed;
         const cycles = Math.round(dt * clockSpeed);
         runCycles(item.runtime, cycles);
       }

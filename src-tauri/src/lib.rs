@@ -12,6 +12,7 @@
     clippy::collapsible_match
 )]
 pub mod ad_value;
+mod advanced_ipc;
 pub mod dual3;
 mod gpu_solver;
 mod krylov;
@@ -25,7 +26,8 @@ mod topology;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
@@ -124,21 +126,32 @@ pub struct ComponentMutation {
     pub component_id: String,
     pub field: String,
     pub value: f64,
+    #[serde(default, skip_serializing)]
+    pub run_id: u64,
 }
 
 pub struct SimulationControlState {
     pub is_running: Arc<AtomicBool>,
+    pub active_run_id: Arc<AtomicU64>,
     pub hot_mutations: Arc<Mutex<Vec<ComponentMutation>>>,
 }
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SimulationFrame {
+    pub run_id: u64,
     pub time: f64,
     pub node_voltages: HashMap<String, f64>,
     pub branch_currents: HashMap<String, f64>,
     pub frame_index: u64,
     pub is_final: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SimulationStreamError {
+    pub run_id: u64,
+    pub error: SimulationError,
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -281,8 +294,14 @@ async fn run_stability_analysis(
 #[tauri::command]
 fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
-    mutation: ComponentMutation,
+    mut mutation: ComponentMutation,
 ) -> Result<(), SimulationError> {
+    mutation.run_id = state.active_run_id.load(Ordering::SeqCst);
+    if mutation.run_id == 0 || !state.is_running.load(Ordering::SeqCst) {
+        return Err(SimulationError::from(
+            "No hay una corrida transitoria activa para aplicar la mutación.".to_string(),
+        ));
+    }
     let mut queue = state
         .hot_mutations
         .lock()
@@ -297,15 +316,28 @@ async fn start_interactive_transient(
     state: tauri::State<'_, SimulationControlState>,
     netlist: solver::CircuitNetlist,
     settings: solver::TransientSettings,
+    run_id: u64,
 ) -> Result<(), SimulationError> {
+    if run_id == 0 {
+        return Err(SimulationError::from(
+            "El identificador de corrida debe ser mayor que cero.".to_string(),
+        ));
+    }
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    state.active_run_id.store(run_id, Ordering::SeqCst);
     state.is_running.store(true, Ordering::SeqCst);
+    if let Ok(mut mutations) = state.hot_mutations.lock() {
+        mutations.clear();
+    }
     let is_running = state.is_running.clone();
+    let active_run_id = state.active_run_id.clone();
     let hot_mutations = state.hot_mutations.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
         let window_inner = window.clone();
         let is_running_inner = is_running.clone();
+        let active_run_id_inner = active_run_id.clone();
+        let panic_run_id = active_run_id.clone();
 
         let catch_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
             let mut last_emit = std::time::Instant::now();
@@ -318,13 +350,17 @@ async fn start_interactive_transient(
                 HashMap::new(),
                 HashMap::new(),
                 Some(hot_mutations),
+                Some(run_id),
                 Some(|step: &solver::TimeStepResult| -> bool {
-                    if !is_running_inner.load(Ordering::SeqCst) {
+                    if !is_running_inner.load(Ordering::SeqCst)
+                        || active_run_id_inner.load(Ordering::SeqCst) != run_id
+                    {
                         return false;
                     }
                     let now = std::time::Instant::now();
                     if now - last_emit >= frame_interval {
                         let packet = SimulationFrame {
+                            run_id,
                             time: step.time,
                             node_voltages: step.node_voltages.clone(),
                             branch_currents: step.branch_currents.clone(),
@@ -339,37 +375,55 @@ async fn start_interactive_transient(
                 }),
             );
 
-            if let Ok((ref results, _, _)) = result {
-                if let Some(last) = results.last() {
-                    let packet = SimulationFrame {
-                        time: last.time,
-                        node_voltages: last.node_voltages.clone(),
-                        branch_currents: last.branch_currents.clone(),
-                        frame_index,
-                        is_final: true,
-                    };
-                    window_inner.emit("sim-frame-update", &packet).ok();
+            if active_run_id_inner.load(Ordering::SeqCst) == run_id {
+                if let Ok((ref results, _, _)) = result {
+                    if let Some(last) = results.last() {
+                        let packet = SimulationFrame {
+                            run_id,
+                            time: last.time,
+                            node_voltages: last.node_voltages.clone(),
+                            branch_currents: last.branch_currents.clone(),
+                            frame_index,
+                            is_final: true,
+                        };
+                        window_inner.emit("sim-frame-update", &packet).ok();
+                    }
                 }
-            }
-            if let Err(ref e) = result {
-                window_inner
-                    .emit("sim-frame-error", &SimulationError::from(e.clone()))
-                    .ok();
+                if let Err(ref e) = result {
+                    window_inner
+                        .emit(
+                            "sim-frame-error",
+                            &SimulationStreamError {
+                                run_id,
+                                error: SimulationError::from(e.clone()),
+                            },
+                        )
+                        .ok();
+                }
             }
         }));
 
-        if catch_result.is_err() {
+        if catch_result.is_err() && panic_run_id.load(Ordering::SeqCst) == run_id {
             window
                 .emit(
                     "sim-frame-error",
-                    &SimulationError::Unknown {
-                        message: "Pánico inesperado en el motor de simulación de Rust".to_string(),
+                    &SimulationStreamError {
+                        run_id,
+                        error: SimulationError::Unknown {
+                            message: "Pánico inesperado en el motor de simulación de Rust"
+                                .to_string(),
+                        },
                     },
                 )
                 .ok();
         }
 
-        is_running.store(false, Ordering::SeqCst);
+        if active_run_id
+            .compare_exchange(run_id, 0, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            is_running.store(false, Ordering::SeqCst);
+        }
     });
 
     Ok(())
@@ -378,7 +432,13 @@ async fn start_interactive_transient(
 #[tauri::command]
 fn stop_interactive_transient(
     state: tauri::State<'_, SimulationControlState>,
+    run_id: Option<u64>,
 ) -> Result<(), String> {
+    let active_run_id = state.active_run_id.load(Ordering::SeqCst);
+    if run_id.is_some_and(|expected| expected != active_run_id) {
+        return Ok(());
+    }
+    state.active_run_id.store(0, Ordering::SeqCst);
     state.is_running.store(false, Ordering::SeqCst);
     Ok(())
 }
@@ -390,9 +450,6 @@ fn get_performance_telemetry() -> Result<telemetry::TelemetryData, String> {
 
 #[tauri::command]
 async fn save_circuit_file(content: String) -> Result<String, String> {
-    use std::fs::File;
-    use std::io::Write;
-
     let file_path = rfd::AsyncFileDialog::new()
         .add_filter("Esquemático Astryd", &["astryd", "json"])
         .set_title("Guardar Esquemático")
@@ -401,9 +458,7 @@ async fn save_circuit_file(content: String) -> Result<String, String> {
 
     if let Some(file_handle) = file_path {
         let path = file_handle.path();
-        let mut file = File::create(path).map_err(|e| e.to_string())?;
-        file.write_all(content.as_bytes())
-            .map_err(|e| e.to_string())?;
+        write_file_atomically(path, &content)?;
         Ok(path.to_string_lossy().to_string())
     } else {
         Err("Operación cancelada por el usuario".to_string())
@@ -412,13 +467,108 @@ async fn save_circuit_file(content: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn save_circuit_to_path(path: String, content: String) -> Result<(), String> {
-    use std::fs::File;
+    write_file_atomically(Path::new(&path), &content)
+}
+
+fn unique_sibling_path(path: &Path, suffix: &str) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "La ruta de guardado no tiene directorio padre.".to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "El nombre del archivo no es valido.".to_string())?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    Ok(parent.join(format!(
+        ".{file_name}.{}.{}.{}",
+        std::process::id(),
+        nonce,
+        suffix
+    )))
+}
+
+pub(crate) fn write_file_atomically(path: &Path, content: &str) -> Result<(), String> {
+    use std::fs::{self, OpenOptions};
     use std::io::Write;
 
-    let mut file = File::create(&path).map_err(|e| e.to_string())?;
-    file.write_all(content.as_bytes())
-        .map_err(|e| e.to_string())?;
+    let temp_path = unique_sibling_path(path, "tmp")?;
+    let backup_path = unique_sibling_path(path, "bak")?;
+    let mut temp_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|error| format!("No se pudo crear el archivo temporal: {error}"))?;
+
+    if let Err(error) = temp_file
+        .write_all(content.as_bytes())
+        .and_then(|_| temp_file.sync_all())
+    {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("No se pudo escribir el archivo temporal: {error}"));
+    }
+    drop(temp_file);
+
+    let had_original = path.exists();
+    if had_original {
+        if let Err(error) = fs::rename(path, &backup_path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(format!("No se pudo preparar el reemplazo seguro: {error}"));
+        }
+    }
+
+    if let Err(error) = fs::rename(&temp_path, path) {
+        if had_original {
+            if let Err(restore_error) = fs::rename(&backup_path, path) {
+                return Err(format!(
+                    "Fallo el guardado ({error}) y no se pudo restaurar el original ({restore_error}). Respaldo: {}",
+                    backup_path.display()
+                ));
+            }
+        }
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("No se pudo reemplazar el archivo: {error}"));
+    }
+
+    if had_original {
+        fs::remove_file(&backup_path).map_err(|error| {
+            format!("El archivo se guardo, pero no se pudo eliminar el respaldo: {error}")
+        })?;
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::write_file_atomically;
+    use std::fs;
+
+    #[test]
+    fn atomic_save_creates_and_replaces_without_residue() {
+        let root = std::env::temp_dir().join(format!(
+            "astryd-persistence-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("create test directory");
+        let file_path = root.join("circuit.astryd");
+
+        write_file_atomically(&file_path, "version one").expect("first save");
+        write_file_atomically(&file_path, "version two").expect("replacement save");
+
+        assert_eq!(
+            fs::read_to_string(&file_path).expect("read saved file"),
+            "version two"
+        );
+        assert_eq!(fs::read_dir(&root).expect("read test directory").count(), 1);
+
+        fs::remove_dir_all(&root).expect("cleanup test directory");
+    }
 }
 
 #[tauri::command]
@@ -455,6 +605,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(SimulationControlState {
             is_running: Arc::new(AtomicBool::new(false)),
+            active_run_id: Arc::new(AtomicU64::new(0)),
             hot_mutations: Arc::new(Mutex::new(Vec::new())),
         })
         .invoke_handler(tauri::generate_handler![
@@ -481,6 +632,9 @@ pub fn run() {
             start_interactive_transient,
             stop_interactive_transient,
             inject_live_mutation,
+            advanced_ipc::run_pvt_matrix_analysis,
+            advanced_ipc::extract_sparameter,
+            advanced_ipc::export_touchstone_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
