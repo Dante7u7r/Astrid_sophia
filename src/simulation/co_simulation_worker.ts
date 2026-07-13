@@ -4,6 +4,7 @@ import { dispatchAnalogTrigger } from "./mcu-spice-bridge";
 import { STANDARD_8051_DEFINITION } from "./mcu-8051";
 import { ATMEGA328P_DEFINITIONS } from "./mcu-avr";
 import { type CircuitNetlist } from "./netlist_extractor";
+import type { AnalogEventTrigger } from "./mcu-types";
 
 export interface SimulationFrame {
   readonly runId: number;
@@ -12,7 +13,7 @@ export interface SimulationFrame {
   readonly branchCurrents: Readonly<Record<string, number>>;
   readonly frameIndex: number;
   readonly isFinal: boolean;
-  readonly triggerEvent: any | null;
+  readonly triggerEvent: AnalogEventTrigger | null;
 }
 
 let interactiveMcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> | null = null;
@@ -83,8 +84,9 @@ self.onmessage = (e: MessageEvent) => {
       } else {
         self.postMessage({ type: "success", results });
       }
-    } catch (err: any) {
-      self.postMessage({ type: "error", error: err.message || String(err) });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      self.postMessage({ type: "error", error: errorMessage });
     }
   }
 };

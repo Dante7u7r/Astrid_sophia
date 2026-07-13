@@ -1,4 +1,12 @@
 import { safeInvoke } from "../simulation/tauri_mock";
+import type { PerformanceSnapshot } from "../performance/performance_monitor";
+
+interface PerformanceTelemetryPayload {
+  ramFormatted?: string;
+  memory_used_mb?: number;
+  cpuPercent?: number;
+  cpu_usage?: number;
+}
 
 export class TelemetryPanel {
   public static lastError: string | null = null;
@@ -92,17 +100,20 @@ export class TelemetryPanel {
 
   private telemetryRamText: HTMLElement | null = null;
   private telemetryCpuText: HTMLElement | null = null;
+  private telemetryFpsText: HTMLElement | null = null;
   private intervalId: number | null = null;
+  private fpsIntervalId: number | null = null;
 
-  constructor() {
+  constructor(private readonly getPerformanceSnapshot?: () => PerformanceSnapshot) {
     this.telemetryRamText = document.querySelector("#telemetry-ram-text");
     this.telemetryCpuText = document.querySelector("#telemetry-cpu-text");
+    this.telemetryFpsText = document.querySelector("#telemetry-fps-text");
   }
 
   public start() {
     const updateTelemetry = async () => {
       try {
-        const data = await safeInvoke<any>("get_performance_telemetry");
+        const data = await safeInvoke<PerformanceTelemetryPayload>("get_performance_telemetry");
         if (this.telemetryRamText) {
           this.telemetryRamText.textContent = data.ramFormatted || `${data.memory_used_mb || 200} MB`;
         }
@@ -110,6 +121,7 @@ export class TelemetryPanel {
           const cpuVal = data.cpuPercent !== undefined ? data.cpuPercent : data.cpu_usage;
           this.telemetryCpuText.textContent = `${(cpuVal || 0).toFixed(1)} %`;
         }
+        this.updateLocalPerformance();
       } catch (err) {
 
         if (this.telemetryRamText) {
@@ -118,11 +130,14 @@ export class TelemetryPanel {
         if (this.telemetryCpuText) {
           this.telemetryCpuText.textContent = "0.0 %";
         }
+        this.updateLocalPerformance();
       }
     };
 
     updateTelemetry();
+    this.updateLocalPerformance();
     this.intervalId = window.setInterval(updateTelemetry, 3000);
+    this.fpsIntervalId = window.setInterval(() => this.updateLocalPerformance(), 1000);
   }
 
   public stop() {
@@ -130,5 +145,16 @@ export class TelemetryPanel {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+    if (this.fpsIntervalId !== null) {
+      clearInterval(this.fpsIntervalId);
+      this.fpsIntervalId = null;
+    }
+  }
+
+  private updateLocalPerformance(): void {
+    if (!this.telemetryFpsText || !this.getPerformanceSnapshot) return;
+    const snapshot = this.getPerformanceSnapshot();
+    const fps = Math.round(snapshot.fpsEstimate);
+    this.telemetryFpsText.textContent = fps > 0 ? `${fps} FPS` : "Reposo";
   }
 }

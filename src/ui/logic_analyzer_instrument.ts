@@ -3,11 +3,12 @@
  */
 
 import { CanvasOrchestrator } from "../canvas_orchestrator";
+import type { InstrumentCallbacks } from "./instrument_callbacks";
 
 export class LogicAnalyzerInstrument {
   private container: HTMLElement;
   private orchestrator: CanvasOrchestrator;
-  private callbacks: any;
+  private callbacks: InstrumentCallbacks;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
 
@@ -15,7 +16,7 @@ export class LogicAnalyzerInstrument {
   private channels: (string | null)[] = [null, null, null, null, null, null, null, null];
   private nodeHistory: Record<string, { time: number; val: number }[]> = {};
 
-  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: any) {
+  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks) {
     this.container = container;
     this.orchestrator = orchestrator;
     this.callbacks = callbacks;

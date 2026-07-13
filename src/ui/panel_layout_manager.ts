@@ -13,50 +13,24 @@
  * - Persistencia en localStorage
  */
 
-const STORAGE_KEY = "astryd_panel_layout";
-const LAYOUT_VERSION = 4;
-
-interface PanelLayout {
-  version?: number;
-  leftWidth: number;
-  rightWidth: number;
-  dockHeight: number;
-  leftCollapsed: boolean;
-  rightCollapsed: boolean;
-  dockCollapsed: boolean;
-}
-
-const DEFAULT_LAYOUT: PanelLayout = {
-  leftWidth: 200,
-  rightWidth: 220,
-  dockHeight: 210,
-  leftCollapsed: false,
-  rightCollapsed: false,
-  dockCollapsed: true,
-};
+import {
+  DEFAULT_LAYOUT,
+  PANEL_LIMITS,
+  type PanelKey,
+  type PanelLayout,
+  getDefaultLayoutForViewport,
+  getDockMaxPx,
+  getKeyboardResizeDirection,
+  resizePanelByDrag,
+  resizePanelByKeyboard,
+  sanitizeStoredLayout,
+} from "./panel_layout_model";
 
 function getDefaultLayout(): PanelLayout {
-  const compactViewport = typeof window !== "undefined" && window.innerWidth <= 760;
-  return {
-    ...DEFAULT_LAYOUT,
-    version: LAYOUT_VERSION,
-    ...(compactViewport
-      ? {
-          leftWidth: 220,
-          rightWidth: 260,
-          leftCollapsed: true,
-          rightCollapsed: true,
-          dockCollapsed: true,
-        }
-      : {}),
-  };
+  return getDefaultLayoutForViewport(typeof window !== "undefined" ? window.innerWidth : Number.POSITIVE_INFINITY);
 }
 
-const LIMITS = {
-  leftMin: 160, leftMax: 400,
-  rightMin: 180, rightMax: 450,
-  dockMin: 120, dockMaxVh: 50,
-};
+const STORAGE_KEY = "astryd_panel_layout";
 
 export class PanelLayoutManager {
   private layout: PanelLayout;
@@ -68,7 +42,7 @@ export class PanelLayoutManager {
   private resizeNotificationId: number | null = null;
 
   // Drag state
-  private activeHandle: "left" | "right" | "dock" | null = null;
+  private activeHandle: PanelKey | null = null;
   private dragStartPos = 0;
   private dragStartSize = 0;
 
@@ -138,7 +112,7 @@ export class PanelLayoutManager {
     }
   }
 
-  private configureSeparator(handle: HTMLElement, panel: "left" | "right" | "dock"): void {
+  private configureSeparator(handle: HTMLElement, panel: PanelKey): void {
     handle.tabIndex = 0;
     handle.setAttribute("role", "separator");
     handle.setAttribute("aria-label", panel === "left"
@@ -236,7 +210,7 @@ export class PanelLayoutManager {
     document.addEventListener("mouseup", () => this.endDrag());
   }
 
-  private startDrag(e: MouseEvent, handle: "left" | "right" | "dock") {
+  private startDrag(e: MouseEvent, handle: PanelKey) {
     e.preventDefault();
     this.activeHandle = handle;
 
@@ -263,19 +237,15 @@ export class PanelLayoutManager {
     if (!this.activeHandle) return;
 
     if (this.activeHandle === "left") {
-      const delta = e.clientX - this.dragStartPos;
-      const newWidth = Math.max(LIMITS.leftMin, Math.min(LIMITS.leftMax, this.dragStartSize + delta));
+      const newWidth = resizePanelByDrag("left", this.dragStartSize, this.dragStartPos, e.clientX, window.innerHeight);
       this.layout.leftWidth = newWidth;
       document.documentElement.style.setProperty("--left-panel-width", `${newWidth}px`);
     } else if (this.activeHandle === "right") {
-      const delta = this.dragStartPos - e.clientX; // Invertido: mover a la izquierda agranda
-      const newWidth = Math.max(LIMITS.rightMin, Math.min(LIMITS.rightMax, this.dragStartSize + delta));
+      const newWidth = resizePanelByDrag("right", this.dragStartSize, this.dragStartPos, e.clientX, window.innerHeight);
       this.layout.rightWidth = newWidth;
       document.documentElement.style.setProperty("--right-panel-width", `${newWidth}px`);
     } else if (this.activeHandle === "dock") {
-      const delta = this.dragStartPos - e.clientY; // Mover hacia arriba agranda
-      const maxPx = window.innerHeight * (LIMITS.dockMaxVh / 100);
-      const newHeight = Math.max(LIMITS.dockMin, Math.min(maxPx, this.dragStartSize + delta));
+      const newHeight = resizePanelByDrag("dock", this.dragStartSize, this.dragStartPos, e.clientY, window.innerHeight);
       this.layout.dockHeight = newHeight;
       document.documentElement.style.setProperty("--osc-panel-height", `${newHeight}px`);
     }
@@ -296,7 +266,7 @@ export class PanelLayoutManager {
     this.syncSeparatorValues();
   }
 
-  private resetDimension(handle: "left" | "right" | "dock") {
+  private resetDimension(handle: PanelKey) {
     if (handle === "left") {
       this.layout.leftWidth = DEFAULT_LAYOUT.leftWidth;
       document.documentElement.style.setProperty("--left-panel-width", `${DEFAULT_LAYOUT.leftWidth}px`);
@@ -312,10 +282,8 @@ export class PanelLayoutManager {
     this.notifyResize();
   }
 
-  private resizeByKeyboard(event: KeyboardEvent, panel: "left" | "right" | "dock"): void {
-    const direction = panel === "dock"
-      ? (event.key === "ArrowUp" ? 1 : event.key === "ArrowDown" ? -1 : 0)
-      : (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0);
+  private resizeByKeyboard(event: KeyboardEvent, panel: PanelKey): void {
+    const direction = getKeyboardResizeDirection(panel, event.key);
     if (direction === 0 && event.key !== "Home") return;
     event.preventDefault();
 
@@ -326,23 +294,13 @@ export class PanelLayoutManager {
 
     const step = event.shiftKey ? 25 : 10;
     if (panel === "left") {
-      this.layout.leftWidth = Math.max(
-        LIMITS.leftMin,
-        Math.min(LIMITS.leftMax, this.layout.leftWidth + direction * step),
-      );
+      this.layout.leftWidth = resizePanelByKeyboard("left", this.layout.leftWidth, direction, step, window.innerHeight);
       document.documentElement.style.setProperty("--left-panel-width", `${this.layout.leftWidth}px`);
     } else if (panel === "right") {
-      this.layout.rightWidth = Math.max(
-        LIMITS.rightMin,
-        Math.min(LIMITS.rightMax, this.layout.rightWidth - direction * step),
-      );
+      this.layout.rightWidth = resizePanelByKeyboard("right", this.layout.rightWidth, direction, step, window.innerHeight);
       document.documentElement.style.setProperty("--right-panel-width", `${this.layout.rightWidth}px`);
     } else {
-      const maxPx = window.innerHeight * (LIMITS.dockMaxVh / 100);
-      this.layout.dockHeight = Math.max(
-        LIMITS.dockMin,
-        Math.min(maxPx, this.layout.dockHeight + direction * step),
-      );
+      this.layout.dockHeight = resizePanelByKeyboard("dock", this.layout.dockHeight, direction, step, window.innerHeight);
       document.documentElement.style.setProperty("--osc-panel-height", `${this.layout.dockHeight}px`);
     }
     this.saveLayout();
@@ -351,11 +309,11 @@ export class PanelLayoutManager {
   }
 
   private syncSeparatorValues(): void {
-    const dockMax = Math.max(LIMITS.dockMin, Math.floor(window.innerHeight * (LIMITS.dockMaxVh / 100)));
-    const values: Array<["left" | "right" | "dock", number, number, number]> = [
-      ["left", this.layout.leftWidth, LIMITS.leftMin, LIMITS.leftMax],
-      ["right", this.layout.rightWidth, LIMITS.rightMin, LIMITS.rightMax],
-      ["dock", this.layout.dockHeight, LIMITS.dockMin, dockMax],
+    const dockMax = getDockMaxPx(window.innerHeight);
+    const values: Array<[PanelKey, number, number, number]> = [
+      ["left", this.layout.leftWidth, PANEL_LIMITS.leftMin, PANEL_LIMITS.leftMax],
+      ["right", this.layout.rightWidth, PANEL_LIMITS.rightMin, PANEL_LIMITS.rightMax],
+      ["dock", this.layout.dockHeight, PANEL_LIMITS.dockMin, dockMax],
     ];
     values.forEach(([panel, value, min, max]) => {
       const handle = this.root.querySelector(`#resize-handle-${panel}`);
@@ -420,7 +378,7 @@ export class PanelLayoutManager {
 
   // ─── API Pública ───────────────────────────────────
 
-  public setPanelCollapsed(panel: "left" | "right" | "dock", collapsed: boolean) {
+  public setPanelCollapsed(panel: PanelKey, collapsed: boolean) {
     if (panel === "left") {
       if (this.layout.leftCollapsed === collapsed) return;
       this.layout.leftCollapsed = collapsed;
@@ -444,16 +402,19 @@ export class PanelLayoutManager {
     this.syncToggleButtons();
     this.saveLayout();
     this.dispatchLayoutChange();
+    if (panel === "dock" && !collapsed) {
+      this.focusInstrumentCenterClose();
+    }
     this.scheduleResizeNotification();
   }
 
-  public isPanelCollapsed(panel: "left" | "right" | "dock"): boolean {
+  public isPanelCollapsed(panel: PanelKey): boolean {
     if (panel === "left") return this.layout.leftCollapsed;
     if (panel === "right") return this.layout.rightCollapsed;
     return this.layout.dockCollapsed;
   }
 
-  public togglePanel(panel: "left" | "right" | "dock") {
+  public togglePanel(panel: PanelKey) {
     if (panel === "left") {
       this.layout.leftCollapsed = !this.layout.leftCollapsed;
       if (this.sidebarLeft) {
@@ -474,6 +435,9 @@ export class PanelLayoutManager {
     this.syncToggleButtons();
     this.saveLayout();
     this.dispatchLayoutChange();
+    if (panel === "dock" && !this.layout.dockCollapsed) {
+      this.focusInstrumentCenterClose();
+    }
 
     this.scheduleResizeNotification();
   }
@@ -499,23 +463,7 @@ export class PanelLayoutManager {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PanelLayout>;
-        
-        // Si el layout guardado es de una versión anterior, ignorarlo y usar defaults
-        if (parsed.version !== LAYOUT_VERSION) {
-          return getDefaultLayout();
-        }
-        
-        const layout = { ...DEFAULT_LAYOUT, ...parsed };
-        
-        // Validar y acotar dimensiones frente a los límites definidos
-        layout.leftWidth = Math.max(LIMITS.leftMin, Math.min(LIMITS.leftMax, layout.leftWidth));
-        layout.rightWidth = Math.max(LIMITS.rightMin, Math.min(LIMITS.rightMax, layout.rightWidth));
-        
-        const maxDockPx = window.innerHeight ? Math.floor(window.innerHeight * (LIMITS.dockMaxVh / 100)) : DEFAULT_LAYOUT.dockHeight;
-        const minDockPx = LIMITS.dockMin;
-        layout.dockHeight = Math.max(minDockPx, Math.min(maxDockPx || DEFAULT_LAYOUT.dockHeight, layout.dockHeight));
-        
-        return layout;
+        return sanitizeStoredLayout(parsed, window.innerHeight) ?? getDefaultLayout();
       }
     } catch {
       // Ignorar errores de parsing
@@ -523,7 +471,7 @@ export class PanelLayoutManager {
     return getDefaultLayout();
   }
 
-  // ─── Utilidades ────────────────────────────────────
+  // --- Utilidades ────────────────────────────────────
 
   private notifyResize() {
     if (this.resizeCallback) {
@@ -543,5 +491,12 @@ export class PanelLayoutManager {
 
   private dispatchLayoutChange() {
     window.dispatchEvent(new CustomEvent("panel-layout-change"));
+  }
+
+  private focusInstrumentCenterClose(): void {
+    window.setTimeout(() => {
+      const closeButton = this.root.querySelector("#instrument-center-close") as HTMLButtonElement | null;
+      closeButton?.focus({ preventScroll: true });
+    }, 0);
   }
 }

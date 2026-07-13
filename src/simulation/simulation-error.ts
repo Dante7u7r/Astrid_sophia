@@ -79,31 +79,40 @@ const PATTERNS: Array<{ kind: SimulationErrorKind; regex: RegExp; userMessage: s
 // segura, no un error.
 const COMPONENT_OR_NET_ID_PATTERN = /\b([A-Z]{1,3}\d+|N\$\d+)\b/;
 
-export function classifySimulationError(error: any): ClassifiedSimulationError {
-  if (error && typeof error === "object" && "kind" in error && "details" in error) {
-    const kind = error.kind;
-    const details = error.details as any;
-    const rawMessage = details.message || JSON.stringify(error);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === "string" ? value : null;
+}
+
+export function classifySimulationError(error: unknown): ClassifiedSimulationError {
+  if (isRecord(error) && "kind" in error && "details" in error && isRecord(error.details)) {
+    const kind = stringField(error, "kind");
+    const details = error.details;
+    const rawMessage = stringField(details, "message") ?? JSON.stringify(error);
     
     let tsKind: SimulationErrorKind = "unknown";
     let suspectedComponentOrNetId: string | null = null;
-    let userMessage = details.message || "";
+    let userMessage = stringField(details, "message") ?? "";
 
     if (kind === "SingularMatrix") {
       tsKind = "singular-matrix";
-      suspectedComponentOrNetId = details.node || null;
-      userMessage = details.message;
+      suspectedComponentOrNetId = stringField(details, "node");
+      userMessage = stringField(details, "message") ?? userMessage;
     } else if (kind === "MaxIterationsExceeded") {
       tsKind = "max-iterations-exceeded";
-      suspectedComponentOrNetId = details.component || null;
-      userMessage = details.message;
+      suspectedComponentOrNetId = stringField(details, "component");
+      userMessage = stringField(details, "message") ?? userMessage;
     } else if (kind === "ConvergenceFailure") {
       tsKind = "convergence-failure";
-      suspectedComponentOrNetId = details.component || null;
-      userMessage = details.message;
+      suspectedComponentOrNetId = stringField(details, "component");
+      userMessage = stringField(details, "message") ?? userMessage;
     } else if (kind === "InvalidCircuit") {
       tsKind = "invalid-circuit";
-      userMessage = details.message;
+      userMessage = stringField(details, "message") ?? userMessage;
     }
 
     return {

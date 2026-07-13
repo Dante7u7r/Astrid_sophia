@@ -1,10 +1,18 @@
 import {
   CanvasOrchestrator,
   ComponentInstance,
-  hitTestComponentAt,
 } from "../canvas_orchestrator";
 import { isTypingInFormField } from "./keyboard_guards";
 import type { AnalysisMode } from "../ui/simulation_controls";
+import {
+  clientToCanvasPoint,
+  hasCanvasSelection,
+  isPointInsideRect,
+  parsePaletteComponentData,
+  resolveWheelZoomStep,
+  shouldStartPaletteDrag,
+} from "./canvas_input_model";
+import { showCanvasContextMenu } from "./canvas_context_menu";
 
 export interface CanvasInputCallbacks {
   requestRender: (immediate?: boolean) => void;
@@ -40,8 +48,7 @@ export function attachCanvasInput(
 
   const onMouseDown = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const { screenX, screenY } = clientToCanvasPoint(rect, e);
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
 
     if (e.button === 0) {
@@ -102,8 +109,7 @@ export function attachCanvasInput(
 
   const onMouseMove = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const { screenX, screenY } = clientToCanvasPoint(rect, e);
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
 
     orchestrator.checkHover(worldPt.x, worldPt.y);
@@ -169,8 +175,7 @@ export function attachCanvasInput(
 
   const onDblClick = async (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const { screenX, screenY } = clientToCanvasPoint(rect, e);
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
     const comp = orchestrator.selectComponentAt(worldPt.x, worldPt.y);
 
@@ -197,21 +202,12 @@ export function attachCanvasInput(
     }
 
     const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    
-    // Zoom factor bounding guard check
-    const currentZoom = orchestrator.zoom;
-    const nextZoom = currentZoom * zoomFactor;
-    if (nextZoom >= orchestrator.minZoom && nextZoom <= orchestrator.maxZoom) {
-      orchestrator.zoomAt(zoomFactor, screenX, screenY);
-    } else {
-      // Clamp to exactly the min/max boundary
-      const clampedZoom = Math.min(Math.max(nextZoom, orchestrator.minZoom), orchestrator.maxZoom);
-      const clampedFactor = clampedZoom / currentZoom;
-      orchestrator.zoomAt(clampedFactor, screenX, screenY);
-    }
+    const { screenX, screenY } = clientToCanvasPoint(rect, e);
+    const { zoomFactor } = resolveWheelZoomStep(e.deltaY, orchestrator.zoom, {
+      minZoom: orchestrator.minZoom,
+      maxZoom: orchestrator.maxZoom,
+    });
+    orchestrator.zoomAt(zoomFactor, screenX, screenY);
     
     callbacks.requestRender(true);
     e.preventDefault();
@@ -281,10 +277,7 @@ export function attachCanvasInput(
     }
 
     // --- Selection-required shortcuts ---
-    const hasSelection =
-      orchestrator.selectedComponents.length > 0 ||
-      orchestrator.selectedComponent !== null ||
-      orchestrator.selectedWire !== null;
+    const hasSelection = hasCanvasSelection(orchestrator);
 
     if (!hasSelection) return;
 
@@ -322,156 +315,15 @@ export function attachCanvasInput(
   };
 
   const onContextMenu = (e: MouseEvent) => {
-    e.preventDefault();
-
-    const existingMenu = document.getElementById("canvas-context-menu");
-    if (existingMenu) existingMenu.remove();
-
-    const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const worldPt = orchestrator.screenToWorld(screenX, screenY);
-
-    const clickedComp = orchestrator.components.find(comp => hitTestComponentAt(comp, worldPt.x, worldPt.y));
-
-    const menu = document.createElement("div");
-    menu.id = "canvas-context-menu";
-    menu.className = "canvas-context-menu";
-
-    const container = canvas.parentElement || document.body;
-    const containerRect = container.getBoundingClientRect();
-    menu.style.position = "absolute";
-    menu.style.left = `${e.clientX - containerRect.left + container.scrollLeft}px`;
-    menu.style.top = `${e.clientY - containerRect.top + container.scrollTop}px`;
-
-    const closeMenu = (evt: MouseEvent) => {
-      if (!menu.contains(evt.target as Node)) {
-        menu.remove();
-        document.removeEventListener("mousedown", closeMenu);
-      }
-    };
-
-    setTimeout(() => {
-      document.addEventListener("mousedown", closeMenu);
-    }, 10);
-
-    const createMenuItem = (label: string, shortcut: string, action: () => void) => {
-      const btn = document.createElement("button");
-      btn.className = "context-menu-item";
-      
-      const labelSpan = document.createElement("span");
-      labelSpan.textContent = label;
-      btn.appendChild(labelSpan);
-
-      if (shortcut) {
-        const shortcutSpan = document.createElement("span");
-        shortcutSpan.className = "context-menu-shortcut";
-        shortcutSpan.textContent = shortcut;
-        btn.appendChild(shortcutSpan);
-      }
-
-      btn.addEventListener("click", () => {
-        action();
-        menu.remove();
-        document.removeEventListener("mousedown", closeMenu);
-      });
-      return btn;
-    };
-
-    if (clickedComp) {
-      const isSelected = clickedComp.selected || 
-                         orchestrator.selectedComponent?.id === clickedComp.id ||
-                         orchestrator.selectedComponents.some(c => c.id === clickedComp.id);
-      if (!isSelected) {
-        orchestrator.selectedComponent = clickedComp;
-        orchestrator.selectedComponents = [];
-        callbacks.onSelectionChanged(clickedComp);
-        callbacks.requestRender(true);
-      }
-
-      menu.appendChild(createMenuItem("Rotar 90°", "R", () => {
-        orchestrator.rotateSelectedComponent();
-        callbacks.requestRender(true);
-        callbacks.onCanvasModified();
-      }));
-
-      menu.appendChild(createMenuItem("Rotar 15°", "Shift+Rueda", () => {
-        orchestrator.rotateSelectedByDegrees(15);
-        callbacks.requestRender(true);
-        callbacks.onCanvasModified();
-      }));
-
-      menu.appendChild(createMenuItem("Espejar (Mirror)", "M", () => {
-        orchestrator.mirrorSelectedComponent();
-        callbacks.requestRender(true);
-        callbacks.onCanvasModified();
-      }));
-
-      menu.appendChild(createMenuItem("Duplicar", "Ctrl+D", () => {
-        orchestrator.duplicateSelected();
-        callbacks.requestRender(true);
-        callbacks.onCanvasModified();
-        callbacks.onNetlistSync();
-      }));
-
-      menu.appendChild(createMenuItem("Iniciar Cable", "W", () => {
-        callbacks.onWireMode();
-      }));
-
-      menu.appendChild(createMenuItem("Copiar ID", "", () => {
-        navigator.clipboard.writeText(clickedComp.id);
-        callbacks.log(`ID del componente copiado: ${clickedComp.id}`, "system");
-      }));
-
-      const divider = document.createElement("div");
-      divider.className = "context-menu-divider";
-      menu.appendChild(divider);
-
-      menu.appendChild(createMenuItem("Eliminar", "Supr", () => {
-        orchestrator.removeSelected();
-        callbacks.requestRender(true);
-        callbacks.onCanvasModified();
-        callbacks.onNetlistSync();
-      }));
-    } else {
-      menu.appendChild(createMenuItem("Centrar Vista", "F", () => {
-        orchestrator.resetCameraToCircuit();
-      }));
-
-      menu.appendChild(createMenuItem("Seleccionar Todo", "Ctrl+A", () => {
-        callbacks.onSelectAll();
-        callbacks.requestRender(true);
-      }));
-
-      if (orchestrator.selectedComponent || orchestrator.selectedComponents.length > 0) {
-        menu.appendChild(createMenuItem("Limpiar Selección", "", () => {
-          orchestrator.selectedComponent = null;
-          orchestrator.selectedComponents = [];
-          callbacks.onSelectionChanged(null);
-          callbacks.requestRender(true);
-        }));
-      }
-
-      const divider = document.createElement("div");
-      divider.className = "context-menu-divider";
-      menu.appendChild(divider);
-
-      menu.appendChild(createMenuItem("Restablecer Layout", "Ctrl+0", () => {
-        const event = new KeyboardEvent("keydown", { key: "0", ctrlKey: true });
-        document.dispatchEvent(event);
-      }));
-    }
-
-    container.appendChild(menu);
+    showCanvasContextMenu(e, canvas, orchestrator, callbacks);
   };
-
   canvas.addEventListener("mousedown", onMouseDown);
   canvas.addEventListener("mousemove", onMouseMove);
   canvas.addEventListener("mouseup", completeConnection);
   canvas.addEventListener("mouseleave", completeConnection);
   canvas.addEventListener("dblclick", onDblClick);
   canvas.addEventListener("wheel", onWheel, { passive: false });
-  canvas.addEventListener("contextmenu", onContextMenu as any);
+  canvas.addEventListener("contextmenu", onContextMenu);
   window.addEventListener("keydown", onKeyDown);
 
   return () => {
@@ -503,8 +355,7 @@ export function attachCanvasDrop(
   ): boolean => {
     try {
       const rect = canvas.getBoundingClientRect();
-      const screenX = clientX - rect.left;
-      const screenY = clientY - rect.top;
+      const { screenX, screenY } = clientToCanvasPoint(rect, { clientX, clientY });
       const worldPt = orchestrator.screenToWorld(screenX, screenY);
       const snapped = orchestrator.snapPointToGrid(worldPt);
       const newComp = orchestrator.addComponent(type, snapped.x, snapped.y, value);
@@ -563,21 +414,11 @@ export function attachCanvasDrop(
     const getComponentData = (): {
       type: ComponentInstance["type"];
       value: ComponentInstance["value"];
-    } => {
-      const rawValue = card.dataset.default || "1000";
-      const numericValue = Number.parseFloat(rawValue);
-      return {
-        type: (card.dataset.type || "resistor") as ComponentInstance["type"],
-        value: Number.isFinite(numericValue) ? numericValue : rawValue,
-      };
-    };
+    } => parsePaletteComponentData(card.dataset);
 
     const isInsideViewport = (clientX: number, clientY: number): boolean => {
       const rect = canvasViewport.getBoundingClientRect();
-      return clientX >= rect.left
-        && clientX <= rect.right
-        && clientY >= rect.top
-        && clientY <= rect.bottom;
+      return isPointInsideRect(rect, { clientX, clientY });
     };
 
     const updateDragVisuals = (clientX: number, clientY: number): void => {
@@ -628,7 +469,10 @@ export function attachCanvasDrop(
 
     const onPointerMove = (event: PointerEvent): void => {
       if (event.pointerId !== pointerId) return;
-      if (!dragging && Math.hypot(event.clientX - startX, event.clientY - startY) >= 6) {
+      if (!dragging && shouldStartPaletteDrag(
+        { x: startX, y: startY },
+        { x: event.clientX, y: event.clientY },
+      )) {
         beginVisualDrag(event.clientX, event.clientY);
       }
       if (!dragging) return;

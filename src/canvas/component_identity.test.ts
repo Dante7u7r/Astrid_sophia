@@ -94,6 +94,13 @@ describe("identidad global de componentes", () => {
     expect(findDuplicateComponentIds([makeComponent("R1"), makeComponent("r1")])).toEqual(["R1"]);
   });
 
+  test("generador salta huecos y usa el sufijo maximo por prefijo", () => {
+    expect(generateUniqueComponentId([
+      makeComponent("R1"),
+      makeComponent("R3"),
+    ], "resistor")).toBe("R4");
+  });
+
   test("renombrar actualiza extremos e identificador del cable", () => {
     const orchestrator = createOrchestrator();
     const resistor = orchestrator.addComponent("resistor", 0, 0, 1000);
@@ -117,6 +124,20 @@ describe("identidad global de componentes", () => {
     expect(orchestrator.renameComponent(first, "r2")).toContain("ya existe");
     expect(orchestrator.renameComponent(first, "1 resistor")).toContain("debe comenzar");
     expect(first.id).toBe("R1");
+  });
+
+  test("duplicar multimetro conserva display OPEN y no comparte firmware", () => {
+    const orchestrator = createOrchestrator();
+    const source = orchestrator.addComponent("dmm", 0, 0, "V");
+    source.firmware = Uint8Array.from([1, 2, 3]);
+    orchestrator.selectedComponent = source;
+
+    orchestrator.duplicateSelected();
+    const duplicate = orchestrator.selectedComponent!;
+
+    expect(duplicate.dmmValue).toBe("OPEN");
+    expect(Array.from(duplicate.firmware ?? [])).toEqual([1, 2, 3]);
+    expect(duplicate.firmware).not.toBe(source.firmware);
   });
 });
 

@@ -2,6 +2,8 @@
   "name": "astryd-sophia",
   "private": true,
   "version": "0.1.0",
+  "description": "simulador de circuitos electronicos de escritorio con backend Rust y Tauri",
+  "author": "Astryd Sophia Project",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +12,7 @@
     "preview": "vite preview",
     "audit:production-guard": "npm run build && node tests/visual_audit.mjs --expect-production",
     "audit:ui": "npm run build:audit && node tests/visual_audit.mjs && npm run audit:production-guard",
+    "audit:performance": "npm run build:audit && node tests/performance_audit.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",

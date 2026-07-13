@@ -1,5 +1,19 @@
 import type { PvtConfig, SParameterResult } from "../simulation/mcu-types";
 import type { PersistedOscilloscopeState } from "../persistence/circuit_file";
+import {
+  calculateOscilloscopeMetrics,
+  buildTyTracePoints,
+  findTriggerStartIndex,
+  normalizeTriggerChannel,
+  normalizeTriggerEdge,
+  type OscilloscopeChannel,
+  type TriggerEdge,
+} from "./oscilloscope_model";
+import {
+  dragOscilloscopeCursor,
+  hitTestOscilloscopeCursor,
+  type OscilloscopeCursor,
+} from "./oscilloscope_cursor_model";
 
 export interface PvtRunResult {
   readonly config: PvtConfig;
@@ -94,7 +108,7 @@ export class OscilloscopePanel {
   private cursorT2 = 0.75; // fraction of width
   private cursorV1 = 1.0;  // volts
   private cursorV2 = -1.0; // volts
-  private draggingCursor: "T1" | "T2" | "V1" | "V2" | null = null;
+  private draggingCursor: OscilloscopeCursor | null = null;
 
   // Calibration settings per channel
   public voltsPerDivCh1 = 1.0;
@@ -111,13 +125,15 @@ export class OscilloscopePanel {
   public isXyMode = false;
 
   // Triggering
-  public triggerChannel: "ch1" | "ch2" | "ch3" | "ch4" = "ch1";
-  public triggerEdge: "rising" | "falling" = "rising";
+  public triggerChannel: OscilloscopeChannel = "ch1";
+  public triggerEdge: TriggerEdge = "rising";
   public triggerLevel = 0.0; // volts
 
   private oscMouseX: number | null = null;
   private oscMouseY: number | null = null;
   private animationFrameId: number | null = null;
+  private lastMeasurementsUpdateAt = 0;
+  private readonly measurementsUpdateIntervalMs = 250;
 
   public getPersistentState(): PersistedOscilloscopeState {
     return {
@@ -250,30 +266,22 @@ export class OscilloscopePanel {
       const w = this.oscCanvas.width;
       const h = this.oscCanvas.height;
 
-      // Hit-test vertical cursors
-      const pxT1 = this.cursorT1 * w;
-      const pxT2 = this.cursorT2 * w;
-      if (Math.abs(x - pxT1) < 8) {
-        this.draggingCursor = "T1";
-        return;
-      }
-      if (Math.abs(x - pxT2) < 8) {
-        this.draggingCursor = "T2";
-        return;
-      }
-
-      // Hit-test horizontal cursors (mapped to CH1 volts scale for simplicity)
-      const centerY = h / 2;
-      const pyV1 = centerY - (this.cursorV1 / this.voltsPerDivCh1) * (h / 8) - this.offsetCh1;
-      const pyV2 = centerY - (this.cursorV2 / this.voltsPerDivCh1) * (h / 8) - this.offsetCh1;
-      if (Math.abs(y - pyV1) < 8) {
-        this.draggingCursor = "V1";
-        return;
-      }
-      if (Math.abs(y - pyV2) < 8) {
-        this.draggingCursor = "V2";
-        return;
-      }
+      this.draggingCursor = hitTestOscilloscopeCursor(
+        x,
+        y,
+        {
+          cursorT1: this.cursorT1,
+          cursorT2: this.cursorT2,
+          cursorV1: this.cursorV1,
+          cursorV2: this.cursorV2,
+        },
+        {
+          width: w,
+          height: h,
+          voltsPerDivCh1: this.voltsPerDivCh1,
+          offsetCh1: this.offsetCh1,
+        },
+      );
     });
 
     this.oscCanvas.addEventListener("mousemove", (e) => {
@@ -284,19 +292,27 @@ export class OscilloscopePanel {
       if (this.draggingCursor && this.isCursorsEnabled) {
         const w = this.oscCanvas!.width;
         const h = this.oscCanvas!.height;
-        if (this.draggingCursor === "T1") {
-          this.cursorT1 = Math.max(0.02, Math.min(0.98, this.oscMouseX / w));
-        } else if (this.draggingCursor === "T2") {
-          this.cursorT2 = Math.max(0.02, Math.min(0.98, this.oscMouseX / w));
-        } else if (this.draggingCursor === "V1") {
-          const centerY = h / 2;
-          const volts = ((centerY - this.offsetCh1 - this.oscMouseY) / (h / 8)) * this.voltsPerDivCh1;
-          this.cursorV1 = volts;
-        } else if (this.draggingCursor === "V2") {
-          const centerY = h / 2;
-          const volts = ((centerY - this.offsetCh1 - this.oscMouseY) / (h / 8)) * this.voltsPerDivCh1;
-          this.cursorV2 = volts;
-        }
+        const nextCursorState = dragOscilloscopeCursor(
+          this.draggingCursor,
+          this.oscMouseX,
+          this.oscMouseY,
+          {
+            cursorT1: this.cursorT1,
+            cursorT2: this.cursorT2,
+            cursorV1: this.cursorV1,
+            cursorV2: this.cursorV2,
+          },
+          {
+            width: w,
+            height: h,
+            voltsPerDivCh1: this.voltsPerDivCh1,
+            offsetCh1: this.offsetCh1,
+          },
+        );
+        this.cursorT1 = nextCursorState.cursorT1;
+        this.cursorT2 = nextCursorState.cursorT2;
+        this.cursorV1 = nextCursorState.cursorV1;
+        this.cursorV2 = nextCursorState.cursorV2;
         this.draw();
       }
     });
@@ -325,8 +341,8 @@ export class OscilloscopePanel {
 
       if (this.timeDivSelect) this.timeDivValue = parseFloat(this.timeDivSelect.value);
 
-      if (this.triggerModeSelect) this.triggerChannel = this.triggerModeSelect.value as any;
-      if (this.triggerEdgeSelect) this.triggerEdge = this.triggerEdgeSelect.value as any;
+      if (this.triggerModeSelect) this.triggerChannel = normalizeTriggerChannel(this.triggerModeSelect.value);
+      if (this.triggerEdgeSelect) this.triggerEdge = normalizeTriggerEdge(this.triggerEdgeSelect.value);
       if (this.triggerLevelSlider) this.triggerLevel = parseFloat(this.triggerLevelSlider.value) / 30;
 
       this.draw();
@@ -376,7 +392,7 @@ export class OscilloscopePanel {
     setupChToggle(this.oscCh4Btn);
   }
 
-  private getProbeNodeByChannel(ch: "ch1" | "ch2" | "ch3" | "ch4"): string | null {
+  private getProbeNodeByChannel(ch: OscilloscopeChannel): string | null {
     if (ch === "ch1") return this.ch1ProbeNode;
     if (ch === "ch2") return this.ch2ProbeNode;
     if (ch === "ch3") return this.ch3ProbeNode;
@@ -574,23 +590,13 @@ export class OscilloscopePanel {
         }
       }
 
-      // Calculate triggering starting offset
-      let triggerStartIdx = 0;
       const triggerNode = this.getProbeNodeByChannel(this.triggerChannel);
-      if (triggerNode && this.transientResults.length > 2) {
-        for (let i = 1; i < this.transientResults.length; i++) {
-          const v0 = this.transientResults[i - 1].nodeVoltages[triggerNode] ?? 0;
-          const v1 = this.transientResults[i].nodeVoltages[triggerNode] ?? 0;
-          if (this.triggerEdge === "rising" && v0 <= this.triggerLevel && v1 > this.triggerLevel) {
-            triggerStartIdx = i;
-            break;
-          }
-          if (this.triggerEdge === "falling" && v0 >= this.triggerLevel && v1 < this.triggerLevel) {
-            triggerStartIdx = i;
-            break;
-          }
-        }
-      }
+      const triggerStartIdx = findTriggerStartIndex(
+        this.transientResults,
+        triggerNode,
+        this.triggerEdge,
+        this.triggerLevel,
+      );
 
       const pointsToDraw = this.transientResults.slice(triggerStartIdx);
 
@@ -604,23 +610,16 @@ export class OscilloscopePanel {
         ctx.shadowBlur = 4;
         ctx.beginPath();
 
-        const windowDuration = this.timeDivValue * 10;
-        let isFirst = true;
-
-        for (const pt of pointsToDraw) {
-          const relativeTime = pt.time - pointsToDraw[0].time;
-          if (relativeTime > windowDuration) break;
-
-          const x = (relativeTime / windowDuration) * width;
-          const v = pt.nodeVoltages[nodeId] ?? 0.0;
-          const y = height / 2 - (v / voltsPerDiv) * divHeight - offsetPixels;
-
-          if (isFirst) {
-            ctx.moveTo(x, y);
-            isFirst = false;
-          } else {
-            ctx.lineTo(x, y);
-          }
+        const tracePoints = buildTyTracePoints(
+          pointsToDraw,
+          nodeId,
+          { width, height },
+          { voltsPerDiv, offsetPixels, timeDivValue: this.timeDivValue },
+        );
+        for (let i = 0; i < tracePoints.length; i++) {
+          const point = tracePoints[i];
+          if (i === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
         }
         ctx.stroke();
         ctx.shadowBlur = 0;
@@ -631,53 +630,14 @@ export class OscilloscopePanel {
       drawChannelTY(this.ch3ProbeNode || "", '#f97316', this.voltsPerDivCh3, this.offsetCh3, isCh3Active);
       drawChannelTY(this.ch4ProbeNode || "", '#22c55e', this.voltsPerDivCh4, this.offsetCh4, isCh4Active);
 
-      // Auto Measurements Calculator
-      const calculateMetrics = (nodeId: string | null) => {
-        if (!nodeId || this.transientResults.length === 0) return { vpp: 0, vrms: 0, freq: 0 };
-        let maxV = -Infinity;
-        let minV = Infinity;
-        let sumSq = 0;
-
-        for (const pt of this.transientResults) {
-          const v = pt.nodeVoltages[nodeId] ?? 0;
-          if (v > maxV) maxV = v;
-          if (v < minV) minV = v;
-          sumSq += v * v;
-        }
-
-        const vpp = maxV - minV;
-        const vrms = Math.sqrt(sumSq / this.transientResults.length);
-        
-        // Freq estimation by zero-crossings
-        let crossings = 0;
-        const avg = (maxV + minV) / 2;
-        for (let i = 1; i < this.transientResults.length; i++) {
-          const v0 = this.transientResults[i - 1].nodeVoltages[nodeId] ?? 0;
-          const v1 = this.transientResults[i].nodeVoltages[nodeId] ?? 0;
-          if (v0 <= avg && v1 > avg) crossings++;
-        }
-        const totalDuration = this.transientResults[this.transientResults.length - 1].time - this.transientResults[0].time;
-        const freq = totalDuration > 0 ? crossings / totalDuration : 0;
-
-        return { vpp, vrms, freq };
-      };
-
-      const updateMeasDOM = (chId: string, node: string | null, active: boolean, color: string) => {
-        const el = document.getElementById(chId);
-        if (el) {
-          if (active && node) {
-            const metrics = calculateMetrics(node);
-            el.innerHTML = `<span style="font-weight:bold; color:${color}">${chId.replace("osc-meas-", "").toUpperCase()}:</span> Vpp=${metrics.vpp.toFixed(2)}V, Vrms=${metrics.vrms.toFixed(2)}V, F=${metrics.freq.toFixed(0)}Hz`;
-          } else {
-            el.innerHTML = `${chId.replace("osc-meas-", "").toUpperCase()}: --`;
-          }
-        }
-      };
-
-      updateMeasDOM("osc-meas-ch1", this.ch1ProbeNode, isCh1Active, "#66fcf1");
-      updateMeasDOM("osc-meas-ch2", this.ch2ProbeNode, isCh2Active, "#a855f7");
-      updateMeasDOM("osc-meas-ch3", this.ch3ProbeNode, isCh3Active, "#f97316");
-      updateMeasDOM("osc-meas-ch4", this.ch4ProbeNode, isCh4Active, "#22c55e");
+      this.updateMeasurementsIfNeeded(
+        [
+          { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: isCh1Active, color: "#66fcf1" },
+          { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: isCh2Active, color: "#a855f7" },
+          { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: isCh3Active, color: "#f97316" },
+          { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: isCh4Active, color: "#22c55e" },
+        ],
+      );
 
       // Draw Interactive Cursors
       if (this.isCursorsEnabled) {
@@ -737,6 +697,36 @@ export class OscilloscopePanel {
     }
 
     this.scheduleNextFrame();
+  }
+
+  private updateMeasurementsIfNeeded(channels: readonly {
+    id: string;
+    node: string | null;
+    active: boolean;
+    color: string;
+  }[]): void {
+    const now = performance.now();
+    if (
+      this.isSimulating
+      && this.lastMeasurementsUpdateAt > 0
+      && now - this.lastMeasurementsUpdateAt < this.measurementsUpdateIntervalMs
+    ) {
+      return;
+    }
+    this.lastMeasurementsUpdateAt = now;
+
+    for (const channel of channels) {
+      const el = document.getElementById(channel.id);
+      if (!el) continue;
+
+      const label = channel.id.replace("osc-meas-", "").toUpperCase();
+      if (channel.active && channel.node) {
+        const metrics = calculateOscilloscopeMetrics(this.transientResults, channel.node);
+        el.innerHTML = `<span style="font-weight:bold; color:${channel.color}">${label}:</span> Vpp=${metrics.vpp.toFixed(2)}V, Vrms=${metrics.vrms.toFixed(2)}V, F=${metrics.freq.toFixed(0)}Hz`;
+      } else {
+        el.textContent = `${label}: --`;
+      }
+    }
   }
 
   public pause() {

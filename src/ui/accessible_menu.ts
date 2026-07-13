@@ -53,6 +53,17 @@ export class AccessibleMenu {
     this.menu.hidden = true;
     this.menu.style.display = "none";
     this.trigger.setAttribute("aria-expanded", "false");
+    const instrumentCenter = document.querySelector("#bottom-dock");
+    const instrumentCenterClose = document.querySelector("#instrument-center-close") as HTMLButtonElement | null;
+    if (
+      !returnFocus
+      && instrumentCenter instanceof HTMLElement
+      && !instrumentCenter.classList.contains("collapsed")
+      && instrumentCenterClose
+    ) {
+      instrumentCenterClose.focus({ preventScroll: true });
+      return;
+    }
     if (returnFocus) this.trigger.focus();
   }
 

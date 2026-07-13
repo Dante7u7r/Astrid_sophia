@@ -670,6 +670,7 @@
                 id="instrument-center-close"
                 class="instrument-center-close"
                 type="button"
+                tabindex="0"
                 aria-label="Cerrar centro de instrumentos"
                 data-tooltip="Cerrar instrumentos"
               >×</button>
@@ -1049,7 +1050,7 @@
       <!-- 3. BARRA DE ESTADO (FOOTER) -->
       <footer class="main-footer" id="app-footer">
         <div class="footer-info-group">
-          <div class="info-item"><span class="info-bullet green"></span><span>60 FPS</span></div>
+          <div class="info-item"><span class="info-bullet green"></span><span id="telemetry-fps-text">-- FPS</span></div>
           <div class="info-item footer-grid-status"><span class="info-bullet"></span><span>Snap activo</span></div>
           <div class="info-item"><span class="info-bullet" id="telemetry-ram-dot" style="background-color: var(--accent-cyan, #66fcf1);"></span><span>RAM</span><span id="telemetry-ram-text" style="color: var(--accent-cyan, #66fcf1); font-family: var(--font-mono);">-- MB</span></div>
           <div class="info-item"><span class="info-bullet" id="telemetry-cpu-dot" style="background-color: var(--accent-purple, #a855f7);"></span><span>CPU</span><span id="telemetry-cpu-text" style="color: var(--accent-purple, #a855f7); font-family: var(--font-mono);">-- %</span></div>

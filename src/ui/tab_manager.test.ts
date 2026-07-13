@@ -80,7 +80,7 @@ function createHarness() {
     setVoltageSnapshot: (nextVoltages) => { voltages = { ...nextVoltages }; },
     resetRuntimeState,
     canChangeActiveTab: () => canChange,
-    serializeCircuit: () => "{}",
+    documentController: { serializeCircuit: () => "{}" },
     addLog,
     invokeTauri: vi.fn(),
   });
@@ -172,5 +172,37 @@ describe("TabManager", () => {
     expect(harness.manager.activeTabId).toBe(first.id);
     expect(harness.manager.tabs).toHaveLength(2);
     expect(harness.addLog).toHaveBeenCalledTimes(3);
+  });
+
+  test("registra frames transitorios en la pestana duena sin exponer el arreglo interno", () => {
+    const harness = createHarness();
+    const first = harness.manager.createNewTab("Primera")!;
+
+    const updatedTab = harness.manager.appendTransientFrameToTab(first.id, {
+      time: 0.01,
+      nodeVoltages: { "1": 5 },
+      branchCurrents: { V1: 0.02 },
+    });
+
+    expect(updatedTab).toBe(first);
+    expect(harness.manager.isActiveTab(first.id)).toBe(true);
+    expect(first.transientResults).toEqual([{
+      time: 0.01,
+      nodeVoltages: { "1": 5 },
+      branchCurrents: { V1: 0.02 },
+    }]);
+    expect(first.voltageSnapshot).toEqual({ "1": 5 });
+  });
+
+  test("cierra la pestana activa mediante metodo de intencion", async () => {
+    const harness = createHarness();
+    const first = harness.manager.createNewTab("Primera")!;
+    const second = harness.manager.createNewTab("Segunda")!;
+    expect(harness.manager.getActiveTabId()).toBe(second.id);
+
+    await harness.manager.closeActiveTab();
+
+    expect(harness.manager.getActiveTabId()).toBe(first.id);
+    expect(harness.manager.getTabById(second.id)).toBeUndefined();
   });
 });

@@ -6,26 +6,16 @@ import {
   DMM_INITIAL_DISPLAY,
   normalizeDmmMode,
 } from "../simulation/dmm";
-
-const DEDICATED_VALUE_EDITORS = new Set<ComponentInstance["type"]>([
-  "dmm",
-  "ldr",
-  "thermistor",
-  "opamp",
-  "switch",
-  "transformer",
-  "x",
-]);
-const ACTUATOR_MODEL_EDITORS = new Set<ComponentInstance["type"]>([
-  "lamp",
-  "relay",
-  "buzzer",
-]);
-
-function finiteOr(value: string, fallback: number): number {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
+import {
+  ACTUATOR_MODEL_EDITORS,
+  DEDICATED_VALUE_EDITORS,
+  buildLiveMutations,
+  clampSwitchProperties,
+  clampTransformerProperties,
+  getUnitDisplayConfig,
+  getValueEditorPresentation,
+  supportsLiveMutation,
+} from "./property_model";
 
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
@@ -44,7 +34,7 @@ export class PropertyEditor {
       addLog: (text: string, type?: 'system' | 'send' | 'receive' | 'error') => void;
       updateCanvasRendering: () => void;
       markCurrentTabAsModified: () => void;
-      invokeTauri: <T>(cmd: string, args?: any) => Promise<T>;
+      invokeTauri: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
     }
   ) {}
 
@@ -98,28 +88,16 @@ export class PropertyEditor {
     const valGroup = document.querySelector("#group-comp-val") as HTMLElement;
     const unitGroup = document.querySelector("#group-comp-unit") as HTMLElement;
     const valLabel = document.querySelector("#group-comp-val .property-label") as HTMLElement;
+    const valuePresentation = getValueEditorPresentation(comp.type);
 
     if (valGroup && unitGroup) {
-      if (usesActuatorModel) {
-        valGroup.style.display = "flex";
-        unitGroup.style.display = "none";
-        if (valLabel) valLabel.textContent = "Modelo eléctrico";
-      } else if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
-        valGroup.style.display = "none";
-        unitGroup.style.display = "none";
-      } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
-        valGroup.style.display = "flex";
-        unitGroup.style.display = "none";
-        if (valLabel) valLabel.textContent = "Modo de Simulación (0-3)";
-      } else {
-        valGroup.style.display = "flex";
-        unitGroup.style.display = "flex";
-        if (valLabel) valLabel.textContent = "Valor Nominal";
-      }
+      valGroup.style.display = valuePresentation.showValueGroup ? "flex" : "none";
+      unitGroup.style.display = valuePresentation.showUnitGroup ? "flex" : "none";
+      if (valLabel) valLabel.textContent = valuePresentation.valueLabel;
     }
-    this.propValSlider.style.display = usesActuatorModel ? "none" : "";
-    if (this.propValInc) this.propValInc.style.display = usesActuatorModel ? "none" : "";
-    if (this.propValDec) this.propValDec.style.display = usesActuatorModel ? "none" : "";
+    this.propValSlider.style.display = valuePresentation.showSliderControls ? "" : "none";
+    if (this.propValInc) this.propValInc.style.display = valuePresentation.showSliderControls ? "" : "none";
+    if (this.propValDec) this.propValDec.style.display = valuePresentation.showSliderControls ? "" : "none";
 
     const waveContainer = document.querySelector("#wave-properties-container") as HTMLElement;
     const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
@@ -256,71 +234,11 @@ export class PropertyEditor {
       }
     }
 
-    if (DEDICATED_VALUE_EDITORS.has(comp.type)) {
-      if (valGroup) valGroup.style.display = "none";
-      if (unitGroup) unitGroup.style.display = "none";
-    }
-
-    switch (comp.type) {
-      case 'resistor':
-        this.propUnitInput.value = "Ohmios (Ω)";
-        this.propValSlider.min = "1";
-        this.propValSlider.max = "10000";
-        break;
-      case 'potentiometer':
-        this.propUnitInput.value = "Resistencia Total (Ω)";
-        this.propValSlider.min = "10";
-        this.propValSlider.max = "1000000";
-        break;
-      case 'capacitor':
-        this.propUnitInput.value = "Faradios (F)";
-        this.propValSlider.min = "0.000000001";
-        this.propValSlider.max = "0.001";
-        break;
-      case 'inductor':
-        this.propUnitInput.value = "Henrios (H)";
-        this.propValSlider.min = "0.000001";
-        this.propValSlider.max = "1";
-        break;
-      case 'diode':
-        this.propUnitInput.value = "Unidad Exponencial";
-        this.propValSlider.min = "0";
-        this.propValSlider.max = "2";
-        break;
-      case 'npn':
-      case 'pnp':
-        this.propUnitInput.value = "Beta Ganancia (β)";
-        this.propValSlider.min = "10";
-        this.propValSlider.max = "500";
-        break;
-      case 'nmos':
-      case 'pmos':
-        this.propUnitInput.value = "Tensión Umbral (Vt)";
-        this.propValSlider.min = "-3";
-        this.propValSlider.max = "3";
-        break;
-      case 'vsource':
-        this.propUnitInput.value = "Voltios (V)";
-        this.propValSlider.min = "-50";
-        this.propValSlider.max = "50";
-        break;
-      case 'isource':
-        this.propUnitInput.value = "Amperios (A)";
-        this.propValSlider.min = "-5";
-        this.propValSlider.max = "5";
-        break;
-      case 'transformer':
-        this.propUnitInput.value = "Inductancia Mutua (H)";
-        this.propValSlider.min = "0.000001";
-        this.propValSlider.max = "1";
-        break;
-      default:
-        this.propUnitInput.value = "Valor Nominal";
-        this.propValSlider.min = "0";
-        this.propValSlider.max = "100";
-    }
+    const unitConfig = getUnitDisplayConfig(comp.type);
+    this.propUnitInput.value = unitConfig.label;
+    this.propValSlider.min = unitConfig.min;
+    this.propValSlider.max = unitConfig.max;
   }
-
   public init() {
     this.propValInput = document.querySelector("#prop-val-input");
     this.propValSlider = document.querySelector("#prop-val-slider");
@@ -546,84 +464,35 @@ export class PropertyEditor {
             const roff = document.querySelector("#prop-switch-roff") as HTMLInputElement;
             const vth = document.querySelector("#prop-switch-vth") as HTMLInputElement;
             const vh = document.querySelector("#prop-switch-vh") as HTMLInputElement;
-            selected.switchState = state?.checked ?? false;
-            selected.switchRon = Math.max(1e-6, finiteOr(ron?.value ?? "", 0.01));
-            selected.switchRoff = Math.max(
-              selected.switchRon,
-              finiteOr(roff?.value ?? "", 1e9),
-            );
-            selected.switchVth = finiteOr(vth?.value ?? "", 0.5);
-            selected.switchVh = Math.max(0, finiteOr(vh?.value ?? "", 0.05));
+            clampSwitchProperties(selected, {
+              stateChecked: state?.checked,
+              ron: ron?.value,
+              roff: roff?.value,
+              vth: vth?.value,
+              vh: vh?.value,
+            });
           }
 
           if (selected.type === "transformer") {
             const l1 = document.querySelector("#prop-transformer-l1") as HTMLInputElement;
             const l2 = document.querySelector("#prop-transformer-l2") as HTMLInputElement;
             const k = document.querySelector("#prop-transformer-k") as HTMLInputElement;
-            selected.primaryInductance = Math.max(1e-9, finiteOr(l1?.value ?? "", 1e-3));
-            selected.secondaryInductance = Math.max(1e-9, finiteOr(l2?.value ?? "", 1e-3));
-            selected.couplingCoefficient = Math.min(
-              0.9999,
-              Math.max(0, finiteOr(k?.value ?? "", 0.9)),
-            );
-            selected.value = selected.primaryInductance;
+            clampTransformerProperties(selected, {
+              l1: l1?.value,
+              l2: l2?.value,
+              k: k?.value,
+            });
           }
 
           const simulationRunner = this.callbacks.getSimulationRunner();
-          const supportsLiveMutation = [
-            "resistor",
-            "vsource",
-            "isource",
-            "switch",
-            "opamp",
-          ].includes(selected.type);
-          if ((simulationRunner?.isSimulationActive() ?? false) && supportsLiveMutation) {
-            const mutations: { componentId: string; field: string; value: number }[] = [];
-            if (selected.type !== "switch" && selected.type !== "opamp") {
-              mutations.push({ componentId: selected.id, field: 'value', value: newVal });
-            }
-            if (selected.amplitude !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'amplitude', value: selected.amplitude });
-            }
-            if (selected.frequency !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'frequency', value: selected.frequency });
-            }
-            if (selected.offset !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'offset', value: selected.offset });
-            }
-            if (selected.dutyCycle !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'duty_cycle', value: selected.dutyCycle });
-            }
-            if (selected.switchRon !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'switch_ron', value: selected.switchRon });
-            }
-            if (selected.switchRoff !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'switch_roff', value: selected.switchRoff });
-            }
-            if (selected.switchVth !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'switch_vth', value: selected.switchVth });
-            }
-            if (selected.switchVh !== undefined) {
-              mutations.push({ componentId: selected.id, field: 'switch_vh', value: selected.switchVh });
-            }
-            if (selected.type === "switch") {
-              mutations.push({
-                componentId: selected.id,
-                field: "switch_state",
-                value: selected.switchState ? 1 : 0,
-              });
-            }
-            if (selected.type === 'opamp') {
-              mutations.push({ componentId: `${selected.id}__vos`, field: 'value', value: selected.offsetVoltage ?? 0.002 });
-              mutations.push({ componentId: selected.id, field: 'value', value: selected.openLoopGain ?? 100000.0 });
-            }
+          if ((simulationRunner?.isSimulationActive() ?? false) && supportsLiveMutation(selected.type)) {
+            const mutations = buildLiveMutations(selected, newVal);
             for (const m of mutations) {
               this.callbacks.invokeTauri('inject_live_mutation', { mutation: m }).catch((err: unknown) => {
                 this.callbacks.addLog(`Error en mutación en caliente: ${err}`, 'error');
               });
             }
-            this.callbacks.addLog(`Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`, "send");
-          } else if (simulationRunner?.isSimulationActive() ?? false) {
+            this.callbacks.addLog(`Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`, "send");          } else if (simulationRunner?.isSimulationActive() ?? false) {
             this.callbacks.addLog(
               `Los cambios de [${selected.id}] se aplicarán en la próxima simulación.`,
               "system",

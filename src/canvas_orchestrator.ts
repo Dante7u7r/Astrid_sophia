@@ -1,10 +1,133 @@
 import { type McuRuntime } from "./simulation/mcu-runtime";
 import { type McuSpiceBridge } from "./simulation/mcu-spice-bridge";
 import { drawComponentSymbol } from "./canvas/component_renderer";
+import { getComponentPins as resolveComponentPins } from "./canvas/component_pins";
 import {
-  DMM_INITIAL_DISPLAY,
-  normalizeDmmMode,
-} from "./simulation/dmm";
+  clampCameraOffsets,
+  fitBoundsToViewport,
+  generateOrthogonalPath,
+  getCircuitBounds,
+  getCircuitGeometricCenter,
+  getVisibleWorldBounds,
+  isVisible,
+  screenToWorld,
+  snapPointToGrid,
+  snapToGrid,
+  worldToScreen,
+  zoomAt,
+} from "./canvas/viewport_camera";
+import {
+  applyDrag,
+  completeBoxSelection,
+  createDragOffsets,
+  selectComponentAt,
+} from "./canvas/selection_model";
+import {
+  connectPins as connectWirePins,
+  syncWireConnections as syncWireModelConnections,
+  wirePathIntersects,
+} from "./canvas/wiring_model";
+import {
+  createComponent,
+  duplicateSelection,
+  mirrorSelection,
+  removeComponentFromCircuit,
+  removeSelection,
+  renameComponentInCircuit,
+  rotateSelection,
+} from "./canvas/component_actions";
+import {
+  hitTestPin as hitTestPinInModel,
+  resolveHoverState,
+} from "./canvas/hover_model";
+import {
+  createComponentLookup,
+  createGridRenderPlan,
+  createSelectedComponentIds,
+  ensureCanvasBuffer,
+  getVisibleComponents,
+  resolveRenderDetail,
+  type RenderDetail,
+} from "./canvas/render_model";
+import {
+  drawProbeBadges,
+  drawSelectionBox,
+  drawSParameterMarkers,
+  drawTemporaryWire,
+  type ProbeBadges,
+  type SParameterMarker,
+} from "./canvas/render_overlays";
+
+export {
+  copyComponentConfiguration,
+  findDuplicateComponentIds,
+  generateUniqueComponentId,
+  isValidComponentId,
+  normalizeComponentId,
+} from "./canvas/component_identity";
+export {
+  getComponentBounds,
+  getComponentLocalHalfExtents,
+  hitTestComponentAt,
+} from "./canvas/component_geometry";
+export { wireEndpointKey } from "./canvas/wire_identity";
+export { getComponentPins } from "./canvas/component_pins";
+export {
+  boundsIntersect,
+  fitBoundsToViewport,
+  generateOrthogonalPath,
+  getCircuitBounds,
+  getCircuitGeometricCenter,
+  getVisibleWorldBounds,
+  isVisible,
+  screenToWorld,
+  snapPointToGrid,
+  snapToGrid,
+  worldToScreen,
+  zoomAt,
+} from "./canvas/viewport_camera";
+export {
+  applyDrag,
+  completeBoxSelection,
+  createDragOffsets,
+  findTopComponentAt,
+  selectComponentAt,
+} from "./canvas/selection_model";
+export {
+  connectPins as connectWirePins,
+  findHoveredWire,
+  syncWireConnections as syncWireModelConnections,
+  wirePathIntersects,
+  wireExists,
+} from "./canvas/wiring_model";
+export {
+  createComponent,
+  duplicateSelection,
+  mirrorSelection,
+  removeComponentFromCircuit,
+  removeSelection,
+  renameComponentInCircuit,
+  rotateSelection,
+} from "./canvas/component_actions";
+export {
+  hitTestPin as hitTestPinInModel,
+  resolveHoverState,
+} from "./canvas/hover_model";
+export {
+  createComponentLookup,
+  createGridRenderPlan,
+  createSelectedComponentIds,
+  ensureCanvasBuffer,
+  getCanvasBufferSize,
+  getVisibleComponents,
+  resolveRenderDetail,
+} from "./canvas/render_model";
+export {
+  drawProbeBadges,
+  drawSelectionBox,
+  drawSParameterMarkers,
+  drawTemporaryWire,
+} from "./canvas/render_overlays";
 
 export interface Point2D {
   x: number;
@@ -87,200 +210,18 @@ export interface WireInstance {
   points: Point2D[]; // Path points for rendering
 }
 
-const COMPONENT_ID_PREFIXES: Record<ComponentInstance["type"], string> = {
-  resistor: "R",
-  capacitor: "C",
-  inductor: "L",
-  diode: "D",
-  vsource: "V",
-  ground: "GND",
-  nmos: "M",
-  opamp: "U",
-  pmos: "M",
-  npn: "Q",
-  pnp: "Q",
-  lamp: "LP",
-  relay: "RY",
-  buzzer: "BZ",
-  mcu_8051: "U",
-  mcu_avr: "U",
-  arduino_uno: "U",
-  esp32: "U",
-  raspberry_pi_pico: "U",
-  isource: "I",
-  led: "LED",
-  transformer: "T",
-  switch: "SW",
-  x: "X",
-  potentiometer: "RV",
-  ldr: "LDR",
-  thermistor: "RT",
-  dmm: "DMM",
-};
+type RenderPinCache = Map<string, PinInstance[]>;
 
-export function normalizeComponentId(id: string): string {
-  return id.trim().toUpperCase();
-}
-
-export function isValidComponentId(id: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9_]*$/.test(id.trim());
-}
-
-export function findDuplicateComponentIds(
-  components: readonly Pick<ComponentInstance, "id">[],
-): string[] {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
-
-  for (const component of components) {
-    const normalized = normalizeComponentId(component.id);
-    if (seen.has(normalized)) {
-      duplicates.add(normalized);
-    } else {
-      seen.add(normalized);
-    }
-  }
-
-  return [...duplicates].sort();
-}
-
-export function copyComponentConfiguration(
-  source: ComponentInstance,
-  target: ComponentInstance,
-): void {
-  Object.assign(target, {
-    value: source.value,
-    rotation: source.rotation,
-    mirror: source.mirror,
-    wiperPosition: source.wiperPosition,
-    lux: source.lux,
-    temperatureCelsius: source.temperatureCelsius,
-    waveType: source.waveType,
-    amplitude: source.amplitude,
-    frequency: source.frequency,
-    offset: source.offset,
-    offsetVoltage: source.offsetVoltage,
-    openLoopGain: source.openLoopGain,
-    dutyCycle: source.dutyCycle,
-    mcuClockSpeed: source.mcuClockSpeed,
-    primaryInductance: source.primaryInductance,
-    secondaryInductance: source.secondaryInductance,
-    couplingCoefficient: source.couplingCoefficient,
-    switchRon: source.switchRon,
-    switchRoff: source.switchRoff,
-    switchVth: source.switchVth,
-    switchVh: source.switchVh,
-    switchState: source.switchState,
-    spiceMacro: source.spiceMacro,
-    pinCount: source.pinCount,
-    firmwareHex: source.firmwareHex,
-  });
-  target.firmware = source.firmware ? source.firmware.slice() : undefined;
-  target.dmmValue = source.type === "dmm" ? DMM_INITIAL_DISPLAY : undefined;
-}
-
-export function generateUniqueComponentId(
-  components: readonly Pick<ComponentInstance, "id">[],
-  type: ComponentInstance["type"],
-): string {
-  const prefix = COMPONENT_ID_PREFIXES[type];
-  const normalizedIds = new Set(components.map(component => normalizeComponentId(component.id)));
-  const suffixPattern = new RegExp(`^${prefix}(\\d+)$`, "i");
-  let highestSuffix = 0;
-
-  for (const component of components) {
-    const match = component.id.trim().match(suffixPattern);
-    if (match) highestSuffix = Math.max(highestSuffix, Number.parseInt(match[1], 10));
-  }
-
-  let suffix = highestSuffix + 1;
-  let candidate = `${prefix}${suffix}`;
-  while (normalizedIds.has(normalizeComponentId(candidate))) {
-    suffix += 1;
-    candidate = `${prefix}${suffix}`;
-  }
-  return candidate;
-}
-
-export function wireEndpointKey(ep: WireEndpoint): string {
-  return `${ep.componentId}:${ep.pinIndex}`;
-}
-
-function createWireId(from: WireEndpoint, to: WireEndpoint): string {
-  return `wire_${from.componentId}_p${from.pinIndex}_to_${to.componentId}_p${to.pinIndex}`;
-}
-
-/** Half-extents (local space, pre-rotation) aligned with render() geometry. */
-export function getComponentLocalHalfExtents(comp: ComponentInstance): { halfW: number; halfH: number } {
-  switch (comp.type) {
-    case 'mcu_8051':
-      return { halfW: 65, halfH: 225 };
-    case 'mcu_avr':
-      return { halfW: 65, halfH: 165 };
-    case 'arduino_uno':
-    case 'esp32':
-    case 'raspberry_pi_pico':
-      return { halfW: 45, halfH: 65 };
-    case 'opamp':
-      return { halfW: 45, halfH: 45 };
-    case 'relay':
-      return { halfW: 45, halfH: 25 };
-    case 'switch':
-      return { halfW: 45, halfH: 15 };
-    case 'transformer':
-      return { halfW: 45, halfH: 25 };
-    case 'nmos':
-    case 'pmos':
-    case 'npn':
-    case 'pnp':
-      return { halfW: 45, halfH: 45 };
-    case 'x': {
-      const pinsLeft = Math.ceil((comp.pinCount ?? 4) / 2);
-      const totalHeight = Math.max(pinsLeft * 40, 60);
-      return { halfW: 65, halfH: totalHeight / 2 + 5 };
-    }
-    case 'dmm':
-      return { halfW: 30, halfH: 40 };
-    default:
-      return { halfW: 40, halfH: 40 };
-  }
-}
-
-export function getComponentBounds(comp: ComponentInstance): BoundingBox {
-  const { halfW, halfH } = getComponentLocalHalfExtents(comp);
-  const rad = (comp.rotation * Math.PI) / 180;
-  const cos = Math.abs(Math.cos(rad));
-  const sin = Math.abs(Math.sin(rad));
-  const worldHalfW = halfW * cos + halfH * sin;
-  const worldHalfH = halfW * sin + halfH * cos;
-  return {
-    x: comp.x - worldHalfW,
-    y: comp.y - worldHalfH,
-    width: worldHalfW * 2,
-    height: worldHalfH * 2,
-  };
-}
-
-export function hitTestComponentAt(
-  comp: ComponentInstance,
-  worldX: number,
-  worldY: number,
-): boolean {
-  const { halfW, halfH } = getComponentLocalHalfExtents(comp);
-  const rad = (-comp.rotation * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = worldX - comp.x;
-  const dy = worldY - comp.y;
-  const localX = dx * cos - dy * sin;
-  const localY = dx * sin + dy * cos;
-  return localX >= -halfW && localX <= halfW && localY >= -halfH && localY <= halfH;
+interface GridPathCache {
+  key: string;
+  path: Path2D;
 }
 
 export class CanvasOrchestrator {
   private canvas: HTMLCanvasElement;
   public simulationActive: boolean = false;
   private ctx: CanvasRenderingContext2D;
+  private gridPathCache: GridPathCache | null = null;
 
   // Viewport State
   public zoom: number = 1.0;
@@ -290,7 +231,7 @@ export class CanvasOrchestrator {
   // Constants
   public readonly minZoom: number = 0.3;
   public readonly maxZoom: number = 3.0;
-  public readonly gridSize: number = 20;
+  public gridSize: number = 20;
 
   // Components & Wires State
   public components: ComponentInstance[] = [];
@@ -327,28 +268,19 @@ export class CanvasOrchestrator {
   // --- COORDINATE TRANSLATIONS ---
 
   public screenToWorld(screenX: number, screenY: number): Point2D {
-    return {
-      x: (screenX - this.offsetX) / this.zoom,
-      y: (screenY - this.offsetY) / this.zoom,
-    };
+    return screenToWorld(screenX, screenY, this);
   }
 
   public worldToScreen(worldX: number, worldY: number): Point2D {
-    return {
-      x: worldX * this.zoom + this.offsetX,
-      y: worldY * this.zoom + this.offsetY,
-    };
+    return worldToScreen(worldX, worldY, this);
   }
 
   public snapToGrid(coord: number): number {
-    return Math.round(coord / this.gridSize) * this.gridSize;
+    return snapToGrid(coord, this.gridSize);
   }
 
   public snapPointToGrid(p: Point2D): Point2D {
-    return {
-      x: this.snapToGrid(p.x),
-      y: this.snapToGrid(p.y),
-    };
+    return snapPointToGrid(p, this.gridSize);
   }
 
   public screenToWorldSnapped(screenX: number, screenY: number): Point2D {
@@ -356,175 +288,17 @@ export class CanvasOrchestrator {
   }
 
   public generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[] {
-    const pts: Point2D[] = [{ x: start.x, y: start.y }];
-    const dx = Math.abs(end.x - start.x);
-    const dy = Math.abs(end.y - start.y);
-
-    if (dx < 0.1) {
-      pts.push({ x: end.x, y: end.y });
-    } else if (dy < 0.1) {
-      pts.push({ x: end.x, y: end.y });
-    } else {
-      if (dx >= dy) {
-        const midX = start.x + (end.x - start.x) / 2;
-        pts.push(this.snapPointToGrid({ x: midX, y: start.y }));
-        pts.push(this.snapPointToGrid({ x: midX, y: end.y }));
-      } else {
-        const midY = start.y + (end.y - start.y) / 2;
-        pts.push(this.snapPointToGrid({ x: start.x, y: midY }));
-        pts.push(this.snapPointToGrid({ x: end.x, y: midY }));
-      }
-      pts.push({ x: end.x, y: end.y });
-    }
-    return pts;
+    return generateOrthogonalPath(start, end, this.gridSize);
   }
 
   public getComponentPins(comp: ComponentInstance): PinInstance[] {
-    const pins: PinInstance[] = [];
-    const rad = (comp.rotation * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-
-    const getRotatedOffset = (lx: number, ly: number): Point2D => {
-      const finalLx = comp.mirror ? -lx : lx;
-      return {
-        x: comp.x + (finalLx * cos - ly * sin),
-        y: comp.y + (finalLx * sin + ly * cos),
-      };
-    };
-
-    if (comp.type === 'ground') {
-      // Ground has 1 pin at the top center of its drawing
-      const pt = getRotatedOffset(0, -20);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: pt.x, y: pt.y });
-    } else if (comp.type === 'nmos' || comp.type === 'pmos' || comp.type === 'npn' || comp.type === 'pnp') {
-      // NMOS, PMOS, and BJT (NPN/PNP) all have 3 pins
-      const ptGate = getRotatedOffset(-40, 0);
-      const ptDrain = getRotatedOffset(20, -40);
-      const ptSource = getRotatedOffset(20, 40);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: ptGate.x, y: ptGate.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: ptDrain.x, y: ptDrain.y });
-      pins.push({ componentId: comp.id, pinIndex: 2, x: ptSource.x, y: ptSource.y });
-    } else if (comp.type === 'opamp') {
-      // Op-Amp has 5 pins: In+ (-40, -15), In- (-40, 15), V+ (0, -40), V- (0, 40), Out (40, 0)
-      const ptInPos = getRotatedOffset(-40, -15);
-      const ptInNeg = getRotatedOffset(-40, 15);
-      const ptVplus = getRotatedOffset(0, -40);
-      const ptVminus = getRotatedOffset(0, 40);
-      const ptOut = getRotatedOffset(40, 0);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: ptInPos.x, y: ptInPos.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: ptInNeg.x, y: ptInNeg.y });
-      pins.push({ componentId: comp.id, pinIndex: 2, x: ptVplus.x, y: ptVplus.y });
-      pins.push({ componentId: comp.id, pinIndex: 3, x: ptVminus.x, y: ptVminus.y });
-      pins.push({ componentId: comp.id, pinIndex: 4, x: ptOut.x, y: ptOut.y });
-    } else if (comp.type === 'relay') {
-      // Relay has 4 pins: coil-a (-40, -20), coil-b (-40, 20), common (40, -20), no (40, 20)
-      const ptCoilA = getRotatedOffset(-40, -20);
-      const ptCoilB = getRotatedOffset(-40, 20);
-      const ptCommon = getRotatedOffset(40, -20);
-      const ptNo = getRotatedOffset(40, 20);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: ptCoilA.x, y: ptCoilA.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: ptCoilB.x, y: ptCoilB.y });
-      pins.push({ componentId: comp.id, pinIndex: 2, x: ptCommon.x, y: ptCommon.y });
-      pins.push({ componentId: comp.id, pinIndex: 3, x: ptNo.x, y: ptNo.y });
-    } else if (comp.type === 'potentiometer') {
-      // Potentiometer has 3 pins: Terminal A (-40, 0), Wiper (0, 40), Terminal B (40, 0)
-      const ptA = getRotatedOffset(-40, 0);
-      const ptWiper = getRotatedOffset(0, 40);
-      const ptB = getRotatedOffset(40, 0);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: ptA.x, y: ptA.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: ptWiper.x, y: ptWiper.y });
-      pins.push({ componentId: comp.id, pinIndex: 2, x: ptB.x, y: ptB.y });
-    } else if (comp.type === 'mcu_8051') {
-      // DIP-40 Package
-      // Pins 1-20 on the left side, y: -200 to 180 (step 20)
-      for (let i = 0; i < 20; i++) {
-        const pt = getRotatedOffset(-60, -200 + i * 20);
-        pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
-      }
-      // Pins 21-40 on the right side, y: 180 to -200 (step -20)
-      for (let i = 0; i < 20; i++) {
-        const pt = getRotatedOffset(60, 180 - i * 20);
-        pins.push({ componentId: comp.id, pinIndex: 20 + i, x: pt.x, y: pt.y });
-      }
-    } else if (comp.type === 'mcu_avr') {
-      // DIP-28 Package (ATmega328P)
-      // Pins 1-14 on the left side, y: -140 to 120 (step 20)
-      for (let i = 0; i < 14; i++) {
-        const pt = getRotatedOffset(-60, -140 + i * 20);
-        pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
-      }
-      // Pins 15-28 on the right side, y: 120 to -140 (step -20)
-      for (let i = 0; i < 14; i++) {
-        const pt = getRotatedOffset(60, 120 - i * 20);
-        pins.push({ componentId: comp.id, pinIndex: 14 + i, x: pt.x, y: pt.y });
-      }
-    } else if (comp.type === 'arduino_uno' || comp.type === 'esp32' || comp.type === 'raspberry_pi_pico') {
-      // Symmetrical 6-pin layout
-      // Left side: Pin 0 (IN), Pin 2 (ADC), Pin 4 (VCC)
-      // Right side: Pin 1 (OUT), Pin 3 (DAC), Pin 5 (GND)
-      const pt0 = getRotatedOffset(-40, -40);
-      const pt1 = getRotatedOffset(40, -40);
-      const pt2 = getRotatedOffset(-40, 0);
-      const pt3 = getRotatedOffset(40, 0);
-      const pt4 = getRotatedOffset(-40, 40);
-      const pt5 = getRotatedOffset(40, 40);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: pt0.x, y: pt0.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: pt1.x, y: pt1.y });
-      pins.push({ componentId: comp.id, pinIndex: 2, x: pt2.x, y: pt2.y });
-      pins.push({ componentId: comp.id, pinIndex: 3, x: pt3.x, y: pt3.y });
-      pins.push({ componentId: comp.id, pinIndex: 4, x: pt4.x, y: pt4.y });
-      pins.push({ componentId: comp.id, pinIndex: 5, x: pt5.x, y: pt5.y });
-    } else if (comp.type === 'transformer') {
-      // Transformer has 4 pins: primary side (0, 1), secondary side (2, 3)
-      const ptPri1 = getRotatedOffset(-40, -20);
-      const ptPri2 = getRotatedOffset(-40, 20);
-      const ptSec1 = getRotatedOffset(40, -20);
-      const ptSec2 = getRotatedOffset(40, 20);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: ptPri1.x, y: ptPri1.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: ptPri2.x, y: ptPri2.y });
-      pins.push({ componentId: comp.id, pinIndex: 2, x: ptSec1.x, y: ptSec1.y });
-      pins.push({ componentId: comp.id, pinIndex: 3, x: ptSec2.x, y: ptSec2.y });
-    } else if (comp.type === 'x') {
-      const pinCount = comp.pinCount ?? 4;
-      const pinsLeft = Math.ceil(pinCount / 2);
-      const totalHeight = Math.max(pinsLeft * 40, 60);
-      const halfH = totalHeight / 2;
-
-      for (let i = 0; i < pinCount; i++) {
-        const pos = Math.floor(i / 2);
-        const yOffset = -halfH + 20 + pos * 40;
-        if (i % 2 === 0) {
-          // Pin par (0, 2, 4...) -> Izquierda. Conexión lógica en la punta exterior (-60)
-          const pt = getRotatedOffset(-60, yOffset);
-          pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
-        } else {
-          // Pin impar (1, 3, 5...) -> Derecha. Conexión lógica en la punta exterior (60)
-          const pt = getRotatedOffset(60, yOffset);
-          pins.push({ componentId: comp.id, pinIndex: i, x: pt.x, y: pt.y });
-        }
-      }
-    } else {
-      // Other 2-pin components (resistor, capacitor, inductor, diode, vsource, isource, led, switch)
-      const pt1 = getRotatedOffset(-40, 0);
-      const pt2 = getRotatedOffset(40, 0);
-      pins.push({ componentId: comp.id, pinIndex: 0, x: pt1.x, y: pt1.y });
-      pins.push({ componentId: comp.id, pinIndex: 1, x: pt2.x, y: pt2.y });
-    }
-
-    return pins;
+    return resolveComponentPins(comp);
   }
-
   public isVisible(box: BoundingBox): boolean {
-    const topLeft = this.screenToWorld(0, 0);
-    const bottomRight = this.screenToWorld(this.canvas.clientWidth, this.canvas.clientHeight);
-
-    return (
-      box.x + box.width >= topLeft.x &&
-      box.x <= bottomRight.x &&
-      box.y + box.height >= topLeft.y &&
-      box.y <= bottomRight.y
-    );
+    return isVisible(box, this, {
+      width: this.canvas.clientWidth,
+      height: this.canvas.clientHeight,
+    });
   }
 
   // --- CAMERA OPERATIONS ---
@@ -532,54 +306,31 @@ export class CanvasOrchestrator {
   /** Calculates the geometric center of all components in world coordinates.
    * Defaults to (0, 0) if the circuit is empty. */
   public getCircuitGeometricCenter(): Point2D {
-    if (this.components.length === 0) {
-      return { x: 0, y: 0 };
-    }
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (const comp of this.components) {
-      const bounds = getComponentBounds(comp);
-      minX = Math.min(minX, bounds.x);
-      maxX = Math.max(maxX, bounds.x + bounds.width);
-      minY = Math.min(minY, bounds.y);
-      maxY = Math.max(maxY, bounds.y + bounds.height);
-    }
-    return {
-      x: (minX + maxX) / 2,
-      y: (minY + maxY) / 2,
-    };
+    return getCircuitGeometricCenter(this.components);
   }
 
   /** Keeps the circuit geometric center within the visible screen area. */
   public clampCameraOffsets(): void {
-    const center = this.getCircuitGeometricCenter();
-    const Gx = center.x;
-    const Gy = center.y;
-    const canvasWidth = this.canvas.clientWidth;
-    const canvasHeight = this.canvas.clientHeight;
-
-    // Offset required to place Gx at screen coordinate X is: screenX - Gx * zoom
-    // We constrain screenX between [0, canvasWidth]
-    const minOffsetX = -Gx * this.zoom;
-    const maxOffsetX = canvasWidth - Gx * this.zoom;
-    const minOffsetY = -Gy * this.zoom;
-    const maxOffsetY = canvasHeight - Gy * this.zoom;
-
-    this.offsetX = Math.min(Math.max(this.offsetX, minOffsetX), maxOffsetX);
-    this.offsetY = Math.min(Math.max(this.offsetY, minOffsetY), maxOffsetY);
+    const nextCamera = clampCameraOffsets(this, this.getCircuitGeometricCenter(), {
+      width: this.canvas.clientWidth,
+      height: this.canvas.clientHeight,
+    });
+    this.offsetX = nextCamera.offsetX;
+    this.offsetY = nextCamera.offsetY;
   }
 
   public zoomAt(zoomFactor: number, screenTargetX: number, screenTargetY: number): void {
-    const worldTarget = this.screenToWorld(screenTargetX, screenTargetY);
-    const nextZoom = Math.min(Math.max(this.zoom * zoomFactor, this.minZoom), this.maxZoom);
-    if (nextZoom === this.zoom) return;
-
-    this.zoom = nextZoom;
-    this.offsetX = screenTargetX - worldTarget.x * this.zoom;
-    this.offsetY = screenTargetY - worldTarget.y * this.zoom;
-    this.clampCameraOffsets();
+    const nextCamera = zoomAt(
+      this,
+      { minZoom: this.minZoom, maxZoom: this.maxZoom },
+      { width: this.canvas.clientWidth, height: this.canvas.clientHeight },
+      this.getCircuitGeometricCenter(),
+      zoomFactor,
+      { x: screenTargetX, y: screenTargetY },
+    );
+    this.zoom = nextCamera.zoom;
+    this.offsetX = nextCamera.offsetX;
+    this.offsetY = nextCamera.offsetY;
   }
 
   public pan(dx: number, dy: number): void {
@@ -590,22 +341,9 @@ export class CanvasOrchestrator {
 
   // --- DRAWING / RENDERING ---
 
-  public render(_voltageMap: Record<string, number> = {}, probes: { ch1?: Point2D; ch2?: Point2D; ch3?: Point2D; ch4?: Point2D } = {}, nodeMap: Record<string, string> = {}, sparMarkers?: { index: number; x: number; y: number }[]): void {
+  public render(_voltageMap: Record<string, number> = {}, probes: ProbeBadges = {}, nodeMap: Record<string, string> = {}, sparMarkers?: SParameterMarker[]): void {
     const dpr = window.devicePixelRatio || 1;
-    const cssWidth = this.canvas.clientWidth;
-    const cssHeight = this.canvas.clientHeight;
-
-    // 1. Sync physical buffer to CSS size × devicePixelRatio.
-    // Canvas buffers are integer-sized; compare rounded values to avoid
-    // resize/render feedback loops on fractional DPR displays.
-    const bufferWidth = Math.round(cssWidth * dpr);
-    const bufferHeight = Math.round(cssHeight * dpr);
-    if (this.canvas.width !== bufferWidth || this.canvas.height !== bufferHeight) {
-      this.canvas.width = bufferWidth;
-      this.canvas.height = bufferHeight;
-      this.canvas.style.width = `${cssWidth}px`;
-      this.canvas.style.height = `${cssHeight}px`;
-    }
+    ensureCanvasBuffer(this.canvas, dpr);
 
     this.clampCameraOffsets();
 
@@ -625,139 +363,50 @@ export class CanvasOrchestrator {
     // 4. Draw Background Grid
     this.drawWorldGrid(dpr);
 
+    const componentById = createComponentLookup(this.components);
+    const pinCache: RenderPinCache = new Map();
+    const visibleWorldBounds = this.getVisibleWorldBounds();
+    const visibleComponents = getVisibleComponents(this.components, visibleWorldBounds);
+    const selectedIds = createSelectedComponentIds(this.selectedComponents);
+
     // 3. Draw Wires
-    this.drawWires(_voltageMap);
+    this.drawWires(componentById, pinCache, visibleWorldBounds);
+
+    const renderDetail = resolveRenderDetail(this.zoom, visibleComponents.length);
 
     // 4. Draw Components
-    for (const comp of this.components) {
+    for (const comp of visibleComponents) {
       const isSelected = comp.selected || 
                          this.selectedComponent?.id === comp.id ||
-                         this.selectedComponents.some(c => c.id === comp.id);
+                         selectedIds.has(comp.id);
       const isHovered = this.hoveredComponent?.id === comp.id;
-      drawComponentSymbol(this.ctx, comp, isSelected, isHovered);
+      drawComponentSymbol(this.ctx, comp, isSelected, isHovered, { detail: renderDetail });
     }
 
-    // 5. Draw Temporary Drawing Wire
-    if (this.activePinForWire && this.tempWireEnd) {
-      this.ctx.strokeStyle = "rgba(102, 252, 241, 0.6)";
-      this.ctx.lineWidth = 2.5;
-      this.ctx.setLineDash([6, 4]);
-      this.ctx.beginPath();
-      
-      const pinPt = this.activePinForWire;
-      const previewPath = this.generateOrthogonalPath(pinPt, this.tempWireEnd);
-      this.ctx.moveTo(previewPath[0].x, previewPath[0].y);
-      for (let i = 1; i < previewPath.length; i++) {
-        this.ctx.lineTo(previewPath[i].x, previewPath[i].y);
-      }
-      
-      this.ctx.stroke();
-      this.ctx.setLineDash([]);
-    }
-
+    drawTemporaryWire(
+      this.ctx,
+      this.activePinForWire,
+      this.tempWireEnd,
+      (start, end) => this.generateOrthogonalPath(start, end),
+    );
     // 6. Draw Highlights & Pins
-    this.drawPins(_voltageMap, nodeMap);
+    this.drawPins(_voltageMap, nodeMap, pinCache, visibleComponents, renderDetail);
 
     // 6b. Draw Visual ERC Issues
-    this.drawERCIssues();
+    this.drawERCIssues(componentById, pinCache);
 
-    // 7. Draw Oscilloscope Probe Badges
-    if (probes.ch1) {
-      this.ctx.fillStyle = "hsl(174, 97%, 69%)";
-      this.ctx.shadowColor = "hsl(174, 97%, 69%)";
-      this.ctx.shadowBlur = 8;
-      this.ctx.beginPath();
-      this.ctx.arc(probes.ch1.x, probes.ch1.y - 14, 8, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
-      
-      this.ctx.fillStyle = "#030508";
-      this.ctx.font = "bold 9px var(--font-sans)";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText("①", probes.ch1.x, probes.ch1.y - 11);
-    }
-    if (probes.ch2) {
-      this.ctx.fillStyle = "hsl(270, 89%, 65%)";
-      this.ctx.shadowColor = "hsl(270, 89%, 65%)";
-      this.ctx.shadowBlur = 8;
-      this.ctx.beginPath();
-      this.ctx.arc(probes.ch2.x, probes.ch2.y - 14, 8, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
-      
-      this.ctx.fillStyle = "#030508";
-      this.ctx.font = "bold 9px var(--font-sans)";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText("②", probes.ch2.x, probes.ch2.y - 11);
-    }
-    if (probes.ch3) {
-      this.ctx.fillStyle = "hsl(25, 95%, 53%)";
-      this.ctx.shadowColor = "hsl(25, 95%, 53%)";
-      this.ctx.shadowBlur = 8;
-      this.ctx.beginPath();
-      this.ctx.arc(probes.ch3.x, probes.ch3.y - 14, 8, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
-      
-      this.ctx.fillStyle = "#030508";
-      this.ctx.font = "bold 9px var(--font-sans)";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText("③", probes.ch3.x, probes.ch3.y - 11);
-    }
-    if (probes.ch4) {
-      this.ctx.fillStyle = "hsl(142, 70%, 45%)";
-      this.ctx.shadowColor = "hsl(142, 70%, 45%)";
-      this.ctx.shadowBlur = 8;
-      this.ctx.beginPath();
-      this.ctx.arc(probes.ch4.x, probes.ch4.y - 14, 8, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
-      
-      this.ctx.fillStyle = "#030508";
-      this.ctx.font = "bold 9px var(--font-sans)";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText("④", probes.ch4.x, probes.ch4.y - 11);
-    }
-
-    // 7b. Draw S-Parameter RF Port Markers (P1, P2, ...)
-    if (sparMarkers) {
-      for (const marker of sparMarkers) {
-        const hue = 140 + marker.index * 30; // Verde → turquesa → naranja
-        this.ctx.fillStyle = `hsla(${hue}, 90%, 60%, 0.85)`;
-        this.ctx.shadowColor = `hsla(${hue}, 90%, 60%, 0.6)`;
-        this.ctx.shadowBlur = 10;
-        this.ctx.beginPath();
-        this.ctx.arc(marker.x, marker.y - 14, 10, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.shadowBlur = 0;
-        this.ctx.fillStyle = '#030508';
-        this.ctx.font = 'bold 10px var(--font-sans)';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText(`P${marker.index}`, marker.x, marker.y - 11);
-      }
-    }
-
-    // 8. Draw CAD Selection Drag Box
-    if (this.selectionStart && this.selectionEnd) {
-      this.ctx.save();
-      this.ctx.fillStyle = "rgba(102, 252, 241, 0.05)";
-      this.ctx.strokeStyle = "rgba(102, 252, 241, 0.4)";
-      this.ctx.lineWidth = 1.5;
-      this.ctx.setLineDash([4, 3]);
-      
-      const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
-      const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
-      const w = Math.abs(this.selectionStart.x - this.selectionEnd.x);
-      const h = Math.abs(this.selectionStart.y - this.selectionEnd.y);
-      
-      this.ctx.beginPath();
-      this.ctx.roundRect(x, y, w, h, 4);
-      this.ctx.fill();
-      this.ctx.stroke();
-      this.ctx.restore();
-    }
+    drawProbeBadges(this.ctx, probes);
+    drawSParameterMarkers(this.ctx, sparMarkers);
+    drawSelectionBox(this.ctx, this.selectionStart, this.selectionEnd);
 
     this.ctx.restore();
+  }
+
+  private getVisibleWorldBounds(): BoundingBox {
+    return getVisibleWorldBounds(this, {
+      width: this.canvas.clientWidth,
+      height: this.canvas.clientHeight,
+    });
   }
 
   private drawWorldGrid(dpr: number = 1): void {
@@ -768,11 +417,13 @@ export class CanvasOrchestrator {
     const topLeft = this.screenToWorld(0, 0);
     const bottomRight = this.screenToWorld(cssW, cssH);
 
-    const startX = Math.floor(topLeft.x / this.gridSize) * this.gridSize;
-    const endX = Math.ceil(bottomRight.x / this.gridSize) * this.gridSize;
-    const startY = Math.floor(topLeft.y / this.gridSize) * this.gridSize;
-    const endY = Math.ceil(bottomRight.y / this.gridSize) * this.gridSize;
-    if (![startX, endX, startY, endY].every(Number.isFinite)) return;
+    const gridPlan = createGridRenderPlan({
+      topLeft,
+      bottomRight,
+      gridSize: this.gridSize,
+      zoom: this.zoom,
+    });
+    if (!gridPlan) return;
 
     this.ctx.save();
     this.ctx.setTransform(
@@ -783,36 +434,49 @@ export class CanvasOrchestrator {
     );
     this.ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
 
-    const columns = Math.max(0, Math.floor((endX - startX) / this.gridSize) + 1);
-    const rows = Math.max(0, Math.floor((endY - startY) / this.gridSize) + 1);
-    const maxGridDots = 8000;
-    const densityStep = columns * rows > maxGridDots
-      ? Math.ceil(Math.sqrt((columns * rows) / maxGridDots))
-      : 1;
-    const gridStep = this.gridSize * densityStep;
-    const dotSize = Math.max(0.7, 1.5 / this.zoom);
-    this.ctx.beginPath();
-    for (let x = startX; x <= endX; x += gridStep) {
-      for (let y = startY; y <= endY; y += gridStep) {
-        this.ctx.rect(x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
+    let path = this.gridPathCache?.key === gridPlan.cacheKey ? this.gridPathCache.path : null;
+    if (!path) {
+      path = new Path2D();
+      for (let x = gridPlan.startX; x <= gridPlan.endX; x += gridPlan.gridStep) {
+        for (let y = gridPlan.startY; y <= gridPlan.endY; y += gridPlan.gridStep) {
+          path.rect(
+            x - gridPlan.dotSize / 2,
+            y - gridPlan.dotSize / 2,
+            gridPlan.dotSize,
+            gridPlan.dotSize,
+          );
+        }
       }
+      this.gridPathCache = { key: gridPlan.cacheKey, path };
     }
-    this.ctx.fill();
+    this.ctx.fill(path);
     this.ctx.restore();
   }
 
-  private drawWires(_voltageMap: Record<string, number> = {}): void {
+  private getPinsCached(comp: ComponentInstance, pinCache: RenderPinCache): PinInstance[] {
+    const cached = pinCache.get(comp.id);
+    if (cached) return cached;
+    const pins = this.getComponentPins(comp);
+    pinCache.set(comp.id, pins);
+    return pins;
+  }
+
+  private drawWires(
+    componentById: ReadonlyMap<string, ComponentInstance>,
+    pinCache: RenderPinCache,
+    visibleWorldBounds: BoundingBox,
+  ): void {
     this.ctx.save();
     
     for (const wire of this.wires) {
       // Find endpoints
-      const fromComp = this.components.find(c => c.id === wire.from.componentId);
-      const toComp = this.components.find(c => c.id === wire.to.componentId);
+      const fromComp = componentById.get(wire.from.componentId);
+      const toComp = componentById.get(wire.to.componentId);
       
       if (!fromComp || !toComp) continue;
 
-      const fromPins = this.getComponentPins(fromComp);
-      const toPins = this.getComponentPins(toComp);
+      const fromPins = this.getPinsCached(fromComp, pinCache);
+      const toPins = this.getPinsCached(toComp, pinCache);
       const startPt = fromPins.find(p => p.pinIndex === wire.from.pinIndex);
       const endPt = toPins.find(p => p.pinIndex === wire.to.pinIndex);
 
@@ -820,6 +484,7 @@ export class CanvasOrchestrator {
 
       const pts = wire.points;
       if (!pts || pts.length < 2) continue;
+      if (!this.wirePathIntersects(pts, visibleWorldBounds)) continue;
 
       // Dibujar camino ortogonal con esquinas redondeadas
       this.ctx.beginPath();
@@ -873,11 +538,21 @@ export class CanvasOrchestrator {
     this.ctx.restore();
   }
 
-  private drawPins(voltageMap: Record<string, number> = {}, nodeMap: Record<string, string> = {}): void {
+  private wirePathIntersects(points: readonly Point2D[], bounds: BoundingBox): boolean {
+    return wirePathIntersects(points, bounds);
+  }
+
+  private drawPins(
+    voltageMap: Record<string, number> = {},
+    nodeMap: Record<string, string> = {},
+    pinCache: RenderPinCache = new Map(),
+    componentsToDraw: readonly ComponentInstance[] = this.components,
+    renderDetail: RenderDetail = "full",
+  ): void {
     this.ctx.save();
 
-    for (const comp of this.components) {
-      const pins = this.getComponentPins(comp);
+    for (const comp of componentsToDraw) {
+      const pins = this.getPinsCached(comp, pinCache);
       for (const pin of pins) {
         const isHovered = this.hoveredPin && 
                           this.hoveredPin.componentId === pin.componentId && 
@@ -885,6 +560,7 @@ export class CanvasOrchestrator {
         const isActive = this.activePinForWire && 
                          this.activePinForWire.componentId === pin.componentId && 
                          this.activePinForWire.pinIndex === pin.pinIndex;
+        if (renderDetail === "compact" && !isHovered && !isActive) continue;
 
         if (isHovered || isActive) {
           this.ctx.fillStyle = "hsl(174, 97%, 69%)";
@@ -951,13 +627,16 @@ export class CanvasOrchestrator {
     this.ctx.restore();
   }
 
-  private drawERCIssues(): void {
+  private drawERCIssues(
+    componentById: ReadonlyMap<string, ComponentInstance> = new Map(this.components.map(component => [component.id, component])),
+    pinCache: RenderPinCache = new Map(),
+  ): void {
     if (this.ercIssues.length === 0) return;
 
     const pulseRadius = 10 + Math.sin(Date.now() / 150) * 3;
 
     for (const issue of this.ercIssues) {
-      const comp = this.components.find(c => c.id === issue.componentId);
+      const comp = componentById.get(issue.componentId);
       if (!comp) continue;
 
       const isError = issue.type === "error";
@@ -966,7 +645,7 @@ export class CanvasOrchestrator {
 
       if (issue.pinIndex !== undefined) {
         // Alerta específica en un pin
-        const pins = this.getComponentPins(comp);
+        const pins = this.getPinsCached(comp, pinCache);
         const pin = pins.find(p => p.pinIndex === issue.pinIndex);
         if (pin) {
           this.ctx.save();
@@ -1022,17 +701,13 @@ export class CanvasOrchestrator {
 
   public hitTestPin(worldX: number, worldY: number, threshold?: number): { pin: PinInstance; comp: ComponentInstance } | null {
     const t = threshold ?? this.getPinHitThreshold();
-    for (const comp of this.components) {
-      const pins = this.getComponentPins(comp);
-      for (const pin of pins) {
-        const dx = worldX - pin.x;
-        const dy = worldY - pin.y;
-        if (dx * dx + dy * dy <= t * t) {
-          return { pin, comp };
-        }
-      }
-    }
-    return null;
+    return hitTestPinInModel(
+      this.components,
+      (component) => this.getComponentPins(component),
+      worldX,
+      worldY,
+      t,
+    );
   }
 
   // --- ACTIONS & OPERATIONS ---
@@ -1043,439 +718,182 @@ export class CanvasOrchestrator {
     y: number,
     value: number | string,
   ): ComponentInstance {
-    const id = generateUniqueComponentId(this.components, type);
-
-    const newComp: ComponentInstance = {
-      id,
+    const newComp = createComponent(
+      this.components,
       type,
+      x,
+      y,
       value,
-      x: this.snapToGrid(x),
-      y: this.snapToGrid(y),
-      rotation: 0,
-    };
-
-    if (type === "dmm") {
-      newComp.value = normalizeDmmMode(value);
-      newComp.dmmValue = DMM_INITIAL_DISPLAY;
-    } else if (type === "potentiometer") {
-      newComp.wiperPosition = 0.5;
-    } else if (type === "ldr") {
-      newComp.lux = 100;
-    } else if (type === "thermistor") {
-      newComp.temperatureCelsius = 25;
-    } else if (type === "transformer") {
-      const inductance = typeof value === "number" && value > 0 ? value : 1e-3;
-      newComp.primaryInductance = inductance;
-      newComp.secondaryInductance = inductance;
-      newComp.couplingCoefficient = 0.9;
-    } else if (type === "switch") {
-      newComp.switchRon = 0.01;
-      newComp.switchRoff = 1e9;
-      newComp.switchVth = 0.5;
-      newComp.switchVh = 0.05;
-      newComp.switchState = false;
-    } else if (type === "opamp") {
-      newComp.offsetVoltage = 0.002;
-      newComp.openLoopGain = 100_000;
-    } else if (type === "mcu_8051" || type === "mcu_avr") {
-      const defaultClock = type === "mcu_avr" ? 16e6 : 12e6;
-      newComp.mcuClockSpeed = typeof value === "number" && value > 0
-        ? value
-        : defaultClock;
-    } else if (type === "x") {
-      newComp.pinCount = 4;
-    }
-
+      (coordinate) => this.snapToGrid(coordinate),
+    );
     this.components.push(newComp);
     return newComp;
   }
 
   public renameComponent(component: ComponentInstance, requestedId: string): string | null {
-    const newId = requestedId.trim();
-    const oldId = component.id;
-
-    if (!isValidComponentId(newId)) {
-      return "El identificador debe comenzar con una letra y contener solo letras, numeros o guion bajo.";
-    }
-
-    const normalizedNewId = normalizeComponentId(newId);
-    const duplicate = this.components.some(
-      candidate => candidate !== component && normalizeComponentId(candidate.id) === normalizedNewId,
-    );
-    if (duplicate) {
-      return `El identificador [${newId}] ya existe en el circuito.`;
-    }
-
-    if (newId === oldId) return null;
-
-    component.id = newId;
-    for (const wire of this.wires) {
-      if (wire.from.componentId === oldId) wire.from.componentId = newId;
-      if (wire.to.componentId === oldId) wire.to.componentId = newId;
-      wire.id = createWireId(wire.from, wire.to);
-    }
-    this.syncWireConnections();
-    return null;
+    const error = renameComponentInCircuit(this.components, this.wires, component, requestedId);
+    if (!error) this.syncWireConnections();
+    return error;
   }
 
   public removeComponent(id: string): void {
-    this.components = this.components.filter(c => c.id !== id);
-    // Also remove any wires attached to this component
-    this.wires = this.wires.filter(w => w.from.componentId !== id && w.to.componentId !== id);
-    this.selectedComponents = this.selectedComponents.filter(c => c.id !== id);
+    const result = removeComponentFromCircuit(
+      this.components,
+      this.wires,
+      this.selectedComponents,
+      id,
+    );
+    this.components = result.components;
+    this.wires = result.wires;
+    this.selectedComponents = result.selectedComponents;
   }
 
   public checkHover(worldX: number, worldY: number): void {
-    this.hoveredComponent = null;
-    this.hoveredPin = null;
-    this.hoveredWire = null;
-
-    // 1. Check pin hover first (takes priority)
-    const hit = this.hitTestPin(worldX, worldY);
-    if (hit) {
-      this.hoveredPin = hit.pin;
-      this.canvas.style.cursor = this.activePinForWire ? 'crosshair' : 'pointer';
-      return;
-    }
-
-    // 2. Check component bounds hover
-    for (const comp of this.components) {
-      if (hitTestComponentAt(comp, worldX, worldY)) {
-        this.hoveredComponent = comp;
-        if (this.isDragging) {
-          this.canvas.style.cursor = 'grabbing';
-        } else if (this.activePinForWire) {
-          this.canvas.style.cursor = 'crosshair';
-        } else if (this.simulationActive && comp.type === 'switch') {
-          this.canvas.style.cursor = 'pointer';
-        } else {
-          this.canvas.style.cursor = 'grab';
-        }
-        return;
-      }
-    }
-
-    // 3. Check wire proximity hover
-    for (const wire of this.wires) {
-      if (!wire.points || wire.points.length < 2) continue;
-      for (let i = 0; i < wire.points.length - 1; i++) {
-        const p1 = wire.points[i];
-        const p2 = wire.points[i + 1];
-        
-        let dist = Infinity;
-        if (Math.abs(p1.y - p2.y) < 0.1) { // Segmento horizontal
-          const minX = Math.min(p1.x, p2.x);
-          const maxX = Math.max(p1.x, p2.x);
-          if (worldX >= minX - 4 && worldX <= maxX + 4) {
-            dist = Math.abs(worldY - p1.y);
-          }
-        } else if (Math.abs(p1.x - p2.x) < 0.1) { // Segmento vertical
-          const minY = Math.min(p1.y, p2.y);
-          const maxY = Math.max(p1.y, p2.y);
-          if (worldY >= minY - 4 && worldY <= maxY + 4) {
-            dist = Math.abs(worldX - p1.x);
-          }
-        }
-        
-        if (dist < 6) { // Tolerancia de proximidad al cable de 6px
-          this.hoveredWire = wire;
-          this.canvas.style.cursor = 'pointer';
-          return;
-        }
-      }
-    }
-    this.canvas.style.cursor = 'default';
+    const hover = resolveHoverState(
+      this.components,
+      this.wires,
+      (component) => this.getComponentPins(component),
+      worldX,
+      worldY,
+      {
+        activePinForWire: this.activePinForWire,
+        isDragging: this.isDragging,
+        simulationActive: this.simulationActive,
+        pinThreshold: this.getPinHitThreshold(),
+      },
+    );
+    this.hoveredComponent = hover.hoveredComponent;
+    this.hoveredPin = hover.hoveredPin;
+    this.hoveredWire = hover.hoveredWire;
+    this.canvas.style.cursor = hover.cursor;
   }
 
   public selectComponentAt(worldX: number, worldY: number, isShift: boolean = false): ComponentInstance | null {
-    let hitComp: ComponentInstance | null = null;
-    for (let i = this.components.length - 1; i >= 0; i--) {
-      const comp = this.components[i];
-      if (hitTestComponentAt(comp, worldX, worldY)) {
-        hitComp = comp;
-        break;
-      }
-    }
-
-    if (hitComp) {
-      this.selectedWire = null; // Quitar selección de cable
-      if (isShift) {
-        // Modo aditivo
-        const idx = this.selectedComponents.findIndex(c => c.id === hitComp!.id);
-        if (idx >= 0) {
-          this.selectedComponents.splice(idx, 1);
-        } else {
-          this.selectedComponents.push(hitComp);
-        }
-        this.selectedComponent = this.selectedComponents.length > 0 
-          ? this.selectedComponents[this.selectedComponents.length - 1] 
-          : null;
-      } else {
-        // Clic normal
-        // Si ya pertenece al lote actual seleccionado, no vaciar el lote (para permitir arrastrar todo el grupo)
-        if (!this.selectedComponents.some(c => c.id === hitComp!.id)) {
-          this.selectedComponents = [hitComp];
-        }
-        this.selectedComponent = hitComp;
-      }
-      return hitComp;
-    }
-
-    // Si no golpeó ningún componente y no hay Shift, limpiar selección
-    if (!isShift) {
-      this.selectedComponent = null;
-      this.selectedComponents = [];
-      
-      // Intentar seleccionar cable
-      if (this.hoveredWire) {
-        this.selectedWire = this.hoveredWire;
-      } else {
-        this.selectedWire = null;
-      }
-    }
-    return null;
+    const result = selectComponentAt(
+      this.components,
+      {
+        selectedComponent: this.selectedComponent,
+        selectedComponents: this.selectedComponents,
+        selectedWire: this.selectedWire,
+      },
+      this.hoveredWire,
+      worldX,
+      worldY,
+      isShift,
+    );
+    this.selectedComponent = result.selectedComponent;
+    this.selectedComponents = result.selectedComponents;
+    this.selectedWire = result.selectedWire;
+    return result.hitComponent;
   }
-
   public completeBoxSelection(): void {
-    if (!this.selectionStart || !this.selectionEnd) return;
-    
-    const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
-    const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
-    const w = Math.abs(this.selectionStart.x - this.selectionEnd.x);
-    const h = Math.abs(this.selectionStart.y - this.selectionEnd.y);
-    
-    // Umbral mínimo para evitar clicks en el vacío
-    if (w < 6 && h < 6) {
-      this.selectedComponents = [];
-      this.selectedComponent = null;
-      this.selectedWire = null;
-      this.selectionStart = null;
-      this.selectionEnd = null;
-      return;
+    const result = completeBoxSelection(this.components, this.selectionStart, this.selectionEnd);
+    if (result) {
+      this.selectedComponent = result.selectedComponent;
+      this.selectedComponents = result.selectedComponents;
+      this.selectedWire = result.selectedWire;
     }
-    
-    this.selectedComponents = [];
-    this.selectedWire = null;
-    
-    for (const comp of this.components) {
-      const bounds = getComponentBounds(comp);
-      const cx = bounds.x + bounds.width / 2;
-      const cy = bounds.y + bounds.height / 2;
-      if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) {
-        this.selectedComponents.push(comp);
-      }
-    }
-    
-    if (this.selectedComponents.length > 0) {
-      this.selectedComponent = this.selectedComponents[this.selectedComponents.length - 1];
-    } else {
-      this.selectedComponent = null;
-    }
-    
     this.selectionStart = null;
     this.selectionEnd = null;
   }
-
   public startDraggingSelected(worldX: number, worldY: number): void {
     this.isDragging = true;
     this.canvas.style.cursor = 'grabbing';
-    this.dragStartOffsets = {};
-    
-    if (this.selectedComponents.length > 0) {
-      for (const comp of this.selectedComponents) {
-        this.dragStartOffsets[comp.id] = {
-          x: worldX - comp.x,
-          y: worldY - comp.y
-        };
-      }
-    } else if (this.selectedComponent) {
-      this.dragStartOffset = {
-        x: worldX - this.selectedComponent.x,
-        y: worldY - this.selectedComponent.y
-      };
-    }
+    const offsets = createDragOffsets(
+      this.selectedComponents,
+      this.selectedComponent,
+      { x: worldX, y: worldY },
+    );
+    this.dragStartOffsets = offsets.dragStartOffsets;
+    this.dragStartOffset = offsets.dragStartOffset;
   }
-
   public handleDragging(worldX: number, worldY: number): void {
     if (!this.isDragging) return;
 
-    if (this.selectedComponents.length > 0) {
-      for (const comp of this.selectedComponents) {
-        const offset = this.dragStartOffsets[comp.id];
-        if (offset) {
-          comp.x = this.snapToGrid(worldX - offset.x);
-          comp.y = this.snapToGrid(worldY - offset.y);
-        }
-      }
-    } else if (this.selectedComponent) {
-      this.selectedComponent.x = this.snapToGrid(worldX - this.dragStartOffset.x);
-      this.selectedComponent.y = this.snapToGrid(worldY - this.dragStartOffset.y);
-    }
-    
+    applyDrag(
+      this.selectedComponents,
+      this.selectedComponent,
+      this.dragStartOffsets,
+      this.dragStartOffset,
+      { x: worldX, y: worldY },
+      this.gridSize,
+    );
     this.syncWireConnections();
   }
-
   public stopDragging(): void {
     this.isDragging = false;
     this.canvas.style.cursor = 'default';
   }
 
   public syncWireConnections(): void {
-    for (const wire of this.wires) {
-      const fromComp = this.components.find(c => c.id === wire.from.componentId);
-      const toComp = this.components.find(c => c.id === wire.to.componentId);
-      if (!fromComp || !toComp) continue;
-
-      const fromPins = this.getComponentPins(fromComp);
-      const toPins = this.getComponentPins(toComp);
-      const startPt = fromPins.find(p => p.pinIndex === wire.from.pinIndex);
-      const endPt = toPins.find(p => p.pinIndex === wire.to.pinIndex);
-      if (!startPt || !endPt) continue;
-
-      wire.points = this.generateOrthogonalPath(startPt, endPt);
-    }
+    syncWireModelConnections(
+      this.components,
+      this.wires,
+      (component) => this.getComponentPins(component),
+      (start, end) => this.generateOrthogonalPath(start, end),
+    );
   }
 
   public connectPins(from: PinInstance, to: PinInstance): void {
-    if (from.componentId === to.componentId) return;
-
-    const exists = this.wires.some(
-      w => 
-        (w.from.componentId === from.componentId && w.from.pinIndex === from.pinIndex &&
-         w.to.componentId === to.componentId && w.to.pinIndex === to.pinIndex) ||
-        (w.from.componentId === to.componentId && w.from.pinIndex === to.pinIndex &&
-         w.to.componentId === from.componentId && w.to.pinIndex === from.pinIndex)
-    );
-
-    if (exists) return;
-
-    const id = createWireId(from, to);
-    this.wires.push({
-      id,
-      from: { componentId: from.componentId, pinIndex: from.pinIndex },
-      to: { componentId: to.componentId, pinIndex: to.pinIndex },
-      points: []
-    });
-    this.syncWireConnections();
+    if (connectWirePins(this.wires, from, to)) {
+      this.syncWireConnections();
+    }
   }
 
   public rotateSelectedComponent(): void {
-    if (this.selectedComponents.length > 0) {
-      for (const comp of this.selectedComponents) {
-        comp.rotation = (comp.rotation + 90) % 360;
-      }
-    } else if (this.selectedComponent) {
-      this.selectedComponent.rotation = (this.selectedComponent.rotation + 90) % 360;
-    }
+    rotateSelection(this.selectedComponents, this.selectedComponent, 90);
     this.syncWireConnections();
   }
 
   public rotateSelectedByDegrees(deltaDegrees: number): void {
-    if (this.selectedComponents.length > 0) {
-      for (const comp of this.selectedComponents) {
-        comp.rotation = (comp.rotation + deltaDegrees + 360) % 360;
-      }
-    } else if (this.selectedComponent) {
-      this.selectedComponent.rotation = (this.selectedComponent.rotation + deltaDegrees + 360) % 360;
-    }
+    rotateSelection(this.selectedComponents, this.selectedComponent, deltaDegrees);
     this.syncWireConnections();
   }
 
   public mirrorSelectedComponent(): void {
-    if (this.selectedComponents.length > 0) {
-      for (const comp of this.selectedComponents) {
-        comp.mirror = !comp.mirror;
-      }
-    } else if (this.selectedComponent) {
-      this.selectedComponent.mirror = !this.selectedComponent.mirror;
-    }
+    mirrorSelection(this.selectedComponents, this.selectedComponent);
     this.syncWireConnections();
   }
 
   public duplicateSelected(): void {
-    if (this.selectedComponents.length > 0) {
-      const newSelection: ComponentInstance[] = [];
-      for (const comp of this.selectedComponents) {
-        const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, comp.value);
-        copyComponentConfiguration(comp, dup);
-        newSelection.push(dup);
-      }
-      for (const comp of this.selectedComponents) {
-        comp.selected = false;
-      }
-      this.selectedComponents = newSelection;
-      for (const comp of this.selectedComponents) {
-        comp.selected = true;
-      }
-    } else if (this.selectedComponent) {
-      const comp = this.selectedComponent;
-      const dup = this.addComponent(comp.type, comp.x + 40, comp.y + 40, comp.value);
-      copyComponentConfiguration(comp, dup);
-      this.selectedComponent = dup;
-    }
+    const result = duplicateSelection(
+      this.selectedComponents,
+      this.selectedComponent,
+      (type, x, y, value) => this.addComponent(type, x, y, value),
+    );
+    this.selectedComponent = result.selectedComponent;
+    this.selectedComponents = result.selectedComponents;
   }
 
   public removeSelected(): void {
-    // 1. Borrar cable seleccionado individual
-    if (this.selectedWire) {
-      this.wires = this.wires.filter(w => w.id !== this.selectedWire!.id);
-      this.selectedWire = null;
-      return;
-    }
-
-    // 2. Borrar componentes seleccionados en lote
-    if (this.selectedComponents.length > 0) {
-      for (const comp of this.selectedComponents) {
-        this.removeComponent(comp.id);
-      }
-      this.selectedComponents = [];
-      this.selectedComponent = null;
-    } else if (this.selectedComponent) {
-      this.removeComponent(this.selectedComponent.id);
-      this.selectedComponent = null;
-    }
+    const result = removeSelection(
+      this.components,
+      this.wires,
+      this.selectedWire,
+      this.selectedComponents,
+      this.selectedComponent,
+    );
+    this.components = result.components;
+    this.wires = result.wires;
+    this.selectedWire = result.selectedWire;
+    this.selectedComponent = result.selectedComponent;
+    this.selectedComponents = result.selectedComponents;
   }
 
   public fitAll(): void {
-    if (this.components.length === 0) return;
+    const bounds = getCircuitBounds(this.components, this.wires);
+    if (!bounds) return;
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const comp of this.components) {
-      const bounds = getComponentBounds(comp);
-      minX = Math.min(minX, bounds.x);
-      minY = Math.min(minY, bounds.y);
-      maxX = Math.max(maxX, bounds.x + bounds.width);
-      maxY = Math.max(maxY, bounds.y + bounds.height);
-    }
+    const nextCamera = fitBoundsToViewport(
+      bounds,
+      { width: this.canvas.clientWidth, height: this.canvas.clientHeight },
+      { minZoom: this.minZoom, maxZoom: this.maxZoom },
+    );
+    if (!nextCamera) return;
 
-    for (const wire of this.wires) {
-      for (const pt of wire.points) {
-        minX = Math.min(minX, pt.x);
-        minY = Math.min(minY, pt.y);
-        maxX = Math.max(maxX, pt.x);
-        maxY = Math.max(maxY, pt.y);
-      }
-    }
-
-    const margin = 40;
-    minX -= margin;
-    minY -= margin;
-    maxX += margin;
-    maxY += margin;
-
-    const canvasW = this.canvas.clientWidth;
-    const canvasH = this.canvas.clientHeight;
-    const worldW = maxX - minX;
-    const worldH = maxY - minY;
-    if (worldW <= 0 || worldH <= 0 || canvasW <= 0 || canvasH <= 0) return;
-
-    const zoomX = canvasW / worldW;
-    const zoomY = canvasH / worldH;
-    this.zoom = Math.min(zoomX, zoomY, this.maxZoom);
-    this.zoom = Math.max(this.zoom, this.minZoom);
-
-    this.offsetX = (canvasW - (minX + maxX) * this.zoom) / 2;
-    this.offsetY = (canvasH - (minY + maxY) * this.zoom) / 2;
+    this.zoom = nextCamera.zoom;
+    this.offsetX = nextCamera.offsetX;
+    this.offsetY = nextCamera.offsetY;
   }
 
   public resetCameraToCircuit(): void {
@@ -1487,41 +905,7 @@ export class CanvasOrchestrator {
       return;
     }
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    for (const comp of this.components) {
-      const bounds = getComponentBounds(comp);
-      minX = Math.min(minX, bounds.x);
-      minY = Math.min(minY, bounds.y);
-      maxX = Math.max(maxX, bounds.x + bounds.width);
-      maxY = Math.max(maxY, bounds.y + bounds.height);
-    }
-
-    const margin = 40;
-    minX -= margin;
-    minY -= margin;
-    maxX += margin;
-    maxY += margin;
-
-    const canvasW = this.canvas.clientWidth;
-    const canvasH = this.canvas.clientHeight;
-    const worldW = maxX - minX;
-    const worldH = maxY - minY;
-
-    if (worldW <= 0 || worldH <= 0 || canvasW <= 0 || canvasH <= 0) return;
-
-    const zoomX = canvasW / worldW;
-    const zoomY = canvasH / worldH;
-    
-    let targetZoom = Math.min(zoomX, zoomY, this.maxZoom);
-    targetZoom = Math.max(targetZoom, this.minZoom);
-
-    this.zoom = targetZoom;
-    this.offsetX = (canvasW - (minX + maxX) * this.zoom) / 2;
-    this.offsetY = (canvasH - (minY + maxY) * this.zoom) / 2;
+    this.fitAll();
     
     this.render();
   }

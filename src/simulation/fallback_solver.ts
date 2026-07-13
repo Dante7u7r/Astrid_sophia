@@ -12,6 +12,18 @@ import {
   type McuSpiceBridge,
   type GpioPin,
 } from "../simulation";
+import {
+  createMnaSystem,
+  createVoltageSourceMap,
+  evaluateWaveformValue,
+  getMaxNodeIndex,
+  stampCapacitorBackwardEuler,
+  stampConductance,
+  stampInductorBackwardEuler,
+  stampVoltageSource,
+  updateCapacitorVoltageState,
+  updateInductorCurrentState,
+} from "./fallback_mna";
 
 // ==========================================================================
 // INTERFAZ DE RESULTADO DEL SOLVER DC DE RESPALDO
@@ -98,50 +110,16 @@ export function solveGaussian(A: readonly number[][], Z: readonly number[]): num
 // ==========================================================================
 
 export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
-  let maxNodeIdx = 0;
-  for (const comp of netlist.components) {
-    for (const pinNode of comp.pins) {
-      const idx = parseInt(pinNode);
-      if (idx > maxNodeIdx) maxNodeIdx = idx;
-    }
-  }
-
-  const n = maxNodeIdx;
+  const n = getMaxNodeIndex(netlist);
   const vSources = netlist.components.filter(c => c.type === 'vsource');
   const m = vSources.length;
 
   const size = n + m;
   if (size === 0) return "El circuito no tiene nodos activos o componentes.";
 
-  const A: number[][] = Array(size).fill(0).map(() => Array(size).fill(0));
-  const Z: number[] = Array(size).fill(0);
-
-  const stampConductance = (nodeA: number, nodeB: number, G: number) => {
-    if (nodeA > 0) A[nodeA - 1][nodeA - 1] += G;
-    if (nodeB > 0) A[nodeB - 1][nodeB - 1] += G;
-    if (nodeA > 0 && nodeB > 0) {
-      A[nodeA - 1][nodeB - 1] -= G;
-      A[nodeB - 1][nodeA - 1] -= G;
-    }
-  };
-
-  const stampVoltageSource = (vsourceIdx: number, nodePos: number, nodeNeg: number, V: number) => {
-    const col = n + vsourceIdx;
-    if (nodePos > 0) {
-      A[nodePos - 1][col] += 1.0;
-      A[col][nodePos - 1] += 1.0;
-    }
-    if (nodeNeg > 0) {
-      A[nodeNeg - 1][col] -= 1.0;
-      A[col][nodeNeg - 1] -= 1.0;
-    }
-    Z[col] = V;
-  };
-
-  const vSourceMap: Record<string, number> = {};
-  vSources.forEach((vs, idx) => {
-    vSourceMap[vs.id] = idx;
-  });
+  const system = createMnaSystem(size);
+  const { A, Z } = system;
+  const vSourceMap = createVoltageSourceMap(vSources);
 
   for (const comp of netlist.components) {
     if (comp.type === 'resistor') {
@@ -149,12 +127,12 @@ export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
       const nodeB = parseInt(comp.pins[1]);
       if (comp.value <= 1e-12) return `La resistencia del resistor [${comp.id}] es demasiado baja o cero.`;
       const G = 1.0 / comp.value;
-      stampConductance(nodeA, nodeB, G);
+      stampConductance(A, nodeA, nodeB, G);
     } else if (comp.type === 'vsource') {
       const nodePos = parseInt(comp.pins[0]);
       const nodeNeg = parseInt(comp.pins[1]);
       const vsIdx = vSourceMap[comp.id];
-      stampVoltageSource(vsIdx, nodePos, nodeNeg, comp.value);
+      stampVoltageSource(system, n, vsIdx, nodePos, nodeNeg, comp.value);
     } else if (comp.type === 'isource') {
       const nodePos = parseInt(comp.pins[0]);
       const nodeNeg = parseInt(comp.pins[1]);
@@ -163,29 +141,29 @@ export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
     } else if (comp.type === 'diode') {
       const nodeAnode = parseInt(comp.pins[0]);
       const nodeCathode = parseInt(comp.pins[1]);
-      stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
+      stampConductance(A, nodeAnode, nodeCathode, 1.0 / 50.0);
     } else if (comp.type === 'led') {
       const nodeAnode = parseInt(comp.pins[0]);
       const nodeCathode = parseInt(comp.pins[1]);
-      stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
+      stampConductance(A, nodeAnode, nodeCathode, 1.0 / 50.0);
     } else if (comp.type === 'nmos') {
       const nodeGate = parseInt(comp.pins[0]);
       const nodeDrain = parseInt(comp.pins[1]);
       const nodeSource = parseInt(comp.pins[2]);
-      stampConductance(nodeDrain, nodeSource, 1.0 / 1e6);
-      stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
+      stampConductance(A, nodeDrain, nodeSource, 1.0 / 1e6);
+      stampConductance(A, nodeGate, nodeSource, 1.0 / 1e9);
     } else if (comp.type === 'pmos') {
       const nodeGate = parseInt(comp.pins[0]);
       const nodeDrain = parseInt(comp.pins[1]);
       const nodeSource = parseInt(comp.pins[2]);
-      stampConductance(nodeSource, nodeDrain, 1.0 / 1e6);
-      stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
+      stampConductance(A, nodeSource, nodeDrain, 1.0 / 1e6);
+      stampConductance(A, nodeGate, nodeSource, 1.0 / 1e9);
     } else if (comp.type === 'npn' || comp.type === 'pnp') {
       const nodeBase = parseInt(comp.pins[0]);
       const nodeCollector = parseInt(comp.pins[1]);
       const nodeEmitter = parseInt(comp.pins[2]);
-      stampConductance(nodeCollector, nodeEmitter, 1.0 / 1e6);
-      stampConductance(nodeBase, nodeEmitter, 1.0 / 1e9);
+      stampConductance(A, nodeCollector, nodeEmitter, 1.0 / 1e6);
+      stampConductance(A, nodeBase, nodeEmitter, 1.0 / 1e9);
     } else if (comp.type === 'switch') {
       const nodeA = parseInt(comp.pins[0]);
       const nodeB = parseInt(comp.pins[1]);
@@ -193,21 +171,21 @@ export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
       const ron = comp.switchRon ?? 0.01;
       const roff = comp.switchRoff ?? 1e9;
       const G = 1.0 / (isClosed ? ron : roff);
-      stampConductance(nodeA, nodeB, G);
+      stampConductance(A, nodeA, nodeB, G);
     } else if (comp.type === 'opamp') {
       const nodeInPos = parseInt(comp.pins[0]);
       const nodeInNeg = parseInt(comp.pins[1]);
       const nodeOut = parseInt(comp.pins[4]);
-      stampConductance(nodeInPos, nodeInNeg, 1.0 / 1e7);
-      stampConductance(nodeOut, 0, 1.0 / 100.0);
+      stampConductance(A, nodeInPos, nodeInNeg, 1.0 / 1e7);
+      stampConductance(A, nodeOut, 0, 1.0 / 100.0);
     } else if (comp.type === 'capacitor') {
       const nodeA = parseInt(comp.pins[0]);
       const nodeB = parseInt(comp.pins[1]);
-      stampConductance(nodeA, nodeB, 1.0 / 1e7);
+      stampConductance(A, nodeA, nodeB, 1.0 / 1e7);
     } else if (comp.type === 'inductor') {
       const nodeA = parseInt(comp.pins[0]);
       const nodeB = parseInt(comp.pins[1]);
-      stampConductance(nodeA, nodeB, 1.0 / 0.001);
+      stampConductance(A, nodeA, nodeB, 1.0 / 0.001);
     }
   }
 
@@ -269,25 +247,14 @@ export function solveTransientCircuitTS(
   tMax: number,
   componentFirmware: Readonly<Record<string, Uint8Array>>,
 ): TimeStepResult[] | string {
-  let maxNodeIdx = 0;
-  for (const comp of netlist.components) {
-    for (const pinNode of comp.pins) {
-      const idx = parseInt(pinNode);
-      if (idx > maxNodeIdx) maxNodeIdx = idx;
-    }
-  }
-
-  const n = maxNodeIdx;
+  const n = getMaxNodeIndex(netlist);
   const vSources = netlist.components.filter(c => c.type === 'vsource');
   const m = vSources.length;
   const size = n + m;
 
   if (size === 0) return "El circuito no tiene nodos activos o componentes.";
 
-  const vSourceMap: Record<string, number> = {};
-  vSources.forEach((vs, idx) => {
-    vSourceMap[vs.id] = idx;
-  });
+  const vSourceMap = createVoltageSourceMap(vSources);
 
   // Inicializar históricos de almacenamiento (condiciones iniciales cero)
   const capStates: Record<string, number> = {};
@@ -397,30 +364,8 @@ export function solveTransientCircuitTS(
     }
 
     // 2. Construir el sistema MNA para este paso de tiempo
-    const A: number[][] = Array(size).fill(0).map(() => Array(size).fill(0));
-    const Z: number[] = Array(size).fill(0);
-
-    const stampConductance = (nodeA: number, nodeB: number, G: number) => {
-      if (nodeA > 0) A[nodeA - 1][nodeA - 1] += G;
-      if (nodeB > 0) A[nodeB - 1][nodeB - 1] += G;
-      if (nodeA > 0 && nodeB > 0) {
-        A[nodeA - 1][nodeB - 1] -= G;
-        A[nodeB - 1][nodeA - 1] -= G;
-      }
-    };
-
-    const stampVoltageSource = (vsourceIdx: number, nodePos: number, nodeNeg: number, V: number) => {
-      const col = n + vsourceIdx;
-      if (nodePos > 0) {
-        A[nodePos - 1][col] += 1.0;
-        A[col][nodePos - 1] += 1.0;
-      }
-      if (nodeNeg > 0) {
-        A[nodeNeg - 1][col] -= 1.0;
-        A[col][nodeNeg - 1] -= 1.0;
-      }
-      Z[col] = V;
-    };
+    const system = createMnaSystem(size);
+    const { A, Z } = system;
 
     // Estampar componentes lineales base
     for (const comp of netlist.components) {
@@ -428,85 +373,49 @@ export function solveTransientCircuitTS(
         const nodeA = parseInt(comp.pins[0]);
         const nodeB = parseInt(comp.pins[1]);
         if (comp.value <= 1e-12) return `Resistencia nula detectada.`;
-        stampConductance(nodeA, nodeB, 1.0 / comp.value);
+        stampConductance(A, nodeA, nodeB, 1.0 / comp.value);
       } else if (comp.type === 'vsource') {
         const nodePos = parseInt(comp.pins[0]);
         const nodeNeg = parseInt(comp.pins[1]);
         const vsIdx = vSourceMap[comp.id];
 
-        let vVal = comp.value;
-        if (comp.waveType) {
-          const amp = comp.amplitude ?? 0;
-          const freq = comp.frequency ?? 1000;
-          const offset = comp.offset ?? 0;
-          const duty = comp.dutyCycle ?? 0.5;
+        const vVal = evaluateWaveformValue(comp, t);
 
-          if (comp.waveType === 'sine') {
-            vVal = offset + amp * Math.sin(2 * Math.PI * freq * t);
-          } else if (comp.waveType === 'square') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            vVal = (tMod < duty * period) ? (offset + amp) : (offset - amp);
-          } else if (comp.waveType === 'pulse') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            vVal = (tMod < duty * period) ? (offset + amp) : offset;
-          }
-        }
-
-        stampVoltageSource(vsIdx, nodePos, nodeNeg, vVal);
+        stampVoltageSource(system, n, vsIdx, nodePos, nodeNeg, vVal);
       } else if (comp.type === 'diode') {
         const nodeAnode = parseInt(comp.pins[0]);
         const nodeCathode = parseInt(comp.pins[1]);
-        stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
+        stampConductance(A, nodeAnode, nodeCathode, 1.0 / 50.0);
       } else if (comp.type === 'nmos') {
         const nodeGate = parseInt(comp.pins[0]);
         const nodeDrain = parseInt(comp.pins[1]);
         const nodeSource = parseInt(comp.pins[2]);
-        stampConductance(nodeDrain, nodeSource, 1.0 / 1e6);
-        stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
+        stampConductance(A, nodeDrain, nodeSource, 1.0 / 1e6);
+        stampConductance(A, nodeGate, nodeSource, 1.0 / 1e9);
       } else if (comp.type === 'pmos') {
         const nodeGate = parseInt(comp.pins[0]);
         const nodeDrain = parseInt(comp.pins[1]);
         const nodeSource = parseInt(comp.pins[2]);
-        stampConductance(nodeSource, nodeDrain, 1.0 / 1e6);
-        stampConductance(nodeGate, nodeSource, 1.0 / 1e9);
+        stampConductance(A, nodeSource, nodeDrain, 1.0 / 1e6);
+        stampConductance(A, nodeGate, nodeSource, 1.0 / 1e9);
       } else if (comp.type === 'npn' || comp.type === 'pnp') {
         const nodeBase = parseInt(comp.pins[0]);
         const nodeCollector = parseInt(comp.pins[1]);
         const nodeEmitter = parseInt(comp.pins[2]);
-        stampConductance(nodeCollector, nodeEmitter, 1.0 / 1e6);
-        stampConductance(nodeBase, nodeEmitter, 1.0 / 1e9);
+        stampConductance(A, nodeCollector, nodeEmitter, 1.0 / 1e6);
+        stampConductance(A, nodeBase, nodeEmitter, 1.0 / 1e9);
       } else if (comp.type === 'isource') {
         const nodePos = parseInt(comp.pins[0]);
         const nodeNeg = parseInt(comp.pins[1]);
 
-        let iVal = comp.value;
-        if (comp.waveType) {
-          const amp = comp.amplitude ?? 0;
-          const freq = comp.frequency ?? 1000;
-          const offset = comp.offset ?? 0;
-          const duty = comp.dutyCycle ?? 0.5;
-
-          if (comp.waveType === 'sine') {
-            iVal = offset + amp * Math.sin(2 * Math.PI * freq * t);
-          } else if (comp.waveType === 'square') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            iVal = (tMod < duty * period) ? (offset + amp) : (offset - amp);
-          } else if (comp.waveType === 'pulse') {
-            const period = 1.0 / freq;
-            const tMod = t % period;
-            iVal = (tMod < duty * period) ? (offset + amp) : offset;
-          }
-        }
+        const iVal = evaluateWaveformValue(comp, t);
 
         if (nodePos > 0) Z[nodePos - 1] -= iVal;
         if (nodeNeg > 0) Z[nodeNeg - 1] += iVal;
       } else if (comp.type === 'led') {
         const nodeAnode = parseInt(comp.pins[0]);
         const nodeCathode = parseInt(comp.pins[1]);
-        stampConductance(nodeAnode, nodeCathode, 1.0 / 50.0);
+        stampConductance(A, nodeAnode, nodeCathode, 1.0 / 50.0);
       } else if (comp.type === 'switch') {
         const nodeA = parseInt(comp.pins[0]);
         const nodeB = parseInt(comp.pins[1]);
@@ -514,13 +423,13 @@ export function solveTransientCircuitTS(
         const ron = comp.switchRon ?? 0.01;
         const roff = comp.switchRoff ?? 1e9;
         const G = 1.0 / (isClosed ? ron : roff);
-        stampConductance(nodeA, nodeB, G);
+        stampConductance(A, nodeA, nodeB, G);
       } else if (comp.type === 'opamp') {
         const nodeInPos = parseInt(comp.pins[0]);
         const nodeInNeg = parseInt(comp.pins[1]);
         const nodeOut = parseInt(comp.pins[4]);
-        stampConductance(nodeInPos, nodeInNeg, 1.0 / 1e7);
-        stampConductance(nodeOut, 0, 1.0 / 100.0);
+        stampConductance(A, nodeInPos, nodeInNeg, 1.0 / 1e7);
+        stampConductance(A, nodeOut, 0, 1.0 / 100.0);
       }
     }
 
@@ -535,15 +444,15 @@ export function solveTransientCircuitTS(
 
         if (pin.direction !== 'input') {
           if (pin.state === 1) {
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            stampConductance(A, nodeIdx, 0, 1.0 / 50.0);
             Z[nodeIdx - 1] += 5.0 / 50.0;
           } else if (pin.state === 0) {
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            stampConductance(A, nodeIdx, 0, 1.0 / 50.0);
           } else {
-            stampConductance(nodeIdx, 0, 1.0 / 1e6);
+            stampConductance(A, nodeIdx, 0, 1.0 / 1e6);
           }
         } else {
-          stampConductance(nodeIdx, 0, 1.0 / 1e6);
+          stampConductance(A, nodeIdx, 0, 1.0 / 1e6);
         }
       });
     }
@@ -560,17 +469,17 @@ export function solveTransientCircuitTS(
 
           if (pinIdx === 1) {
             const vOut = outputs[1] ?? 0.0;
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            stampConductance(A, nodeIdx, 0, 1.0 / 50.0);
             Z[nodeIdx - 1] += vOut / 50.0;
           } else if (pinIdx === 3) {
             const vDac = outputs[3] ?? 0.0;
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            stampConductance(A, nodeIdx, 0, 1.0 / 50.0);
             Z[nodeIdx - 1] += vDac / 50.0;
           } else if (pinIdx === 4) {
-            stampConductance(nodeIdx, 0, 1.0 / 50.0);
+            stampConductance(A, nodeIdx, 0, 1.0 / 50.0);
             Z[nodeIdx - 1] += vCC / 50.0;
           } else {
-            stampConductance(nodeIdx, 0, 1.0 / 1e6);
+            stampConductance(A, nodeIdx, 0, 1.0 / 1e6);
           }
         });
       }
@@ -582,29 +491,13 @@ export function solveTransientCircuitTS(
         const nodePos = parseInt(comp.pins[0]);
         const nodeNeg = parseInt(comp.pins[1]);
         const prevVc = capStates[comp.id] || 0.0;
-
-        // Modelo companion del capacitor con Euler Regresivo:
-        // g_eq = C/dt, i_eq = g_eq * Vc(t)
-        const gEq = comp.value / dt;
-        const iEq = gEq * prevVc;
-
-        stampConductance(nodePos, nodeNeg, gEq);
-        if (nodePos > 0) Z[nodePos - 1] += iEq;
-        if (nodeNeg > 0) Z[nodeNeg - 1] -= iEq;
+        stampCapacitorBackwardEuler(system, nodePos, nodeNeg, comp.value, dt, prevVc);
 
       } else if (comp.type === 'inductor') {
         const nodePos = parseInt(comp.pins[0]);
         const nodeNeg = parseInt(comp.pins[1]);
         const prevIl = indStates[comp.id] || 0.0;
-
-        // Modelo companion del inductor con Euler Regresivo:
-        // g_eq = dt/L, i_eq = Il(t)
-        const gEq = dt / comp.value;
-        const iEq = prevIl;
-
-        stampConductance(nodePos, nodeNeg, gEq);
-        if (nodePos > 0) Z[nodePos - 1] -= iEq;
-        if (nodeNeg > 0) Z[nodeNeg - 1] += iEq;
+        stampInductorBackwardEuler(system, nodePos, nodeNeg, comp.value, dt, prevIl);
       }
     }
 
@@ -636,19 +529,20 @@ export function solveTransientCircuitTS(
       if (comp.type === 'capacitor') {
         const nodePos = parseInt(comp.pins[0]);
         const nodeNeg = parseInt(comp.pins[1]);
-        const vPos = nodePos > 0 ? stepVoltages[nodePos.toString()] : 0.0;
-        const vNeg = nodeNeg > 0 ? stepVoltages[nodeNeg.toString()] : 0.0;
-        capStates[comp.id] = vPos - vNeg;
+        capStates[comp.id] = updateCapacitorVoltageState(nodePos, nodeNeg, stepVoltages);
 
       } else if (comp.type === 'inductor') {
         const nodePos = parseInt(comp.pins[0]);
         const nodeNeg = parseInt(comp.pins[1]);
-        const vPos = nodePos > 0 ? stepVoltages[nodePos.toString()] : 0.0;
-        const vNeg = nodeNeg > 0 ? stepVoltages[nodeNeg.toString()] : 0.0;
-        const newVl = vPos - vNeg;
-
         const prevIl = indStates[comp.id] || 0.0;
-        indStates[comp.id] = (dt / comp.value) * newVl + prevIl;
+        indStates[comp.id] = updateInductorCurrentState(
+          nodePos,
+          nodeNeg,
+          comp.value,
+          dt,
+          prevIl,
+          stepVoltages,
+        );
       }
     }
   }

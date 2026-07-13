@@ -21,7 +21,7 @@
 //     main.ts → dispatcher (NUNCA al revés)
 // ==========================================================================
 
-import { safeInvoke as invoke } from "./tauri_mock";
+import { invokeTyped, type SimulationDispatchResult } from "./tauri_commands";
 import { type CircuitNetlist } from "./netlist_extractor";
 import { type SimulationRunner } from "./simulation_runner";
 import { TelemetryPanel } from "../ui/telemetry_panel";
@@ -30,8 +30,13 @@ import { type AnalysisMode } from "../ui/simulation_controls";
 import { type TSResult } from "./fallback_solver";
 import { type TimeStepResult } from "../ui/oscilloscope_panel";
 import { classifySimulationError } from "./simulation-error";
+import { createFallbackAcDemoResult } from "./fallback_ac_demo";
+import {
+  findIsolatedActiveNodes,
+  hasIdealVoltageSourceCycle,
+} from "./erc_graph";
 
-let fallbackTimeoutId: any = null;
+let fallbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 export function clearPendingTimeouts(): void {
   if (fallbackTimeoutId !== null) {
@@ -141,64 +146,7 @@ export function runElectricalRuleCheck(
   }
 
   // 6. Conectividad a Tierra (subcircuitos aislados)
-  const allNodes = new Set<string>();
-  for (const comp of netlist.components) {
-    for (const node of comp.pins) {
-      allNodes.add(node);
-    }
-  }
-
-  const adjacencyList: Record<string, Set<string>> = {};
-  for (const node of allNodes) {
-    adjacencyList[node] = new Set<string>();
-  }
-  for (const comp of netlist.components) {
-    for (let i = 0; i < comp.pins.length; i++) {
-      for (let j = i + 1; j < comp.pins.length; j++) {
-        const nodeA = comp.pins[i];
-        const nodeB = comp.pins[j];
-        if (nodeA && nodeB && nodeA !== nodeB) {
-          adjacencyList[nodeA].add(nodeB);
-          adjacencyList[nodeB].add(nodeA);
-        }
-      }
-    }
-  }
-
-  const visited = new Set<string>();
-  if (allNodes.has("0")) {
-    const queue: string[] = ["0"];
-    visited.add("0");
-    while (queue.length > 0) {
-      const curr = queue.shift()!;
-      const neighbors = adjacencyList[curr];
-      if (neighbors) {
-        for (const neighbor of neighbors) {
-          if (!visited.has(neighbor)) {
-            visited.add(neighbor);
-            queue.push(neighbor);
-          }
-        }
-      }
-    }
-  }
-
-  const activeNodes = new Set<string>();
-  activeNodes.add("0");
-  if (netlist.wires) {
-    for (const w of netlist.wires) {
-      for (const n of w.nodes) {
-        activeNodes.add(n);
-      }
-    }
-  }
-
-  const isolatedNodes: string[] = [];
-  for (const node of allNodes) {
-    if (!visited.has(node) && activeNodes.has(node)) {
-      isolatedNodes.push(node);
-    }
-  }
+  const isolatedNodes = findIsolatedActiveNodes(netlist);
 
   if (isolatedNodes.length > 0) {
     const isolatedComps = new Set<string>();
@@ -215,49 +163,7 @@ export function runElectricalRuleCheck(
   }
 
   // 7. Bucle de fuentes de tensión ideales
-  const vsourceAdjacency: Record<string, string[]> = {};
-  for (const node of allNodes) {
-    vsourceAdjacency[node] = [];
-  }
-  for (const comp of netlist.components) {
-    if (comp.type === 'vsource') {
-      const nodeA = comp.pins[0];
-      const nodeB = comp.pins[1];
-      if (nodeA && nodeB && nodeA !== nodeB) {
-        vsourceAdjacency[nodeA].push(nodeB);
-        vsourceAdjacency[nodeB].push(nodeA);
-      }
-    }
-  }
-
-  const cycleVisited = new Set<string>();
-  let hasVsourceCycle = false;
-  
-  function dfsDetectCycle(node: string, parent: string | null): boolean {
-    cycleVisited.add(node);
-    const neighbors = vsourceAdjacency[node] || [];
-    for (const neighbor of neighbors) {
-      if (!cycleVisited.has(neighbor)) {
-        if (dfsDetectCycle(neighbor, node)) {
-          return true;
-        }
-      } else if (neighbor !== parent) {
-        return true;
-      }
-    }
-    return false;
-  }
-  
-  for (const node of allNodes) {
-    if (!cycleVisited.has(node)) {
-      if (dfsDetectCycle(node, null)) {
-        hasVsourceCycle = true;
-        break;
-      }
-    }
-  }
-  
-  if (hasVsourceCycle) {
+  if (hasIdealVoltageSourceCycle(netlist)) {
     errors.push("Bucle de fuentes de tensión detectado: Hay un lazo cerrado compuesto únicamente por fuentes de tensión ideales. Esto produce una corriente indeterminada (matriz singular).");
   }
 
@@ -283,7 +189,7 @@ export interface DispatchConfig {
 export interface DispatchCallbacks {
   addLog: (text: string, type: 'system' | 'send' | 'receive' | 'error') => void;
   /** Invocado al recibir resultados exitosos del solver (Rust o fallback TS) */
-  onResultsReady: (mode: AnalysisMode, results: any) => void;
+  onResultsReady: (mode: AnalysisMode, results: SimulationDispatchResult) => void;
   /** Actualiza el indicador de estado IPC en la barra de herramientas */
   onIpcStatusUpdate: (text: string, color: string) => void;
   updateCanvasRendering: () => void;
@@ -349,7 +255,7 @@ export async function dispatchSimulation(
       case 'AC': {
         callbacks.addLog("Enviando conexiones al motor de CA de Rust...", "send");
         const settings = { fStart: 10.0, fEnd: 100000.0, pointsPerDecade: 20 };
-        const results = await invoke<any>("run_ac_sweep", { netlist, settings });
+        const results = await invokeTyped("run_ac_sweep", { netlist, settings });
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [Respuesta en Frecuencia CA]!", "receive");
         callbacks.onResultsReady(mode, results);
         callbacks.onIpcStatusUpdate("Solucionador Rust Activo", "var(--accent-cyan)");
@@ -359,7 +265,7 @@ export async function dispatchSimulation(
 
       case 'SENS': {
         callbacks.addLog("Enviando conexiones al solucionador de sensibilidad de Rust...", "send");
-        const results = await invoke<any>("run_sensitivity_analysis", { netlist });
+        const results = await invokeTyped("run_sensitivity_analysis", { netlist });
         callbacks.addLog("¡Resultados de Sensibilidad calculados exitosamente en Rust!", "receive");
 
         // Mostrar resultados detallados en la consola
@@ -369,13 +275,12 @@ export async function dispatchSimulation(
           callbacks.addLog(`Componente: ${sens.componentId} (${sens.parameterName} = ${sens.parameterValue})`, "receive");
           for (const [node, absVal] of Object.entries(sens.absoluteSensitivities)) {
             const normVal = sens.normalizedSensitivities[node] || 0;
-            callbacks.addLog(`  • Nodo ${node}: Absoluta = ${(absVal as number).toFixed(6)} V/U | Normalizada = ${((normVal as number) * 100).toFixed(2)}%`, "receive");
+            callbacks.addLog(`  • Nodo ${node}: Absoluta = ${absVal.toFixed(6)} V/U | Normalizada = ${(normVal * 100).toFixed(2)}%`, "receive");
           }
         }
         callbacks.addLog("=== LÍMITES DE PEOR CASO (WORST-CASE LIMITS) ===", "system");
         for (const [node, limits] of Object.entries(results.worstCaseLimits)) {
-          const lim = limits as any;
-          callbacks.addLog(`  • Nodo ${node}: Nom = ${lim.nominalValue.toFixed(4)} V | Desviación = ±${lim.maxDeviation.toFixed(4)} V | Rango = [${lim.worstCaseLow.toFixed(4)} V, ${lim.worstCaseHigh.toFixed(4)} V]`, "receive");
+          callbacks.addLog(`  • Nodo ${node}: Nom = ${limits.nominalValue.toFixed(4)} V | Desviación = ±${limits.maxDeviation.toFixed(4)} V | Rango = [${limits.worstCaseLow.toFixed(4)} V, ${limits.worstCaseHigh.toFixed(4)} V]`, "receive");
         }
         callbacks.addLog("----------------------------------------------------------------", "system");
 
@@ -393,7 +298,7 @@ export async function dispatchSimulation(
           period = 1.0 / acSource.frequency;
         }
         const pssSettings = { period, maxShootingIters: 15, shootingTolerance: 1e-4 };
-        const results = await invoke<any>("run_pss_simulation", { netlist, settings: pssSettings });
+        const results = await invokeTyped("run_pss_simulation", { netlist, settings: pssSettings });
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [PSS Shooting Method]!", "receive");
         callbacks.onResultsReady(mode, results);
         callbacks.onIpcStatusUpdate("Solucionador Rust Activo", "var(--accent-cyan)");
@@ -403,7 +308,7 @@ export async function dispatchSimulation(
 
       case 'STB': {
         callbacks.addLog("Enviando conexiones al motor de análisis de Estabilidad [Polos y Ceros] de Rust...", "send");
-        const results = await invoke<any>("run_stability_analysis", { netlist });
+        const results = await invokeTyped("run_stability_analysis", { netlist });
         callbacks.addLog("¡Resultados de Estabilidad calculados exitosamente en Rust!", "receive");
 
         callbacks.addLog("----------------------------------------------------------------", "system");
@@ -412,7 +317,7 @@ export async function dispatchSimulation(
         callbacks.addLog(`Margen de Fase (Phase Margin): ${results.phaseMargin.toFixed(2)}º`, "receive");
         callbacks.addLog(`Margen de Ganancia (Gain Margin): ${results.gainMargin.toFixed(2)} dB`, "receive");
         callbacks.addLog("Lista de Polos del Sistema en el Plano de Laplace (s):", "receive");
-        results.poles.forEach((p: any, idx: number) => {
+        results.poles.forEach((p, idx) => {
           callbacks.addLog(`  • Polo ${idx + 1}: ${p.re.toFixed(2)} ${p.im >= 0 ? "+" : "-"} ${Math.abs(p.im).toFixed(2)}j rad/s`, "receive");
         });
         callbacks.addLog("----------------------------------------------------------------", "system");
@@ -426,7 +331,7 @@ export async function dispatchSimulation(
       default: {
         // DC — modo por defecto
         callbacks.addLog(`Enviando conexiones a Rust con ${netlist.components.length} componentes...`, "send");
-        const results = await invoke<any>("run_dc_simulation", { netlist });
+        const results = await invokeTyped("run_dc_simulation", { netlist });
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [MNA Newton-Raphson]!", "receive");
         callbacks.addLog("----------------------------------------------------------------", "system");
         callbacks.addLog("=== VOLTAJES DE NODOS (DC) ===", "system");
@@ -457,40 +362,7 @@ export async function dispatchSimulation(
         if (mode === 'AC') {
           // Filtro pasa-bajos demo para respuesta en frecuencia
           callbacks.addLog("Simulando respuesta en frecuencia del circuito localmente en navegador...", "receive");
-          const freqs: number[] = [];
-          const nodeAmplitudes: Record<string, number[]> = {};
-          const nodePhases: Record<string, number[]> = {};
-
-          const nodes = new Set<string>();
-          netlist.components.forEach(comp => {
-            comp.pins.forEach(pin => {
-              if (pin !== "0") nodes.add(pin);
-            });
-          });
-
-          const logMin = Math.log10(10);
-          const logMax = Math.log10(100000);
-          for (let i = 0; i <= 100; i++) {
-            const logVal = logMin + (i / 100) * (logMax - logMin);
-            freqs.push(Math.pow(10, logVal));
-          }
-
-          nodes.forEach(nodeId => {
-            const fc = nodeId === "1" ? 1000 : nodeId === "2" ? 10000 : 5000;
-            const amps: number[] = [];
-            const phases: number[] = [];
-            freqs.forEach(f => {
-              const ratio = f / fc;
-              const mag = 1.0 / Math.sqrt(1 + ratio * ratio);
-              const phase = -Math.atan(ratio) * (180 / Math.PI);
-              amps.push(20 * Math.log10(mag));
-              phases.push(phase);
-            });
-            nodeAmplitudes[nodeId] = amps;
-            nodePhases[nodeId] = phases;
-          });
-
-          const acResults = { frequencies: freqs, nodeAmplitudes, nodePhases };
+          const acResults = createFallbackAcDemoResult(netlist);
           callbacks.onResultsReady(mode, acResults);
           callbacks.onIpcStatusUpdate("Respaldo local Activo (Filtro Demo CA)", "var(--warning)");
           callbacks.updateCanvasRendering();

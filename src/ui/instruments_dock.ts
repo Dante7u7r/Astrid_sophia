@@ -9,6 +9,11 @@ import { LogicAnalyzerInstrument } from "./logic_analyzer_instrument";
 import { FftAnalyzerInstrument } from "./fft_analyzer_instrument";
 import { CurveTracerInstrument } from "./curve_tracer_instrument";
 import { CanvasOrchestrator } from "../canvas_orchestrator";
+import {
+  createNoopInstrumentCallbacks,
+  type InstrumentCallbacks,
+} from "./instrument_callbacks";
+import { updateQaState } from "../testing/qa_state";
 
 export class InstrumentsDock {
   private container: HTMLElement;
@@ -22,14 +27,18 @@ export class InstrumentsDock {
   public fftAnalyzer: FftAnalyzerInstrument | null = null;
   public curveTracer: CurveTracerInstrument | null = null;
 
-  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: any) {
+  constructor(
+    container: HTMLElement,
+    orchestrator: CanvasOrchestrator,
+    callbacks: Partial<InstrumentCallbacks>,
+  ) {
     this.container = container;
     this.tabs = this.container.querySelectorAll(".inst-tab");
     this.contents = this.container.querySelectorAll(".inst-content-box");
-    this.init(orchestrator, callbacks);
+    this.init(orchestrator, { ...createNoopInstrumentCallbacks(), ...callbacks });
   }
 
-  private init(orchestrator: CanvasOrchestrator, callbacks: any) {
+  private init(orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks) {
     // 1. Vincular clics de pestañas
     const tabList = this.container.querySelector(".instruments-tabs-bar");
     tabList?.setAttribute("role", "tablist");
@@ -94,6 +103,7 @@ export class InstrumentsDock {
 
   public switchTab(tabId: string) {
     this.activeTab = tabId;
+    updateQaState({ activeInstrumentTab: tabId });
 
     // Actualizar botones de pestaña
     this.tabs.forEach((tab) => {

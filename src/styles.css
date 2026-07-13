@@ -58,7 +58,7 @@
   --tabs-h:            36px;
 
   /* ── Efectos ── */
-  --glass-blur:       blur(20px) saturate(180%);
+  --glass-blur:       blur(8px) saturate(140%);
   --shadow-depth:     0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-glow-cyan: 0 0 20px rgba(91, 243, 228, 0.15), 0 0 40px rgba(91, 243, 228, 0.06);
   --transition:       all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);

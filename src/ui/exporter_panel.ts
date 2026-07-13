@@ -1,5 +1,32 @@
-import { type OscilloscopePanel } from "./oscilloscope_panel";
+import { type OscilloscopePanel, type TimeStepResult } from "./oscilloscope_panel";
+import {
+  type ExportSnapshot,
+  buildCsvExport,
+  buildSvgExport,
+  buildTouchstoneExport,
+} from "./exporter_model";
 import { type AnalysisMode } from "./simulation_controls";
+
+interface Hdf5LiteDatasetMetadata {
+  length: number;
+  type: "Float64";
+  unit: string;
+  node?: string;
+  offset?: number;
+  byteLength?: number;
+}
+
+interface Hdf5LiteMetadata {
+  creator: string;
+  timestamp: string;
+  analysisMode: AnalysisMode;
+  datasets: Record<string, Hdf5LiteDatasetMetadata>;
+  nodesList?: string[];
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export class ExporterPanel {
   constructor(
@@ -13,195 +40,25 @@ export class ExporterPanel {
   ) {}
 
   public exportarDatosCSV(): void {
-    let csvContent = "";
-    let filename = "reporte_simulacion.csv";
-
-    const oscilloscopePanel = this.callbacks.getOscilloscopePanel();
-    const activeAnalysisMode = this.callbacks.getActiveAnalysisMode();
-    const probes = this.callbacks.getProbeNodes();
-
-    const acResults = oscilloscopePanel ? oscilloscopePanel.acSweepResults : null;
-    const tranResults = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
-    const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : probes.ch1;
-    const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : probes.ch2;
-
-    if (activeAnalysisMode === 'AC' && acResults !== null) {
-      csvContent = "Frecuencia (Hz),Magnitud Canal 1 (dB),Fase Canal 1 (Grados),Magnitud Canal 2 (dB),Fase Canal 2 (Grados)\n";
-      const freqs = acResults.frequencies;
-      for (let i = 0; i < freqs.length; i++) {
-        const f = freqs[i];
-        const db1 = ch1Node ? acResults.nodeAmplitudes[ch1Node]?.[i] ?? 0.0 : 0.0;
-        const ph1 = ch1Node ? acResults.nodePhases[ch1Node]?.[i] ?? 0.0 : 0.0;
-        const db2 = ch2Node ? acResults.nodeAmplitudes[ch2Node]?.[i] ?? 0.0 : 0.0;
-        const ph2 = ch2Node ? acResults.nodePhases[ch2Node]?.[i] ?? 0.0 : 0.0;
-        csvContent += `${f.toFixed(2)},${db1.toFixed(4)},${ph1.toFixed(4)},${db2.toFixed(4)},${ph2.toFixed(4)}\n`;
-      }
-      filename = "reporte_barrido_ca.csv";
-    } else if ((activeAnalysisMode === 'TRAN' || activeAnalysisMode === 'PSS') && tranResults.length > 0) {
-      csvContent = "Tiempo (s),Voltaje Canal 1 (V),Voltaje Canal 2 (V)\n";
-      tranResults.forEach(pt => {
-        const v1 = ch1Node ? pt.nodeVoltages[ch1Node] ?? 0.0 : 0.0;
-        const v2 = ch2Node ? pt.nodeVoltages[ch2Node] ?? 0.0 : 0.0;
-        csvContent += `${pt.time.toFixed(6)},${v1.toFixed(5)},${v2.toFixed(5)}\n`;
-      });
-      filename = "reporte_transitorio.csv";
-    } else {
-      csvContent = "Nodo,Voltaje Operacion (V)\n";
-      for (const [node, volt] of Object.entries(this.callbacks.getVoltageMap())) {
-        csvContent += `${node},${volt.toFixed(5)}\n`;
-      }
-      filename = "reporte_punto_operacion_cc.csv";
-    }
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const { filename, content } = buildCsvExport(this.createExportSnapshot());
+    this.downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8;' }), filename);
     this.callbacks.addLog(`Datos exportados exitosamente a ${filename}`, "receive");
   }
 
   public exportarDatosSVG(): void {
-    let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" style="background:#030508; font-family:sans-serif;">`;
-    let filename = "grafico_simulacion.svg";
-
-    svgContent += `<rect width="800" height="400" fill="#030508" />`;
-    svgContent += `<text x="400" y="25" fill="hsl(174, 97%, 69%)" font-size="16" font-weight="bold" text-anchor="middle">Astryd Sophia v2.0 Evolution - Reporte Grafico</text>`;
-
-    const oscilloscopePanel = this.callbacks.getOscilloscopePanel();
-    const activeAnalysisMode = this.callbacks.getActiveAnalysisMode();
-    const probes = this.callbacks.getProbeNodes();
-
-    const acResults = oscilloscopePanel ? oscilloscopePanel.acSweepResults : null;
-    const tranResults = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
-    const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : probes.ch1;
-    const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : probes.ch2;
-
-    if (activeAnalysisMode === 'AC' && acResults !== null && acResults.frequencies.length > 0) {
-      filename = "grafico_barrido_ca.svg";
-      const freqs = acResults.frequencies;
-      const fMin = freqs[0];
-      const fMax = freqs[freqs.length - 1];
-
-      // Dibujar cuadrícula y líneas CA
-      svgContent += `<line x1="50" y1="350" x2="750" y2="350" stroke="#1e293b" stroke-width="1.5" />`;
-      svgContent += `<line x1="50" y1="50" x2="50" y2="350" stroke="#1e293b" stroke-width="1.5" />`;
-
-      const drawBodePlot = (node: string, color: string, name: string) => {
-        const amps = acResults.nodeAmplitudes[node];
-        if (!amps) return "";
-        let path = "";
-        for (let i = 0; i < freqs.length; i++) {
-          const ratio = (Math.log10(freqs[i]) - Math.log10(fMin)) / (Math.log10(fMax) - Math.log10(fMin));
-          const x = 50 + ratio * 700;
-          // Normalizar magnitud a un rango de -60 a 10 dB
-          const dbVal = Math.max(-60, Math.min(10, amps[i]));
-          const y = 350 - ((dbVal + 60) / 70) * 300;
-          path += `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)} `;
-        }
-        return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" /><text x="60" y="${node === ch1Node ? '70' : '90'}" fill="${color}" font-size="11" font-weight="bold">${name} (${node})</text>`;
-      };
-
-      if (ch1Node) svgContent += drawBodePlot(ch1Node, "hsl(174, 97%, 69%)", "Magnitud CH1");
-      if (ch2Node) svgContent += drawBodePlot(ch2Node, "hsl(270, 89%, 65%)", "Magnitud CH2");
-
-    } else if ((activeAnalysisMode === 'TRAN' || activeAnalysisMode === 'PSS') && tranResults.length > 0) {
-      filename = "grafico_transitorio.svg";
-      const tMax = tranResults[tranResults.length - 1].time;
-
-      svgContent += `<line x1="50" y1="350" x2="750" y2="350" stroke="#1e293b" stroke-width="1.5" />`;
-      svgContent += `<line x1="50" y1="50" x2="50" y2="350" stroke="#1e293b" stroke-width="1.5" />`;
-
-      const drawTranPlot = (node: string, color: string, name: string) => {
-        let path = "";
-        let minV = 0.0;
-        let maxV = 1.0;
-        tranResults.forEach(pt => {
-          const v = pt.nodeVoltages[node] ?? 0.0;
-          if (v < minV) minV = v;
-          if (v > maxV) maxV = v;
-        });
-        const vDiff = (maxV - minV) || 1.0;
-
-        for (let i = 0; i < tranResults.length; i++) {
-          const pt = tranResults[i];
-          const x = 50 + (pt.time / tMax) * 700;
-          const v = pt.nodeVoltages[node] ?? 0.0;
-          const y = 350 - ((v - minV) / vDiff) * 300;
-          path += `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)} `;
-        }
-        return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" /><text x="60" y="${node === ch1Node ? '70' : '90'}" fill="${color}" font-size="11" font-weight="bold">${name} (${node})</text>`;
-      };
-
-      if (ch1Node) svgContent += drawTranPlot(ch1Node, "hsl(174, 97%, 69%)", "Voltaje CH1");
-      if (ch2Node) svgContent += drawTranPlot(ch2Node, "hsl(270, 89%, 65%)", "Voltaje CH2");
-    } else {
-      svgContent += `<text x="400" y="200" fill="#64748b" font-size="14" text-anchor="middle">No hay curvas transitorias o de CA para exportar en este modo.</text>`;
-    }
-
-    svgContent += `</svg>`;
-
-    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const { filename, content } = buildSvgExport(this.createExportSnapshot());
+    this.downloadBlob(new Blob([content], { type: 'image/svg+xml;charset=utf-8' }), filename);
     this.callbacks.addLog(`Grafico vectorial exportado exitosamente a ${filename}`, "receive");
   }
 
   public exportarDatosTouchstone(): void {
-    const oscilloscopePanel = this.callbacks.getOscilloscopePanel();
-    const activeAnalysisMode = this.callbacks.getActiveAnalysisMode();
-    const probes = this.callbacks.getProbeNodes();
-
-    const acResults = oscilloscopePanel ? oscilloscopePanel.acSweepResults : null;
-    const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : probes.ch1;
-    const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : probes.ch2;
-
-    if (activeAnalysisMode !== 'AC' || !acResults || acResults.frequencies.length === 0) {
-      this.callbacks.addLog("Realiza un análisis de Barrido CA (AC Sweep) antes de exportar datos Touchstone.", "error");
+    const exportData = buildTouchstoneExport(this.createExportSnapshot(), new Date().toISOString());
+    if (!exportData) {
+      this.callbacks.addLog("Realiza un analisis de Barrido CA (AC Sweep) antes de exportar datos Touchstone.", "error");
       return;
     }
 
-    let s2pContent = `! Touchstone 2-Port File generated by Astryd Sophia v2.0 Evolution\n`;
-    s2pContent += `! Created on: ${new Date().toISOString()}\n`;
-    s2pContent += `! Source nodes: Port 1 = Node ${ch1Node ?? 'N/A'}, Port 2 = Node ${ch2Node ?? 'N/A'}\n`;
-    s2pContent += `# Hz S DB R 50\n`;
-
-    const freqs = acResults.frequencies;
-    for (let i = 0; i < freqs.length; i++) {
-      const f = freqs[i];
-      const s11_db = ch1Node ? acResults.nodeAmplitudes[ch1Node]?.[i] ?? -80.0 : -80.0;
-      const s11_phase = ch1Node ? acResults.nodePhases[ch1Node]?.[i] ?? 0.0 : 0.0;
-
-      const s21_db = ch2Node ? acResults.nodeAmplitudes[ch2Node]?.[i] ?? -80.0 : -80.0;
-      const s21_phase = ch2Node ? acResults.nodePhases[ch2Node]?.[i] ?? 0.0 : 0.0;
-
-      const s12_db = -80.0;
-      const s12_phase = 0.0;
-      const s22_db = -80.0;
-      const s22_phase = 0.0;
-
-      s2pContent += `${f.toFixed(4)} ${s11_db.toFixed(6)} ${s11_phase.toFixed(6)} ${s21_db.toFixed(6)} ${s21_phase.toFixed(6)} ${s12_db.toFixed(6)} ${s12_phase.toFixed(6)} ${s22_db.toFixed(6)} ${s22_phase.toFixed(6)}\n`;
-    }
-
-    const blob = new Blob([s2pContent], { type: 'text/plain;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "reporte_s2p.s2p");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    this.downloadBlob(new Blob([exportData.content], { type: 'text/plain;charset=utf-8;' }), exportData.filename);
     this.callbacks.addLog("Datos de Barrido CA exportados a formato Touchstone (.s2p) exitosamente.", "receive");
   }
 
@@ -215,7 +72,7 @@ export class ExporterPanel {
     const ch1Node = oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : probes.ch1;
     const ch2Node = oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : probes.ch2;
 
-    let metadata: any = {
+    const metadata: Hdf5LiteMetadata = {
       creator: "Astryd Sophia v2.0 Evolution",
       timestamp: new Date().toISOString(),
       analysisMode: activeAnalysisMode,
@@ -247,17 +104,21 @@ export class ExporterPanel {
       }
     } else if ((activeAnalysisMode === 'TRAN' || activeAnalysisMode === 'PSS') && tranResults.length > 0) {
       filename = "reporte_transitorio.h5";
-      const times = new Float64Array(tranResults.map((r: any) => r.time));
+      const times = new Float64Array(tranResults.map((result: TimeStepResult) => result.time));
       binaryArrays.push(times);
       metadata.datasets["time"] = { length: times.length, type: "Float64", unit: "s" };
 
       if (ch1Node) {
-        const v1 = new Float64Array(tranResults.map((r: any) => r.nodeVoltages[ch1Node] ?? 0.0));
+        const v1 = new Float64Array(
+          tranResults.map((result: TimeStepResult) => result.nodeVoltages[ch1Node] ?? 0.0),
+        );
         binaryArrays.push(v1);
         metadata.datasets[`ch1_voltage`] = { length: v1.length, type: "Float64", unit: "V", node: ch1Node };
       }
       if (ch2Node) {
-        const v2 = new Float64Array(tranResults.map((r: any) => r.nodeVoltages[ch2Node] ?? 0.0));
+        const v2 = new Float64Array(
+          tranResults.map((result: TimeStepResult) => result.nodeVoltages[ch2Node] ?? 0.0),
+        );
         binaryArrays.push(v2);
         metadata.datasets[`ch2_voltage`] = { length: v2.length, type: "Float64", unit: "V", node: ch2Node };
       }
@@ -277,7 +138,7 @@ export class ExporterPanel {
     const paddingNeeded = (8 - (currentOffset % 8)) % 8;
     currentOffset += paddingNeeded;
 
-    let datasetMetaKeys = Object.keys(metadata.datasets);
+    const datasetMetaKeys = Object.keys(metadata.datasets);
     for (let i = 0; i < binaryArrays.length; i++) {
       const key = datasetMetaKeys[i];
       if (metadata.datasets[key]) {
@@ -290,7 +151,7 @@ export class ExporterPanel {
     const finalJsonBytes = encoder.encode(JSON.stringify(metadata));
     const finalJsonLen = finalJsonBytes.byteLength;
     
-    let totalHeaderSize = 8 + 4 + finalJsonLen;
+    const totalHeaderSize = 8 + 4 + finalJsonLen;
     const finalPadding = (8 - (totalHeaderSize % 8)) % 8;
     const headerSizePadded = totalHeaderSize + finalPadding;
     
@@ -323,7 +184,25 @@ export class ExporterPanel {
       writeOffset += arr.byteLength;
     }
 
-    const blob = new Blob([mainBuffer], { type: 'application/octet-stream' });
+    this.downloadBlob(new Blob([mainBuffer], { type: 'application/octet-stream' }), filename);
+    this.callbacks.addLog(`Datos binarios exportados a formato HDF5 Lite (.h5) en ${filename}`, "receive");
+  }
+
+  private createExportSnapshot(): ExportSnapshot {
+    const oscilloscopePanel = this.callbacks.getOscilloscopePanel();
+    const probes = this.callbacks.getProbeNodes();
+
+    return {
+      activeAnalysisMode: this.callbacks.getActiveAnalysisMode(),
+      acResults: oscilloscopePanel ? oscilloscopePanel.acSweepResults : null,
+      transientResults: oscilloscopePanel ? oscilloscopePanel.transientResults : [],
+      ch1Node: oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : probes.ch1,
+      ch2Node: oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : probes.ch2,
+      voltageMap: this.callbacks.getVoltageMap(),
+    };
+  }
+
+  private downloadBlob(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -332,9 +211,8 @@ export class ExporterPanel {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    this.callbacks.addLog(`Datos binarios exportados a formato HDF5 Lite (.h5) en ${filename}`, "receive");
+    URL.revokeObjectURL(url);
   }
-
   private async getCanvasWithBackground(canvasId: string, backgroundColor: string): Promise<string> {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
     if (!canvas || canvas.width === 0 || canvas.height === 0) return "";
@@ -506,9 +384,9 @@ export class ExporterPanel {
 
       doc.save(`reporte_astryd_sophia_${activeAnalysisMode.toLowerCase()}.pdf`);
       this.callbacks.addLog("Reporte científico PDF descargado exitosamente.", "receive");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error al exportar PDF:", err);
-      this.callbacks.addLog(`Error al exportar PDF: ${err.message || err}`, "error");
+      this.callbacks.addLog(`Error al exportar PDF: ${formatErrorMessage(err)}`, "error");
     }
   }
 

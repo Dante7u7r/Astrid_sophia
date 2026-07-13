@@ -1,63 +1,32 @@
-import { type ComponentInstance, type CanvasOrchestrator } from "../canvas_orchestrator";
+import { type CanvasOrchestrator } from "../canvas_orchestrator";
+import type { CircuitDocumentPort } from "../app/circuit_document_controller";
+import { TabFileActions } from "./tab_file_actions";
+import { type OscilloscopePanel } from "./oscilloscope_panel";
+import { type AnalysisMode, type SimulationControls } from "./simulation_controls";
+import type { McuDebugPanel } from "./mcu_debug_panel";
+import { TabsView } from "./tabs_view";
+import { WorkspaceStore } from "./workspace_store";
 import {
-  type AcSweepResult,
-  type OscilloscopePanel,
-  type PvtTrace,
-  type TimeStepResult,
-} from "./oscilloscope_panel";
-import { type SParameterResult } from "../simulation";
-import { type AnalysisMode } from "./simulation_controls";
-import {
-  cloneCircuitComponents,
-  cloneCircuitWires,
-  createDefaultOscilloscopeState,
-  type PersistedOscilloscopeState,
-} from "../persistence/circuit_file";
+  captureRuntimeIntoTab,
+  restoreTabIntoRuntime,
+  type InitialTabData,
+  type Tab,
+  type TabProbeState,
+} from "./workspace_state";
 
-export interface TabProbeState {
-  ch1: string | null;
-  ch2: string | null;
-  ch3: string | null;
-  ch4: string | null;
-}
-
-export interface Tab {
-  id: string;
-  name: string;
-  components: ComponentInstance[];
-  wires: any[];
-  zoom: number;
-  offsetX: number;
-  offsetY: number;
-  filePath: string | null;
-  unsaved: boolean;
-  transientResults: TimeStepResult[];
-  acSweepResults: AcSweepResult | null;
-  pvtMode: boolean;
-  pvtTraces: PvtTrace[];
-  sparResult: SParameterResult | null;
-  sparCh1Index: number;
-  sparCh2Index: number;
-  sparPorts: { nodeId: string; z0: number }[];
-  voltageSnapshot: Record<string, number>;
-  oscilloscopeState: PersistedOscilloscopeState;
-  ch1ProbeNode: string | null;
-  ch2ProbeNode: string | null;
-  ch3ProbeNode: string | null;
-  ch4ProbeNode: string | null;
-  activeAnalysisMode: AnalysisMode;
-}
+export type { Tab, TabProbeState } from "./workspace_state";
 
 export class TabManager {
-  public tabs: Tab[] = [];
-  public activeTabId: string | null = null;
+  private readonly store = new WorkspaceStore();
+  private readonly tabsView = new TabsView();
+  private readonly fileActions: TabFileActions;
 
   constructor(
     private callbacks: {
       getOrchestrator: () => CanvasOrchestrator | null;
       getOscilloscopePanel: () => OscilloscopePanel | null;
-      getMcuDebugPanel: () => any;
-      getSimulationControls: () => any;
+      getMcuDebugPanel: () => McuDebugPanel | null;
+      getSimulationControls: () => SimulationControls | null;
       extractNetlist: () => void;
       updateCanvasRendering: () => void;
       getActiveAnalysisMode: () => AnalysisMode;
@@ -65,79 +34,135 @@ export class TabManager {
       getProbes: () => TabProbeState;
       setProbes: (probes: TabProbeState) => void;
       getSparPorts: () => { nodeId: string; z0: number }[];
-      setSparPorts: (ports: any[]) => void;
+      setSparPorts: (ports: { nodeId: string; z0: number }[]) => void;
       getVoltageSnapshot: () => Readonly<Record<string, number>>;
       setVoltageSnapshot: (voltages: Record<string, number>) => void;
       resetRuntimeState: () => void;
       canChangeActiveTab: () => boolean;
-      serializeCircuit: () => string;
-      addLog: (text: string, type?: 'system' | 'send' | 'receive' | 'error') => void;
-      invokeTauri: <T>(cmd: string, args?: any) => Promise<T>;
+      documentController: Pick<CircuitDocumentPort, "serializeCircuit">;
+      addLog: (text: string, type?: "system" | "send" | "receive" | "error") => void;
+      invokeTauri: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
     }
-  ) {}
+  ) {
+    this.fileActions = new TabFileActions({
+      getOrchestrator: callbacks.getOrchestrator,
+      getOscilloscopePanel: callbacks.getOscilloscopePanel,
+      getActiveAnalysisMode: callbacks.getActiveAnalysisMode,
+      getProbes: callbacks.getProbes,
+      getSparPorts: callbacks.getSparPorts,
+      getVoltageSnapshot: callbacks.getVoltageSnapshot,
+      documentController: callbacks.documentController,
+      addLog: callbacks.addLog,
+      invokeTauri: callbacks.invokeTauri,
+      renderTabsBar: () => {
+        this.renderTabsBar();
+      },
+    });
+  }
+
+  public get tabs(): Tab[] {
+    return this.store.getTabs();
+  }
+
+  public get activeTabId(): string | null {
+    return this.store.getActiveTabId();
+  }
+
+  public set activeTabId(tabId: string | null) {
+    this.store.setActiveTabId(tabId);
+  }
 
   public getTabs(): Tab[] {
-    return this.tabs;
+    return this.store.getTabs();
   }
 
   public getActiveTabId(): string | null {
-    return this.activeTabId;
+    return this.store.getActiveTabId();
   }
 
   public getActiveTab(): Tab | undefined {
-    return this.tabs.find(t => t.id === this.activeTabId);
+    return this.store.getActiveTab();
   }
 
-  public createNewTab(name?: string, initialData?: { components: any[], wires: any[], filePath: string | null }): Tab | null {
+  public getTabById(tabId: string): Tab | undefined {
+    return this.store.findTab(tabId);
+  }
+
+  public isActiveTab(tabId: string): boolean {
+    return this.store.getActiveTabId() === tabId;
+  }
+
+  public appendTransientFrameToTab(
+    tabId: string,
+    frame: {
+      time: number;
+      nodeVoltages: Readonly<Record<string, number>>;
+      branchCurrents: Readonly<Record<string, number>>;
+    },
+  ): Tab | undefined {
+    const tab = this.store.findTab(tabId);
+    if (!tab) return undefined;
+
+    tab.transientResults.push({
+      time: frame.time,
+      nodeVoltages: { ...frame.nodeVoltages },
+      branchCurrents: { ...frame.branchCurrents },
+    });
+    tab.voltageSnapshot = { ...frame.nodeVoltages };
+    return tab;
+  }
+
+  public bindTransientResultsToTab(tabId: string, transientResults: Tab["transientResults"]): Tab | undefined {
+    const tab = this.store.findTab(tabId);
+    if (!tab) return undefined;
+
+    tab.transientResults = transientResults;
+    return tab;
+  }
+
+  public isTabEmpty(tab: Tab): boolean {
+    return tab.components.length === 0
+      && tab.wires.length === 0
+      && tab.filePath === null
+      && !tab.unsaved;
+  }
+
+  public applyLoadedFileToTab(
+    tabId: string,
+    metadata: { name: string; filePath: string | null; unsaved?: boolean },
+  ): Tab | undefined {
+    const tab = this.store.findTab(tabId);
+    if (!tab) return undefined;
+
+    tab.name = metadata.name;
+    tab.filePath = metadata.filePath;
+    tab.unsaved = metadata.unsaved ?? false;
+    this.renderTabsBar();
+    return tab;
+  }
+
+  public createNewTab(name?: string, initialData?: InitialTabData): Tab | null {
     if (this.activeTabId && !this.callbacks.canChangeActiveTab()) {
       this.callbacks.addLog(
-        "Detén la simulación activa antes de crear otra pestaña.",
+        "Deten la simulacion activa antes de crear otra pestana.",
         "error",
       );
       return null;
     }
 
     const tabId = Math.random().toString(36).substring(2, 9);
-    const tabName = name || `Circuito ${this.tabs.length + 1}`;
-    
-    const newTab: Tab = {
-      id: tabId,
-      name: tabName,
-      components: initialData?.components || [],
-      wires: initialData?.wires || [],
-      zoom: 1.0,
-      offsetX: 0,
-      offsetY: 0,
-      filePath: initialData?.filePath || null,
-      unsaved: false,
-      transientResults: [],
-      acSweepResults: null,
-      pvtMode: false,
-      pvtTraces: [],
-      sparResult: null,
-      sparCh1Index: 0,
-      sparCh2Index: 1,
-      sparPorts: [],
-      voltageSnapshot: {},
-      oscilloscopeState: createDefaultOscilloscopeState(),
-      ch1ProbeNode: "1",
-      ch2ProbeNode: "2",
-      ch3ProbeNode: "3",
-      ch4ProbeNode: "4",
-      activeAnalysisMode: 'DC'
-    };
+    const newTab = this.store.createTab(tabId, name, initialData);
 
-    this.tabs.push(newTab);
     this.switchTab(tabId);
     return newTab;
   }
 
   public switchTab(tabId: string): boolean {
     if (this.activeTabId === tabId) return true;
-    if (!this.tabs.some(tab => tab.id === tabId)) return false;
+    if (!this.store.hasTab(tabId)) return false;
     if (this.activeTabId && !this.callbacks.canChangeActiveTab()) {
       this.callbacks.addLog(
-        "Detén la simulación activa antes de cambiar de pestaña.",
+        "Deten la simulacion activa antes de cambiar de pestana.",
         "error",
       );
       return false;
@@ -145,89 +170,35 @@ export class TabManager {
 
     const orchestrator = this.callbacks.getOrchestrator();
     const oscilloscopePanel = this.callbacks.getOscilloscopePanel();
-    const activeAnalysisMode = this.callbacks.getActiveAnalysisMode();
-    const probes = this.callbacks.getProbes();
 
-    // 1. Guardar el estado del tab actual
     if (this.activeTabId && orchestrator) {
-      const currentTab = this.tabs.find(t => t.id === this.activeTabId);
+      const currentTab = this.store.findTab(this.activeTabId);
       if (currentTab) {
-        currentTab.components = cloneCircuitComponents(orchestrator.components);
-        currentTab.wires = cloneCircuitWires(orchestrator.wires);
-        currentTab.zoom = orchestrator.zoom;
-        currentTab.offsetX = orchestrator.offsetX;
-        currentTab.offsetY = orchestrator.offsetY;
-        currentTab.activeAnalysisMode = activeAnalysisMode;
-        currentTab.ch1ProbeNode = probes.ch1;
-        currentTab.ch2ProbeNode = probes.ch2;
-        currentTab.ch3ProbeNode = probes.ch3;
-        currentTab.ch4ProbeNode = probes.ch4;
-        currentTab.sparPorts = this.callbacks.getSparPorts().map(port => ({ ...port }));
-        currentTab.voltageSnapshot = { ...this.callbacks.getVoltageSnapshot() };
-        if (oscilloscopePanel) {
-          currentTab.transientResults = oscilloscopePanel.transientResults;
-          currentTab.acSweepResults = oscilloscopePanel.acSweepResults;
-          currentTab.pvtMode = oscilloscopePanel.pvtMode;
-          currentTab.pvtTraces = oscilloscopePanel.pvtTraces;
-          currentTab.sparResult = oscilloscopePanel.sparResult;
-          currentTab.sparCh1Index = oscilloscopePanel.sparCh1Index;
-          currentTab.sparCh2Index = oscilloscopePanel.sparCh2Index;
-          currentTab.oscilloscopeState = oscilloscopePanel.getPersistentState();
-        }
+        captureRuntimeIntoTab(currentTab, {
+          orchestrator,
+          oscilloscopePanel,
+          activeAnalysisMode: this.callbacks.getActiveAnalysisMode(),
+          probes: this.callbacks.getProbes(),
+          sparPorts: this.callbacks.getSparPorts(),
+          voltageSnapshot: this.callbacks.getVoltageSnapshot(),
+        });
       }
     }
 
-    // 2. Cargar el estado del nuevo tab activo
-    this.activeTabId = tabId;
-    const targetTab = this.tabs.find(t => t.id === tabId);
+    this.store.setActiveTabId(tabId);
+    const targetTab = this.store.findTab(tabId);
     if (targetTab && orchestrator) {
-      orchestrator.selectedComponent = null;
-      orchestrator.selectedComponents = [];
-      orchestrator.selectedWire = null;
-      orchestrator.activePinForWire = null;
-      orchestrator.tempWireEnd = null;
-      orchestrator.selectionStart = null;
-      orchestrator.selectionEnd = null;
-
-      orchestrator.components = cloneCircuitComponents(targetTab.components);
-      orchestrator.wires = cloneCircuitWires(targetTab.wires);
-      orchestrator.zoom = targetTab.zoom;
-      orchestrator.offsetX = targetTab.offsetX;
-      orchestrator.offsetY = targetTab.offsetY;
-
-      this.callbacks.setActiveAnalysisMode(targetTab.activeAnalysisMode);
-      this.callbacks.setProbes({
-        ch1: targetTab.ch1ProbeNode,
-        ch2: targetTab.ch2ProbeNode,
-        ch3: targetTab.ch3ProbeNode,
-        ch4: targetTab.ch4ProbeNode,
+      restoreTabIntoRuntime(targetTab, {
+        orchestrator,
+        oscilloscopePanel,
+        simulationControls: this.callbacks.getSimulationControls(),
+        setActiveAnalysisMode: this.callbacks.setActiveAnalysisMode,
+        setProbes: this.callbacks.setProbes,
+        setSparPorts: this.callbacks.setSparPorts,
+        setVoltageSnapshot: this.callbacks.setVoltageSnapshot,
+        resetRuntimeState: this.callbacks.resetRuntimeState,
       });
-
-      const simulationControls = this.callbacks.getSimulationControls();
-      if (simulationControls) {
-        simulationControls.setActiveModeButton(targetTab.activeAnalysisMode);
-      }
-
-      if (oscilloscopePanel) {
-        oscilloscopePanel.activeAnalysisMode = targetTab.activeAnalysisMode;
-        oscilloscopePanel.ch1ProbeNode = targetTab.ch1ProbeNode;
-        oscilloscopePanel.ch2ProbeNode = targetTab.ch2ProbeNode;
-        oscilloscopePanel.ch3ProbeNode = targetTab.ch3ProbeNode;
-        oscilloscopePanel.ch4ProbeNode = targetTab.ch4ProbeNode;
-        oscilloscopePanel.transientResults = targetTab.transientResults;
-        oscilloscopePanel.acSweepResults = targetTab.acSweepResults;
-        oscilloscopePanel.sweepTime = 0.0;
-        oscilloscopePanel.pvtMode = targetTab.pvtMode;
-        oscilloscopePanel.pvtTraces = targetTab.pvtTraces;
-        oscilloscopePanel.sparResult = targetTab.sparResult;
-        oscilloscopePanel.sparCh1Index = targetTab.sparCh1Index;
-        oscilloscopePanel.sparCh2Index = targetTab.sparCh2Index;
-        oscilloscopePanel.applyPersistentState(targetTab.oscilloscopeState);
-      }
-      this.callbacks.setSparPorts(targetTab.sparPorts.map(port => ({ ...port })));
-      this.callbacks.resetRuntimeState();
-      this.callbacks.setVoltageSnapshot({ ...targetTab.voltageSnapshot });
-      document.querySelectorAll('.pvt-profile-btn').forEach(el => el.remove());
+      document.querySelectorAll(".pvt-profile-btn").forEach(el => el.remove());
 
       this.callbacks.extractNetlist();
       this.callbacks.updateCanvasRendering();
@@ -244,35 +215,36 @@ export class TabManager {
   }
 
   public async closeTab(tabId: string) {
-    const tabIndex = this.tabs.findIndex(t => t.id === tabId);
+    const tabIndex = this.store.indexOf(tabId);
     if (tabIndex === -1) return;
 
-    const targetTab = this.tabs[tabIndex];
+    const targetTab = this.store.findTab(tabId);
+    if (!targetTab) return;
 
     if (this.activeTabId === tabId && !this.callbacks.canChangeActiveTab()) {
       this.callbacks.addLog(
-        "Detén la simulación activa antes de cerrar esta pestaña.",
+        "Deten la simulacion activa antes de cerrar esta pestana.",
         "error",
       );
       return;
     }
 
     if (targetTab.unsaved) {
-      const confirmClose = confirm(`La pestaña "${targetTab.name}" tiene cambios no guardados. ¿Deseas cerrarla de todas formas?`);
+      const confirmClose = confirm(`La pestana "${targetTab.name}" tiene cambios no guardados. Deseas cerrarla de todas formas?`);
       if (!confirmClose) return;
     }
 
-    this.tabs.splice(tabIndex, 1);
+    this.store.removeTab(tabId);
 
     const orchestrator = this.callbacks.getOrchestrator();
 
     if (this.activeTabId === tabId) {
-      if (this.tabs.length > 0) {
-        const nextActiveIdx = Math.max(0, tabIndex - 1);
-        this.activeTabId = null;
-        this.switchTab(this.tabs[nextActiveIdx].id);
+      const fallbackTabId = this.store.getFallbackTabIdAfterRemoval(tabIndex);
+      if (fallbackTabId) {
+        this.store.setActiveTabId(null);
+        this.switchTab(fallbackTabId);
       } else {
-        this.activeTabId = null;
+        this.store.setActiveTabId(null);
         if (orchestrator) {
           orchestrator.components = [];
           orchestrator.wires = [];
@@ -284,116 +256,42 @@ export class TabManager {
     }
   }
 
+  public async closeActiveTab(): Promise<void> {
+    const activeTabId = this.store.getActiveTabId();
+    if (activeTabId) {
+      await this.closeTab(activeTabId);
+    }
+  }
+
   public renderTabsBar() {
-    const container = document.querySelector("#tabs-container");
-    if (!container) return;
-
-    container.innerHTML = "";
-
-    this.tabs.forEach(tab => {
-      const tabEl = document.createElement("div");
-      tabEl.className = `tab-item${tab.id === this.activeTabId ? " active" : ""}`;
-      tabEl.setAttribute("data-id", tab.id);
-
-      const nameSpan = document.createElement("span");
-      nameSpan.textContent = tab.name;
-      tabEl.appendChild(nameSpan);
-
-      if (tab.unsaved) {
-        const dot = document.createElement("span");
-        dot.className = "tab-unsaved";
-        tabEl.appendChild(dot);
-      }
-
-      const closeBtn = document.createElement("button");
-      closeBtn.className = "tab-close";
-      closeBtn.innerHTML = "&times;";
-      closeBtn.type = "button";
-      closeBtn.title = "Cerrar pestaña";
-      closeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.closeTab(tab.id);
-      });
-
-      tabEl.appendChild(closeBtn);
-
-      tabEl.addEventListener("click", () => {
-        this.switchTab(tab.id);
-      });
-
-      container.appendChild(tabEl);
+    this.tabsView.render(this.store.getTabs(), this.store.getActiveTabId(), {
+      onSelect: (tabId) => {
+        this.switchTab(tabId);
+      },
+      onClose: (tabId) => {
+        void this.closeTab(tabId);
+      },
     });
   }
 
   public markCurrentTabAsModified() {
-    const currentTab = this.tabs.find(t => t.id === this.activeTabId);
-    if (currentTab && !currentTab.unsaved) {
-      currentTab.unsaved = true;
+    if (this.store.markActiveTabAsModified()) {
       this.renderTabsBar();
     }
   }
 
   public async saveCircuitDirect() {
-    const currentTab = this.tabs.find(t => t.id === this.activeTabId);
+    const currentTab = this.store.getActiveTab();
     if (!currentTab) return;
 
-    const orchestrator = this.callbacks.getOrchestrator();
-
-    if (currentTab.filePath) {
-      this.callbacks.addLog(`Guardando esquemático directamente en: [${currentTab.filePath}]...`, "system");
-      try {
-        if (orchestrator) {
-          currentTab.components = cloneCircuitComponents(orchestrator.components);
-          currentTab.wires = cloneCircuitWires(orchestrator.wires);
-          currentTab.zoom = orchestrator.zoom;
-          currentTab.offsetX = orchestrator.offsetX;
-          currentTab.offsetY = orchestrator.offsetY;
-        }
-
-        const jsonStr = this.callbacks.serializeCircuit();
-        await this.callbacks.invokeTauri("save_circuit_to_path", { path: currentTab.filePath, content: jsonStr });
-        currentTab.unsaved = false;
-        this.renderTabsBar();
-        this.callbacks.addLog(`Esquemático guardado con éxito.`, "receive");
-      } catch (err) {
-        this.callbacks.addLog(`Error al guardar esquemático: ${err}`, "error");
-      }
-    } else {
-      this.saveCircuitAs();
-    }
+    await this.fileActions.saveDirect(currentTab, () => this.saveCircuitAs());
   }
 
   public async saveCircuitAs() {
-    const currentTab = this.tabs.find(t => t.id === this.activeTabId);
+    const currentTab = this.store.getActiveTab();
     if (!currentTab) return;
 
-    this.callbacks.addLog("Abriendo diálogo para guardar esquemático...", "system");
-    const orchestrator = this.callbacks.getOrchestrator();
-    try {
-      if (orchestrator) {
-        currentTab.components = cloneCircuitComponents(orchestrator.components);
-        currentTab.wires = cloneCircuitWires(orchestrator.wires);
-        currentTab.zoom = orchestrator.zoom;
-        currentTab.offsetX = orchestrator.offsetX;
-        currentTab.offsetY = orchestrator.offsetY;
-      }
-
-      const jsonStr = this.callbacks.serializeCircuit();
-      const savedPath = await this.callbacks.invokeTauri<string>("save_circuit_file", { content: jsonStr });
-      if (savedPath) {
-        currentTab.filePath = savedPath;
-        currentTab.name = savedPath.split(/[/\\]/).pop() || "esquematico.astryd";
-        currentTab.unsaved = false;
-        this.renderTabsBar();
-        this.callbacks.addLog(`Esquemático guardado con éxito en: [${savedPath}]`, "receive");
-      }
-    } catch (err) {
-      if (err !== "Operación cancelada por el usuario") {
-        this.callbacks.addLog(`Error al guardar esquemático: ${err}`, "error");
-      } else {
-        this.callbacks.addLog("Operación de guardado cancelada.", "system");
-      }
-    }
+    await this.fileActions.saveAs(currentTab);
   }
 
   public init(onAddTabShortcut: () => void) {
@@ -404,7 +302,6 @@ export class TabManager {
       });
     }
 
-    // Crear primera pestaña por defecto
     this.createNewTab("Circuito 1");
     onAddTabShortcut();
   }

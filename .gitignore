@@ -38,6 +38,7 @@ htmlcov/
 .coverage
 .nyc_output/
 visual-audit-results/
+performance-audit-results/
 audit-*.png
 audit-*.json
 pw-*.log

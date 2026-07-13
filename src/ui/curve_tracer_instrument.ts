@@ -3,18 +3,19 @@
  */
 
 import { CanvasOrchestrator } from "../canvas_orchestrator";
+import type { InstrumentCallbacks } from "./instrument_callbacks";
 
 export class CurveTracerInstrument {
   private container: HTMLElement;
   private orchestrator: CanvasOrchestrator;
-  private callbacks: any;
+  private callbacks: InstrumentCallbacks;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
 
   // Selected semiconductor for tracing
   private selectedCompId: string | null = null;
 
-  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: any) {
+  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks) {
     this.container = container;
     this.orchestrator = orchestrator;
     this.callbacks = callbacks;

@@ -1,3 +1,5 @@
+import type { InstrumentCallbacks } from "./instrument_callbacks";
+
 /**
  * FftAnalyzerInstrument — Analizador de Espectro (FFT) en Tiempo Real
  */
@@ -11,7 +13,7 @@ export class FftAnalyzerInstrument {
   private activeChannel: "CH1" | "CH2" = "CH1";
   private rawData: { time: number; val: number }[] = [];
 
-  constructor(container: HTMLElement, _callbacks: any) {
+  constructor(container: HTMLElement, _callbacks: InstrumentCallbacks) {
     this.container = container;
     this.render();
     this.initCanvas();

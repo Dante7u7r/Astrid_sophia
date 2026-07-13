@@ -17,6 +17,12 @@ import {
   DMM_VOLTAGE_INPUT_RESISTANCE,
   normalizeDmmMode,
 } from "./dmm";
+import {
+  DisjointSetUnion,
+  assignRootNode,
+  mapPinKeysToNodes,
+  pinKey,
+} from "./netlist_node_model";
 
 // ==========================================================================
 // INTERFACES DE LA NETLIST ELÉCTRICA
@@ -135,31 +141,6 @@ export function validateSchematicIntegrity(
 // inversa de Ackermann — esencialmente constante para cualquier N práctico.
 // ==========================================================================
 
-class DisjointSetUnion {
-  private parent: Record<string, string> = {};
-
-  find(i: string): string {
-    if (!this.parent[i]) {
-      this.parent[i] = i;
-      return i;
-    }
-    if (this.parent[i] === i) {
-      return i;
-    }
-    const root = this.find(this.parent[i]);
-    this.parent[i] = root;
-    return root;
-  }
-
-  union(i: string, j: string): void {
-    const rootI = this.find(i);
-    const rootJ = this.find(j);
-    if (rootI !== rootJ) {
-      this.parent[rootI] = rootJ;
-    }
-  }
-}
-
 // ==========================================================================
 // EXTRACCIÓN DE NETLIST ELÉCTRICA
 //
@@ -194,10 +175,10 @@ export function extractElectricalNetlist(
   for (const comp of components) {
     if (comp.type === 'relay') {
       compPinMapping[comp.id] = [
-        `${comp.id}:0`,
-        `${comp.id}:1`,
-        `${comp.id}:2`,
-        `${comp.id}:3`,
+        pinKey(comp.id, 0),
+        pinKey(comp.id, 1),
+        pinKey(comp.id, 2),
+        pinKey(comp.id, 3),
         `${comp.id}:internal`,
       ];
       allPinKeys.push(`${comp.id}:0`, `${comp.id}:1`, `${comp.id}:2`, `${comp.id}:3`, `${comp.id}:internal`);
@@ -205,17 +186,17 @@ export function extractElectricalNetlist(
       const pins = getPins(comp);
       compPinMapping[comp.id] = [];
       for (const pin of pins) {
-        const pinKey = `${comp.id}:${pin.pinIndex}`;
-        allPinKeys.push(pinKey);
-        compPinMapping[comp.id].push(pinKey);
+        const key = pinKey(comp.id, pin.pinIndex);
+        allPinKeys.push(key);
+        compPinMapping[comp.id].push(key);
       }
     }
   }
 
   // 2. Unir los pins que están conectados por cables (wires)
   for (const wire of wires) {
-    const keyFrom = `${wire.from.componentId}:${wire.from.pinIndex}`;
-    const keyTo = `${wire.to.componentId}:${wire.to.pinIndex}`;
+    const keyFrom = pinKey(wire.from.componentId, wire.from.pinIndex);
+    const keyTo = pinKey(wire.to.componentId, wire.to.pinIndex);
     dsu.union(keyFrom, keyTo);
   }
 
@@ -231,7 +212,7 @@ export function extractElectricalNetlist(
 
   // 4. Mapear cada raíz de grupo a un índice de nodo eléctrico único
   const rootToNodeIdMap: Record<string, string> = {};
-  let nextNodeId = 1;
+  const nextNodeId = { value: 1 };
 
   if (gndRoot) {
     rootToNodeIdMap[gndRoot] = "0";
@@ -244,14 +225,7 @@ export function extractElectricalNetlist(
     const pinsKeys = compPinMapping[comp.id] || [];
 
     if (comp.type === 'potentiometer') {
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -277,14 +251,7 @@ export function extractElectricalNetlist(
         pins: [pin1Node, pin2Node],
       });
     } else if (comp.type === 'ldr') {
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -299,14 +266,7 @@ export function extractElectricalNetlist(
         pins: [pin0Node, pin1Node],
       });
     } else if (comp.type === 'dmm') {
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -336,14 +296,7 @@ export function extractElectricalNetlist(
         });
       }
     } else if (comp.type === 'thermistor') {
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -363,14 +316,8 @@ export function extractElectricalNetlist(
       });
     } else if (comp.type === 'lamp') {
       const model = parseLampActuatorModel(comp.value?.toString() ?? "");
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+
       extractedComponents.push({
         id: comp.id,
         type: 'resistor',
@@ -379,14 +326,8 @@ export function extractElectricalNetlist(
       });
     } else if (comp.type === 'buzzer') {
       const model = parseBuzzerActuatorModel(comp.value?.toString() ?? "");
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+
       extractedComponents.push({
         id: comp.id,
         type: 'resistor',
@@ -403,10 +344,7 @@ export function extractElectricalNetlist(
 
       const roots = [pin0Root, pin1Root, pin2Root, pin3Root, internalRoot];
       roots.forEach(r => {
-        if (!rootToNodeIdMap[r]) {
-          rootToNodeIdMap[r] = nextNodeId.toString();
-          nextNodeId++;
-        }
+        assignRootNode(rootToNodeIdMap, r, nextNodeId);
       });
 
       const pin0Node = rootToNodeIdMap[pin0Root];
@@ -445,10 +383,7 @@ export function extractElectricalNetlist(
 
       const roots = [pin0Root, pin1Root, pin2Root, pin3Root];
       roots.forEach(r => {
-        if (!rootToNodeIdMap[r]) {
-          rootToNodeIdMap[r] = nextNodeId.toString();
-          nextNodeId++;
-        }
+        assignRootNode(rootToNodeIdMap, r, nextNodeId);
       });
 
       const priNode1 = rootToNodeIdMap[pin0Root];
@@ -484,14 +419,7 @@ export function extractElectricalNetlist(
         k_coeff: k,
       });
     } else if (comp.type === 'opamp') {
-      const pinsMapped = pinsKeys.map(pk => {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        return rootToNodeIdMap[root];
-      });
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0"; // In+
       const pin1Node = pinsMapped[1] || "0"; // In-
@@ -501,11 +429,7 @@ export function extractElectricalNetlist(
 
       // Crear nodo interno para insertar la tensión offset en serie
       const internalOffsetNode = `${comp.id}__offset_node`;
-      if (!rootToNodeIdMap[internalOffsetNode]) {
-        rootToNodeIdMap[internalOffsetNode] = nextNodeId.toString();
-        nextNodeId++;
-      }
-      const offsetNodeId = rootToNodeIdMap[internalOffsetNode];
+      const offsetNodeId = assignRootNode(rootToNodeIdMap, internalOffsetNode, nextNodeId);
 
       const vos = comp.offsetVoltage !== undefined ? Number(comp.offsetVoltage) : 0.002;
       const aol = comp.openLoopGain !== undefined ? Number(comp.openLoopGain) : 100000.0;
@@ -527,15 +451,7 @@ export function extractElectricalNetlist(
         pins: [offsetNodeId, pin1Node, pin2Node, pin3Node, pin4Node],
       });
     } else {
-      const pinsMapped: string[] = [];
-      for (const pk of pinsKeys) {
-        const root = dsu.find(pk);
-        if (!rootToNodeIdMap[root]) {
-          rootToNodeIdMap[root] = nextNodeId.toString();
-          nextNodeId++;
-        }
-        pinsMapped.push(rootToNodeIdMap[root]);
-      }
+      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
 
       let subcircuitName: string | undefined;
       if (comp.type === 'x' && comp.spiceMacro) {

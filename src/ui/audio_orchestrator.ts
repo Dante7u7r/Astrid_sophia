@@ -1,3 +1,7 @@
+interface WindowWithWebkitAudio extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 export class AudioOrchestrator {
   private ctx: AudioContext | null = null;
   private activeBuzzers = new Map<string, { osc: OscillatorNode; gain: GainNode }>();
@@ -5,7 +9,7 @@ export class AudioOrchestrator {
 
   private initContext() {
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
       }

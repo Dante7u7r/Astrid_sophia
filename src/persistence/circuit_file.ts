@@ -2,11 +2,18 @@ import {
   findDuplicateComponentIds,
   isValidComponentId,
   type ComponentInstance,
-  type Point2D,
   type WireInstance,
 } from "../canvas_orchestrator";
 import type { AnalysisMode } from "../ui/simulation_controls";
 import { normalizeDmmMode } from "../simulation/dmm";
+import {
+  CircuitFileValidationError,
+  finiteInteger,
+  finiteNumber,
+  isRecord,
+  nullableString,
+  parsePoint,
+} from "./circuit_file_validators";
 
 export const CURRENT_CIRCUIT_FILE_VERSION = "3.0";
 
@@ -111,6 +118,14 @@ const STRING_COMPONENT_FIELDS = [
   "spiceMacro",
 ] as const;
 
+type NumericComponentField = (typeof NUMERIC_COMPONENT_FIELDS)[number];
+type BooleanComponentField = (typeof BOOLEAN_COMPONENT_FIELDS)[number];
+type StringComponentField = (typeof STRING_COMPONENT_FIELDS)[number];
+type WritableParsedComponent = ComponentInstance
+  & Partial<Record<NumericComponentField, number>>
+  & Partial<Record<BooleanComponentField, boolean>>
+  & Partial<Record<StringComponentField, string>>;
+
 const DEFAULT_OSCILLOSCOPE: PersistedOscilloscopeState = {
   channelsEnabled: [true, false, false, false],
   voltsPerDiv: [1, 1, 1, 1],
@@ -133,42 +148,6 @@ export function createDefaultOscilloscopeState(): PersistedOscilloscopeState {
     channelsEnabled: [...DEFAULT_OSCILLOSCOPE.channelsEnabled],
     voltsPerDiv: [...DEFAULT_OSCILLOSCOPE.voltsPerDiv],
     offsets: [...DEFAULT_OSCILLOSCOPE.offsets],
-  };
-}
-
-class CircuitFileValidationError extends Error {}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNumber(value: unknown, path: string, fallback?: number): number {
-  if (value === undefined && fallback !== undefined) return fallback;
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new CircuitFileValidationError(`${path} debe ser un numero finito.`);
-  }
-  return value;
-}
-
-function finiteInteger(value: unknown, path: string, fallback?: number): number {
-  const parsed = finiteNumber(value, path, fallback);
-  if (!Number.isInteger(parsed)) {
-    throw new CircuitFileValidationError(`${path} debe ser un entero.`);
-  }
-  return parsed;
-}
-
-function nullableString(value: unknown, path: string, fallback: string | null): string | null {
-  if (value === undefined) return fallback;
-  if (typeof value === "string" || value === null) return value;
-  throw new CircuitFileValidationError(`${path} debe ser texto o null.`);
-}
-
-function parsePoint(value: unknown, path: string): Point2D {
-  if (!isRecord(value)) throw new CircuitFileValidationError(`${path} no es un punto valido.`);
-  return {
-    x: finiteNumber(value.x, `${path}.x`),
-    y: finiteNumber(value.y, `${path}.y`),
   };
 }
 
@@ -218,7 +197,7 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
     y: finiteNumber(value.y, `${path}.y`),
     rotation: finiteNumber(value.rotation, `${path}.rotation`, 0),
   };
-  const writable = component as unknown as Record<string, unknown>;
+  const writable: WritableParsedComponent = component;
 
   for (const field of NUMERIC_COMPONENT_FIELDS) {
     if (value[field] !== undefined) writable[field] = finiteNumber(value[field], `${path}.${field}`);

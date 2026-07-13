@@ -27,8 +27,33 @@
 
 import { ActuatorHistoryManager } from "../ui/actuator_helpers";
 import { AudioOrchestrator } from "../ui/audio_orchestrator";
+import type {
+  ComponentInstance,
+  PinInstance,
+  Point2D,
+  WireInstance,
+} from "../canvas_orchestrator";
 import { type SimulationFrame } from "./simulation_runner";
 import { resetRuntime } from "./mcu-runtime";
+
+interface DemoLoadOscilloscopeState {
+  transientResults: unknown[];
+  acSweepResults: unknown | null;
+  sweepTime: number;
+  draw?: () => void;
+}
+
+interface DemoLoadOrchestratorState {
+  components: ComponentInstance[];
+  wires: WireInstance[];
+  selectedComponent: ComponentInstance | null;
+  selectedComponents: ComponentInstance[];
+  selectedWire: WireInstance | null;
+  activePinForWire: PinInstance | null;
+  tempWireEnd: Point2D | null;
+  selectionStart: Point2D | null;
+  selectionEnd: Point2D | null;
+}
 
 // ==========================================================================
 // VoltageSnapshot — Instantánea de voltajes para el inspector de tiempo
@@ -129,7 +154,10 @@ export class CircuitStateManager {
    * resetea los estados de los pines de todos los microcontroladores,
    * limpia el netlist extraído y pone a cero todos los vectores de voltaje.
    */
-  prepareForDemoLoad(oscilloscopePanel: any, orchestrator: any): void {
+  prepareForDemoLoad(
+    oscilloscopePanel: DemoLoadOscilloscopeState | null,
+    orchestrator: DemoLoadOrchestratorState | null,
+  ): void {
     // 1. Limpiar de forma explícita y absoluta todo el historial del osciloscopio
     if (oscilloscopePanel) {
       oscilloscopePanel.transientResults = [];

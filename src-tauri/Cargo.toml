@@ -1,8 +1,8 @@
 [package]
 name = "astryd-sophia"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Simulador de circuitos electronicos de escritorio"
+authors = ["Astryd Sophia Project"]
 edition = "2021"
 default-run = "astryd-sophia"
 
@@ -38,4 +38,3 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
-
