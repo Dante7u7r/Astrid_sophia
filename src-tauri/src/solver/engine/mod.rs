@@ -2,6 +2,8 @@ pub mod ac;
 pub mod advanced;
 pub mod dc;
 pub mod devices;
+mod live_mutations;
+pub mod simulation_types;
 pub mod transient;
 
 #[cfg(test)]
@@ -11,4 +13,5 @@ pub use ac::*;
 pub use advanced::*;
 pub use dc::*;
 pub use devices::*;
+pub use simulation_types::*;
 pub use transient::*;

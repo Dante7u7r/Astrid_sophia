@@ -12,6 +12,7 @@ use super::ac::*;
 use super::dc::*;
 #[allow(unused_imports)]
 use super::devices::*;
+use super::simulation_types::{TimeStepResult, TransientSettings};
 #[allow(unused_imports)]
 use super::transient::*;
 
