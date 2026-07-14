@@ -15,6 +15,11 @@ use super::dc::*;
 use super::devices::*;
 use super::live_mutations::take_live_mutations;
 use super::simulation_types::{TimeStepResult, TransientSettings};
+use super::transient_setup::{
+    has_transient_nonlinearity, initialize_device_junction_temperatures,
+    initialize_energy_storage_states, initialize_mcu_transient_state, EnergyStorageState,
+    McuTransientState,
+};
 
 pub fn solve_transient_circuit(
     netlist: &CircuitNetlist,
@@ -99,123 +104,26 @@ where
         vsource_map.insert(vs.id.clone(), idx);
     }
 
-    // Inicializar estados de los almacenes de energía (Capacitores y Bobinas) con valores pasados o 0.0
-    let mut cap_states: HashMap<String, f64> = HashMap::new();
-    let mut ind_states: HashMap<String, f64> = HashMap::new();
-    let mut cap_states_prev: HashMap<String, f64> = HashMap::new();
-    let mut ind_states_prev: HashMap<String, f64> = HashMap::new();
-    let mut cap_currents: HashMap<String, f64> = HashMap::new();
-    let mut ind_voltages: HashMap<String, f64> = HashMap::new();
-    let mut switch_states: HashMap<String, bool> = HashMap::new();
+    let EnergyStorageState {
+        mut cap_states,
+        mut ind_states,
+        mut cap_states_prev,
+        mut ind_states_prev,
+        mut cap_currents,
+        mut ind_voltages,
+        mut switch_states,
+    } = initialize_energy_storage_states(netlist, &cap_init, &ind_init);
 
-    // Extraer .ic_directive a un mapa local para facilidad de acceso
-    let mut ic_map = HashMap::new();
-    for comp in &netlist.components {
-        if comp.comp_type == "ic_directive" {
-            if let Some(node) = comp.pins.first() {
-                ic_map.insert(node.clone(), comp.value);
-            }
-        }
-    }
-    let has_ic = !ic_map.is_empty();
-
-    for comp in &netlist.components {
-        if comp.comp_type == "capacitor" {
-            let pin_a = &comp.pins[0];
-            let pin_b = &comp.pins[1];
-            let mut v_ic = 0.0;
-            if has_ic {
-                let v_a = if pin_a == "0" {
-                    0.0
-                } else {
-                    *ic_map.get(pin_a).unwrap_or(&0.0)
-                };
-                let v_b = if pin_b == "0" {
-                    0.0
-                } else {
-                    *ic_map.get(pin_b).unwrap_or(&0.0)
-                };
-                v_ic = v_a - v_b;
-            }
-            let val = if has_ic {
-                v_ic
-            } else {
-                *cap_init.get(&comp.id).unwrap_or(&0.0)
-            };
-            cap_states.insert(comp.id.clone(), val);
-            cap_states_prev.insert(comp.id.clone(), val);
-            cap_currents.insert(comp.id.clone(), 0.0);
-        } else if comp.comp_type == "inductor" {
-            let val = *ind_init.get(&comp.id).unwrap_or(&0.0);
-            ind_states.insert(comp.id.clone(), val);
-            ind_states_prev.insert(comp.id.clone(), val);
-            ind_voltages.insert(comp.id.clone(), 0.0);
-        } else if comp.comp_type == "switch" {
-            switch_states.insert(comp.id.clone(), comp.switch_state.unwrap_or(false));
-        }
-    }
-
-    let has_nonlinear = netlist.components.iter().any(|c| {
-        c.comp_type == "diode"
-            || c.comp_type == "led"
-            || c.comp_type == "opto"
-            || c.comp_type == "nmos"
-            || c.comp_type == "pmos"
-            || c.comp_type == "npn"
-            || c.comp_type == "pnp"
-            || c.comp_type == "opamp"
-            || c.comp_type == "bsim3nmos"
-            || c.comp_type == "bsim3pmos"
-            || c.comp_type == "bsim4nmos"
-            || c.comp_type == "bsim4pmos"
-            || c.comp_type.ends_with("_gate")
-            || c.comp_type == "arduino_uno"
-            || c.comp_type == "esp32"
-            || c.comp_type == "raspberry_pi_pico"
-            || c.comp_type == "bvoltage"
-            || c.comp_type == "bcurrent"
-            || c.comp_type == "njf"
-            || c.comp_type == "pjf"
-            || c.comp_type == "switch"
-    });
-
-    let mut mcu_tchip: HashMap<String, f64> = HashMap::new();
-    let mut mcu_vsample: HashMap<String, f64> = HashMap::new();
-    let mut mcu_vdaceff: HashMap<String, f64> = HashMap::new();
+    let has_nonlinear = has_transient_nonlinearity(netlist);
 
     let t_amb = netlist.temperature.unwrap_or(300.0);
 
-    for comp in &netlist.components {
-        if comp.comp_type == "arduino_uno"
-            || comp.comp_type == "esp32"
-            || comp.comp_type == "raspberry_pi_pico"
-        {
-            mcu_tchip.insert(comp.id.clone(), t_amb);
-            mcu_vsample.insert(comp.id.clone(), 0.0);
-            mcu_vdaceff.insert(comp.id.clone(), 0.0);
-        }
-    }
-
-    // Temperaturas de unión para self-heating de dispositivos discretos (Diodos, BJTs, MOSFETs, Optos)
-    let mut device_tjunc: HashMap<String, f64> = HashMap::new();
-    for comp in &netlist.components {
-        if comp.comp_type == "diode"
-            || comp.comp_type == "led"
-            || comp.comp_type == "nmos"
-            || comp.comp_type == "pmos"
-            || comp.comp_type == "npn"
-            || comp.comp_type == "pnp"
-            || comp.comp_type == "bsim3nmos"
-            || comp.comp_type == "bsim3pmos"
-            || comp.comp_type == "bsim4nmos"
-            || comp.comp_type == "bsim4pmos"
-            || comp.comp_type == "njf"
-            || comp.comp_type == "pjf"
-            || comp.comp_type == "opto"
-        {
-            device_tjunc.insert(comp.id.clone(), t_amb);
-        }
-    }
+    let McuTransientState {
+        mut mcu_tchip,
+        mut mcu_vsample,
+        mut mcu_vdaceff,
+    } = initialize_mcu_transient_state(netlist, t_amb);
+    let mut device_tjunc = initialize_device_junction_temperatures(netlist, t_amb);
 
     // Armar la matriz lineal estática BASE (Resistores, Fuentes de voltaje independientes)
     let mut matrix_a_linear = DMatrix::<f64>::zeros(size, size);
