@@ -14,6 +14,7 @@ use super::dc::*;
 #[allow(unused_imports)]
 use super::devices::*;
 use super::simulation_types::{TimeStepResult, TransientSettings};
+use super::transient_mixed_signal::initialize_mixed_signal_scheduler;
 use super::transient_setup::{
     apply_static_live_overrides, drain_live_overrides, has_transient_nonlinearity,
     initialize_device_junction_temperatures, initialize_energy_storage_states,
@@ -138,41 +139,7 @@ where
         &mut vector_z_linear,
     )?;
 
-    // Inicializar planificador Mixed-Signal y estados iniciales
-    let mut ms_scheduler = MixedSignalScheduler::new();
-    for comp in &netlist.components {
-        if comp.comp_type.ends_with("_gate") {
-            let is_not = comp.comp_type == "not_gate";
-            let po = if is_not { 1 } else { 2 };
-            // Estado inicial LOW por defecto
-            ms_scheduler.set_state(&comp.id, po, false);
-            // Inicializar voltajes de entrada analógicos pasados en el scheduler
-            ms_scheduler
-                .last_analog_v
-                .entry(comp.id.clone())
-                .or_default()
-                .insert(0, 0.0);
-            if !is_not {
-                ms_scheduler
-                    .last_analog_v
-                    .get_mut(&comp.id)
-                    .unwrap()
-                    .insert(1, 0.0);
-            }
-        } else if comp.comp_type == "arduino_uno"
-            || comp.comp_type == "esp32"
-            || comp.comp_type == "raspberry_pi_pico"
-        {
-            // Salida digital inicial LOW (pin_idx = 1 es output)
-            ms_scheduler.set_state(&comp.id, 1, false);
-            // Schedulizar el primer McuPeriodicTick a t = 0.0
-            ms_scheduler.schedule_event(MixedSignalEvent {
-                time: 0.0,
-                component_id: comp.id.clone(),
-                event_type: MixedSignalEventType::McuPeriodicTick,
-            });
-        }
-    }
+    let mut ms_scheduler = initialize_mixed_signal_scheduler(netlist);
 
     // VARIABLES DE TIEMPO ADAPTATIVO
     let mut dt = settings.dt;
