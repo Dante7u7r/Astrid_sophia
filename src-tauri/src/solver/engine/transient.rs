@@ -23,6 +23,9 @@ use super::transient_setup::{
     initialize_mcu_transient_state, ComponentOverrideMap, EnergyStorageState, McuTransientState,
 };
 use super::transient_sources::stamp_dynamic_transient_sources;
+use super::transient_state_updates::{
+    update_coupled_inductor_states, update_passive_storage_states, IntegrationHistoryParams,
+};
 use super::transient_switches::update_switch_states;
 
 pub fn solve_transient_circuit(
@@ -2215,74 +2218,28 @@ where
                 detect_mixed_signal_crossings(netlist, &mut ms_scheduler, &step_solution, t, dt);
                 process_mixed_signal_events(netlist, &mut ms_scheduler, t + dt);
 
+                let integration_history = IntegrationHistoryParams {
+                    integration_method,
+                    gear2_active_this_step,
+                    gear_a,
+                    gear_b,
+                    gear_c,
+                    dt,
+                };
+
+                update_passive_storage_states(
+                    netlist,
+                    &step_solution,
+                    &mut cap_states,
+                    &mut cap_states_prev,
+                    &mut ind_states,
+                    &mut ind_states_prev,
+                    &integration_history,
+                );
+
                 // --- ACTUALIZAR DEFINITIVAMENTE LOS HISTÓRICOS DE ESTADO ---
                 for comp in &netlist.components {
                     match comp.comp_type.as_str() {
-                        "capacitor" => {
-                            let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                            let node_neg = comp.pins[1].parse::<usize>().unwrap();
-
-                            let v_pos = if node_pos > 0 {
-                                step_solution[node_pos - 1]
-                            } else {
-                                0.0
-                            };
-                            let v_neg = if node_neg > 0 {
-                                step_solution[node_neg - 1]
-                            } else {
-                                0.0
-                            };
-
-                            let new_vc = v_pos - v_neg;
-                            let prev_vc = *cap_states.get(&comp.id).unwrap_or(&0.0);
-                            cap_states_prev.insert(comp.id.clone(), prev_vc);
-                            cap_states.insert(comp.id.clone(), new_vc);
-                        }
-                        "inductor" => {
-                            let is_coupled = if let Some(ref mutuals) = netlist.mutual_inductances {
-                                mutuals
-                                    .iter()
-                                    .any(|m| m.l1_id == comp.id || m.l2_id == comp.id)
-                            } else {
-                                false
-                            };
-                            if is_coupled {
-                                continue;
-                            }
-                            if integration_method == "trap" {
-                                continue; // Already updated in TRAP block above
-                            }
-
-                            let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                            let node_neg = comp.pins[1].parse::<usize>().unwrap();
-
-                            let v_pos = if node_pos > 0 {
-                                step_solution[node_pos - 1]
-                            } else {
-                                0.0
-                            };
-                            let v_neg = if node_neg > 0 {
-                                step_solution[node_neg - 1]
-                            } else {
-                                0.0
-                            };
-
-                            let new_vl = v_pos - v_neg;
-                            let prev_il = *ind_states.get(&comp.id).unwrap();
-                            let prev_prev_il = *ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
-
-                            let new_il = if gear2_active_this_step {
-                                let g_eq = 1.0 / (gear_a * comp.value);
-                                let i_eq_val =
-                                    -(gear_b / gear_a) * prev_il - (gear_c / gear_a) * prev_prev_il;
-                                g_eq * new_vl + i_eq_val
-                            } else {
-                                (dt / comp.value) * new_vl + prev_il
-                            };
-
-                            ind_states_prev.insert(comp.id.clone(), prev_il);
-                            ind_states.insert(comp.id.clone(), new_il);
-                        }
                         "arduino_uno" | "esp32" | "raspberry_pi_pico" if comp.pins.len() >= 6 => {
                             let _pin_in = comp.pins[0].parse::<usize>().unwrap_or(0);
                             let pin_out = comp.pins[1].parse::<usize>().unwrap_or(0);
@@ -2458,90 +2415,13 @@ where
                     }
                 }
 
-                // ACTUALIZAR ESTADOS DE INDUCTORES ACOPLADOS (Inductancia Mutua K)
-                if let Some(ref mutuals) = netlist.mutual_inductances {
-                    for k_comp in mutuals {
-                        if let (Some(l1), Some(l2)) = (
-                            netlist.components.iter().find(|c| c.id == k_comp.l1_id),
-                            netlist.components.iter().find(|c| c.id == k_comp.l2_id),
-                        ) {
-                            let node_1pos = l1.pins[0].parse::<usize>().unwrap();
-                            let node_1neg = l1.pins[1].parse::<usize>().unwrap();
-                            let node_2pos = l2.pins[0].parse::<usize>().unwrap();
-                            let node_2neg = l2.pins[1].parse::<usize>().unwrap();
-
-                            let v_1pos = if node_1pos > 0 {
-                                step_solution[node_1pos - 1]
-                            } else {
-                                0.0
-                            };
-                            let v_1neg = if node_1neg > 0 {
-                                step_solution[node_1neg - 1]
-                            } else {
-                                0.0
-                            };
-                            let v_2pos = if node_2pos > 0 {
-                                step_solution[node_2pos - 1]
-                            } else {
-                                0.0
-                            };
-                            let v_2neg = if node_2neg > 0 {
-                                step_solution[node_2neg - 1]
-                            } else {
-                                0.0
-                            };
-
-                            let v1 = v_1pos - v_1neg;
-                            let v2 = v_2pos - v_2neg;
-
-                            let l1_val = l1.value;
-                            let l2_val = l2.value;
-                            let k = k_comp.k_coeff;
-
-                            let m = k * (l1_val * l2_val).sqrt();
-                            let delta = l1_val * l2_val - m * m;
-
-                            if delta.abs() > 1e-30 {
-                                let prev_il1 = *ind_states.get(&l1.id).unwrap_or(&0.0);
-                                let prev_il2 = *ind_states.get(&l2.id).unwrap_or(&0.0);
-
-                                let f_step = if gear2_active_this_step {
-                                    1.0 / gear_a
-                                } else {
-                                    dt
-                                };
-
-                                let g11 = (f_step * l2_val) / delta;
-                                let g22 = (f_step * l1_val) / delta;
-                                let g12 = -(f_step * m) / delta;
-
-                                let (i_eq1, i_eq2) = if gear2_active_this_step {
-                                    let prev_prev_il1 =
-                                        *ind_states_prev.get(&l1.id).unwrap_or(&prev_il1);
-                                    let prev_prev_il2 =
-                                        *ind_states_prev.get(&l2.id).unwrap_or(&prev_il2);
-                                    (
-                                        -(gear_b / gear_a) * prev_il1
-                                            - (gear_c / gear_a) * prev_prev_il1,
-                                        -(gear_b / gear_a) * prev_il2
-                                            - (gear_c / gear_a) * prev_prev_il2,
-                                    )
-                                } else {
-                                    (prev_il1, prev_il2)
-                                };
-
-                                let new_il1 = g11 * v1 + g12 * v2 + i_eq1;
-                                let new_il2 = g12 * v1 + g22 * v2 + i_eq2;
-
-                                ind_states_prev.insert(l1.id.clone(), prev_il1);
-                                ind_states.insert(l1.id.clone(), new_il1);
-
-                                ind_states_prev.insert(l2.id.clone(), prev_il2);
-                                ind_states.insert(l2.id.clone(), new_il2);
-                            }
-                        }
-                    }
-                }
+                update_coupled_inductor_states(
+                    netlist,
+                    &step_solution,
+                    &mut ind_states,
+                    &mut ind_states_prev,
+                    &integration_history,
+                );
 
                 // SELF-HEATING: Actualizar temperaturas de unión de dispositivos discretos
                 for comp in &netlist.components {

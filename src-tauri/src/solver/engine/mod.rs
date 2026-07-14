@@ -8,6 +8,7 @@ pub mod transient;
 mod transient_mixed_signal;
 mod transient_setup;
 mod transient_sources;
+mod transient_state_updates;
 mod transient_switches;
 
 #[cfg(test)]
