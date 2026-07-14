@@ -1,5 +1,11 @@
 use crate::solver::types::{CircuitNetlist, ComponentData};
+use nalgebra::{DMatrix, DVector};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use super::live_mutations::take_live_mutations;
+
+pub(crate) type ComponentOverrideMap = HashMap<String, HashMap<String, f64>>;
 
 pub(crate) struct EnergyStorageState {
     pub cap_states: HashMap<String, f64>,
@@ -15,6 +21,65 @@ pub(crate) struct McuTransientState {
     pub mcu_tchip: HashMap<String, f64>,
     pub mcu_vsample: HashMap<String, f64>,
     pub mcu_vdaceff: HashMap<String, f64>,
+}
+
+pub(crate) fn drain_live_overrides(
+    local_overrides: &mut ComponentOverrideMap,
+    live_overrides: &Option<Arc<Mutex<Vec<crate::ComponentMutation>>>>,
+    live_run_id: Option<u64>,
+) {
+    if let Some(queue) = live_overrides {
+        if let Ok(mut guard) = queue.lock() {
+            for mutation in take_live_mutations(&mut guard, live_run_id) {
+                local_overrides
+                    .entry(mutation.component_id)
+                    .or_default()
+                    .insert(mutation.field, mutation.value);
+            }
+        }
+    }
+}
+
+pub(crate) fn apply_static_live_overrides(
+    netlist: &CircuitNetlist,
+    n: usize,
+    vsource_map: &HashMap<String, usize>,
+    local_overrides: &ComponentOverrideMap,
+    matrix_a: &mut DMatrix<f64>,
+    vector_z: &mut DVector<f64>,
+) {
+    for (comp_id, fields) in local_overrides {
+        if let Some(&new_val) = fields.get("value") {
+            if let Some(comp) = netlist.components.iter().find(|c| c.id == *comp_id) {
+                match comp.comp_type.as_str() {
+                    "resistor" => {
+                        apply_resistor_value_override(comp, new_val, matrix_a);
+                    }
+                    "vsource" => {
+                        if comp.wave_type.is_none() {
+                            if let Some(&vs_idx) = vsource_map.get(comp_id) {
+                                vector_z[n + vs_idx] += new_val - comp.value;
+                            }
+                        }
+                    }
+                    "isource" => {
+                        if comp.wave_type.is_none() {
+                            let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                            let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
+                            let diff = new_val - comp.value;
+                            if node_pos > 0 {
+                                vector_z[node_pos - 1] -= diff;
+                            }
+                            if node_neg > 0 {
+                                vector_z[node_neg - 1] += diff;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn initialize_energy_storage_states(
@@ -150,6 +215,28 @@ fn capacitor_initial_voltage(comp: &ComponentData, ic_map: &HashMap<String, f64>
         *ic_map.get(pin_b).unwrap_or(&0.0)
     };
     v_a - v_b
+}
+
+fn apply_resistor_value_override(comp: &ComponentData, new_val: f64, matrix_a: &mut DMatrix<f64>) {
+    if comp.value <= 0.0 || new_val <= 0.0 {
+        return;
+    }
+
+    let g_old = 1.0 / comp.value;
+    let g_new = 1.0 / new_val;
+    let dg = g_new - g_old;
+    let node_a = comp.pins[0].parse::<usize>().unwrap_or(0);
+    let node_b = comp.pins[1].parse::<usize>().unwrap_or(0);
+    if node_a > 0 {
+        matrix_a[(node_a - 1, node_a - 1)] += dg;
+    }
+    if node_b > 0 {
+        matrix_a[(node_b - 1, node_b - 1)] += dg;
+    }
+    if node_a > 0 && node_b > 0 {
+        matrix_a[(node_a - 1, node_b - 1)] -= dg;
+        matrix_a[(node_b - 1, node_a - 1)] -= dg;
+    }
 }
 
 fn is_mcu_component(comp: &ComponentData) -> bool {

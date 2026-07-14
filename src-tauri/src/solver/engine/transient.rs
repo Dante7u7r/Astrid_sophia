@@ -13,12 +13,11 @@ use super::advanced::*;
 use super::dc::*;
 #[allow(unused_imports)]
 use super::devices::*;
-use super::live_mutations::take_live_mutations;
 use super::simulation_types::{TimeStepResult, TransientSettings};
 use super::transient_setup::{
-    has_transient_nonlinearity, initialize_device_junction_temperatures,
-    initialize_energy_storage_states, initialize_mcu_transient_state, EnergyStorageState,
-    McuTransientState,
+    apply_static_live_overrides, drain_live_overrides, has_transient_nonlinearity,
+    initialize_device_junction_temperatures, initialize_energy_storage_states,
+    initialize_mcu_transient_state, ComponentOverrideMap, EnergyStorageState, McuTransientState,
 };
 
 pub fn solve_transient_circuit(
@@ -192,21 +191,11 @@ where
 
     let mut results = Vec::new();
     let mut current_solution = DVector::<f64>::zeros(size);
-    let mut local_overrides: HashMap<String, HashMap<String, f64>> = HashMap::new();
+    let mut local_overrides = ComponentOverrideMap::new();
 
     // Iterar en el tiempo de forma dinámica
     while t <= t_max {
-        // Drenar mutaciones en caliente hacia el mapa local de overrides
-        if let Some(ref queue) = live_overrides {
-            if let Ok(mut guard) = queue.lock() {
-                for mutation in take_live_mutations(&mut guard, live_run_id) {
-                    local_overrides
-                        .entry(mutation.component_id)
-                        .or_default()
-                        .insert(mutation.field, mutation.value);
-                }
-            }
-        }
+        drain_live_overrides(&mut local_overrides, &live_overrides, live_run_id);
 
         let gear2_active_this_step = integration_method == "gear2" && steps_completed >= 2;
 
@@ -236,56 +225,14 @@ where
         let mut matrix_a = matrix_a_linear.clone();
         let mut vector_z = vector_z_linear.clone();
 
-        // Aplicar overrides sobre la matriz y vector clonados (resistor DC, fuente DC)
-        for (comp_id, fields) in &local_overrides {
-            if let Some(&new_val) = fields.get("value") {
-                if let Some(comp) = netlist.components.iter().find(|c| c.id == *comp_id) {
-                    match comp.comp_type.as_str() {
-                        "resistor" => {
-                            if comp.value > 0.0 && new_val > 0.0 {
-                                let g_old = 1.0 / comp.value;
-                                let g_new = 1.0 / new_val;
-                                let dg = g_new - g_old;
-                                let node_a = comp.pins[0].parse::<usize>().unwrap_or(0);
-                                let node_b = comp.pins[1].parse::<usize>().unwrap_or(0);
-                                if node_a > 0 {
-                                    matrix_a[(node_a - 1, node_a - 1)] += dg;
-                                }
-                                if node_b > 0 {
-                                    matrix_a[(node_b - 1, node_b - 1)] += dg;
-                                }
-                                if node_a > 0 && node_b > 0 {
-                                    matrix_a[(node_a - 1, node_b - 1)] -= dg;
-                                    matrix_a[(node_b - 1, node_a - 1)] -= dg;
-                                }
-                            }
-                        }
-                        "vsource" => {
-                            if comp.wave_type.is_none() {
-                                if let Some(&vs_idx) = vsource_map.get(comp_id) {
-                                    let diff = new_val - comp.value;
-                                    vector_z[n + vs_idx] += diff;
-                                }
-                            }
-                        }
-                        "isource" => {
-                            if comp.wave_type.is_none() {
-                                let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
-                                let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
-                                let diff = new_val - comp.value;
-                                if node_pos > 0 {
-                                    vector_z[node_pos - 1] -= diff;
-                                }
-                                if node_neg > 0 {
-                                    vector_z[node_neg - 1] += diff;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
+        apply_static_live_overrides(
+            netlist,
+            n,
+            &vsource_map,
+            &local_overrides,
+            &mut matrix_a,
+            &mut vector_z,
+        );
 
         // Actualizar fuentes de tensión dinámicas transitorias para el t actual
         for comp in &netlist.components {
