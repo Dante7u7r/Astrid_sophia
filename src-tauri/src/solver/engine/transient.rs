@@ -20,6 +20,7 @@ use super::transient_setup::{
     initialize_mcu_transient_state, ComponentOverrideMap, EnergyStorageState, McuTransientState,
 };
 use super::transient_sources::stamp_dynamic_transient_sources;
+use super::transient_switches::update_switch_states;
 
 pub fn solve_transient_circuit(
     netlist: &CircuitNetlist,
@@ -244,45 +245,12 @@ where
             &mut vector_z,
         );
 
-        // Actualizar estados congelados del switch usando voltajes del paso anterior convergido
-        for comp in &netlist.components {
-            if comp.comp_type == "switch" {
-                let co = local_overrides.get(&comp.id);
-                // Si hay override de switch_state, forzar estado sin pasar por histéresis
-                if let Some(&forced) = co.and_then(|f| f.get("switch_state")) {
-                    switch_states.insert(comp.id.clone(), forced >= 0.5);
-                } else if let (Ok(node_a), Ok(node_b)) =
-                    (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>())
-                {
-                    let v_a = if node_a > 0 {
-                        current_solution[node_a - 1]
-                    } else {
-                        0.0
-                    };
-                    let v_b = if node_b > 0 {
-                        current_solution[node_b - 1]
-                    } else {
-                        0.0
-                    };
-                    let v_ab = v_a - v_b;
-                    let vth = co
-                        .and_then(|f| f.get("switch_vth").copied())
-                        .unwrap_or(comp.switch_vth.unwrap_or(0.5));
-                    let vh = co
-                        .and_then(|f| f.get("switch_vh").copied())
-                        .unwrap_or(comp.switch_vh.unwrap_or(0.05));
-                    let was_closed = switch_states.get(&comp.id).copied().unwrap_or(false);
-                    let new_state = if !was_closed && v_ab > vth + vh / 2.0 {
-                        true
-                    } else if was_closed && v_ab < vth - vh / 2.0 {
-                        false
-                    } else {
-                        was_closed
-                    };
-                    switch_states.insert(comp.id.clone(), new_state);
-                }
-            }
-        }
+        update_switch_states(
+            netlist,
+            &local_overrides,
+            &current_solution,
+            &mut switch_states,
+        );
 
         let stamp_companion_conductance =
             |matrix: &mut DMatrix<f64>, r: usize, c: usize, g: f64| {
