@@ -6,6 +6,7 @@ mod live_mutations;
 pub mod simulation_types;
 pub mod transient;
 mod transient_setup;
+mod transient_sources;
 
 #[cfg(test)]
 mod tests;

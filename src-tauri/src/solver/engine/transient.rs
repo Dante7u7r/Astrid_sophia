@@ -19,6 +19,7 @@ use super::transient_setup::{
     initialize_device_junction_temperatures, initialize_energy_storage_states,
     initialize_mcu_transient_state, ComponentOverrideMap, EnergyStorageState, McuTransientState,
 };
+use super::transient_sources::stamp_dynamic_transient_sources;
 
 pub fn solve_transient_circuit(
     netlist: &CircuitNetlist,
@@ -234,115 +235,14 @@ where
             &mut vector_z,
         );
 
-        // Actualizar fuentes de tensión dinámicas transitorias para el t actual
-        for comp in &netlist.components {
-            if comp.comp_type == "vsource" {
-                let co = local_overrides.get(&comp.id);
-                if let Some(ref wave) = comp.wave_type {
-                    let amp = co
-                        .and_then(|f| f.get("amplitude").copied())
-                        .or(comp.amplitude)
-                        .unwrap_or(0.0);
-                    let freq = co
-                        .and_then(|f| f.get("frequency").copied())
-                        .or(comp.frequency)
-                        .unwrap_or(1e3);
-                    let offset = co
-                        .and_then(|f| f.get("offset").copied())
-                        .or(comp.offset)
-                        .unwrap_or(0.0);
-                    let duty = co
-                        .and_then(|f| f.get("duty_cycle").copied())
-                        .or(comp.duty_cycle)
-                        .unwrap_or(0.5);
-                    let v_base = co
-                        .and_then(|f| f.get("value").copied())
-                        .unwrap_or(comp.value);
-
-                    let v_val = match wave.as_str() {
-                        "sine" => offset + amp * (2.0 * std::f64::consts::PI * freq * t).sin(),
-                        "square" => {
-                            let period = 1.0 / freq;
-                            let t_mod = t % period;
-                            if t_mod < duty * period {
-                                offset + amp
-                            } else {
-                                offset - amp
-                            }
-                        }
-                        "pulse" => {
-                            let period = 1.0 / freq;
-                            let t_mod = t % period;
-                            let pulse_width = duty * period;
-                            if t_mod < pulse_width {
-                                offset + amp
-                            } else {
-                                offset
-                            }
-                        }
-                        _ => v_base,
-                    };
-
-                    let vs_idx = *vsource_map.get(&comp.id).unwrap();
-                    vector_z[n + vs_idx] = v_val;
-                }
-            } else if comp.comp_type == "isource" {
-                let co = local_overrides.get(&comp.id);
-                if let Some(ref wave) = comp.wave_type {
-                    let amp = co
-                        .and_then(|f| f.get("amplitude").copied())
-                        .or(comp.amplitude)
-                        .unwrap_or(0.0);
-                    let freq = co
-                        .and_then(|f| f.get("frequency").copied())
-                        .or(comp.frequency)
-                        .unwrap_or(1e3);
-                    let offset = co
-                        .and_then(|f| f.get("offset").copied())
-                        .or(comp.offset)
-                        .unwrap_or(0.0);
-                    let duty = co
-                        .and_then(|f| f.get("duty_cycle").copied())
-                        .or(comp.duty_cycle)
-                        .unwrap_or(0.5);
-
-                    let i_val = match wave.as_str() {
-                        "sine" => offset + amp * (2.0 * std::f64::consts::PI * freq * t).sin(),
-                        "square" => {
-                            let period = 1.0 / freq;
-                            let t_mod = t % period;
-                            if t_mod < duty * period {
-                                offset + amp
-                            } else {
-                                offset - amp
-                            }
-                        }
-                        "pulse" => {
-                            let period = 1.0 / freq;
-                            let t_mod = t % period;
-                            let pulse_width = duty * period;
-                            if t_mod < pulse_width {
-                                offset + amp
-                            } else {
-                                offset
-                            }
-                        }
-                        _ => comp.value,
-                    };
-
-                    let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                    let node_neg = comp.pins[1].parse::<usize>().unwrap();
-                    let static_val = comp.value;
-                    let diff = i_val - static_val;
-                    if node_pos > 0 {
-                        vector_z[node_pos - 1] -= diff;
-                    }
-                    if node_neg > 0 {
-                        vector_z[node_neg - 1] += diff;
-                    }
-                }
-            }
-        }
+        stamp_dynamic_transient_sources(
+            netlist,
+            n,
+            t,
+            &vsource_map,
+            &local_overrides,
+            &mut vector_z,
+        );
 
         // Actualizar estados congelados del switch usando voltajes del paso anterior convergido
         for comp in &netlist.components {
