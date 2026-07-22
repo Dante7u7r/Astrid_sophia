@@ -1095,15 +1095,23 @@ Estado: completado y validado en escritorio Windows.
   `transient_step_control.rs`, con pruebas unitarias propias. La suite Rust
   completa quedo en 128 pruebas exitosas.
 - Se agrego E2E reproducible sobre una ventana Tauri real mediante
-  WebdriverIO y un WebDriver embebido. La feature `wdio` es explicita; el
+  WebdriverIO, `tauri-driver` y EdgeDriver externo. La feature `wdio` es
+  explicita; el
   backend y puente frontend de pruebas no se registran en produccion.
 - La suite nativa verifica: cargar `01_divisor_rc.astryd`, ejecutar CC con el
   solver Rust, guardar por IPC y comparar el archivo escrito, abrir los cinco
   instrumentos y logs, colocar un resistor, cablearlo y restaurar el snapshot.
-- La automatizacion ya no depende de OCR. Usa selectores, accesibilidad y estado
-  QA estructurado. Debido a que WebView2 no traduce de forma fiable las acciones
-  W3C a `PointerEvent`, los gestos de paleta y cableado se inyectan como las
-  secuencias DOM reales dentro de la ventana Tauri; el resto usa WebDriver.
+- La automatizacion ya no depende de OCR ni de eventos DOM fabricados. La carga
+  de demo, el arrastre desde la paleta y el cableado usan acciones WebDriver
+  reales y la suite exige eventos con `isTrusted=true`. El proveedor embebido se
+  retiro porque convertia las acciones W3C en `MouseEvent` no confiables, omitia
+  `PointerEvent` y perdia el estado de botones durante el movimiento.
+- El binario E2E se genera en `target/debug`, separado del ejecutable release. El
+  servicio instala `tauri-driver` y descarga el EdgeDriver compatible cuando
+  faltan, por lo que `npm run test:e2e:desktop` es el comando reproducible unico.
+- El hook final del runner limpia `tauri-driver.exe` y `msedgedriver.exe` en
+  Windows para evitar procesos o puertos huerfanos cuando la libreria falla al
+  cerrar una sesion.
 - El osciloscopio limita el dibujo T-Y a una envolvente min/max de hasta dos
   puntos por pixel, cachea trazas y metricas, y limita cada historial
   interactivo a 60.000 frames con recorte por bloques. Los resultados por lote
@@ -1118,7 +1126,9 @@ Estado: completado y validado en escritorio Windows.
   Tauri nativo y `npm audit` sin vulnerabilidades reportadas.
 - Release NSIS generado en
   `src-tauri/target/release/bundle/nsis/Astryd Sophia_0.1.0_x64-setup.exe`
-  (SHA-256 `AA8ABB741C0D67DE8BDA45CD80D2F55497B35097DF47D61E6D5ABB9535450F0E`).
+  (SHA-256 `FF5C7E175DA2A82AB8399DDDC37C003F23CFC29E195F7303F219BFF782F9253F`).
+- El release de produccion se reconstruyo sin la feature `wdio` y se comprobo
+  en ejecucion que no abre el puerto `4445` usado por EdgeDriver.
 - Se actualizo la instalacion local y se hizo smoke del ejecutable instalado:
   demo cargada, centro de instrumentos visible y resultados Rust `0=0 V`,
   `1=5 V`, `2=5 V`.

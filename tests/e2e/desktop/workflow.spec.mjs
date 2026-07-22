@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { Key } from "webdriverio";
 
 const DEMO_FILE = "01_divisor_rc.astryd";
 
@@ -12,53 +13,77 @@ async function qaState() {
   return browser.execute(() => window.__ASTRYD_QA__);
 }
 
-async function dragPaletteComponent(selector, target) {
-  await browser.execute((cardSelector, destination) => {
-    const card = document.querySelector(cardSelector);
-    if (!(card instanceof HTMLElement)) throw new Error(`Componente no encontrado: ${cardSelector}`);
-    const source = card.getBoundingClientRect();
-    const pointerId = 91;
-    card.dispatchEvent(new PointerEvent("pointerdown", {
-      bubbles: true,
-      button: 0,
-      buttons: 1,
-      pointerId,
-      clientX: source.left + source.width / 2,
-      clientY: source.top + source.height / 2,
-    }));
-    document.dispatchEvent(new PointerEvent("pointermove", {
-      bubbles: true,
-      buttons: 1,
-      pointerId,
-      clientX: destination.x,
-      clientY: destination.y,
-    }));
-    document.dispatchEvent(new PointerEvent("pointerup", {
-      bubbles: true,
-      button: 0,
-      pointerId,
-      clientX: destination.x,
-      clientY: destination.y,
-    }));
-  }, selector, target);
+async function captureTrustedInputEvents() {
+  await browser.execute(() => {
+    window.__ASTRYD_E2E_INPUT_CAPTURE__?.abort();
+    const capture = new AbortController();
+    window.__ASTRYD_E2E_INPUT_CAPTURE__ = capture;
+    window.__ASTRYD_E2E_INPUT_EVENTS__ = [];
+    for (const type of [
+      "change",
+      "pointerdown",
+      "pointermove",
+      "pointerup",
+      "mousedown",
+      "mousemove",
+      "mouseup",
+    ]) {
+      document.addEventListener(type, (event) => {
+        const target = event.target instanceof Element
+          ? event.target.id || event.target.className || event.target.tagName
+          : String(event.target);
+        window.__ASTRYD_E2E_INPUT_EVENTS__.push({
+          type,
+          isTrusted: event.isTrusted,
+          target,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          buttons: event.buttons,
+        });
+      }, { capture: true, signal: capture.signal });
+    }
+  });
+}
+
+async function trustedInputEvents() {
+  return browser.execute(() => window.__ASTRYD_E2E_INPUT_EVENTS__ ?? []);
+}
+
+function expectTrustedEvents(events, requiredTypes) {
+  for (const type of requiredTypes) {
+    const matching = events.filter((event) => event.type === type);
+    expect(matching.length).toBeGreaterThan(0);
+    expect(matching.every((event) => event.isTrusted)).toBe(true);
+  }
+}
+
+async function dragPaletteComponent(source, canvas, targetRatio) {
+  const canvasSize = await canvas.getSize();
+  await browser.action("pointer", { parameters: { pointerType: "mouse" } })
+    .move({ duration: 0, origin: source, x: 0, y: 0 })
+    .down({ button: 0 })
+    .pause(100)
+    .move({ duration: 100, origin: "pointer", x: 20, y: 0 })
+    .move({
+      duration: 600,
+      origin: canvas,
+      x: Math.round(canvasSize.width * (targetRatio.x - 0.5)),
+      y: Math.round(canvasSize.height * (targetRatio.y - 0.5)),
+    })
+    .pause(100)
+    .up({ button: 0 })
+    .perform();
 }
 
 async function wireCanvasPins(from, to) {
-  await browser.execute((start, end) => {
-    const canvas = document.querySelector("#circuit-canvas");
-    if (!(canvas instanceof HTMLCanvasElement)) throw new Error("Lienzo no disponible");
-    const mouse = (type, point, buttons) => canvas.dispatchEvent(new MouseEvent(type, {
-      bubbles: true,
-      button: 0,
-      buttons,
-      clientX: point.x,
-      clientY: point.y,
-    }));
-    mouse("mousemove", start, 0);
-    mouse("mousedown", start, 1);
-    mouse("mousemove", end, 1);
-    mouse("mouseup", end, 0);
-  }, from, to);
+  await browser.action("pointer", { parameters: { pointerType: "mouse" } })
+    .move({ duration: 0, origin: "viewport", x: Math.round(from.x), y: Math.round(from.y) })
+    .down({ button: 0 })
+    .pause(100)
+    .move({ duration: 500, origin: "viewport", x: Math.round(to.x), y: Math.round(to.y) })
+    .pause(100)
+    .up({ button: 0 })
+    .perform();
 }
 
 describe("flujo nativo de escritorio", () => {
@@ -70,17 +95,24 @@ describe("flujo nativo de escritorio", () => {
     ), { timeout: 20_000, timeoutMsg: "El puente E2E de la ventana Tauri no se inicializo" });
 
     const demoSelect = await $("#btn-open-demo");
-    await demoSelect.selectByAttribute("value", DEMO_FILE);
-    await browser.execute((value) => {
+    const demoOptionIndex = await browser.execute((value) => {
       const select = document.querySelector("#btn-open-demo");
-      if (!(select instanceof HTMLSelectElement)) throw new Error("Selector de demos no disponible");
-      select.value = value;
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      if (!(select instanceof HTMLSelectElement)) return -1;
+      return [...select.options].findIndex((option) => option.value === value);
     }, DEMO_FILE);
+    expect(demoOptionIndex).toBeGreaterThanOrEqual(0);
+    await captureTrustedInputEvents();
+    await demoSelect.click();
+    await browser.keys([
+      Key.Home,
+      ...Array.from({ length: demoOptionIndex }, () => Key.ArrowDown),
+      Key.Enter,
+    ]);
     await browser.waitUntil(async () => (await qaState())?.lastDemoFile === DEMO_FILE, {
       timeout: 15_000,
       timeoutMsg: "La demo no termino de cargar",
     });
+    expectTrustedEvents(await trustedInputEvents(), ["change"]);
 
     const baseline = await appSnapshot();
     expect(baseline.componentCount).toBe(4);
@@ -128,16 +160,14 @@ describe("flujo nativo de escritorio", () => {
     await browser.waitUntil(async () => (await center.getAttribute("class")).includes("collapsed"));
 
     const resistor = await $("#comp-resistor");
-    await resistor.scrollIntoView();
-    const canvasLocation = await canvas.getLocation();
-    const canvasSize = await canvas.getSize();
-    await dragPaletteComponent("#comp-resistor", {
-        x: canvasLocation.x + canvasSize.width * 0.78,
-        y: canvasLocation.y + canvasSize.height * 0.72,
-    });
+    await captureTrustedInputEvents();
+    await dragPaletteComponent(resistor, canvas, { x: 0.78, y: 0.72 });
+    const paletteEvents = await trustedInputEvents();
     await browser.waitUntil(async () => (await appSnapshot())?.componentCount === 5, {
       timeoutMsg: "Arrastrar el resistor no agrego el componente",
     });
+    expectTrustedEvents(paletteEvents, ["pointerdown", "pointermove", "pointerup"]);
+    expect(paletteEvents.some((event) => event.type === "pointermove" && event.buttons === 1)).toBe(true);
 
     const edited = await appSnapshot();
     const newResistor = edited.components.find(
@@ -147,6 +177,7 @@ describe("flujo nativo de escritorio", () => {
     const ground = edited.components.find((component) => component.type === "ground");
     expect(newResistor).toBeDefined();
     expect(ground).toBeDefined();
+    await captureTrustedInputEvents();
     await wireCanvasPins(
       { x: newResistor.pins[0].clientX, y: newResistor.pins[0].clientY },
       { x: ground.pins[0].clientX, y: ground.pins[0].clientY },
@@ -154,6 +185,9 @@ describe("flujo nativo de escritorio", () => {
     await browser.waitUntil(async () => (await appSnapshot())?.wireCount === 5, {
       timeoutMsg: "El gesto de cableado no creo la conexion",
     });
+    const wireEvents = await trustedInputEvents();
+    expectTrustedEvents(wireEvents, ["mousedown", "mousemove", "mouseup"]);
+    expect(wireEvents.some((event) => event.type === "mousemove" && event.buttons === 1)).toBe(true);
 
     const loaded = await browser.execute(
       (content) => window.__ASTRYD_E2E__.loadSerializedCircuit(content),

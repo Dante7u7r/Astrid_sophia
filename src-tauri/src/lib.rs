@@ -604,9 +604,7 @@ pub fn run() {
     let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
 
     #[cfg(feature = "wdio")]
-    let builder = builder
-        .plugin(tauri_plugin_wdio::init())
-        .plugin(tauri_plugin_wdio_webdriver::init());
+    let builder = builder.plugin(tauri_plugin_wdio::init());
 
     builder
         .manage(SimulationControlState {
