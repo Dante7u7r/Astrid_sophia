@@ -28,6 +28,7 @@ import {
   installQaState,
   recordQaLog,
 } from "./testing/qa_state";
+import { installDesktopE2eBridge } from "./testing/desktop_e2e_bridge";
 import { PerformanceMonitor } from "./performance/performance_monitor";
 import { installPerformanceHarness } from "./performance/performance_harness";
 import {
@@ -59,6 +60,9 @@ const performanceAuditEnabled = (import.meta.env.DEV || import.meta.env.MODE ===
   && new URLSearchParams(window.location.search).get("perf") === "1";
 const performanceMonitor = new PerformanceMonitor();
 installQaState();
+if (import.meta.env.MODE === "wdio") {
+  void import("@wdio/tauri-plugin");
+}
 if (visualAudit.enabled) {
   document.documentElement.dataset.auditStage = visualAudit.stage;
   document.documentElement.dataset.auditStep = visualAudit.step;
@@ -474,6 +478,12 @@ window.addEventListener("DOMContentLoaded", () => {
     initFilePersistence,
     initTabManager,
     addLog,
+  });
+  installDesktopE2eBridge({
+    getOrchestrator: () => orchestrator,
+    getDocumentController: () => circuitDocumentController,
+    getActiveTabName: () => tabManager?.getActiveTab()?.name ?? null,
+    updateCanvasRendering: () => updateCanvasRendering(true),
   });
   consoleLogController.bindClearButton();
 

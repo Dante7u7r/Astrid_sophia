@@ -2,6 +2,7 @@ import { type CanvasOrchestrator } from "../canvas_orchestrator";
 import type { CircuitDocumentPort } from "../app/circuit_document_controller";
 import { TabFileActions } from "./tab_file_actions";
 import { type OscilloscopePanel } from "./oscilloscope_panel";
+import { appendLiveTransientSample } from "../simulation/transient_history";
 import { type AnalysisMode, type SimulationControls } from "./simulation_controls";
 import type { McuDebugPanel } from "./mcu_debug_panel";
 import { TabsView } from "./tabs_view";
@@ -103,7 +104,7 @@ export class TabManager {
     const tab = this.store.findTab(tabId);
     if (!tab) return undefined;
 
-    tab.transientResults.push({
+    appendLiveTransientSample(tab.transientResults, {
       time: frame.time,
       nodeVoltages: { ...frame.nodeVoltages },
       branchCurrents: { ...frame.branchCurrents },

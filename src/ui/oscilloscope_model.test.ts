@@ -6,6 +6,7 @@ import {
   findTriggerStartIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
+  selectTraceSampleIndices,
 } from "./oscilloscope_model";
 
 function point(time: number, voltage: number): TimeStepResult {
@@ -67,5 +68,28 @@ describe("oscilloscope_model", () => {
       { x: 0, y: 40 },
       { x: 50, y: 30 },
     ]);
+  });
+
+  it("reduce trazas extensas conservando extremos por bucket", () => {
+    const results = Array.from({ length: 10_000 }, (_, index) => point(index / 10_000, 0));
+    results[5_123] = point(0.5123, 25);
+
+    const points = buildTyTracePoints(
+      results,
+      "1",
+      { width: 100, height: 80 },
+      { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.1 },
+    );
+
+    expect(points.length).toBeLessThanOrEqual(200);
+    expect(points.some((tracePoint) => tracePoint.y === -210)).toBe(true);
+  });
+
+  it("selecciona una cantidad acotada de muestras XY incluyendo extremos", () => {
+    const indices = selectTraceSampleIndices(1_000_000, 2_000);
+
+    expect(indices).toHaveLength(2_000);
+    expect(indices[0]).toBe(0);
+    expect(indices[indices.length - 1]).toBe(999_999);
   });
 });

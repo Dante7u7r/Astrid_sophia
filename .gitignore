@@ -39,6 +39,7 @@ htmlcov/
 .nyc_output/
 visual-audit-results/
 performance-audit-results/
+desktop-e2e-results/
 audit-*.png
 audit-*.json
 pw-*.log

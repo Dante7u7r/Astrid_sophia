@@ -1083,6 +1083,46 @@ Limitacion conocida:
   mostro claramente la demo cargada y los resultados del solver.
 - No se probo instalacion/desinstalacion del NSIS, solo generacion del bundle.
 
+### Cierre de prioridad alta - 2026-07-22
+
+Estado: completado y validado en escritorio Windows.
+
+- El nucleo transitorio se redujo de 2.103 a 587 lineas de coordinacion. El
+  stamping de junctions, MOS/BSIM, BJT, JFET, opamp, logica, MCU y fuentes
+  comportamentales vive ahora en modulos separados bajo
+  `src-tauri/src/solver/engine/transient/stamps/`.
+- El control LTE e historial trapezoidal paso a
+  `transient_step_control.rs`, con pruebas unitarias propias. La suite Rust
+  completa quedo en 128 pruebas exitosas.
+- Se agrego E2E reproducible sobre una ventana Tauri real mediante
+  WebdriverIO y un WebDriver embebido. La feature `wdio` es explicita; el
+  backend y puente frontend de pruebas no se registran en produccion.
+- La suite nativa verifica: cargar `01_divisor_rc.astryd`, ejecutar CC con el
+  solver Rust, guardar por IPC y comparar el archivo escrito, abrir los cinco
+  instrumentos y logs, colocar un resistor, cablearlo y restaurar el snapshot.
+- La automatizacion ya no depende de OCR. Usa selectores, accesibilidad y estado
+  QA estructurado. Debido a que WebView2 no traduce de forma fiable las acciones
+  W3C a `PointerEvent`, los gestos de paleta y cableado se inyectan como las
+  secuencias DOM reales dentro de la ventana Tauri; el resto usa WebDriver.
+- El osciloscopio limita el dibujo T-Y a una envolvente min/max de hasta dos
+  puntos por pixel, cachea trazas y metricas, y limita cada historial
+  interactivo a 60.000 frames con recorte por bloques. Los resultados por lote
+  destinados a analisis y exportacion no se recortan silenciosamente.
+- Auditoria de 1.000.000 muestras: 21,80 ms en primera reduccion, 0,00 ms
+  medidos desde cache, 2.560 puntos de salida y pico preservado.
+- Auditoria canvas: `stress-252` mediana 2,00 ms; `stress-480` 2,60 ms;
+  `stress-960-lod` 1,90 ms. Todos los maximos quedaron bajo presupuesto.
+- Verificacion final: 264 pruebas frontend, 128 Rust, build TypeScript/Vite,
+  auditoria UI, guard de produccion, auditoria de rendimiento,
+  `cargo fmt --check`, `cargo clippy -- -D warnings` con y sin `wdio`, E2E
+  Tauri nativo y `npm audit` sin vulnerabilidades reportadas.
+- Release NSIS generado en
+  `src-tauri/target/release/bundle/nsis/Astryd Sophia_0.1.0_x64-setup.exe`
+  (SHA-256 `AA8ABB741C0D67DE8BDA45CD80D2F55497B35097DF47D61E6D5ABB9535450F0E`).
+- Se actualizo la instalacion local y se hizo smoke del ejecutable instalado:
+  demo cargada, centro de instrumentos visible y resultados Rust `0=0 V`,
+  `1=5 V`, `2=5 V`.
+
 ## Criterio de cierre
 
 Una fase se considera terminada solo cuando:

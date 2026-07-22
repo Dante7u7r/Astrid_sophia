@@ -9,10 +9,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:audit": "tsc && vite build --mode audit",
+    "build:e2e": "tsc && vite build --mode wdio",
     "preview": "vite preview",
     "audit:production-guard": "npm run build && node tests/visual_audit.mjs --expect-production",
     "audit:ui": "npm run build:audit && node tests/visual_audit.mjs && npm run audit:production-guard",
     "audit:performance": "npm run build:audit && node tests/performance_audit.mjs",
+    "test:e2e:desktop:build": "tauri build --features wdio --config src-tauri/tauri.wdio.conf.json --no-bundle",
+    "test:e2e:desktop": "wdio run wdio.conf.ts",
+    "test:e2e:desktop:full": "npm run test:e2e:desktop:build && npm run test:e2e:desktop",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",
@@ -24,12 +28,24 @@
     "@tauri-apps/plugin-opener": "^2",
     "jspdf": "^4.2.1"
   },
+  "overrides": {
+    "dompurify": "3.4.12",
+    "@wdio/native-utils": "2.5.0",
+    "serialize-javascript": "7.0.7"
+  },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@wdio/cli": "^9.30.0",
+    "@wdio/local-runner": "^9.30.0",
+    "@wdio/mocha-framework": "^9.30.0",
+    "@wdio/spec-reporter": "^9.29.1",
+    "@wdio/tauri-plugin": "^1.2.0",
+    "@wdio/tauri-service": "^1.2.0",
     "happy-dom": "^20.10.6",
     "playwright": "^1.61.1",
     "typescript": "~5.6.2",
     "vite": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "webdriverio": "^9.30.0"
   }
 }

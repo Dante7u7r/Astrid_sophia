@@ -194,6 +194,26 @@ describe("TabManager", () => {
     expect(first.voltageSnapshot).toEqual({ "1": 5 });
   });
 
+  test("limita el historial interactivo por pestana", () => {
+    const harness = createHarness();
+    const first = harness.manager.createNewTab("Primera")!;
+    first.transientResults = Array.from({ length: 60_000 }, (_, index) => ({
+      time: index,
+      nodeVoltages: {},
+      branchCurrents: {},
+    }));
+
+    harness.manager.appendTransientFrameToTab(first.id, {
+      time: 60_000,
+      nodeVoltages: { "1": 5 },
+      branchCurrents: {},
+    });
+
+    expect(first.transientResults).toHaveLength(54_001);
+    expect(first.transientResults[0].time).toBe(6_000);
+    expect(first.transientResults[first.transientResults.length - 1]?.time).toBe(60_000);
+  });
+
   test("cierra la pestana activa mediante metodo de intencion", async () => {
     const harness = createHarness();
     const first = harness.manager.createNewTab("Primera")!;

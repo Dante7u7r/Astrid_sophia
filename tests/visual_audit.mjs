@@ -644,6 +644,15 @@ async function runProductionGuard() {
     if (metrics.nonTransparentCanvasPixels === 0) {
       fail("La aplicación normal no renderizó el canvas durante el guard de producción");
     }
+    const internalHarnesses = await page.evaluate(() => ({
+      qa: typeof window.__ASTRYD_QA__ !== "undefined",
+      performance: typeof window.__ASTRYD_PERF__ !== "undefined",
+      desktopE2e: typeof window.__ASTRYD_E2E__ !== "undefined",
+      wdio: typeof window.wdioTauri !== "undefined",
+    }));
+    if (Object.values(internalHarnesses).some(Boolean)) {
+      fail("La build de produccion expuso un puente interno de pruebas", { internalHarnesses });
+    }
     if (pageErrors.length > 0) {
       fail("La build de producción generó errores JavaScript", { pageErrors });
     }

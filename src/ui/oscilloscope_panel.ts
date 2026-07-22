@@ -6,6 +6,7 @@ import {
   findTriggerStartIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
+  selectTraceSampleIndices,
   type OscilloscopeChannel,
   type TriggerEdge,
 } from "./oscilloscope_model";
@@ -541,7 +542,12 @@ export class OscilloscopePanel {
       const nodeX = this.ch1ProbeNode || "1";
       const nodeY = this.ch2ProbeNode || "2";
 
-      for (let i = 0; i < this.transientResults.length; i++) {
+      const xyIndices = selectTraceSampleIndices(
+        this.transientResults.length,
+        Math.max(64, Math.min(4_000, Math.ceil(width * 2))),
+      );
+      for (let sampleIndex = 0; sampleIndex < xyIndices.length; sampleIndex++) {
+        const i = xyIndices[sampleIndex];
         const pt = this.transientResults[i];
         const vx = pt.nodeVoltages[nodeX] ?? 0.0;
         const vy = pt.nodeVoltages[nodeY] ?? 0.0;
@@ -549,7 +555,7 @@ export class OscilloscopePanel {
         const x = width / 2 + (vx / this.voltsPerDivCh1) * (width / 10) + this.offsetCh1;
         const y = height / 2 - (vy / this.voltsPerDivCh2) * (height / 8) - this.offsetCh2;
 
-        if (i === 0) ctx.moveTo(x, y);
+        if (sampleIndex === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -598,11 +604,9 @@ export class OscilloscopePanel {
         this.triggerLevel,
       );
 
-      const pointsToDraw = this.transientResults.slice(triggerStartIdx);
-
       // Draw channels
       const drawChannelTY = (nodeId: string, color: string, voltsPerDiv: number, offsetPixels: number, isActive: boolean) => {
-        if (!isActive || !nodeId || pointsToDraw.length === 0) return;
+        if (!isActive || !nodeId || triggerStartIdx >= this.transientResults.length) return;
 
         ctx.strokeStyle = color;
         ctx.lineWidth = 2.0;
@@ -611,10 +615,11 @@ export class OscilloscopePanel {
         ctx.beginPath();
 
         const tracePoints = buildTyTracePoints(
-          pointsToDraw,
+          this.transientResults,
           nodeId,
           { width, height },
           { voltsPerDiv, offsetPixels, timeDivValue: this.timeDivValue },
+          triggerStartIdx,
         );
         for (let i = 0; i < tracePoints.length; i++) {
           const point = tracePoints[i];

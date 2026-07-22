@@ -121,6 +121,21 @@ async function runPerformanceAudit() {
       }
       results.push(result);
     }
+
+    console.log("[perf] midiendo traza transitoria de 1,000,000 muestras");
+    const transient = await page.evaluate(() => window.__ASTRYD_PERF__.measureTransientTrace(1_000_000));
+    console.log(
+      `[perf] transient-million: first=${transient.firstPassMs.toFixed(2)}ms cached=${transient.cachedPassMs.toFixed(2)}ms points=${transient.outputPointCount}`,
+    );
+    if (
+      transient.firstPassMs > 1_500
+      || transient.cachedPassMs > 12
+      || transient.outputPointCount > 2_560
+      || !transient.peakPreserved
+    ) {
+      fail("Presupuesto de traza transitoria excedido", transient);
+    }
+    results.push({ name: "transient-million", ...transient });
   } finally {
     await browser.close();
     await preview.stop();

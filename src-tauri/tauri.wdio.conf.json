@@ -1,0 +1,11 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build:e2e"
+  },
+  "app": {
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": false
+  }
+}

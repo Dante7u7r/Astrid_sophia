@@ -1,5 +1,7 @@
 import type { CanvasOrchestrator, ComponentInstance, WireInstance } from "../canvas_orchestrator";
 import type { PerformanceMonitor } from "./performance_monitor";
+import { buildTyTracePoints, type TyTracePoint } from "../ui/oscilloscope_model";
+import type { TimeStepResult } from "../ui/oscilloscope_panel";
 
 export interface StressCircuitOptions {
   rows?: number;
@@ -23,6 +25,13 @@ export interface RenderBenchmarkResult {
 export interface PerformanceHarnessApi {
   createStressCircuit(options?: StressCircuitOptions): { componentCount: number; wireCount: number };
   measureCanvasRender(iterations?: number): RenderBenchmarkResult;
+  measureTransientTrace(sampleCount?: number): {
+    sampleCount: number;
+    outputPointCount: number;
+    firstPassMs: number;
+    cachedPassMs: number;
+    peakPreserved: boolean;
+  };
   snapshot(): ReturnType<PerformanceMonitor["snapshot"]>;
 }
 
@@ -123,6 +132,39 @@ export function installPerformanceHarness(dependencies: PerformanceHarnessDepend
         maxMs: sorted[sorted.length - 1],
         averageMs: total / durations.length,
         monitor: dependencies.performanceMonitor.snapshot(),
+      };
+    },
+    measureTransientTrace: (requestedSampleCount = 1_000_000) => {
+      const sampleCount = Math.max(1_000, Math.min(requestedSampleCount, 1_000_000));
+      const emptyCurrents: Record<string, number> = {};
+      const results: TimeStepResult[] = new Array(sampleCount);
+      for (let index = 0; index < sampleCount; index++) {
+        results[index] = {
+          time: index / sampleCount,
+          nodeVoltages: { "1": index === Math.floor(sampleCount * 0.513) ? 25 : Math.sin(index * 0.01) },
+          branchCurrents: emptyCurrents,
+        };
+      }
+
+      const renderTrace = (): TyTracePoint[] => buildTyTracePoints(
+        results,
+        "1",
+        { width: 1_280, height: 480 },
+        { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.1 },
+      );
+      const firstStartedAt = performance.now();
+      const points = renderTrace();
+      const firstPassMs = performance.now() - firstStartedAt;
+      const cachedStartedAt = performance.now();
+      renderTrace();
+      const cachedPassMs = performance.now() - cachedStartedAt;
+
+      return {
+        sampleCount,
+        outputPointCount: points.length,
+        firstPassMs,
+        cachedPassMs,
+        peakPreserved: points.some((point) => point.y < -1_000),
       };
     },
     snapshot: () => dependencies.performanceMonitor.snapshot(),

@@ -20,7 +20,7 @@ declare global {
 }
 
 const QA_ENABLED = typeof import.meta !== "undefined"
-  && (import.meta.env.DEV || import.meta.env.MODE === "audit");
+  && (import.meta.env.DEV || import.meta.env.MODE === "audit" || import.meta.env.MODE === "wdio");
 
 const state: AstrydQaState = {
   enabled: QA_ENABLED,

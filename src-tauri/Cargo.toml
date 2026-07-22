@@ -6,6 +6,9 @@ authors = ["Astryd Sophia Project"]
 edition = "2021"
 default-run = "astryd-sophia"
 
+[features]
+wdio = []
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,6 +25,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-wdio = "1.2.0"
+tauri-plugin-wdio-webdriver = "1.2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 nalgebra = "0.33"
