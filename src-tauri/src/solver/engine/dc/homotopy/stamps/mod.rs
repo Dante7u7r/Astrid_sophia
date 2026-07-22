@@ -1,6 +1,7 @@
 mod bipolar;
-mod field_effect;
+mod jfet;
 mod junctions;
+mod mos;
 
 use crate::solver::matrix::SparseMatrix;
 use crate::solver::types::{CircuitNetlist, ComponentData};
@@ -20,9 +21,9 @@ pub(super) fn stamp_component(comp: &ComponentData, ctx: &mut StampContext<'_>) 
     match comp.comp_type.as_str() {
         "diode" | "led" => junctions::stamp_diode(comp, ctx),
         "opto" => junctions::stamp_opto(comp, ctx),
-        "nmos" | "bsim3nmos" | "bsim4nmos" => field_effect::stamp_nmos(comp, ctx),
-        "pmos" | "bsim3pmos" | "bsim4pmos" => field_effect::stamp_pmos(comp, ctx),
-        "jfet" | "njf" | "pjf" => field_effect::stamp_jfet(comp, ctx),
+        "nmos" | "bsim3nmos" | "bsim4nmos" => mos::stamp_nmos(comp, ctx),
+        "pmos" | "bsim3pmos" | "bsim4pmos" => mos::stamp_pmos(comp, ctx),
+        "jfet" | "njf" | "pjf" => jfet::stamp_jfet(comp, ctx),
         "npn" | "pnp" => bipolar::stamp_bipolar(comp, ctx),
         _ => {}
     }

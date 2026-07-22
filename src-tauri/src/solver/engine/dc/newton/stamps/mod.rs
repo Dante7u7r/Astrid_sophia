@@ -1,8 +1,12 @@
 mod behavioral;
 mod bipolar;
-mod field_effect;
+mod jfet;
 mod junctions;
-mod mixed_signal;
+mod logic;
+mod mcu;
+mod mos;
+mod opamp;
+mod switches;
 
 use crate::solver::matrix::SparseMatrix;
 use crate::solver::types::{CircuitNetlist, ComponentData};
@@ -33,14 +37,14 @@ pub(super) fn stamp_component(comp: &ComponentData, ctx: &mut StampContext<'_>) 
         "diode" | "led" => junctions::stamp_diode(comp, ctx),
         "opto" => junctions::stamp_opto(comp, ctx),
         "verilog_a" => behavioral::stamp_verilog_a(comp, ctx),
-        "nmos" | "bsim3nmos" | "bsim4nmos" => field_effect::stamp_nmos(comp, ctx),
-        "pmos" | "bsim3pmos" | "bsim4pmos" => field_effect::stamp_pmos(comp, ctx),
+        "nmos" | "bsim3nmos" | "bsim4nmos" => mos::stamp_nmos(comp, ctx),
+        "pmos" | "bsim3pmos" | "bsim4pmos" => mos::stamp_pmos(comp, ctx),
         "npn" | "pnp" => bipolar::stamp_bipolar(comp, ctx),
-        "njf" | "pjf" => field_effect::stamp_jfet(comp, ctx),
-        "opamp" => mixed_signal::stamp_opamp(comp, ctx),
-        kind if kind.ends_with("_gate") => mixed_signal::stamp_logic_gate(comp, ctx),
-        "arduino_uno" | "esp32" | "raspberry_pi_pico" => mixed_signal::stamp_mcu(comp, ctx),
-        "switch" => mixed_signal::stamp_switch(comp, ctx),
+        "njf" | "pjf" => jfet::stamp_jfet(comp, ctx),
+        "opamp" => opamp::stamp_opamp(comp, ctx),
+        kind if kind.ends_with("_gate") => logic::stamp_logic_gate(comp, ctx),
+        "arduino_uno" | "esp32" | "raspberry_pi_pico" => mcu::stamp_mcu(comp, ctx),
+        "switch" => switches::stamp_switch(comp, ctx),
         "bvoltage" => behavioral::stamp_bvoltage(comp, ctx),
         "bcurrent" => behavioral::stamp_bcurrent(comp, ctx),
         _ => {}
