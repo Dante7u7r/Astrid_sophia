@@ -14,6 +14,9 @@ use super::dc::*;
 #[allow(unused_imports)]
 use super::devices::*;
 use super::simulation_types::{TimeStepResult, TransientSettings};
+use super::transient_companions::{
+    stamp_companion_conductance, stamp_transient_companions, CompanionStampState,
+};
 use super::transient_mcu::{update_mcu_accepted_states, McuAcceptedStateMaps};
 use super::transient_mixed_signal::{
     detect_mixed_signal_crossings, initialize_mixed_signal_scheduler, process_mixed_signal_events,
@@ -225,14 +228,6 @@ where
             &current_solution,
             &mut switch_states,
         );
-
-        let stamp_companion_conductance =
-            |matrix: &mut DMatrix<f64>, r: usize, c: usize, g: f64| {
-                if r > 0 && c > 0 {
-                    matrix[(r - 1, c - 1)] += g;
-                }
-            };
-
         let (gear_a, gear_b, gear_c) = if gear2_active_this_step {
             let dt1 = dt;
             let dt2 = prev_dt;
@@ -243,231 +238,31 @@ where
         } else {
             (0.0, 0.0, 0.0)
         };
-
-        // Estampar los modelos de integración acompañantes y compuertas lógicas Mixed-Signal
-        for comp in &netlist.components {
-            match comp.comp_type.as_str() {
-                "capacitor" => {
-                    let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                    let node_neg = comp.pins[1].parse::<usize>().unwrap();
-                    let prev_vc = *cap_states.get(&comp.id).unwrap();
-
-                    let (g_eq, i_eq) = if gear2_active_this_step {
-                        let prev_prev_vc = *cap_states_prev.get(&comp.id).unwrap_or(&prev_vc);
-                        let g = gear_a * comp.value;
-                        let i = -comp.value * (gear_b * prev_vc + gear_c * prev_prev_vc);
-                        (g, i)
-                    } else if integration_method == "trap" {
-                        let prev_ic = *cap_currents.get(&comp.id).unwrap_or(&0.0);
-                        let g = 2.0 * comp.value / dt;
-                        let i = -prev_ic - g * prev_vc;
-                        (g, i)
-                    } else {
-                        let g = comp.value / dt;
-                        let i = g * prev_vc;
-                        (g, i)
-                    };
-
-                    stamp_companion_conductance(&mut matrix_a, node_pos, node_pos, g_eq);
-                    stamp_companion_conductance(&mut matrix_a, node_neg, node_neg, g_eq);
-                    stamp_companion_conductance(&mut matrix_a, node_pos, node_neg, -g_eq);
-                    stamp_companion_conductance(&mut matrix_a, node_neg, node_pos, -g_eq);
-
-                    if node_pos > 0 {
-                        vector_z[node_pos - 1] += i_eq;
-                    }
-                    if node_neg > 0 {
-                        vector_z[node_neg - 1] -= i_eq;
-                    }
-                }
-                "inductor" => {
-                    let is_coupled = if let Some(ref mutuals) = netlist.mutual_inductances {
-                        mutuals
-                            .iter()
-                            .any(|m| m.l1_id == comp.id || m.l2_id == comp.id)
-                    } else {
-                        false
-                    };
-                    if is_coupled {
-                        continue;
-                    }
-
-                    let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                    let node_neg = comp.pins[1].parse::<usize>().unwrap();
-                    let prev_il = *ind_states.get(&comp.id).unwrap();
-
-                    let (g_eq, i_eq) = if gear2_active_this_step {
-                        let prev_prev_il = *ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
-                        let g = 1.0 / (gear_a * comp.value);
-                        let i = -(gear_b / gear_a) * prev_il - (gear_c / gear_a) * prev_prev_il;
-                        (g, i)
-                    } else if integration_method == "trap" {
-                        let g = dt / (2.0 * comp.value);
-                        let prev_vl = *ind_voltages.get(&comp.id).unwrap_or(&0.0);
-                        let i = prev_il + g * prev_vl;
-                        (g, i)
-                    } else {
-                        let g = dt / comp.value;
-                        let i = prev_il;
-                        (g, i)
-                    };
-
-                    // Estampar conductancia equivalente + conductancia Gmin mínima en paralelo para evitar singularidad (Upgrade 5)
-                    let g_tot = g_eq + 1e-12;
-
-                    stamp_companion_conductance(&mut matrix_a, node_pos, node_pos, g_tot);
-                    stamp_companion_conductance(&mut matrix_a, node_neg, node_neg, g_tot);
-                    stamp_companion_conductance(&mut matrix_a, node_pos, node_neg, -g_tot);
-                    stamp_companion_conductance(&mut matrix_a, node_neg, node_pos, -g_tot);
-
-                    if node_pos > 0 {
-                        vector_z[node_pos - 1] -= i_eq;
-                    }
-                    if node_neg > 0 {
-                        vector_z[node_neg - 1] += i_eq;
-                    }
-                }
-                // --- FASE 30: CO-SIMULACIÓN MIXED-SIGNAL DE EVENTOS DISCRETOS ---
-                "and_gate" | "or_gate" | "not_gate" | "nand_gate" | "nor_gate" | "xor_gate" => {
-                    let node_out = comp.pins[comp.pins.len() - 1].parse::<usize>().unwrap();
-                    let mut inputs = Vec::new();
-                    for i in 0..(comp.pins.len() - 1) {
-                        let pin_in = comp.pins[i].parse::<usize>().unwrap();
-                        let v_in = if pin_in > 0 {
-                            current_solution[pin_in - 1]
-                        } else {
-                            0.0
-                        };
-                        inputs.push(v_in > 1.5); // Umbral de histéresis ideal 1.5 V
-                    }
-
-                    let out_high = match comp.comp_type.as_str() {
-                        "and_gate" => inputs.iter().all(|&x| x),
-                        "or_gate" => inputs.iter().any(|&x| x),
-                        "not_gate" => !inputs.first().copied().unwrap_or(false),
-                        "nand_gate" => !inputs.iter().all(|&x| x),
-                        "nor_gate" => !inputs.iter().any(|&x| x),
-                        "xor_gate" => inputs.iter().filter(|&&x| x).count() % 2 == 1,
-                        _ => false,
-                    };
-
-                    // Equivalente Norton de interfaz D/A: R_out = 100 Ohm, V_out = 5V si High, 0V si Low
-                    let r_out = 100.0;
-                    let g_eq = 1.0 / r_out;
-                    let i_eq = if out_high { 5.0 / r_out } else { 0.0 };
-
-                    stamp_companion_conductance(&mut matrix_a, node_out, node_out, g_eq);
-                    if node_out > 0 {
-                        vector_z[node_out - 1] += i_eq;
-                    }
-                }
-                "switch" => {
-                    let co = local_overrides.get(&comp.id);
-                    let node_a = comp.pins[0].parse::<usize>().unwrap();
-                    let node_b = comp.pins[1].parse::<usize>().unwrap();
-                    let ron = co
-                        .and_then(|f| f.get("switch_ron").copied())
-                        .unwrap_or(comp.switch_ron.unwrap_or(0.01));
-                    let roff = co
-                        .and_then(|f| f.get("switch_roff").copied())
-                        .unwrap_or(comp.switch_roff.unwrap_or(1e9));
-                    let is_closed = switch_states.get(&comp.id).copied().unwrap_or(false);
-                    let conductance = 1.0 / if is_closed { ron } else { roff };
-                    stamp_companion_conductance(&mut matrix_a, node_a, node_a, conductance);
-                    stamp_companion_conductance(&mut matrix_a, node_b, node_b, conductance);
-                    stamp_companion_conductance(&mut matrix_a, node_a, node_b, -conductance);
-                    stamp_companion_conductance(&mut matrix_a, node_b, node_a, -conductance);
-                }
-                _ => {}
-            }
-        }
-
-        // Estampar inductores acoplados (Inductancia Mutua K)
-        if let Some(ref mutuals) = netlist.mutual_inductances {
-            for k_comp in mutuals {
-                if let (Some(l1), Some(l2)) = (
-                    netlist.components.iter().find(|c| c.id == k_comp.l1_id),
-                    netlist.components.iter().find(|c| c.id == k_comp.l2_id),
-                ) {
-                    let node_1pos = l1.pins[0].parse::<usize>().unwrap();
-                    let node_1neg = l1.pins[1].parse::<usize>().unwrap();
-                    let node_2pos = l2.pins[0].parse::<usize>().unwrap();
-                    let node_2neg = l2.pins[1].parse::<usize>().unwrap();
-
-                    let l1_val = l1.value;
-                    let l2_val = l2.value;
-                    let k = k_comp.k_coeff;
-
-                    let m = k * (l1_val * l2_val).sqrt();
-                    let delta = l1_val * l2_val - m * m;
-
-                    if delta.abs() > 1e-30 {
-                        let f_step = if gear2_active_this_step {
-                            1.0 / gear_a
-                        } else {
-                            dt
-                        };
-
-                        let g11 = (f_step * l2_val) / delta;
-                        let g22 = (f_step * l1_val) / delta;
-                        let g12 = -(f_step * m) / delta;
-
-                        // Estampar conductancias propias
-                        let g11_tot = g11 + 1e-12;
-                        stamp_companion_conductance(&mut matrix_a, node_1pos, node_1pos, g11_tot);
-                        stamp_companion_conductance(&mut matrix_a, node_1neg, node_1neg, g11_tot);
-                        stamp_companion_conductance(&mut matrix_a, node_1pos, node_1neg, -g11_tot);
-                        stamp_companion_conductance(&mut matrix_a, node_1neg, node_1pos, -g11_tot);
-
-                        let g22_tot = g22 + 1e-12;
-                        stamp_companion_conductance(&mut matrix_a, node_2pos, node_2pos, g22_tot);
-                        stamp_companion_conductance(&mut matrix_a, node_2neg, node_2neg, g22_tot);
-                        stamp_companion_conductance(&mut matrix_a, node_2pos, node_2neg, -g22_tot);
-                        stamp_companion_conductance(&mut matrix_a, node_2neg, node_2pos, -g22_tot);
-
-                        // Estampar conductancia de acoplamiento cruzado G12
-                        stamp_companion_conductance(&mut matrix_a, node_1pos, node_2pos, g12);
-                        stamp_companion_conductance(&mut matrix_a, node_1neg, node_2neg, g12);
-                        stamp_companion_conductance(&mut matrix_a, node_1pos, node_2neg, -g12);
-                        stamp_companion_conductance(&mut matrix_a, node_1neg, node_2pos, -g12);
-
-                        stamp_companion_conductance(&mut matrix_a, node_2pos, node_1pos, g12);
-                        stamp_companion_conductance(&mut matrix_a, node_2neg, node_1neg, g12);
-                        stamp_companion_conductance(&mut matrix_a, node_2pos, node_1neg, -g12);
-                        stamp_companion_conductance(&mut matrix_a, node_2neg, node_1pos, -g12);
-
-                        // Estampar fuentes de corriente equivalentes
-                        let prev_il1 = *ind_states.get(&l1.id).unwrap_or(&0.0);
-                        let prev_il2 = *ind_states.get(&l2.id).unwrap_or(&0.0);
-
-                        let (i_eq1, i_eq2) = if gear2_active_this_step {
-                            let prev_prev_il1 = *ind_states_prev.get(&l1.id).unwrap_or(&prev_il1);
-                            let prev_prev_il2 = *ind_states_prev.get(&l2.id).unwrap_or(&prev_il2);
-                            (
-                                -(gear_b / gear_a) * prev_il1 - (gear_c / gear_a) * prev_prev_il1,
-                                -(gear_b / gear_a) * prev_il2 - (gear_c / gear_a) * prev_prev_il2,
-                            )
-                        } else {
-                            (prev_il1, prev_il2)
-                        };
-
-                        if node_1pos > 0 {
-                            vector_z[node_1pos - 1] -= i_eq1;
-                        }
-                        if node_1neg > 0 {
-                            vector_z[node_1neg - 1] += i_eq1;
-                        }
-
-                        if node_2pos > 0 {
-                            vector_z[node_2pos - 1] -= i_eq2;
-                        }
-                        if node_2neg > 0 {
-                            vector_z[node_2neg - 1] += i_eq2;
-                        }
-                    }
-                }
-            }
-        }
+        let companion_params = IntegrationHistoryParams {
+            integration_method,
+            gear2_active_this_step,
+            gear_a,
+            gear_b,
+            gear_c,
+            dt,
+        };
+        stamp_transient_companions(
+            netlist,
+            &mut matrix_a,
+            &mut vector_z,
+            &CompanionStampState {
+                current_solution: &current_solution,
+                cap_states: &cap_states,
+                cap_states_prev: &cap_states_prev,
+                cap_currents: &cap_currents,
+                ind_states: &ind_states,
+                ind_states_prev: &ind_states_prev,
+                ind_voltages: &ind_voltages,
+                switch_states: &switch_states,
+                local_overrides: &local_overrides,
+            },
+            &companion_params,
+        );
 
         // Si hay componentes no lineales, resolvemos con Newton-Raphson
         let step_solution_res = if has_nonlinear {

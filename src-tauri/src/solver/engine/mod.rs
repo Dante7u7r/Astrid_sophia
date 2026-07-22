@@ -5,6 +5,7 @@ pub mod devices;
 mod live_mutations;
 pub mod simulation_types;
 pub mod transient;
+mod transient_companions;
 mod transient_mcu;
 mod transient_mixed_signal;
 mod transient_setup;
