@@ -1,25 +1,48 @@
 use num_complex::Complex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-use super::super::ac::{find_peak_magnitude, FftResult, ImdResult};
 use super::super::simulation_types::TimeStepResult;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct DcSweepSettings {
-    pub source_id: String,
-    pub v_start: f64,
-    pub v_end: f64,
-    pub v_step: f64,
+pub struct FftResult {
+    pub frequencies: Vec<f64>,
+    pub magnitudes_db: Vec<f64>,
+    pub thd: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct DcSweepResult {
-    pub sweep_voltages: Vec<f64>,
-    pub node_voltages: HashMap<String, Vec<f64>>,
-    pub branch_currents: HashMap<String, Vec<f64>>,
+pub struct ImdResult {
+    pub fundamental_power_dbv: f64,
+    pub im2_power_dbv: f64,
+    pub im3_power_dbv: f64,
+    pub imd_ratio_percent: f64,
+    pub ip3_out_dbv: f64,
+    pub frequencies: Vec<f64>,
+    pub magnitudes_db: Vec<f64>,
+}
+
+pub fn find_peak_magnitude(frequencies: &[f64], magnitudes: &[f64], target_freq: f64) -> f64 {
+    let mut best_bin = 0;
+    let mut min_diff = f64::MAX;
+    for (i, &f) in frequencies.iter().enumerate() {
+        let diff = (f - target_freq).abs();
+        if diff < min_diff {
+            min_diff = diff;
+            best_bin = i;
+        }
+    }
+
+    let mut max_mag = magnitudes[best_bin];
+    let start = best_bin.saturating_sub(3);
+    let end = (best_bin + 3).min(frequencies.len() - 1);
+    for i in start..=end {
+        if magnitudes[i] > max_mag {
+            max_mag = magnitudes[i];
+        }
+    }
+    max_mag
 }
 
 pub fn calculate_imd_analysis(
