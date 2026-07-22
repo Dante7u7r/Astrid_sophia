@@ -11,6 +11,7 @@ mod transient_mixed_signal;
 mod transient_setup;
 mod transient_sources;
 mod transient_state_updates;
+mod transient_step_control;
 mod transient_switches;
 mod transient_thermal;
 
