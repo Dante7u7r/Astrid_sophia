@@ -11,6 +11,7 @@ mod transient_setup;
 mod transient_sources;
 mod transient_state_updates;
 mod transient_switches;
+mod transient_thermal;
 
 #[cfg(test)]
 mod tests;
