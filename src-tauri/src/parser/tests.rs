@@ -8,7 +8,7 @@ use super::lexer::*;
 use super::subcircuits::*;
 
 #[cfg(test)]
-mod tests {
+mod parser_tests {
     use super::*;
 
     #[test]

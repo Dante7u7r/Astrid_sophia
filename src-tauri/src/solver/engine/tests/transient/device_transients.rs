@@ -56,7 +56,7 @@ fn test_cmos_inverter_transient() {
 
     let results = solve_transient_circuit(&netlist, &settings).unwrap();
     assert!(
-        results.len() > 0,
+        !results.is_empty(),
         "La simulación transitoria de inversor CMOS debió generar resultados."
     );
 
@@ -147,7 +147,7 @@ fn test_bjt_transient_delay() {
 
     let results = solve_transient_circuit(&netlist, &settings).unwrap();
     assert!(
-        results.len() > 0,
+        !results.is_empty(),
         "Debería haber resultados de simulación transitoria para BJT."
     );
 
@@ -228,7 +228,7 @@ fn test_diode_clipper_transient() {
     };
 
     let results = solve_transient_circuit(&netlist, &settings).unwrap();
-    assert!(results.len() > 0);
+    assert!(!results.is_empty());
 
     let mut max_v2 = 0.0;
     for step in &results {

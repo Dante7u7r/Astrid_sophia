@@ -6,10 +6,16 @@ import {
   findTriggerStartIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
-  selectTraceSampleIndices,
   type OscilloscopeChannel,
   type TriggerEdge,
 } from "./oscilloscope_model";
+import {
+  drawAcSweep,
+  drawOscilloscopeCursors,
+  drawPvtTraces,
+  drawTyReticle,
+  drawXyTrace,
+} from "./oscilloscope_renderer";
 import {
   dragOscilloscopeCursor,
   hitTestOscilloscopeCursor,
@@ -321,6 +327,7 @@ export class OscilloscopePanel {
     window.addEventListener("mouseup", () => {
       this.draggingCursor = null;
     });
+    window.addEventListener("resize", () => this.refreshVisibility());
 
     this.oscCanvas.addEventListener("mouseleave", () => {
       this.oscMouseX = null;
@@ -470,120 +477,41 @@ export class OscilloscopePanel {
 
     // --- MODO AC SWEEP: DIAGRAMA DE BODE LOGARÍTMICO ---
     if (this.activeAnalysisMode === 'AC' && this.acSweepResults !== null && this.acSweepResults.frequencies.length > 0) {
-      const ctx = this.oscCtx!;
-      const freqs = this.acSweepResults.frequencies;
-      const fMin = freqs[0];
-      const fMax = freqs[freqs.length - 1];
-      const logMin = Math.log10(fMin);
-      const logMax = Math.log10(fMax);
+      drawAcSweep(this.oscCtx, width, height, this.acSweepResults, [
+        { node: this.ch1ProbeNode, color: "#66fcf1", active: isCh1Active },
+        { node: this.ch2ProbeNode, color: "#a855f7", active: isCh2Active },
+        { node: this.ch3ProbeNode, color: "#f97316", active: isCh3Active },
+        { node: this.ch4ProbeNode, color: "#22c55e", active: isCh4Active },
+      ]);
 
-      // Decades Grid
-      ctx.strokeStyle = 'rgba(102, 252, 241, 0.08)';
-      ctx.lineWidth = 1;
-      const decades = [10, 100, 1000, 10000, 100000];
-      decades.forEach(dec => {
-        if (dec >= fMin && dec <= fMax) {
-          const x = ((Math.log10(dec) - logMin) / (logMax - logMin)) * width;
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height - 15);
-          ctx.stroke();
-          ctx.fillStyle = 'rgba(102, 252, 241, 0.4)';
-          ctx.font = '9px var(--font-sans)';
-          ctx.textAlign = 'center';
-          const label = dec >= 1000 ? (dec / 1000) + " kHz" : dec + " Hz";
-          ctx.fillText(label, x, height - 4);
-        }
-      });
-
-      // Bode Curving
-      const drawBode = (nodeId: string, color: string, isActive: boolean) => {
-        if (!isActive || !nodeId) return;
-        const amps = this.acSweepResults!.nodeAmplitudes[nodeId];
-        if (!amps || amps.length === 0) return;
-
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.2;
-        ctx.beginPath();
-        for (let i = 0; i < freqs.length; i++) {
-          const x = ((Math.log10(freqs[i]) - logMin) / (logMax - logMin)) * width;
-          const db = amps[i];
-          const y = (height - 15) * (1.0 - (db - (-80)) / (20 - (-80)));
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      };
-
-      drawBode(this.ch1ProbeNode || "", '#66fcf1', isCh1Active);
-      drawBode(this.ch2ProbeNode || "", '#a855f7', isCh2Active);
-      drawBode(this.ch3ProbeNode || "", '#f97316', isCh3Active);
-      drawBode(this.ch4ProbeNode || "", '#22c55e', isCh4Active);
-
-    } else if (this.isXyMode && isCh1Active && isCh2Active && this.transientResults.length > 1) {
-      // --- MODO X-Y: CURVAS DE LISSAJOUS ---
-      const ctx = this.oscCtx!;
-      ctx.strokeStyle = 'rgba(102, 252, 241, 0.05)';
-      ctx.lineWidth = 1;
-      // Draw XY Grid
-      for (let x = 0; x < width; x += 40) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
-      }
-      for (let y = 0; y < height; y += 40) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
-      }
-
-      ctx.strokeStyle = '#66fcf1';
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#66fcf1';
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-
-      const nodeX = this.ch1ProbeNode || "1";
-      const nodeY = this.ch2ProbeNode || "2";
-
-      const xyIndices = selectTraceSampleIndices(
-        this.transientResults.length,
-        Math.max(64, Math.min(4_000, Math.ceil(width * 2))),
+    } else if (this.activeAnalysisMode === "PVT" && this.pvtTraces.length > 0) {
+      drawPvtTraces(
+        this.oscCtx,
+        width,
+        height,
+        this.pvtTraces,
+        this.ch1ProbeNode || "1",
+        this.voltsPerDivCh1,
+        this.offsetCh1,
+        this.timeDivValue,
       );
-      for (let sampleIndex = 0; sampleIndex < xyIndices.length; sampleIndex++) {
-        const i = xyIndices[sampleIndex];
-        const pt = this.transientResults[i];
-        const vx = pt.nodeVoltages[nodeX] ?? 0.0;
-        const vy = pt.nodeVoltages[nodeY] ?? 0.0;
-
-        const x = width / 2 + (vx / this.voltsPerDivCh1) * (width / 10) + this.offsetCh1;
-        const y = height / 2 - (vy / this.voltsPerDivCh2) * (height / 8) - this.offsetCh2;
-
-        if (sampleIndex === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+    } else if (this.isXyMode && isCh1Active && isCh2Active && this.transientResults.length > 1) {
+      drawXyTrace(
+        this.oscCtx,
+        width,
+        height,
+        this.transientResults,
+        this.ch1ProbeNode || "1",
+        this.ch2ProbeNode || "2",
+        this.voltsPerDivCh1,
+        this.voltsPerDivCh2,
+        this.offsetCh1,
+        this.offsetCh2,
+      );
 
     } else {
-      // --- MODO T-Y (ESTÁNDAR) ---
-      const ctx = this.oscCtx!;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.lineWidth = 1;
-      
-      const divWidth = width / 10;
-      const divHeight = height / 8;
-
-      // Draw standard reticle grid
-      for (let x = 0; x <= width; x += divWidth) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
-      }
-      for (let y = 0; y <= height; y += divHeight) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
-      }
-
-      // Central axes
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.beginPath();
-      ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
-      ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
-      ctx.stroke();
+      const ctx = this.oscCtx;
+      const { divHeight } = drawTyReticle(this.oscCtx, width, height);
 
       if (this.isSimulating && !this.isOscPaused) {
         // Adjust sweep speed based on timeDivValue
@@ -644,60 +572,20 @@ export class OscilloscopePanel {
         ],
       );
 
-      // Draw Interactive Cursors
       if (this.isCursorsEnabled) {
-        ctx.strokeStyle = "rgba(251, 191, 36, 0.7)"; // Yellow vertical Cursors
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-
-        // T1
-        const x1 = this.cursorT1 * width;
-        ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, height); ctx.stroke();
-        ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
-        ctx.font = "8px var(--font-mono)";
-        ctx.fillText("t1", x1 + 4, 12);
-
-        // T2
-        const x2 = this.cursorT2 * width;
-        ctx.beginPath(); ctx.moveTo(x2, 0); ctx.lineTo(x2, height); ctx.stroke();
-        ctx.fillText("t2", x2 + 4, 12);
-
-        // V1 and V2
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.7)"; // Pink horizontal Cursors
-        const centerY = height / 2;
-        const y1 = centerY - (this.cursorV1 / this.voltsPerDivCh1) * divHeight - this.offsetCh1;
-        const y2 = centerY - (this.cursorV2 / this.voltsPerDivCh1) * divHeight - this.offsetCh1;
-
-        ctx.beginPath(); ctx.moveTo(0, y1); ctx.lineTo(width, y1); ctx.stroke();
-        ctx.fillStyle = "rgba(244, 63, 94, 0.9)";
-        ctx.fillText("v1", 4, y1 - 4);
-
-        ctx.beginPath(); ctx.moveTo(0, y2); ctx.lineTo(width, y2); ctx.stroke();
-        ctx.fillText("v2", 4, y2 - 4);
-        ctx.setLineDash([]);
-
-        // Delta Panel Tooltip
-        const windowDuration = this.timeDivValue * 10;
-        const tVal1 = this.cursorT1 * windowDuration;
-        const tVal2 = this.cursorT2 * windowDuration;
-        const dt = Math.abs(tVal2 - tVal1);
-        const dv = Math.abs(this.cursorV2 - this.cursorV1);
-        const freqEst = dt > 0 ? 1 / dt : 0;
-
-        ctx.fillStyle = "rgba(10, 15, 25, 0.9)";
-        ctx.strokeStyle = "rgba(251, 191, 36, 0.5)";
-        ctx.lineWidth = 1;
-        const txt = `Δt: ${(dt * 1000).toFixed(2)} ms | 1/Δt: ${freqEst.toFixed(1)} Hz | ΔV: ${dv.toFixed(2)} V`;
-        ctx.font = "bold 9px var(--font-sans)";
-        const tWidth = ctx.measureText(txt).width;
-        ctx.beginPath();
-        ctx.roundRect(width / 2 - tWidth / 2 - 8, 12, tWidth + 16, 18, 4);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = "hsl(174, 97%, 69%)";
-        ctx.textAlign = "center";
-        ctx.fillText(txt, width / 2, 24);
+        drawOscilloscopeCursors(
+          this.oscCtx,
+          width,
+          height,
+          divHeight,
+          this.cursorT1,
+          this.cursorT2,
+          this.cursorV1,
+          this.cursorV2,
+          this.voltsPerDivCh1,
+          this.offsetCh1,
+          this.timeDivValue,
+        );
       }
     }
 

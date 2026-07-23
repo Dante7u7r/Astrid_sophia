@@ -44,7 +44,7 @@ fn test_rc_transient_circuit() {
 
     let results = solve_transient_circuit(&netlist, &settings).unwrap();
     assert!(
-        results.len() > 0,
+        !results.is_empty(),
         "Debería haber al menos un paso temporal de simulación."
     );
 
@@ -63,7 +63,7 @@ fn test_rc_transient_circuit() {
 
     let v_t0 = get_voltage_at(0.0);
     assert!(
-        v_t0 >= 0.0 && v_t0 < 1.0,
+        (0.0..1.0).contains(&v_t0),
         "Voltaje inicial en el primer paso debería rondar los 0V-0.5V, obtenido: {}",
         v_t0
     );

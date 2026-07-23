@@ -194,7 +194,7 @@ fn test_scr_phase_control() {
 
     let results = solve_transient_circuit(&netlist, &settings).unwrap();
     assert!(
-        results.len() > 0,
+        !results.is_empty(),
         "Debería haber al menos un paso temporal de simulación."
     );
 

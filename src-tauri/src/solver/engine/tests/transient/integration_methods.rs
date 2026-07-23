@@ -51,7 +51,7 @@ fn test_gear2_integration_stability() {
         integration_method: Some("euler".to_string()),
     };
     let results_euler = solve_transient_circuit(&netlist_rlc, &settings_euler).unwrap();
-    assert!(results_euler.len() > 0);
+    assert!(!results_euler.is_empty());
 
     // 2. Simular con Gear 2 (BDF2)
     let settings_gear = TransientSettings {
@@ -61,7 +61,7 @@ fn test_gear2_integration_stability() {
         integration_method: Some("gear2".to_string()),
     };
     let results_gear = solve_transient_circuit(&netlist_rlc, &settings_gear).unwrap();
-    assert!(results_gear.len() > 0);
+    assert!(!results_gear.is_empty());
     assert_eq!(results_euler.len(), results_gear.len());
 
     // Verificar que el capacitor de Gear 2 se carga y oscila suavemente hacia 5V

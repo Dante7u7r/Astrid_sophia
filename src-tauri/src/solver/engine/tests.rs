@@ -15,7 +15,7 @@ use super::simulation_types::{TimeStepResult, TransientSettings};
 use super::transient::*;
 
 #[cfg(test)]
-mod tests {
+mod core_tests {
     use super::*;
     use num_complex::Complex;
     use std::collections::HashMap;

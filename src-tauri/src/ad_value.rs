@@ -461,7 +461,7 @@ mod tests {
         let rmax = AdValue::max(&a, &b);
         assert!((rmax.value - 5.0).abs() < 1e-15);
         assert_eq!(rmax.grad.get(&1), Some(&1.0)); // hereda grad de V(1)
-        assert!(rmax.grad.get(&2).is_none() || *rmax.grad.get(&2).unwrap() == 0.0);
+        assert!(rmax.grad.get(&2).is_none_or(|gradient| *gradient == 0.0));
 
         let rmin = AdValue::min(&a, &b);
         assert!((rmin.value - 3.0).abs() < 1e-15);

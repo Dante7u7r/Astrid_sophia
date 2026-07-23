@@ -53,7 +53,7 @@ fn test_monte_carlo_distribution() {
     assert_eq!(results.len(), 20); // 20 corridas de simulación
 
     for run in results {
-        assert!(run.len() > 0);
+        assert!(!run.is_empty());
         let v_mid = *run.last().unwrap().node_voltages.get("2").unwrap();
         // Para divisor de tensión R1/R2 ideales de 1k, Vmid = 5.0V.
         // Con +/-10% de tolerancia, la dispersión está en torno a 5.0V, variando físicamente.

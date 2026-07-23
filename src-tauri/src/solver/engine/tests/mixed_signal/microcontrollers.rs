@@ -230,7 +230,7 @@ fn test_microcontrollers_mixed_signal() {
         integration_method: None,
     };
     let results_pico = solve_transient_circuit(&netlist_pico, &settings_pico).unwrap();
-    assert!(results_pico.len() > 0);
+    assert!(!results_pico.is_empty());
 }
 
 #[test]
@@ -333,7 +333,7 @@ fn test_microcontrollers_phd_level() {
 
     let results = solve_transient_circuit(&netlist_thermal, &settings).unwrap();
     assert!(
-        results.len() > 0,
+        !results.is_empty(),
         "Debería completar el análisis transitorio electro-térmico mixed-signal."
     );
 }

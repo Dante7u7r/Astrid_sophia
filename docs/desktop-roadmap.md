@@ -974,11 +974,11 @@ Resultado:
   - `stress-480`: mediana 3.50 ms, promedio 3.79 ms, maximo 6.70 ms.
   - `stress-960-lod`: mediana 4.30 ms, promedio 4.30 ms, maximo 7.60 ms.
 
-Limitacion conocida:
+Validacion posterior:
 
-- Esta fase prueba el flujo PVT con IPC mockeado. Falta una prueba Tauri real
-  del perfil PVT porque requiere escoger un circuito compatible y esperar la
-  matriz completa.
+- La suite Tauri nativa ya ejecuta el perfil PVT comercial con el solver Rust,
+  comprueba que produce trazas y verifica por pixeles que se dibujan en el
+  osciloscopio.
 - El texto nuevo del controlador usa ASCII para evitar ampliar el problema de
   mojibake existente en archivos antiguos.
 
@@ -1161,6 +1161,40 @@ Estado: completada el 2026-07-22.
   formatear para confirmar que no cambiaron ecuaciones.
 - Verificacion: `cargo check`, 128 pruebas Rust, `cargo fmt --check` y
   `cargo clippy -- -D warnings`.
+
+### Media 2-6 - Analisis, parser, render y E2E nativo
+
+Estado: completadas el 2026-07-22.
+
+- Ruido AC separa la extraccion del punto de operacion y modelos linealizados
+  en `ac/noise/operating_point.rs`; `noise.rs` conserva el barrido y la API.
+- El parser SPICE bajo de 1.011 a 579 lineas. Las directivas `.model` y sus
+  expresiones viven en `parser/devices/models.rs`; la resolucion de familias,
+  pines y tipos vive en `parser/devices/families.rs`.
+- El sweep AC bajo a 100 lineas de coordinacion. La preparacion del punto de
+  operacion esta en `ac/sweep/operating_point.rs` y el stamping/factorizacion
+  por frecuencia en `ac/sweep/frequency.rs`.
+- `CanvasOrchestrator` bajo de 927 a 502 lineas y delega el dibujo completo en
+  `canvas/canvas_scene_renderer.ts`, que conserva el cache de rejilla y los
+  pasos de cables, componentes, pines, ERC y overlays.
+- `OscilloscopePanel` bajo de 762 a 568 lineas. Bode, X-Y, reticula T-Y,
+  cursores y overlays PVT viven en `ui/oscilloscope_renderer.ts`.
+- Se corrigio un defecto real: PVT almacenaba resultados pero no tenia una
+  ruta de dibujo. Tambien se refresca el osciloscopio al volver visible su
+  pestana despues de abrir el centro de instrumentos.
+- El E2E Tauri ejecuta PVT Rust real y valida trazas por pixeles. Tambien pulsa
+  los exportadores reales CSV, SVG y HDF5, captura sus blobs y verifica nombre,
+  contenido y cabecera binaria HDF5.
+- Verificacion incremental: 8 pruebas del parser, 8 pruebas AC/ruido, build
+  TypeScript/Vite, 264 pruebas frontend y flujo Tauri nativo completo.
+- Cierre integral: auditoria UI y guard de produccion, auditoria de rendimiento,
+  `npm audit` sin vulnerabilidades, 128 pruebas Rust, `cargo fmt --check` y
+  Clippy `--all-targets` con y sin la feature `wdio`.
+- Rendimiento final: `stress-252` mediana 1,80 ms, `stress-480` 2,20 ms,
+  `stress-960-lod` 2,00 ms y reduccion inicial de un millon de muestras en
+  16,50 ms.
+- Release NSIS generado y ejecutable release comprobado sin listeners locales:
+  SHA-256 `BC9EBC796FE065F9CA7826874F8D78A7F462B8D689470FE02AD633C00CBACD1A`.
 
 ## Criterio de cierre
 

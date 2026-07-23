@@ -483,6 +483,7 @@ window.addEventListener("DOMContentLoaded", () => {
     getOrchestrator: () => orchestrator,
     getDocumentController: () => circuitDocumentController,
     getActiveTabName: () => tabManager?.getActiveTab()?.name ?? null,
+    getOscilloscopePanel: () => oscilloscopePanel,
     updateCanvasRendering: () => updateCanvasRendering(true),
   });
   consoleLogController.bindClearButton();
