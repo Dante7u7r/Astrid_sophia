@@ -1133,6 +1133,35 @@ Estado: completado y validado en escritorio Windows.
   demo cargada, centro de instrumentos visible y resultados Rust `0=0 V`,
   `1=5 V`, `2=5 V`.
 
+## Prioridad media
+
+El hardening de tipos en produccion ya no tiene usos de `any`; los usos
+restantes pertenecen a dobles y fixtures de prueba. La prioridad media actual
+queda ordenada por tamano, acoplamiento y alcance de regresion:
+
+1. Dividir modelos compartidos de dispositivos.
+2. Separar modelos y analisis dentro de ruido AC.
+3. Dividir el parser de dispositivos por familias SPICE.
+4. Separar preparacion, stamping y resolucion del sweep AC.
+5. Reducir responsabilidades de `CanvasOrchestrator` y `OscilloscopePanel`.
+6. Ampliar E2E Tauri a PVT y exportaciones reales controladas.
+
+### Media 1 - Modelos compartidos de dispositivos
+
+Estado: completada el 2026-07-22.
+
+- `solver/engine/devices.rs` bajo de 1.329 a 7 lineas y conserva la misma API
+  publica mediante reexportaciones.
+- `devices/junctions.rs` contiene constantes fisicas, limites PN, termica y
+  capacitancias de diodo, JFET, MOS y BJT.
+- `devices/behavioral.rs` contiene tokenizador, parser, AST y evaluadores
+  numerico/AD de fuentes comportamentales.
+- `devices/bsim.rs` contiene los evaluadores NMOS/PMOS de BSIM3 y BSIM4.
+- Los cuerpos extraidos se compararon con el blob Git original antes de
+  formatear para confirmar que no cambiaron ecuaciones.
+- Verificacion: `cargo check`, 128 pruebas Rust, `cargo fmt --check` y
+  `cargo clippy -- -D warnings`.
+
 ## Criterio de cierre
 
 Una fase se considera terminada solo cuando:
