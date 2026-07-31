@@ -1,4 +1,4 @@
-use super::resolve_includes;
+use super::{resolve_includes, MAX_SPICE_TEXT_BYTES};
 use crate::solver::{CircuitNetlist, ComponentData, MutualInductance, ThermalConfig};
 use std::collections::HashMap;
 
@@ -16,7 +16,13 @@ use families::{classify_component, resolve_device_layout, resolve_pin_count};
 pub use models::*;
 
 pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist, String> {
+    if netlist_str.len() > MAX_SPICE_TEXT_BYTES {
+        return Err("El texto SPICE excede el limite de 10 MB.".to_string());
+    }
     let resolved_netlist = resolve_includes(netlist_str, 0)?;
+    if resolved_netlist.len() > MAX_SPICE_TEXT_BYTES {
+        return Err("El texto SPICE expandido excede el limite de 10 MB.".to_string());
+    }
     let mut templates = HashMap::new();
     let mut models = HashMap::new();
     let mut root_lines = Vec::new();
@@ -540,6 +546,12 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 }
             }
 
+            if comp.comp_type == "vsource" || comp.comp_type == "isource" {
+                if let Some(value) = parse_independent_source_dc_value(&tokens, pins_count + 1) {
+                    comp.value = value;
+                }
+            }
+
             // Tol=
             for tok in &tokens[pins_count + 2..] {
                 if tok.to_lowercase().starts_with("tol=") {
@@ -592,6 +604,13 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             value: val,
             ..Default::default()
         });
+    }
+
+    if components.len() > crate::topology::MAX_NETLIST_COMPONENTS {
+        return Err(format!(
+            "El netlist SPICE excede el limite de {} componentes.",
+            crate::topology::MAX_NETLIST_COMPONENTS
+        ));
     }
 
     Ok(CircuitNetlist {

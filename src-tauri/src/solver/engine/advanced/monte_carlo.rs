@@ -12,6 +12,28 @@ pub struct MonteCarloSettings {
     pub seed: Option<u64>,
 }
 
+const MAX_MONTE_CARLO_RUNS: usize = 256;
+const MAX_MONTE_CARLO_SAMPLES: usize = 2_000_000;
+
+impl MonteCarloSettings {
+    pub fn validate(&self, transient_settings: &TransientSettings) -> Result<(), String> {
+        transient_settings.validate()?;
+        if self.runs == 0 || self.runs > MAX_MONTE_CARLO_RUNS {
+            return Err(format!(
+                "Monte Carlo requiere entre 1 y {MAX_MONTE_CARLO_RUNS} corridas."
+            ));
+        }
+        let samples_per_run = (transient_settings.t_max / transient_settings.dt).ceil() as usize;
+        let total_samples = self.runs.saturating_mul(samples_per_run);
+        if total_samples > MAX_MONTE_CARLO_SAMPLES {
+            return Err(format!(
+                "Monte Carlo excede el limite combinado de {MAX_MONTE_CARLO_SAMPLES} muestras."
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -44,6 +66,7 @@ pub fn solve_monte_carlo_transient(
     transient_settings: &TransientSettings,
     mc_settings: &MonteCarloSettings,
 ) -> Result<Vec<Vec<TimeStepResult>>, String> {
+    mc_settings.validate(transient_settings)?;
     let rng_seed_base = mc_settings.seed.unwrap_or(123456789);
 
     (0..mc_settings.runs)
@@ -72,4 +95,38 @@ pub fn solve_monte_carlo_transient(
             solve_transient_circuit(&varied_netlist, transient_settings)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_zero_runs_and_excessive_combined_samples() {
+        let transient = TransientSettings {
+            dt: 1e-3,
+            t_max: 1.0,
+            fixed_step: None,
+            integration_method: None,
+        };
+        assert!(MonteCarloSettings {
+            runs: 0,
+            seed: None,
+        }
+        .validate(&transient)
+        .is_err());
+
+        let dense_transient = TransientSettings {
+            dt: 1e-5,
+            t_max: 1.0,
+            fixed_step: None,
+            integration_method: None,
+        };
+        assert!(MonteCarloSettings {
+            runs: 256,
+            seed: None,
+        }
+        .validate(&dense_transient)
+        .is_err());
+    }
 }

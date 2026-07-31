@@ -1,8 +1,8 @@
 # Astrid Sophia (Phase 37 Milestone)
 
-**Interactive real-time mixed-signal circuit simulator — 60 FPS continuous transient engine (Rust) + reactive vector canvas (TypeScript).**
+**Interactive circuit simulator — Rust MNA engine + reactive vector canvas (TypeScript).**
 
-Astrid Sophia combines SPICE-level Modified Nodal Analysis (MNA) with cycle-accurate microcontroller co-simulation (8051, AVR), advanced parametric analysis (PVT, S-Parameter extraction), and a premium dark-mode schematic editor in a single Tauri v2 desktop application.
+Astrid Sophia combines Modified Nodal Analysis (MNA), a Tauri v2 desktop schematic editor and several advanced analysis prototypes. It is currently intended for closed educational/research pilots, not for safety-critical or sign-off engineering work.
 
 ---
 
@@ -18,38 +18,16 @@ Astrid Sophia combines SPICE-level Modified Nodal Analysis (MNA) with cycle-accu
 | AC analysis | Small-signal frequency sweep with complex admittance Jacobian |
 | DC operating point | Automatic initial guess + pseudo-transient (PTA) |
 | Sensitivity | ∂V/∂R, ∂V/∂C parametric sensitivity with worst-case limits |
-| Periodic steady-state | Shooting method for steady-state envelope (PSS) |
-| Stability analysis | Pole-zero extraction, phase margin, gain margin (STB) |
+| Periodic steady-state | Experimental shooting method; external validation and closure criteria are still incomplete |
+| Pole/zero analysis | Experimental reduced-order extraction; **does not calculate loop gain, phase margin or gain margin** |
 
-20+ device models: resistor, capacitor, inductor, diode (Shockley), LED, BJT NPN/PNP (Ebers-Moll + Early), NMOS/PMOS (Level 1 + subthreshold), op-amp (macro-model with tanh saturation), transformer, switch (Ron/Roff with hysteresis), transmission line (RLCG Pi-segment cascade), lamp thermal model, relay electromechanical, buzzer piezoelectric, optocoupler (CTR), BSIM3v3/BSIM4 (gate leakage, DIBL, short-channel).
+20+ device models: resistor, capacitor, inductor, diode (Shockley), LED, BJT NPN/PNP (Ebers-Moll + Early), NMOS/PMOS (Level 1 + subthreshold), op-amp (macro-model with tanh saturation), transformer, switch (Ron/Roff with hysteresis), transmission line (RLCG Pi-segment cascade), lamp thermal model, relay electromechanical, buzzer piezoelectric and optocoupler (CTR). BSIM3v3/BSIM4 support is partial and experimental; it has not been systematically correlated against a reference simulator.
 
-### Real-Time Co-Simulation (Mixed-Signal)
+### MCU Scaffold (Not Simulable)
 
-```
-  SIMULATION TIMESTEP (dt = 1 us)
-  +-------------------+---------------------------+-----------+
-  |   MNA SOLVER      |   MCU RUNTIMES           |  AUDIO /  |
-  |   (Rust)          |   (8051 12 MHz /         |  ACTUATOR |
-  |                   |    AVR 16 MHz)           |  UPDATE   |
-  |                   |                           |           |
-  |  Solve A.x = b    |  Execute cycles          |  Buzzer   |
-  |  Stamp companion  |  Dispatch analog IRQs    |  Lamp     |
-  |  models           |  Read GPIO from nodes    |  Relay    |
-  |                   |  Write GPIO to MNA       |  LED      |
-  +-------------------+---------------------------+-----------+
-          |                       |                      |
-          +-----------------------+----------------------+
-                                  |
-                                  v
-                    ON_FRAME_RECEIVED (60 FPS)
-                    -> Canvas heatmaps + oscilloscope
-                    -> Actuator interpolation
-                    -> Telemetry broadcast
-```
-
-- **Cycle accuracy**: 8051 — 12 cycles/µs; AVR — 16 cycles/µs, matching real silicon.
-- **Interrupt injection**: Analog threshold crossings (`rising`/`falling`/`either`) dispatched as hardware interrupts (e.g., INT0 at vector 0x02).
-- **GPIO coupling**: Digital pin states converted to Thevenin/Norton companion sources, stamped into the MNA matrix each timestep.
+- **MCU status**: 8051/AVR components are rejected by ERC before simulation. The remaining runtime is an inspection scaffold, not a firmware executor; the UI can validate/load HEX or BIN and display a partial disassembly only.
+- **Board models**: Arduino Uno, ESP32 and Raspberry Pi Pico are high-level analog/functional models. They do not execute real firmware.
+- **Mixed-signal hooks**: threshold events and GPIO coupling infrastructure exist, but they are not equivalent to validated hardware emulation.
 
 ### Advanced Parametric Analysis
 
@@ -76,7 +54,7 @@ simulation/
   simulation_dispatcher.ts   Tauri v2 IPC orchestrator + Electrical Rule Check (ERC)
   circuit_state_manager.ts   Centralized reactive immutable state container
   mcu-types.ts               MCU architecture definitions (8051, AVR, ARM Cortex-M0)
-  mcu-runtime.ts             Cycle-accurate virtual MCU runtime (fetch-decode-execute)
+  mcu-runtime.ts             Experimental MCU timing/runtime scaffold
   mcu-8051.ts                STANDARD_8051_DEFINITION
   mcu-avr.ts                 ATMEGA328P_DEFINITIONS
   mcu-spice-bridge.ts        Mixed-signal GPIO bridge (digital state encoding 0,1,X,Z)
@@ -96,14 +74,14 @@ ui/
   settings_modal.ts           Simulation parameters (dt, tolerance, max iterations)
   actuator_helpers.ts         Actuator model parsers (lamp thermal, relay, buzzer)
   audio_orchestrator.ts       Web Audio API PWM synthesis
-  mcu_debug_panel.ts          MCU register viewer, firmware upload (.hex), step/run/reset
+  mcu_debug_panel.ts          Inspector HEX/BIN y desensamblado; no ejecuta la ISA
 ```
 
 ### `src/` — Application root
 
 ```
 src/
-  main.ts                     Entry point (2,624 lines after 7 refactoring passes)
+  main.ts                     Entry point and desktop composition root
   canvas_orchestrator.ts      Canvas 2D schematic editor (viewport, hit-testing, wire routing)
   styles.css                  Premium dark-mode design system
   components.css              Component-specific styling
@@ -132,11 +110,17 @@ npm install
 # Launch development server (Vite on port 1420)
 npm run dev
 
-# Run unit tests (12 tests: DSU, Gaussian elimination, DC solver)
+# Run frontend unit/integration tests
 npm test
+
+# Run tests with the enforced coverage floor
+npm run test:coverage
 
 # Run integration tests (end-to-end simulation flow)
 npm run test:integration
+
+# Run the versioned Phase 4 scientific matrix
+npm run validate:scientific
 
 # Watch mode for TDD
 npm run test:watch
@@ -168,15 +152,18 @@ build mode. Its stages, isolation steps, and query parameters are documented in
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 
-1. **Frontend**: `npm ci` -> `npm run build` (TypeScript strict + Vite)
-2. **Backend**: `cargo check` -> `cargo clippy -D warnings` -> `cargo test` (90+ Rust tests)
-3. **Static analysis**: CodeQL security and maintainability scanning
+1. **Frontend**: reproducible `npm ci`, production dependency audit, strict build and coverage floor
+2. **Backend**: pinned Rust toolchain, `cargo check`, formatting, Clippy and tests with the lockfile enforced
+3. **Scientific matrix**: 13 versioned cases / 46 observations, including four live ngspice correlations
+4. **Windows desktop**: instrumented Tauri build and the native WDIO E2E suite
+5. **Static analysis**: CodeQL for JavaScript/TypeScript and Rust
 
 Every simulation run is guarded by an **Electrical Rule Check (ERC)**:
 - Missing ground reference (node "0")
 - Shorted voltage sources (both terminals on the same node)
 - Parallel voltage sources (conflicting constraints)
 - Floating pins / orphaned components
+- Unsupported component contracts, invalid pin counts and oversized node/component sets
 
 ---
 
@@ -187,16 +174,17 @@ Every simulation run is guarded by an **Electrical Rule Check (ERC)**:
 | Canvas framerate | 60 FPS | 60 FPS |
 | Transient timestep | 1-100 us adaptive | 1 us fixed |
 | Interactive latency | < 16 ms | < 10 ms |
-| MCU 8051 co-simulation | 12 cycles/us | 12 cycles/us |
-| MCU AVR co-simulation | 16 cycles/us | 16 cycles/us |
-| Test suite runtime | < 1 s | 410 ms |
-| Production bundle (gzip) | < 200 kB | 43 kB |
+| MCU firmware execution | Complete ISA + peripherals | Not implemented; simulation is blocked |
+| Scientific reference suite | Documented external comparisons | 13 cases / 46 observations; live ngspice DC, AC, transient and ideal-diode correlation |
+| Production bundle (gzip) | < 200 kB | ~346 kB measured |
 
 ---
 
 ## License
 
-Astrid Sophia is distributed under the MIT License. See `LICENSE` for details.
+Proprietary software. All rights are reserved; see [`LICENSE`](LICENSE). No
+permission to copy, modify or redistribute is granted without prior written
+authorization from the copyright holder.
 
 ---
 

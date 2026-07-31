@@ -34,6 +34,27 @@ pub fn solve_noise_sweep(
     netlist: &CircuitNetlist,
     settings: &NoiseSweepSettings,
 ) -> Result<NoiseSweepResult, String> {
+    settings.ac_settings.validate()?;
+    let validated_node_count = crate::topology::validate_netlist_topology(netlist, false)?;
+    let validated_output_node = settings
+        .output_node
+        .parse::<usize>()
+        .map_err(|_| "El nodo de salida de ruido debe ser numerico.".to_string())?;
+    let validated_reference_node = settings
+        .reference_node
+        .parse::<usize>()
+        .map_err(|_| "El nodo de referencia de ruido debe ser numerico.".to_string())?;
+    if validated_output_node > validated_node_count
+        || validated_reference_node > validated_node_count
+    {
+        return Err(format!(
+            "Los nodos de ruido deben estar entre 0 y {validated_node_count}; se recibieron {validated_output_node} y {validated_reference_node}."
+        ));
+    }
+    if validated_output_node == validated_reference_node {
+        return Err("Los nodos de salida y referencia de ruido deben ser distintos.".to_string());
+    }
+
     // 1. Resolver Punto de Operación DC
     let (op_result, _) =
         solve_dc_circuit_with_guess(netlist, settings.ac_settings.op_guess.as_ref())?;
@@ -84,8 +105,8 @@ pub fn solve_noise_sweep(
         f *= ratio;
     }
 
-    let n_out = settings.output_node.parse::<usize>().unwrap_or(0);
-    let n_ref = settings.reference_node.parse::<usize>().unwrap_or(0);
+    let n_out = validated_output_node;
+    let n_ref = validated_reference_node;
 
     let mut output_noise_density = Vec::new();
     let mut input_noise_density = Vec::new();

@@ -57,4 +57,20 @@ describe("SettingsModal", () => {
     expect(onSave).toHaveBeenCalledWith({ dt: 0.002, tolerance: 0.0001, maxIterations: 120 });
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });
+
+  test("rechaza valores no físicos y mantiene abierto el diálogo", () => {
+    const onSave = vi.fn();
+    const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement;
+    const modal = document.querySelector("#settings-modal") as HTMLElement;
+    new SettingsModal({ dt: 0.001, tolerance: 0.00001, maxIterations: 80 }, onSave);
+    trigger.click();
+
+    (document.querySelector("#settings-dt-input") as HTMLInputElement).value = "-0.001";
+    (document.querySelector("#settings-tol-input") as HTMLInputElement).value = "NaN";
+    (document.querySelector("#settings-iter-input") as HTMLInputElement).value = "0";
+    (document.querySelector("#btn-save-settings") as HTMLButtonElement).click();
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(modal.classList.contains("open")).toBe(true);
+  });
 });

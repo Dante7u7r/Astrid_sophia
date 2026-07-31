@@ -13,6 +13,31 @@ pub struct DcSweepSettings {
     pub v_step: f64,
 }
 
+const MAX_DC_SWEEP_POINTS: usize = 100_000;
+
+impl DcSweepSettings {
+    pub fn validate(&self) -> Result<usize, String> {
+        if self.source_id.trim().is_empty() {
+            return Err("La fuente del barrido DC no puede estar vacia.".to_string());
+        }
+        if !self.v_start.is_finite() || !self.v_end.is_finite() || !self.v_step.is_finite() {
+            return Err("Los limites y el paso del barrido DC deben ser finitos.".to_string());
+        }
+        if self.v_step.abs() < 1e-12 {
+            return Err("El paso de barrido (v_step) no puede ser cero.".to_string());
+        }
+
+        let span = (self.v_end - self.v_start).abs();
+        let estimated_points = (span / self.v_step.abs()).floor() + 1.0;
+        if !estimated_points.is_finite() || estimated_points > MAX_DC_SWEEP_POINTS as f64 {
+            return Err(format!(
+                "El barrido DC excede el limite de {MAX_DC_SWEEP_POINTS} puntos."
+            ));
+        }
+        Ok(estimated_points as usize)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DcSweepResult {
@@ -25,22 +50,29 @@ pub fn solve_dc_sweep(
     netlist: &CircuitNetlist,
     settings: &DcSweepSettings,
 ) -> Result<DcSweepResult, String> {
-    let mut sweep_voltages = Vec::new();
+    let estimated_points = settings.validate()?;
+    let mut sweep_voltages = Vec::with_capacity(estimated_points);
     let mut v = settings.v_start;
-
-    if settings.v_step.abs() < 1e-12 {
-        return Err("El paso de barrido (v_step) no puede ser cero.".to_string());
-    }
 
     if settings.v_start <= settings.v_end {
         let step = settings.v_step.abs();
         while v <= settings.v_end + 1e-9 {
+            if sweep_voltages.len() >= MAX_DC_SWEEP_POINTS {
+                return Err(format!(
+                    "El barrido DC excede el limite de {MAX_DC_SWEEP_POINTS} puntos."
+                ));
+            }
             sweep_voltages.push(v);
             v += step;
         }
     } else {
         let step = -settings.v_step.abs();
         while v >= settings.v_end - 1e-9 {
+            if sweep_voltages.len() >= MAX_DC_SWEEP_POINTS {
+                return Err(format!(
+                    "El barrido DC excede el limite de {MAX_DC_SWEEP_POINTS} puntos."
+                ));
+            }
             sweep_voltages.push(v);
             v += step;
         }
@@ -102,4 +134,29 @@ pub fn solve_dc_sweep(
         node_voltages,
         branch_currents,
     })
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_zero_step_and_excessive_point_count() {
+        assert!(DcSweepSettings {
+            source_id: "V1".to_string(),
+            v_start: 0.0,
+            v_end: 1.0,
+            v_step: 0.0,
+        }
+        .validate()
+        .is_err());
+        assert!(DcSweepSettings {
+            source_id: "V1".to_string(),
+            v_start: 0.0,
+            v_end: 1.0,
+            v_step: 1e-9,
+        }
+        .validate()
+        .is_err());
+    }
 }

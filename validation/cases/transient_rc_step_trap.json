@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "transient-rc-step-trap",
+  "title": "Respuesta RC con integración trapezoidal",
+  "rationale": "Comprueba la historia trapezoidal del capacitor en tres puntos temporales contra la respuesta exponencial.",
+  "analysis": {
+    "kind": "transient",
+    "dt": 0.00001,
+    "tMax": 0.002,
+    "fixedStep": true,
+    "integrationMethod": "trap",
+    "tolerance": 1e-9,
+    "maxIterations": 100
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 5.0,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 1000.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "C1",
+        "type": "capacitor",
+        "value": 0.000001,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": [],
+    "fixedStep": true
+  },
+  "observations": [
+    {
+      "id": "vc_at_0_25tau",
+      "quantity": "transient_node_voltage",
+      "node": "2",
+      "timeSeconds": 0.00025
+    },
+    {
+      "id": "vc_at_1tau",
+      "quantity": "transient_node_voltage",
+      "node": "2",
+      "timeSeconds": 0.001
+    },
+    {
+      "id": "vc_at_2tau",
+      "quantity": "transient_node_voltage",
+      "node": "2",
+      "timeSeconds": 0.002
+    }
+  ],
+  "reference": "../references/transient_rc_step_trap.json"
+}

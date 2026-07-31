@@ -3,7 +3,18 @@
     "beforeBuildCommand": "npm run build:e2e"
   },
   "app": {
-    "withGlobalTauri": true
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "default",
+        {
+          "identifier": "wdio",
+          "description": "Instrumentación disponible únicamente en compilaciones E2E",
+          "windows": ["main"],
+          "permissions": ["wdio:default"]
+        }
+      ]
+    }
   },
   "bundle": {
     "active": false

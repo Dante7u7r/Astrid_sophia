@@ -78,6 +78,7 @@ function createHarness() {
     extractNetlist: vi.fn(),
     updateCanvasRendering: vi.fn(),
     updateOscilloscopeRendering: vi.fn(),
+    clearPropertiesPanel: vi.fn(),
     addLog: vi.fn(),
     logError: vi.fn(),
   };
@@ -144,5 +145,6 @@ describe("CircuitDocumentController", () => {
     expect(deps.extractNetlist).toHaveBeenCalledOnce();
     expect(deps.updateCanvasRendering).toHaveBeenCalledOnce();
     expect(deps.updateOscilloscopeRendering).toHaveBeenCalledOnce();
+    expect(deps.clearPropertiesPanel).toHaveBeenCalledOnce();
   });
 });

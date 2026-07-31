@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Key } from "webdriverio";
 
-const DEMO_FILE = "01_divisor_rc.astryd";
+const DEMO_FILE = "01_filtro_rc.astryd";
+const DEMO_CASES = [
+  { file: "01_filtro_rc.astryd", tab: "01_filtro_rc", mode: "DC", components: 4, wires: 4 },
+  { file: "02_puente_rectificador.astryd", tab: "02_puente_rectificador", mode: "TRAN", components: 8, wires: 11 },
+  { file: "03_arduino_led.astryd", tab: "03_arduino_led", mode: "TRAN", components: 4, wires: 4 },
+  { file: "04_amp_bjt_bode.astryd", tab: "04_amp_bjt_bode", mode: "AC", components: 9, wires: 12 },
+];
 
 async function appSnapshot() {
   return browser.execute(() => window.__ASTRYD_E2E__?.snapshot());
@@ -11,6 +17,26 @@ async function appSnapshot() {
 
 async function qaState() {
   return browser.execute(() => window.__ASTRYD_QA__);
+}
+
+async function selectDemo(filename) {
+  const demoSelect = await $("#btn-open-demo");
+  const demoOptionIndex = await browser.execute((value) => {
+    const select = document.querySelector("#btn-open-demo");
+    if (!(select instanceof HTMLSelectElement)) return -1;
+    return [...select.options].findIndex((option) => option.value === value);
+  }, filename);
+  expect(demoOptionIndex).toBeGreaterThanOrEqual(0);
+  await demoSelect.click();
+  await browser.keys([
+    Key.Home,
+    ...Array.from({ length: demoOptionIndex }, () => Key.ArrowDown),
+    Key.Enter,
+  ]);
+  await browser.waitUntil(async () => (await qaState())?.lastDemoFile === filename, {
+    timeout: 15_000,
+    timeoutMsg: `La demo ${filename} no termino de cargar`,
+  });
 }
 
 async function captureTrustedInputEvents() {
@@ -155,30 +181,14 @@ describe("flujo nativo de escritorio", () => {
       () => Boolean(window.__ASTRYD_E2E__ && window.__ASTRYD_QA__?.enabled),
     ), { timeout: 20_000, timeoutMsg: "El puente E2E de la ventana Tauri no se inicializo" });
 
-    const demoSelect = await $("#btn-open-demo");
-    const demoOptionIndex = await browser.execute((value) => {
-      const select = document.querySelector("#btn-open-demo");
-      if (!(select instanceof HTMLSelectElement)) return -1;
-      return [...select.options].findIndex((option) => option.value === value);
-    }, DEMO_FILE);
-    expect(demoOptionIndex).toBeGreaterThanOrEqual(0);
     await captureTrustedInputEvents();
-    await demoSelect.click();
-    await browser.keys([
-      Key.Home,
-      ...Array.from({ length: demoOptionIndex }, () => Key.ArrowDown),
-      Key.Enter,
-    ]);
-    await browser.waitUntil(async () => (await qaState())?.lastDemoFile === DEMO_FILE, {
-      timeout: 15_000,
-      timeoutMsg: "La demo no termino de cargar",
-    });
+    await selectDemo(DEMO_FILE);
     expectTrustedEvents(await trustedInputEvents(), ["change"]);
 
     const baseline = await appSnapshot();
     expect(baseline.componentCount).toBe(4);
     expect(baseline.wireCount).toBe(4);
-    expect(baseline.activeTabName).toBe("01_divisor_rc");
+    expect(baseline.activeTabName).toBe("01_filtro_rc");
 
     await $("#run-sim-btn").click();
     await browser.waitUntil(async () => (await qaState())?.lastSolver === "rust", {
@@ -328,5 +338,66 @@ describe("flujo nativo de escritorio", () => {
     await mkdir(outputDir, { recursive: true });
     await browser.saveScreenshot(join(outputDir, "workflow-complete.png"));
     await rm(savedPath, { force: true });
+  });
+
+  it("carga, encuadra y simula todas las demos con el solver nativo", async () => {
+    const canvas = await $("#circuit-canvas");
+    await canvas.waitForDisplayed({ timeout: 20_000 });
+    const instrumentCenter = await $("#bottom-dock");
+    if ((await instrumentCenter.getAttribute("aria-hidden")) !== "true") {
+      await $("#instrument-center-close").click();
+      await browser.waitUntil(
+        async () => (await instrumentCenter.getAttribute("aria-hidden")) === "true",
+        { timeoutMsg: "El centro de instrumentos no se cerro antes de revisar las demos" },
+      );
+    }
+    const outputDir = resolve("desktop-e2e-results", "demos");
+    await mkdir(outputDir, { recursive: true });
+
+    for (const demo of DEMO_CASES) {
+      await selectDemo(demo.file);
+      const closeInstrumentCenter = await $("#instrument-center-close");
+      if (await closeInstrumentCenter.isDisplayed()) {
+        await closeInstrumentCenter.click();
+        await browser.waitUntil(
+          async () => !(await closeInstrumentCenter.isDisplayed()),
+          { timeoutMsg: `El centro de instrumentos cubre el esquema ${demo.file}` },
+        );
+      }
+      const snapshot = await appSnapshot();
+      expect(snapshot.componentCount).toBe(demo.components);
+      expect(snapshot.wireCount).toBe(demo.wires);
+      expect(snapshot.activeTabName).toBe(demo.tab);
+      expect(snapshot.analysisMode).toBe(demo.mode);
+
+      const canvasLocation = await canvas.getLocation();
+      const canvasSize = await canvas.getSize();
+      for (const component of snapshot.components) {
+        expect(component.clientX).toBeGreaterThan(canvasLocation.x + 20);
+        expect(component.clientX).toBeLessThan(canvasLocation.x + canvasSize.width - 20);
+        expect(component.clientY).toBeGreaterThan(canvasLocation.y + 20);
+        expect(component.clientY).toBeLessThan(canvasLocation.y + canvasSize.height - 20);
+      }
+      await canvas.moveTo({ xOffset: 12, yOffset: 12 });
+      await browser.saveScreenshot(join(outputDir, `${demo.tab}-schematic.png`));
+
+      const beforeRun = (await qaState()).lastUpdatedAt;
+      await $("#run-sim-btn").click();
+      await browser.waitUntil(async () => {
+        const state = await qaState();
+        return state?.lastUpdatedAt !== beforeRun
+          && state?.lastSimulationMode === demo.mode
+          && state?.lastSolver === "rust"
+          && state?.simulationRunning === false;
+      }, {
+        timeout: 90_000,
+        timeoutMsg: `La simulacion nativa de ${demo.file} no termino correctamente`,
+      });
+
+      const finalState = await qaState();
+      if (finalState.lastLogType === "error") {
+        throw new Error(`${demo.file} termino con error: ${finalState.lastLog}`);
+      }
+    }
   });
 });

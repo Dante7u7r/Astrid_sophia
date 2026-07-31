@@ -10,20 +10,68 @@ export function collectNetlistNodes(netlist: CircuitNetlist): Set<string> {
   return allNodes;
 }
 
+function dcConnectivityPairs(type: string, pinCount: number): readonly (readonly [number, number | "0"])[] {
+  switch (type) {
+    case "resistor":
+    case "inductor":
+    case "diode":
+    case "led":
+    case "vsource":
+    case "bvoltage":
+    case "switch":
+    case "ccvs":
+    case "vcvs":
+      return [[0, 1]];
+    case "nmos":
+    case "pmos":
+    case "bsim3nmos":
+    case "bsim3pmos":
+    case "bsim4nmos":
+    case "bsim4pmos":
+    case "verilog_a":
+      return [[1, 2]];
+    case "npn":
+    case "pnp":
+    case "njf":
+    case "pjf":
+      return [[0, 1], [0, 2], [1, 2]];
+    case "opto":
+      return [[0, 1], [2, 3]];
+    case "opamp":
+      return [[0, 1], [4, "0"]];
+    case "not_gate":
+      return [[1, "0"]];
+    case "and_gate":
+    case "or_gate":
+    case "nand_gate":
+    case "nor_gate":
+    case "xor_gate":
+      return [[2, "0"]];
+    case "arduino_uno":
+    case "esp32":
+    case "raspberry_pi_pico":
+      return Array.from(
+        { length: Math.max(0, pinCount - 1) },
+        (_, pin) => [pin, pinCount - 1] as const,
+      );
+    default:
+      return [];
+  }
+}
+
 export function buildComponentAdjacency(netlist: CircuitNetlist, nodes = collectNetlistNodes(netlist)): Record<string, Set<string>> {
   const adjacencyList: Record<string, Set<string>> = {};
   for (const node of nodes) {
     adjacencyList[node] = new Set<string>();
   }
+  adjacencyList["0"] ??= new Set<string>();
   for (const comp of netlist.components) {
-    for (let i = 0; i < comp.pins.length; i++) {
-      for (let j = i + 1; j < comp.pins.length; j++) {
-        const nodeA = comp.pins[i];
-        const nodeB = comp.pins[j];
-        if (nodeA && nodeB && nodeA !== nodeB) {
-          adjacencyList[nodeA].add(nodeB);
-          adjacencyList[nodeB].add(nodeA);
-        }
+    for (const [pinA, pinB] of dcConnectivityPairs(comp.type, comp.pins.length)) {
+      const nodeA = comp.pins[pinA];
+      const nodeB = pinB === "0" ? "0" : comp.pins[pinB];
+      if (nodeA && nodeB && nodeA !== nodeB) {
+        adjacencyList[nodeA]?.add(nodeB);
+        adjacencyList[nodeB]?.add(nodeA);
       }
     }
   }

@@ -4,7 +4,12 @@
   "version": "0.1.0",
   "description": "simulador de circuitos electronicos de escritorio con backend Rust y Tauri",
   "author": "Astryd Sophia Project",
+  "license": "UNLICENSED",
   "type": "module",
+  "engines": {
+    "node": "24.18.0",
+    "npm": "11.16.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -19,8 +24,11 @@
     "test:e2e:desktop": "npm run test:e2e:desktop:build && npm run test:e2e:desktop:run",
     "test:e2e:desktop:full": "npm run test:e2e:desktop",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",
+    "setup:ngspice:windows": "powershell -NoProfile -File validation/bootstrap-ngspice.ps1",
+    "validate:scientific": "cargo run --quiet --manifest-path src-tauri/Cargo.toml --example scientific_validation -- validation/manifest.json",
     "tauri": "tauri",
     "empaquetar": "tauri build"
   },
@@ -36,6 +44,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@vitest/coverage-v8": "4.1.9",
     "@wdio/cli": "^9.30.0",
     "@wdio/local-runner": "^9.30.0",
     "@wdio/mocha-framework": "^9.30.0",

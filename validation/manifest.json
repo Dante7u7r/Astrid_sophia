@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "phase4-external-correlation",
+  "title": "Correlación científica externa de Astryd Sophia — Fase 4",
+  "cases": [
+    "cases/dc_resistive_divider.json",
+    "cases/dc_diode_shockley_sweep.json",
+    "cases/ac_rc_low_pass_cutoff.json",
+    "cases/ac_rl_low_pass_sweep.json",
+    "cases/ac_rlc_band_pass_resonance.json",
+    "cases/transient_rc_step_tau.json",
+    "cases/transient_rc_step_trap.json",
+    "cases/transient_rc_step_gear2.json",
+    "cases/transient_rl_step_sweep.json",
+    "cases/external_dc_resistive_divider.json",
+    "cases/external_ac_rc_low_pass_cutoff.json",
+    "cases/external_transient_rc_step_trap.json",
+    "cases/external_dc_diode_shockley_sweep.json"
+  ],
+  "reports": {
+    "json": "reports/latest.json",
+    "markdown": "reports/latest.md"
+  }
+}

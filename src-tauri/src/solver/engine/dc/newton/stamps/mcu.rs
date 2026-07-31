@@ -126,20 +126,16 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         };
 
         let i_linear_out = g_out * (v_target_out - v_out_diff);
-
-        let i_stamp_out = if i_linear_out > i_max {
-            i_max + g_out * v_out_diff
-        } else if i_linear_out < -i_max {
-            -i_max + g_out * v_out_diff
-        } else {
-            g_out * v_target_out
-        };
+        let normalized_out = i_linear_out / i_max;
+        let i_out = i_max * normalized_out.tanh();
+        let g_out_eff = g_out / normalized_out.cosh().powi(2);
+        let i_stamp_out = i_out + g_out_eff * v_out_diff;
 
         // Stamp Pin_Out
-        stamp_g(&mut matrix_a, pin_out, pin_out, g_out);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_out);
-        stamp_g(&mut matrix_a, pin_out, pin_gnd, -g_out);
-        stamp_g(&mut matrix_a, pin_gnd, pin_out, -g_out);
+        stamp_g(&mut matrix_a, pin_out, pin_out, g_out_eff);
+        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_out_eff);
+        stamp_g(&mut matrix_a, pin_out, pin_gnd, -g_out_eff);
+        stamp_g(&mut matrix_a, pin_gnd, pin_out, -g_out_eff);
 
         if pin_out > 0 {
             vector_z[pin_out - 1] += i_stamp_out;
@@ -163,22 +159,21 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         };
 
         let i_linear_dac = g_out * (v_target_dac - v_dac_diff);
-
-        let (i_stamp_dac, g_transfer) = if i_linear_dac > i_max {
-            (i_max + g_out * v_dac_diff, 0.0)
-        } else if i_linear_dac < -i_max {
-            (-i_max + g_out * v_dac_diff, 0.0)
+        let normalized_dac = i_linear_dac / i_max;
+        let i_dac = i_max * normalized_dac.tanh();
+        let g_dac_eff = g_out / normalized_dac.cosh().powi(2);
+        let g_transfer = if mode == 0 || mode == 3 {
+            g_dac_eff
         } else {
-            let g_trans = if mode == 0 || mode == 3 { g_out } else { 0.0 };
-            (g_out * v_target_dac, g_trans)
+            0.0
         };
 
-        stamp_g(&mut matrix_a, pin_dac, pin_dac, g_out);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_out);
-        stamp_g(&mut matrix_a, pin_dac, pin_gnd, -g_out);
-        stamp_g(&mut matrix_a, pin_gnd, pin_dac, -g_out);
+        stamp_g(&mut matrix_a, pin_dac, pin_dac, g_dac_eff);
+        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_dac_eff);
+        stamp_g(&mut matrix_a, pin_dac, pin_gnd, -g_dac_eff);
+        stamp_g(&mut matrix_a, pin_gnd, pin_dac, -g_dac_eff);
 
-        let i_eq_dac_residue = i_stamp_dac - g_transfer * v_adc_diff;
+        let i_eq_dac_residue = i_dac + g_dac_eff * v_dac_diff - g_transfer * v_adc_diff;
 
         if pin_dac > 0 && pin_adc > 0 {
             matrix_a.add_element(pin_dac - 1, pin_adc - 1, -g_transfer);

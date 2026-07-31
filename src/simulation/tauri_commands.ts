@@ -41,8 +41,6 @@ export interface StabilityPole {
 
 export interface StabilityAnalysisResult {
   isStable: boolean;
-  phaseMargin: number;
-  gainMargin: number;
   poles: StabilityPole[];
   zeros?: StabilityPole[];
   converged?: boolean;
@@ -52,7 +50,11 @@ export type PssSimulationResult = TimeStepResult[];
 
 export interface TauriCommandMap {
   run_dc_simulation: {
-    args: { netlist: CircuitNetlist };
+    args: {
+      netlist: CircuitNetlist;
+      tolerance?: number;
+      maxIterations?: number;
+    };
     result: DcSimulationResult;
   };
   run_ac_sweep: {

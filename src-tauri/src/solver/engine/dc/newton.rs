@@ -1,5 +1,6 @@
 use crate::solver::matrix::SparseMatrix;
 use crate::solver::types::CircuitNetlist;
+use crate::solver::SolverNumericalSettings;
 use nalgebra::DVector;
 use std::collections::HashMap;
 
@@ -24,11 +25,12 @@ pub fn solve_newton_raphson_core(
     initial_guess: &Vec<f64>,
     pta_params: Option<(f64, f64, &DVector<f64>)>,
     switch_frozen_states: &HashMap<String, bool>,
+    numerical_settings: SolverNumericalSettings,
 ) -> Result<DVector<f64>, String> {
     let (vt, is_temp) = get_thermal_parameters(netlist.temperature, None);
     let size = n + m;
-    let max_iter = 100;
-    let tolerance = 1e-6;
+    let max_iter = numerical_settings.max_iterations;
+    let tolerance = numerical_settings.tolerance;
 
     let mut prev_voltages = initial_guess.clone();
     let mut solution = DVector::<f64>::zeros(size);

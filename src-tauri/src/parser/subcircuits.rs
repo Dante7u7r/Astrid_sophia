@@ -726,6 +726,14 @@ pub fn flatten_subcircuit(
             }
 
             // Parsear tolerancia opcional (ej: tol=1%) y parámetros térmicos (rth=, cth=)
+            if comp.comp_type == "vsource" || comp.comp_type == "isource" {
+                if let Some(value) =
+                    parse_independent_source_dc_value(&tokens, actual_pins_count + 1)
+                {
+                    comp.value = value;
+                }
+            }
+
             for tok in &tokens[actual_pins_count + 2..] {
                 let tok_lower = tok.to_lowercase();
                 if tok_lower.starts_with("tol=") {
@@ -777,10 +785,25 @@ pub fn flatten_subcircuit(
 /// re‑parsea para que el aplanador jerárquico convierta cada X en sus
 /// componentes primitivos. Los componentes no‑X se conservan intactos.
 pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNetlist, String> {
+    if netlist.components.len() > crate::topology::MAX_NETLIST_COMPONENTS {
+        return Err(format!(
+            "El circuito excede el limite de {} componentes antes de expandir subcircuitos.",
+            crate::topology::MAX_NETLIST_COMPONENTS
+        ));
+    }
     let defs = match &netlist.subcircuit_definitions {
         Some(d) if !d.trim().is_empty() => d.clone(),
         _ => return Ok(netlist.clone()),
     };
+    if defs.len() > super::MAX_SPICE_TEXT_BYTES {
+        return Err("Las definiciones de subcircuito exceden el limite de 10 MB.".to_string());
+    }
+    if super::contains_external_include_directive(&defs) {
+        return Err(
+            "Las definiciones del esquema no pueden leer archivos mediante .include/.lib."
+                .to_string(),
+        );
+    }
 
     // Separar componentes tipo 'x' del resto
     let mut x_lines = String::new();
@@ -788,6 +811,11 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
 
     for comp in &netlist.components {
         if comp.comp_type == "x" {
+            if comp.id.trim().is_empty() || comp.id.len() > 128 || comp.pins.len() > 64 {
+                return Err(
+                    "Instancia de subcircuito con ID invalido o mas de 64 pines.".to_string(),
+                );
+            }
             // Generar línea SPICE de instanciación: X<nombre> <pin0> <pin1> ... <subckt_name>
             x_lines.push_str(&comp.id);
             for pin in &comp.pins {
@@ -801,6 +829,9 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
             x_lines.push(' ');
             x_lines.push_str(name);
             x_lines.push('\n');
+            if x_lines.len() > super::MAX_SPICE_TEXT_BYTES {
+                return Err("Las instancias de subcircuito exceden el limite de 10 MB.".to_string());
+            }
         } else {
             regular_comps.push(comp.clone());
         }
@@ -817,6 +848,12 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
     // Fusionar: componentes regulares originales + componentes expandidos
     let mut all_components = regular_comps;
     all_components.extend(expanded.components);
+    if all_components.len() > crate::topology::MAX_NETLIST_COMPONENTS {
+        return Err(format!(
+            "El circuito expandido excede el limite de {} componentes.",
+            crate::topology::MAX_NETLIST_COMPONENTS
+        ));
+    }
 
     Ok(CircuitNetlist {
         components: all_components,

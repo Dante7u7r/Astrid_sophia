@@ -91,11 +91,20 @@ export function formatComponentValue(comp: ComponentInstance): string {
   } else if (
     comp.type === "mcu_8051"
     || comp.type === "mcu_avr"
-    || comp.type === "arduino_uno"
+  ) {
+    formattedVal = comp.firmwareHex ? "Firmware cargado" : "Sin firmware";
+  } else if (
+    comp.type === "arduino_uno"
     || comp.type === "esp32"
     || comp.type === "raspberry_pi_pico"
   ) {
-    formattedVal = comp.firmwareHex ? "Firmware cargado" : "Sin firmware";
+    const mode = Number(comp.value);
+    const supply = comp.type === "arduino_uno" ? "USB 5 V" : "USB 3.3 V";
+    if (comp.firmwareHex) formattedVal = `Firmware cargado · ${supply}`;
+    else if (mode === 1) formattedVal = `Modo integrado: Blink · ${supply}`;
+    else if (mode === 2) formattedVal = `Modo integrado: Umbral · ${supply}`;
+    else if (mode === 3) formattedVal = `Modo integrado: PWM · ${supply}`;
+    else formattedVal = `Modo integrado: Seguidor · ${supply}`;
   } else if (comp.type === "isource") {
     formattedVal = `${comp.value} A`;
   } else if (comp.type === "led") {

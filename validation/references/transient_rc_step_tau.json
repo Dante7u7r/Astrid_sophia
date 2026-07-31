@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "caseId": "transient-rc-step-tau",
+  "method": "closed_form",
+  "source": "Respuesta al escalón de un circuito RC ideal.",
+  "observations": [
+    {
+      "id": "vc_at_tau",
+      "expected": 3.1606027941427883,
+      "absoluteTolerance": 0.03,
+      "relativeTolerance": 0.005,
+      "units": "V",
+      "expression": "Vc(τ)=5·(1-e^-1); tolerancia incluye error global O(dt/τ) de Backward Euler con dt=τ/100"
+    },
+    {
+      "id": "kcl_at_tau",
+      "expected": 0.0,
+      "absoluteTolerance": 1e-9,
+      "relativeTolerance": 0.0,
+      "units": "A",
+      "expression": "|(Vc−Vin)/R + C·(Vc[n]−Vc[n−1])/dt|"
+    }
+  ]
+}

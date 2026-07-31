@@ -156,12 +156,23 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     case "run_sensitivity_analysis":
       return {
-        sensitivities: { "R1": 0.5, "R2": -0.5 },
+        sensitivities: [],
+        worstCaseLimits: {},
+        nominalVoltages: { "0": 0.0, "1": 5.0, "2": 2.5 },
         converged: true,
       } as T;
 
     case "run_pss_simulation":
+      return [] as T;
+
     case "run_stability_analysis":
+      return {
+        poles: [],
+        zeros: [],
+        isStable: true,
+        converged: true,
+      } as T;
+
     case "run_dc_sweep":
     case "run_noise_sweep":
     case "run_monte_carlo_transient":

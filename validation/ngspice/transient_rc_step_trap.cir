@@ -1,0 +1,7 @@
+Astryd Sophia external correlation: RC step with trapezoidal integration
+V1 1 0 PULSE(0 5 0 1p 1p 10 20)
+R1 1 2 1k
+C1 2 0 1u IC=0
+.options method=trap
+.tran 10u 2m uic
+.end

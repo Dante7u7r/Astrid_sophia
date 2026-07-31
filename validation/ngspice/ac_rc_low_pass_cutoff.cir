@@ -1,0 +1,6 @@
+Astryd Sophia external correlation: RC low-pass
+V1 1 0 AC 1
+R1 1 2 1k
+C1 2 0 1u
+.ac lin 1 159.15494309189535 159.15494309189535
+.end

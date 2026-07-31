@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use super::super::simulation_types::TimeStepResult;
 
+const MAX_SPECTRAL_INPUT_STEPS: usize = 2_000_000;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FftResult {
@@ -21,6 +23,49 @@ pub struct ImdResult {
     pub ip3_out_dbv: f64,
     pub frequencies: Vec<f64>,
     pub magnitudes_db: Vec<f64>,
+}
+
+fn validate_spectral_input(time_steps: &[TimeStepResult], node_name: &str) -> Result<(), String> {
+    if time_steps.len() < 2 {
+        return Err("No hay suficientes pasos de tiempo para el analisis espectral.".to_string());
+    }
+    if time_steps.len() > MAX_SPECTRAL_INPUT_STEPS {
+        return Err(format!(
+            "El analisis espectral excede el limite de {MAX_SPECTRAL_INPUT_STEPS} muestras."
+        ));
+    }
+    if node_name.trim().is_empty() || node_name.len() > 128 {
+        return Err("El nodo espectral es vacio o demasiado largo.".to_string());
+    }
+
+    let mut previous_time = None;
+    for step in time_steps {
+        if !step.time.is_finite() {
+            return Err("La serie temporal contiene tiempos no finitos.".to_string());
+        }
+        if let Some(previous) = previous_time {
+            if step.time <= previous {
+                return Err(
+                    "La serie temporal debe tener tiempos finitos y estrictamente crecientes."
+                        .to_string(),
+                );
+            }
+        }
+        previous_time = Some(step.time);
+        let Some(voltage) = step.node_voltages.get(node_name) else {
+            return Err(format!(
+                "El nodo '{}' no existe en todas las muestras temporales.",
+                node_name
+            ));
+        };
+        if !voltage.is_finite() {
+            return Err(format!(
+                "El nodo '{}' contiene voltajes no finitos.",
+                node_name
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn find_peak_magnitude(frequencies: &[f64], magnitudes: &[f64], target_freq: f64) -> f64 {
@@ -51,13 +96,15 @@ pub fn calculate_imd_analysis(
     f1: f64,
     f2: f64,
 ) -> Result<ImdResult, String> {
-    if time_steps.len() < 2 {
-        return Err(
-            "No hay suficientes pasos de tiempo para análisis de intermodulación.".to_string(),
-        );
+    validate_spectral_input(time_steps, node_name)?;
+    if !f1.is_finite() || !f2.is_finite() || f1 <= 0.0 || f2 <= 0.0 || f1 == f2 {
+        return Err("Las frecuencias IMD deben ser finitas, positivas y diferentes.".to_string());
     }
 
-    let t_max = time_steps.last().unwrap().time;
+    let t_max = time_steps.last().expect("validated non-empty input").time;
+    if t_max <= 0.0 {
+        return Err("La duracion de la serie IMD debe ser positiva.".to_string());
+    }
     let n_points = 2048; // Potencia de 2
     let dt_uniform = t_max / (n_points - 1) as f64;
 
@@ -217,11 +264,15 @@ pub fn calculate_fft_and_thd(
     node_name: &str,
     fundamental_freq: f64,
 ) -> Result<FftResult, String> {
-    if time_steps.len() < 2 {
-        return Err("No hay suficientes pasos de tiempo para análisis FFT.".to_string());
+    validate_spectral_input(time_steps, node_name)?;
+    if !fundamental_freq.is_finite() || fundamental_freq <= 0.0 {
+        return Err("La frecuencia fundamental FFT debe ser finita y positiva.".to_string());
     }
 
-    let t_max = time_steps.last().unwrap().time;
+    let t_max = time_steps.last().expect("validated non-empty input").time;
+    if t_max <= 0.0 {
+        return Err("La duracion de la serie FFT debe ser positiva.".to_string());
+    }
     let n_points = 2048; // Potencia de 2
     let dt_uniform = t_max / (n_points - 1) as f64;
 

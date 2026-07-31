@@ -49,4 +49,25 @@ describe("InstrumentsDock", () => {
     dock.switchTab("logic");
     expect(dock.getActiveTab()).toBe("logic");
   });
+
+  it("solicita resize al revelar cualquier canvas de instrumento", () => {
+    const container = createDockElement();
+    const orchestrator = {
+      components: [],
+      selectedComponent: null,
+      getComponentPins: vi.fn(() => []),
+    } as unknown as CanvasOrchestrator;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    const resize = vi.fn();
+    window.addEventListener("resize", resize);
+
+    const dock = new InstrumentsDock(container, orchestrator, {});
+    dock.switchTab("tracer");
+
+    expect(resize).toHaveBeenCalledOnce();
+    window.removeEventListener("resize", resize);
+  });
 });

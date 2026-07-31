@@ -11,10 +11,10 @@
 - Astryd Sophia: editor esquemático + solver MNA en Rust + osciloscopio integrado.
 - Stack: Tauri 2, TypeScript/Canvas, co-simulación MCU (transitorio).
 
-## 2. Divisor RC — DC y transitorio (3 min)
+## 2. Filtro RC pasa-bajos — DC y transitorio (3 min)
 
-1. Clic en **Demos → Divisor RC**.
-2. Modo **Análisis CC** → **Simular**: mostrar voltajes en nodos sobre el canvas (~2.5 V en el nodo intermedio).
+1. Clic en **Demos → Filtro RC pasa-bajos**.
+2. Modo **Análisis CC** → **Simular**: mostrar la salida estable del filtro sobre el condensador.
 3. Cambiar a **Transitorio** → **Simular**: abrir osciloscopio, mostrar carga del condensador.
 4. Mensaje clave: convergencia básica y visualización en vivo.
 
@@ -24,12 +24,13 @@
 2. Simular y mostrar forma de onda rectificada en CH1.
 3. Mencionar FFT/THD como capacidad avanzada del motor (opcional si hay tiempo).
 
-## 4. Blink MCU — co-simulación (4 min)
+## 4. Arduino + LED — co-simulación (4 min)
 
-1. **Demos → Blink Arduino**.
+1. **Demos → Arduino + LED**.
 2. Explicar cadena: GPIO digital → resistencia → LED.
-3. Simular en transitorio; señalar actuador LED y panel MCU si está disponible.
-4. Nota: cargar firmware hex en el panel MCU para parpadeo cycle-accurate completo.
+3. Aclarar que el macromodelo de placa ya incluye su alimentación interna, como una placa conectada por USB.
+4. Simular en transitorio; señalar la salida digital integrada, el LED y el panel MCU.
+5. Nota: para ejecutar firmware AVR real, cargar un archivo HEX desde el panel MCU.
 
 ## 5. Amplificador BJT — AC / Bode (3 min)
 

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "caseId": "ac-rc-low-pass-cutoff",
+  "method": "closed_form",
+  "source": "Función de transferencia H(jω)=1/(1+jωRC).",
+  "observations": [
+    {
+      "id": "gain_at_fc",
+      "expected": -3.010299956639812,
+      "absoluteTolerance": 0.002,
+      "relativeTolerance": 0.0001,
+      "units": "dB",
+      "expression": "20·log10(1/√2)"
+    },
+    {
+      "id": "phase_at_fc",
+      "expected": -45.0,
+      "absoluteTolerance": 0.02,
+      "relativeTolerance": 0.0001,
+      "units": "deg",
+      "expression": "-atan(ωRC), con ωRC=1"
+    },
+    {
+      "id": "kcl_at_fc",
+      "expected": 0.0,
+      "absoluteTolerance": 1e-10,
+      "relativeTolerance": 0.0,
+      "units": "A",
+      "expression": "|(Vout−Vin)/R + jωC·Vout|"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ pub fn solve_pss(
     netlist: &CircuitNetlist,
     settings: &PssSettings,
 ) -> Result<Vec<TimeStepResult>, String> {
+    settings.validate()?;
     let _n = crate::topology::validate_netlist_topology(netlist, false)?;
     let mut state_keys = Vec::new();
     for comp in &netlist.components {
@@ -25,6 +26,16 @@ pub fn solve_pss(
     }
 
     let d = state_keys.len();
+    let estimated_transient_steps = settings
+        .max_shooting_iters
+        .saturating_mul(d.saturating_add(1))
+        .saturating_mul(201);
+    if estimated_transient_steps > 2_000_000 {
+        return Err(
+            "La solicitud PSS excede el límite de 2 000 000 de pasos transitorios estimados."
+                .to_string(),
+        );
+    }
     let trans_settings = TransientSettings {
         dt: settings.period / 200.0,
         t_max: settings.period,
@@ -145,15 +156,28 @@ pub fn solve_pss(
     Ok(last_results)
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub struct PoleZeroValue {
+    pub re: f64,
+    pub im: f64,
+}
+
+impl From<Complex<f64>> for PoleZeroValue {
+    fn from(value: Complex<f64>) -> Self {
+        Self {
+            re: value.re,
+            im: value.im,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-#[allow(non_snake_case)]
 pub struct PoleZeroResult {
-    pub poles: Vec<Complex<f64>>,
-    pub zeros: Vec<Complex<f64>>,
+    pub poles: Vec<PoleZeroValue>,
+    pub zeros: Vec<PoleZeroValue>,
     pub is_stable: bool,
-    pub phaseMargin: f64,
-    pub gainMargin: f64,
 }
 
 pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult, String> {
@@ -177,9 +201,6 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
     let mut zeros = Vec::new();
 
     let mut is_stable = true;
-    let mut phase_margin = 180.0;
-    let mut gain_margin = 40.0;
-
     if !dynamic_nodes.is_empty() {
         let size = dynamic_nodes.len();
         let mut node_to_idx = HashMap::new();
@@ -484,42 +505,9 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
         }
     }
 
-    if !is_stable {
-        phase_margin = 0.0;
-        gain_margin = 0.0;
-    } else if !poles.is_empty() {
-        let mut min_dist = f64::INFINITY;
-        let mut dom_p = poles[0];
-        for &p in &poles {
-            if p.re.abs() < min_dist {
-                min_dist = p.re.abs();
-                dom_p = p;
-            }
-        }
-
-        if poles.len() > 1 {
-            let mut second_dist = f64::INFINITY;
-            let mut sec_p = poles[0];
-            for &p in &poles {
-                if p != dom_p && p.re.abs() < second_dist {
-                    second_dist = p.re.abs();
-                    sec_p = p;
-                }
-            }
-            let ratio = sec_p.re.abs() / dom_p.re.abs().max(1e-9);
-            phase_margin = (90.0_f64 - (1.0_f64 / ratio).atan().to_degrees()).max(10.0_f64);
-            gain_margin = (20.0_f64 * ratio.log10()).max(3.0_f64);
-        } else {
-            phase_margin = 90.0;
-            gain_margin = 30.0;
-        }
-    }
-
     Ok(PoleZeroResult {
-        poles,
-        zeros,
+        poles: poles.into_iter().map(PoleZeroValue::from).collect(),
+        zeros: zeros.into_iter().map(PoleZeroValue::from).collect(),
         is_stable,
-        phaseMargin: phase_margin,
-        gainMargin: gain_margin,
     })
 }

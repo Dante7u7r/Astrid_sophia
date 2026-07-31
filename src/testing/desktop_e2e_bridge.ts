@@ -7,6 +7,8 @@ interface DesktopE2eSnapshot {
   readonly wireCount: number;
   readonly activeTabName: string | null;
   readonly analysisMode: string | null;
+  readonly acPointCount: number;
+  readonly transientSampleCount: number;
   readonly pvtMode: boolean;
   readonly pvtTraceCount: number;
   readonly components: Array<{
@@ -41,6 +43,9 @@ interface DesktopE2eBridgeDependencies {
 export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependencies): void {
   if (import.meta.env.MODE !== "wdio") return;
 
+  // The Tauri service compares the native title with document.title exactly.
+  document.title = "Astryd Sophia";
+
   window.__ASTRYD_E2E__ = {
     snapshot(): DesktopE2eSnapshot {
       const orchestrator = dependencies.getOrchestrator();
@@ -52,6 +57,8 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
           wireCount: 0,
           activeTabName: null,
           analysisMode: oscilloscope?.activeAnalysisMode ?? null,
+          acPointCount: oscilloscope?.acSweepResults?.frequencies.length ?? 0,
+          transientSampleCount: oscilloscope?.transientResults.length ?? 0,
           pvtMode: oscilloscope?.pvtMode ?? false,
           pvtTraceCount: oscilloscope?.pvtTraces.length ?? 0,
           components: [],
@@ -64,6 +71,8 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
         wireCount: orchestrator.wires.length,
         activeTabName: dependencies.getActiveTabName(),
         analysisMode: oscilloscope?.activeAnalysisMode ?? null,
+        acPointCount: oscilloscope?.acSweepResults?.frequencies.length ?? 0,
+        transientSampleCount: oscilloscope?.transientResults.length ?? 0,
         pvtMode: oscilloscope?.pvtMode ?? false,
         pvtTraceCount: oscilloscope?.pvtTraces.length ?? 0,
         components: orchestrator.components.map((component) => {

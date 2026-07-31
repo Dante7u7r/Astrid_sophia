@@ -40,9 +40,9 @@
 | **24** | **Líneas de Transmisión RLCG** — Cascada Pi segmentada | ✅ | `test_tline_expansion_segments`, `test_tline_lossy_expansion` |
 | **25** | **Deriva Térmica** — Varshni, Is(T), Vth(T), β(T), TC1/TC2 | ✅ | `test_thermal_is_pn_scaling`, `test_thermal_resistance_tc1`, `test_thermal_mosfet_vth_drift`, `test_thermal_mosfet_beta_degradation`, `test_diode_thermal_voltage_shift` |
 | **26** | **Análisis de Sensibilidad Paramétrica** — ∂V/∂R, ∂V/∂C, Peor caso | ✅ | `test_dc_sensitivity_voltage_divider` |
-| **27** | **Simulación de Envolvente (PSS)** — Shooting Method régimen permanente | ✅ | `test_pss_shooting_method_simple_rc` |
-| **28** | **Modelos BSIM3v3 / BSIM4** — Fugas de compuerta, canal corto, DIBL | ✅ | `test_bsim4_nmos_gate_leakage`, `test_bsim4_pmos_short_channel_saturation` |
-| **29** | **Análisis de Estabilidad (Polos y Ceros)** — Margen de fase y polos | ✅ | `test_stability_analysis_rc_pole`, `test_stability_zeros_extraction` |
+| **27** | **PSS experimental** — Shooting Method; falta validación externa y cierre periódico cuantificado | ⚠️ | `test_pss_shooting_method_simple_rc` |
+| **28** | **BSIM3v3 / BSIM4 parcial** — Sin correlación sistemática contra simulador de referencia | ⚠️ | `test_bsim4_nmos_gate_leakage`, `test_bsim4_pmos_short_channel_saturation` |
+| **29** | **Polos y ceros experimental** — Modelo reducido; no calcula ganancia de lazo ni márgenes | ⚠️ | `test_stability_analysis_rc_pole`, `test_stability_zeros_extraction` |
 | **30** | **Co-simulación Digital/Analógica Avanzada** — Retardos configurables y lógica ideal | ✅ | `test_logic_gate_configurable_delays`, `test_logic_gate_delay_parsing` |
 | **31** | **Exportación Profesional** — Exportación a Touchstone, HDF5 y PDF | ✅ | `main.ts` |
 | **32** | **GPU Acceleration (WebGPU)** — Schur complement en WebGPU | ✅ | `test_gpu_schur_solver` |
@@ -68,8 +68,8 @@ Astrid_sophia/
 │   └── simulation/               # Subsistema MCU
 │       ├── index.ts              # Agregador de módulos MCU
 │       ├── mcu-types.ts          # Tipos base (McuConfig, McuExecutionState)
-│       ├── mcu-runtime.ts        # Runtime cycle-accurate (step/run/halt)
-│       ├── mcu-8051.ts           # ISA 8051 (instruction-set accurate)
+│       ├── mcu-runtime.ts        # Runtime temporal experimental (ISA incompleta)
+│       ├── mcu-8051.ts           # Tabla de decodificación/desensamblado 8051
 │       ├── mcu-avr.ts            # Definiciones AVR
 │       └── mcu-spice-bridge.ts  # Co-simulación digital/analógica
 ├── src-tauri/src/                # Backend Rust
@@ -85,7 +85,7 @@ Astrid_sophia/
 │   │   ├── solve_dc_circuit_thermal  # DC con temperatura global
 │   │   ├── solve_monte_carlo_transient
 │   │   ├── solve_pss                 # PSS shooting method
-│   │   ├── run_stability_analysis     # Polos/ceros, margen de fase
+│   │   ├── run_stability_analysis     # Polos/ceros experimentales, sin márgenes
 │   │   ├── calculate_fft_and_thd     # FFT Cooley-Tukey + THD
 │   │   └── calculate_imd_analysis     # IMD/IP3 intermodulación
 │   ├── parser.rs                 # Parser SPICE (.subckt, .model, .lib, VaExpr) (~2000L)
@@ -98,9 +98,9 @@ Astrid_sophia/
 │   ├── topology.rs               # Detección de nodos flotantes y loops de voltaje
 │   ├── telemetry.rs              # Métricas del sistema (CPU, RAM)
 │   ├── lib.rs                    # Comandos IPC Tauri (20 endpoints)
-│   ├── main.rs                   # Entry point Tauri
-│   └── bin/
-│       └── debug_scr.rs           # Binario auxiliar para debug de SCR
+│   └── main.rs                   # Entry point Tauri
+├── src-tauri/examples/
+│   └── debug_scr.rs              # Ejemplo auxiliar para debug de SCR
 └── index.html                    # SPA principal
 ```
 
@@ -125,7 +125,7 @@ Astrid_sophia/
 | 13 | `solve_dc_thermal` | 25 | DC con temperatura |
 | 14 | `run_sensitivity_analysis` | 26 | Sensibilidad paramétrica |
 | 15 | `run_pss_simulation` | 27 | PSS shooting method |
-| 16 | `run_stability_analysis` | 29 | Polos, ceros, margen de fase |
+| 16 | `run_stability_analysis` | 29 | Polos y ceros de modelo reducido; sin márgenes |
 | 17 | `get_performance_telemetry` | 20 | Métricas del sistema |
 | 18 | `save_circuit_file` | 21 | Guardar esquemático (diálogo) |
 | 19 | `save_circuit_to_path` | 21 | Guardar esquemático (ruta directa) |
@@ -139,7 +139,7 @@ Astrid_sophia/
 |------|-------------|--------|
 | A.1 | Modularización de la UI (settings, telemetry, oscilloscope panels) | ✅ |
 | A.2 | Actuadores Interactivos (lámpara, relé, zumbador + sintetizador de audio) | ✅ |
-| A.3 | Integración de Emuladores de MCU (8051/AVR cycle-accurate en UI) | ✅ |
+| A.3 | Runtime MCU experimental (sin ISA, periféricos ni precisión de ciclo completos) | ⚠️ |
 | A.4 | Navegador de Librerías y Gestor de Pestañas (buscador + workspace tabs) | ✅ |
 
 ---

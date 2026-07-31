@@ -15,7 +15,7 @@ fn test_tline_expansion_segments() {
         n_segments: 20,
     };
 
-    let components = expand_transmission_line(&params);
+    let components = expand_transmission_line(&params).unwrap();
 
     // Para línea ideal (R=0, G=0): cada segmento genera 1 inductor + 2 capacitores = 3 componentes
     // Total: 20 * 3 = 60 componentes
@@ -68,7 +68,7 @@ fn test_tline_lossy_expansion() {
         n_segments: 10,
     };
 
-    let components = expand_transmission_line(&params);
+    let components = expand_transmission_line(&params).unwrap();
 
     // Para línea con pérdidas: cada segmento genera 1R + 1L + 2C + 2G_shunt = 6 componentes
     // Total: 10 * 6 = 60 componentes

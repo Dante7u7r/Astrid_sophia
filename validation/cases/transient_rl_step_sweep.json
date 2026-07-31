@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "transient-rl-step-sweep",
+  "title": "Respuesta RL al escalón entre 0.25τ y 5τ",
+  "rationale": "Comprueba el companion model del inductor y la evolución temporal de la corriente en cinco puntos de la respuesta cerrada.",
+  "analysis": {
+    "kind": "transient",
+    "dt": 0.000005,
+    "tMax": 0.005,
+    "fixedStep": true,
+    "integrationMethod": "BE",
+    "tolerance": 1e-9,
+    "maxIterations": 100
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 5.0,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 100.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "L1",
+        "type": "inductor",
+        "value": 0.1,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": [],
+    "fixedStep": true
+  },
+  "observations": [
+    {
+      "id": "source_current_0_25tau",
+      "quantity": "transient_branch_current",
+      "source": "V1",
+      "timeSeconds": 0.00025
+    },
+    {
+      "id": "source_current_0_5tau",
+      "quantity": "transient_branch_current",
+      "source": "V1",
+      "timeSeconds": 0.0005
+    },
+    {
+      "id": "source_current_1tau",
+      "quantity": "transient_branch_current",
+      "source": "V1",
+      "timeSeconds": 0.001
+    },
+    {
+      "id": "source_current_2tau",
+      "quantity": "transient_branch_current",
+      "source": "V1",
+      "timeSeconds": 0.002
+    },
+    {
+      "id": "source_current_5tau",
+      "quantity": "transient_branch_current",
+      "source": "V1",
+      "timeSeconds": 0.005
+    }
+  ],
+  "reference": "../references/transient_rl_step_sweep.json"
+}

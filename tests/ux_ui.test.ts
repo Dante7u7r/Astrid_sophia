@@ -191,23 +191,18 @@ describe('Pruebas de Simulación de Circuitos en TS (Circuit Solvers)', () => {
     expect(voltages['0']).toBe(0);
   });
 
-  it('debe simular y resolver correctamente un circuito con diodo rectificador linealizado', () => {
+  it('debe rechazar un diodo cuando solo está disponible el fallback lineal', () => {
     const diodeCircuit: CircuitNetlist = {
       components: [
         { id: 'V1', type: 'vsource', value: 5, pins: ['1', '0'] },
         { id: 'R1', type: 'resistor', value: 50, pins: ['1', '2'] },
-        { id: 'D1', type: 'diode', value: 0.7, pins: ['2', '0'] }, // Diode a GND (Rdiodo = 50 ohm en fallback)
+        { id: 'D1', type: 'diode', value: 0.7, pins: ['2', '0'] },
         { id: 'GND', type: 'ground', value: 0, pins: ['0'] }
       ],
       wires: []
     };
 
     const res = solveCircuitTS(diodeCircuit);
-    expect(typeof res).not.toBe('string');
-    
-    const voltages = (res as any).nodeVoltages;
-    // El divisor resistivo se forma por R1 (50 ohm) y Rdiodo (50 ohm) -> Vdiodo = 5V * (50/(50+50)) = 2.5V
-    expect(voltages['1']).toBeCloseTo(5, 2);
-    expect(voltages['2']).toBeCloseTo(2.5, 2);
+    expect(res).toMatch(/no tiene un modelo científico/i);
   });
 });

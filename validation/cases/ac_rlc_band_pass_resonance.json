@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "ac-rlc-band-pass-resonance",
+  "title": "RLC serie en resonancia",
+  "rationale": "Comprueba la cancelación de reactancias inductiva y capacitiva y el cumplimiento de KCL en un circuito RLC.",
+  "analysis": {
+    "kind": "ac",
+    "fStart": 159.15494309189532,
+    "fEnd": 159.15494309189532,
+    "pointsPerDecade": 1
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 0.0,
+        "pins": ["1", "0"],
+        "amplitude": 1.0
+      },
+      {
+        "id": "L1",
+        "type": "inductor",
+        "value": 0.1,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "C1",
+        "type": "capacitor",
+        "value": 0.00001,
+        "pins": ["2", "3"]
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 100.0,
+        "pins": ["3", "0"]
+      }
+    ],
+    "wires": []
+  },
+  "observations": [
+    {
+      "id": "gain_at_resonance",
+      "quantity": "node_amplitude_db",
+      "node": "3",
+      "frequencyHz": 159.15494309189532
+    },
+    {
+      "id": "phase_at_resonance",
+      "quantity": "node_phase_degrees",
+      "node": "3",
+      "frequencyHz": 159.15494309189532
+    },
+    {
+      "id": "kcl_at_resonance",
+      "quantity": "ac_kcl_residual",
+      "node": "3",
+      "frequencyHz": 159.15494309189532
+    }
+  ],
+  "reference": "../references/ac_rlc_band_pass_resonance.json"
+}

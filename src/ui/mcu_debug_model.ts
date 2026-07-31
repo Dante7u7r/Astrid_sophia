@@ -1,24 +1,76 @@
 export function parseIntelHex(hexStr: string, flashSize: number): Uint8Array {
+  if (!Number.isSafeInteger(flashSize) || flashSize <= 0 || flashSize > 16 * 1024 * 1024) {
+    throw new Error("El tamaño de flash solicitado no es válido.");
+  }
+  if (new TextEncoder().encode(hexStr).byteLength > 16 * 1024 * 1024) {
+    throw new Error("El archivo Intel HEX excede el límite de 16 MiB.");
+  }
+
   const flash = new Uint8Array(flashSize);
   const lines = hexStr.split(/\r?\n/);
-  for (const line of lines) {
+  let baseAddress = 0;
+  let eofSeen = false;
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
     const trimmed = line.trim();
-    if (!trimmed.startsWith(":")) continue;
+    if (trimmed.length === 0 || !trimmed.startsWith(":")) continue;
+    if (!/^:[0-9A-Fa-f]+$/.test(trimmed) || trimmed.length < 11 || trimmed.length % 2 === 0) {
+      throw new Error(`Registro Intel HEX mal formado en la línea ${lineIndex + 1}.`);
+    }
 
     const byteCount = parseInt(trimmed.substring(1, 3), 16);
     const address = parseInt(trimmed.substring(3, 7), 16);
     const recordType = parseInt(trimmed.substring(7, 9), 16);
-
-    if (recordType === 0) {
-      for (let i = 0; i < byteCount; i++) {
-        const byteVal = parseInt(trimmed.substring(9 + i * 2, 9 + i * 2 + 2), 16);
-        if (address + i < flashSize) {
-          flash[address + i] = byteVal;
-        }
-      }
-    } else if (recordType === 1) {
-      break;
+    const expectedLength = 11 + byteCount * 2;
+    if (trimmed.length !== expectedLength) {
+      throw new Error(`Longitud Intel HEX incorrecta en la línea ${lineIndex + 1}.`);
     }
+
+    const recordBytes: number[] = [];
+    for (let offset = 1; offset < trimmed.length; offset += 2) {
+      recordBytes.push(parseInt(trimmed.substring(offset, offset + 2), 16));
+    }
+    if (recordBytes.reduce((sum, value) => sum + value, 0) % 256 !== 0) {
+      throw new Error(`Checksum Intel HEX inválido en la línea ${lineIndex + 1}.`);
+    }
+
+    const data = recordBytes.slice(4, 4 + byteCount);
+    if (recordType === 0x00) {
+      const absoluteAddress = baseAddress + address;
+      if (absoluteAddress + byteCount > flashSize) {
+        throw new Error(`El firmware escribe fuera de la flash en la línea ${lineIndex + 1}.`);
+      }
+      for (let i = 0; i < byteCount; i++) {
+        flash[absoluteAddress + i] = data[i];
+      }
+    } else if (recordType === 0x01) {
+      if (byteCount !== 0 || address !== 0) {
+        throw new Error(`Registro EOF inválido en la línea ${lineIndex + 1}.`);
+      }
+      eofSeen = true;
+      break;
+    } else if (recordType === 0x02) {
+      if (byteCount !== 2 || address !== 0) {
+        throw new Error(`Dirección de segmento inválida en la línea ${lineIndex + 1}.`);
+      }
+      baseAddress = ((data[0] << 8) | data[1]) << 4;
+    } else if (recordType === 0x04) {
+      if (byteCount !== 2 || address !== 0) {
+        throw new Error(`Dirección lineal extendida inválida en la línea ${lineIndex + 1}.`);
+      }
+      baseAddress = ((data[0] << 8) | data[1]) * 0x10000;
+    } else if (recordType === 0x03 || recordType === 0x05) {
+      if (byteCount !== 4 || address !== 0) {
+        throw new Error(`Dirección de inicio inválida en la línea ${lineIndex + 1}.`);
+      }
+    } else {
+      throw new Error(`Tipo de registro Intel HEX no soportado: 0x${recordType.toString(16)}.`);
+    }
+  }
+
+  if (!eofSeen) {
+    throw new Error("El archivo Intel HEX no contiene un registro EOF.");
   }
   return flash;
 }

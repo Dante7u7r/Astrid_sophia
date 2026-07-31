@@ -43,6 +43,9 @@ export interface DesktopWorkspaceControllerDeps {
   resetPerformanceCaches(): void;
   updateCanvasRendering(immediate?: boolean): void;
   updateOscilloscopeRendering(immediate?: boolean): void;
+  markCurrentTabAsModified(): void;
+  onActiveTabChanged(tabId: string): void;
+  onCircuitLoaded(): void;
   addLog(text: string, type?: LogType): void;
   logError(message: string): void;
   invokeTauri: InvokeTauri;
@@ -52,6 +55,7 @@ export function createDesktopWorkspaceControllers(
   deps: DesktopWorkspaceControllerDeps,
 ): DesktopWorkspaceControllers {
   let tabManager: TabManager | null = null;
+  let propertyEditor: PropertyEditor | null = null;
 
   const circuitDocumentController = createCircuitDocumentController({
     getOrchestrator: deps.getOrchestrator,
@@ -69,6 +73,8 @@ export function createDesktopWorkspaceControllers(
     extractNetlist: deps.extractNetlist,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
+    clearPropertiesPanel: () => propertyEditor?.clearPropertiesPanel?.(),
+    onCircuitLoaded: deps.onCircuitLoaded,
     addLog: deps.addLog,
     logError: deps.logError,
   });
@@ -92,19 +98,20 @@ export function createDesktopWorkspaceControllers(
       deps.circuitState.actuatorHistory.clear();
       deps.circuitState.audioOrchestrator.stopAll();
     },
+    onActiveTabChanged: deps.onActiveTabChanged,
     canChangeActiveTab: () => !(deps.getSimulationControls()?.isSimulationRunning() ?? false),
     documentController: circuitDocumentController,
     addLog: deps.addLog,
     invokeTauri: deps.invokeTauri,
   });
 
-  const propertyEditor = new PropertyEditor({
+  propertyEditor = new PropertyEditor({
     getOrchestrator: deps.getOrchestrator,
     getMcuDebugPanel: deps.getMcuDebugPanel,
     getSimulationRunner: deps.getSimulationRunner,
     addLog: deps.addLog,
     updateCanvasRendering: deps.updateCanvasRendering,
-    markCurrentTabAsModified: () => tabManager?.markCurrentTabAsModified(),
+    markCurrentTabAsModified: deps.markCurrentTabAsModified,
     invokeTauri: deps.invokeTauri,
   });
 

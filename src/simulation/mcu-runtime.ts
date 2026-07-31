@@ -1,5 +1,6 @@
-/** Runtime básico para simulación de microcontroladores.
- * Implementa cycle-accurate execution con step() y run().
+/** Runtime experimental para visualización temporal de microcontroladores.
+ * No implementa semántica completa de instrucciones, registros, memoria,
+ * interrupciones ni periféricos, por lo que no es instruction/cycle accurate.
  */
 import type {
   McuDefinition,

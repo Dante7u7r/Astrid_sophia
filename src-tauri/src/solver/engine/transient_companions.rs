@@ -6,7 +6,6 @@ use super::transient_setup::ComponentOverrideMap;
 use super::transient_state_updates::IntegrationHistoryParams;
 
 pub(crate) struct CompanionStampState<'a> {
-    pub current_solution: &'a DVector<f64>,
     pub cap_states: &'a HashMap<String, f64>,
     pub cap_states_prev: &'a HashMap<String, f64>,
     pub cap_currents: &'a HashMap<String, f64>,
@@ -36,10 +35,10 @@ pub(crate) fn stamp_transient_companions(
                     let g = params.gear_a * comp.value;
                     let i = -comp.value * (params.gear_b * prev_vc + params.gear_c * prev_prev_vc);
                     (g, i)
-                } else if params.integration_method == "trap" {
+                } else if params.trap_active_this_step {
                     let prev_ic = *state.cap_currents.get(&comp.id).unwrap_or(&0.0);
                     let g = 2.0 * comp.value / params.dt;
-                    let i = -prev_ic - g * prev_vc;
+                    let i = prev_ic + g * prev_vc;
                     (g, i)
                 } else {
                     let g = comp.value / params.dt;
@@ -74,7 +73,7 @@ pub(crate) fn stamp_transient_companions(
                     let i = -(params.gear_b / params.gear_a) * prev_il
                         - (params.gear_c / params.gear_a) * prev_prev_il;
                     (g, i)
-                } else if params.integration_method == "trap" {
+                } else if params.trap_active_this_step {
                     let g = params.dt / (2.0 * comp.value);
                     let prev_vl = *state.ind_voltages.get(&comp.id).unwrap_or(&0.0);
                     let i = prev_il + g * prev_vl;
@@ -96,35 +95,6 @@ pub(crate) fn stamp_transient_companions(
                 }
                 if node_neg > 0 {
                     vector[node_neg - 1] += i_eq;
-                }
-            }
-            "and_gate" | "or_gate" | "not_gate" | "nand_gate" | "nor_gate" | "xor_gate" => {
-                let node_out = comp.pins[comp.pins.len() - 1].parse::<usize>().unwrap();
-                let inputs = comp.pins[..comp.pins.len() - 1]
-                    .iter()
-                    .map(|pin| {
-                        let node = pin.parse::<usize>().unwrap();
-                        node > 0 && state.current_solution[node - 1] > 1.5
-                    })
-                    .collect::<Vec<_>>();
-
-                let out_high = match comp.comp_type.as_str() {
-                    "and_gate" => inputs.iter().all(|&input| input),
-                    "or_gate" => inputs.iter().any(|&input| input),
-                    "not_gate" => !inputs.first().copied().unwrap_or(false),
-                    "nand_gate" => !inputs.iter().all(|&input| input),
-                    "nor_gate" => !inputs.iter().any(|&input| input),
-                    "xor_gate" => inputs.iter().filter(|&&input| input).count() % 2 == 1,
-                    _ => false,
-                };
-
-                let r_out = 100.0;
-                let g_eq = 1.0 / r_out;
-                let i_eq = if out_high { 5.0 / r_out } else { 0.0 };
-
-                stamp_conductance(matrix, node_out, node_out, g_eq);
-                if node_out > 0 {
-                    vector[node_out - 1] += i_eq;
                 }
             }
             "switch" => {
@@ -291,12 +261,8 @@ mod tests {
     }
 
     impl OwnedStampState {
-        fn as_stamp_state<'a>(
-            &'a self,
-            current_solution: &'a DVector<f64>,
-        ) -> CompanionStampState<'a> {
+        fn as_stamp_state(&self) -> CompanionStampState<'_> {
             CompanionStampState {
-                current_solution,
                 cap_states: &self.cap_states,
                 cap_states_prev: &self.cap_states_prev,
                 cap_currents: &self.cap_currents,
@@ -312,6 +278,7 @@ mod tests {
     fn integration_params(dt: f64) -> IntegrationHistoryParams<'static> {
         IntegrationHistoryParams {
             integration_method: "euler",
+            trap_active_this_step: false,
             gear2_active_this_step: false,
             gear_a: 0.0,
             gear_b: 0.0,
@@ -334,7 +301,6 @@ mod tests {
         };
         let mut owned_state = OwnedStampState::default();
         owned_state.cap_states.insert("C1".to_string(), 3.0);
-        let current_solution = DVector::zeros(1);
         let mut matrix = DMatrix::zeros(1, 1);
         let mut vector = DVector::zeros(1);
 
@@ -342,12 +308,90 @@ mod tests {
             &netlist,
             &mut matrix,
             &mut vector,
-            &owned_state.as_stamp_state(&current_solution),
+            &owned_state.as_stamp_state(),
             &integration_params(0.5),
         );
 
         assert_eq!(matrix[(0, 0)], 4.0);
         assert_eq!(vector[0], 12.0);
+    }
+
+    #[test]
+    fn trapezoidal_startup_uses_euler_before_history_exists() {
+        let netlist = CircuitNetlist {
+            components: vec![ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 2.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut owned_state = OwnedStampState::default();
+        owned_state.cap_states.insert("C1".to_string(), 3.0);
+        owned_state.cap_currents.insert("C1".to_string(), 5.0);
+        let mut matrix = DMatrix::zeros(1, 1);
+        let mut vector = DVector::zeros(1);
+        let params = IntegrationHistoryParams {
+            integration_method: "trap",
+            trap_active_this_step: false,
+            gear2_active_this_step: false,
+            gear_a: 0.0,
+            gear_b: 0.0,
+            gear_c: 0.0,
+            dt: 0.5,
+        };
+
+        stamp_transient_companions(
+            &netlist,
+            &mut matrix,
+            &mut vector,
+            &owned_state.as_stamp_state(),
+            &params,
+        );
+
+        assert_eq!(matrix[(0, 0)], 4.0);
+        assert_eq!(vector[0], 12.0);
+    }
+
+    #[test]
+    fn stamps_trapezoidal_capacitor_history_with_physical_sign() {
+        let netlist = CircuitNetlist {
+            components: vec![ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 2.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut owned_state = OwnedStampState::default();
+        owned_state.cap_states.insert("C1".to_string(), 3.0);
+        owned_state.cap_currents.insert("C1".to_string(), 5.0);
+        let mut matrix = DMatrix::zeros(1, 1);
+        let mut vector = DVector::zeros(1);
+        let params = IntegrationHistoryParams {
+            integration_method: "trap",
+            trap_active_this_step: true,
+            gear2_active_this_step: false,
+            gear_a: 0.0,
+            gear_b: 0.0,
+            gear_c: 0.0,
+            dt: 0.5,
+        };
+
+        stamp_transient_companions(
+            &netlist,
+            &mut matrix,
+            &mut vector,
+            &owned_state.as_stamp_state(),
+            &params,
+        );
+
+        assert_eq!(matrix[(0, 0)], 8.0);
+        assert_eq!(vector[0], 29.0);
     }
 
     #[test]
@@ -368,7 +412,6 @@ mod tests {
             "S1".to_string(),
             HashMap::from([("switch_ron".to_string(), 0.5)]),
         );
-        let current_solution = DVector::zeros(2);
         let mut matrix = DMatrix::zeros(2, 2);
         let mut vector = DVector::zeros(2);
 
@@ -376,7 +419,7 @@ mod tests {
             &netlist,
             &mut matrix,
             &mut vector,
-            &owned_state.as_stamp_state(&current_solution),
+            &owned_state.as_stamp_state(),
             &integration_params(1.0),
         );
 
@@ -384,6 +427,33 @@ mod tests {
         assert_eq!(matrix[(1, 1)], 2.0);
         assert_eq!(matrix[(0, 1)], -2.0);
         assert_eq!(matrix[(1, 0)], -2.0);
+        assert_eq!(vector, DVector::zeros(2));
+    }
+
+    #[test]
+    fn logic_gates_are_not_stamped_as_dynamic_companions() {
+        let netlist = CircuitNetlist {
+            components: vec![ComponentData {
+                id: "U1".to_string(),
+                comp_type: "not_gate".to_string(),
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let owned_state = OwnedStampState::default();
+        let mut matrix = DMatrix::zeros(2, 2);
+        let mut vector = DVector::zeros(2);
+
+        stamp_transient_companions(
+            &netlist,
+            &mut matrix,
+            &mut vector,
+            &owned_state.as_stamp_state(),
+            &integration_params(1e-6),
+        );
+
+        assert_eq!(matrix, DMatrix::zeros(2, 2));
         assert_eq!(vector, DVector::zeros(2));
     }
 }

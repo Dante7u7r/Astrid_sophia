@@ -63,6 +63,7 @@ function createHarness() {
 
   const addLog = vi.fn();
   const resetRuntimeState = vi.fn();
+  const onActiveTabChanged = vi.fn();
   const manager = new TabManager({
     getOrchestrator: () => orchestrator,
     getOscilloscopePanel: () => oscilloscope,
@@ -79,6 +80,7 @@ function createHarness() {
     getVoltageSnapshot: () => voltages,
     setVoltageSnapshot: (nextVoltages) => { voltages = { ...nextVoltages }; },
     resetRuntimeState,
+    onActiveTabChanged,
     canChangeActiveTab: () => canChange,
     documentController: { serializeCircuit: () => "{}" },
     addLog,
@@ -91,6 +93,7 @@ function createHarness() {
     oscilloscope,
     addLog,
     resetRuntimeState,
+    onActiveTabChanged,
     setMode: (nextMode: AnalysisMode) => { mode = nextMode; },
     getMode: () => mode,
     setProbes: (nextProbes: TabProbeState) => { probes = { ...nextProbes }; },

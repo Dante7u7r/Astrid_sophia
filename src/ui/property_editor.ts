@@ -38,6 +38,43 @@ export class PropertyEditor {
     }
   ) {}
 
+  private setFormControlsDisabled(disabled: boolean): void {
+    const form = document.querySelector<HTMLElement>("#properties-form");
+    if (!form) return;
+    form.setAttribute("aria-disabled", String(disabled));
+    for (const control of form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>(
+      "input, select, textarea, button",
+    )) {
+      control.disabled = disabled;
+    }
+  }
+
+  public clearPropertiesPanel(): void {
+    this.setFormControlsDisabled(true);
+    if (this.propIdInput) {
+      this.propIdInput.value = "";
+      this.propIdInput.placeholder = "Selecciona un componente";
+    }
+    if (this.propValInput) this.propValInput.value = "";
+    if (this.propUnitInput) this.propUnitInput.value = "";
+
+    for (const id of [
+      "wave-properties-container",
+      "macro-spice-container",
+      "potentiometer-container",
+      "ldr-container",
+      "thermistor-container",
+      "dmm-properties-container",
+      "switch-properties-container",
+      "transformer-properties-container",
+      "opamp-properties-container",
+    ]) {
+      const container = document.getElementById(id);
+      if (container) container.style.display = "none";
+    }
+    this.callbacks.getMcuDebugPanel()?.hide();
+  }
+
   public toggleWaveFieldsVisibility(waveType: string) {
     const fAmp = document.querySelector("#field-wave-amp") as HTMLElement;
     const fFreq = document.querySelector("#field-wave-freq") as HTMLElement;
@@ -70,6 +107,9 @@ export class PropertyEditor {
 
   public updatePropertiesPanel(comp: ComponentInstance) {
     if (!this.propIdInput || !this.propValInput || !this.propValSlider || !this.propUnitInput) return;
+
+    this.setFormControlsDisabled(false);
+    this.propIdInput.placeholder = "Ej. R1";
 
     this.propIdInput.value = comp.id;
     const usesActuatorModel = ACTUATOR_MODEL_EDITORS.has(comp.type);
@@ -276,7 +316,8 @@ export class PropertyEditor {
     const tempDisplay = document.querySelector("#prop-temp-display") as HTMLElement;
     if (tempSlider && tempDisplay) {
       tempSlider.addEventListener("input", (e) => {
-        const val = parseInt((e.target as HTMLInputElement).value) || 25;
+        const parsed = parseInt((e.target as HTMLInputElement).value);
+        const val = Number.isFinite(parsed) ? parsed : 25;
         tempDisplay.textContent = `${val} ºC`;
       });
     }
@@ -301,7 +342,8 @@ export class PropertyEditor {
 
     if (opampVosSlider && opampVosDisplay) {
       opampVosSlider.addEventListener("input", (e) => {
-        const val = parseFloat((e.target as HTMLInputElement).value) || 2.0;
+        const parsed = parseFloat((e.target as HTMLInputElement).value);
+        const val = Number.isFinite(parsed) ? parsed : 2.0;
         opampVosDisplay.textContent = `${val.toFixed(1)} mV`;
         const orchestrator = this.callbacks.getOrchestrator();
         const selected = orchestrator ? orchestrator.selectedComponent : null;
@@ -431,7 +473,10 @@ export class PropertyEditor {
           if (selected.type === 'thermistor') {
             const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
             if (tempSlider) {
-              selected.temperatureCelsius = parseInt(tempSlider.value) || 25;
+              const parsedTemperature = parseInt(tempSlider.value);
+              selected.temperatureCelsius = Number.isFinite(parsedTemperature)
+                ? parsedTemperature
+                : 25;
             }
           }
 
@@ -451,7 +496,10 @@ export class PropertyEditor {
             const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
             const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
             if (opampVosSlider) {
-              selected.offsetVoltage = (parseFloat(opampVosSlider.value) || 2.0) / 1000.0;
+              const parsedOffsetMillivolts = parseFloat(opampVosSlider.value);
+              selected.offsetVoltage = (
+                Number.isFinite(parsedOffsetMillivolts) ? parsedOffsetMillivolts : 2.0
+              ) / 1000.0;
             }
             if (opampGainSelect) {
               selected.openLoopGain = parseFloat(opampGainSelect.value) || 100000.0;
@@ -508,5 +556,7 @@ export class PropertyEditor {
         }
       });
     }
+
+    this.clearPropertiesPanel();
   }
 }

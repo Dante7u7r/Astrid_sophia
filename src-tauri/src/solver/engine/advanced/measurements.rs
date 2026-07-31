@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::super::simulation_types::TimeStepResult;
+
+const MAX_MEASURE_INPUT_STEPS: usize = 2_000_000;
+const MAX_MEASURE_DIRECTIVES: usize = 10_000;
 
 // ==================================================================================
 // FASE 23: Evaluador de Mediciones Transitorias (.measure)
@@ -114,6 +117,22 @@ pub fn evaluate_measures(
     let mut measurements = HashMap::new();
     let mut errors = Vec::new();
 
+    if results.len() > MAX_MEASURE_INPUT_STEPS {
+        return MeasureResult {
+            measurements,
+            error_log: Some(format!(
+                "Las medidas exceden el limite de {MAX_MEASURE_INPUT_STEPS} muestras."
+            )),
+        };
+    }
+    if directives.len() > MAX_MEASURE_DIRECTIVES {
+        return MeasureResult {
+            measurements,
+            error_log: Some(format!(
+                "Las medidas exceden el limite de {MAX_MEASURE_DIRECTIVES} directivas."
+            )),
+        };
+    }
     if results.is_empty() {
         return MeasureResult {
             measurements,
@@ -125,11 +144,68 @@ pub fn evaluate_measures(
 
     let t_global_start = results[0].time;
     let t_global_end = results.last().unwrap().time;
+    if !t_global_start.is_finite()
+        || !t_global_end.is_finite()
+        || results
+            .windows(2)
+            .any(|window| !window[1].time.is_finite() || window[1].time <= window[0].time)
+    {
+        return MeasureResult {
+            measurements,
+            error_log: Some(
+                "Las medidas requieren tiempos finitos y estrictamente crecientes.".to_string(),
+            ),
+        };
+    }
 
+    let mut measure_names = HashSet::new();
     for dir in directives {
+        if dir.name.trim().is_empty()
+            || dir.name.len() > 128
+            || dir.measure_type.trim().is_empty()
+            || dir.measure_type.len() > 32
+            || dir.node.trim().is_empty()
+            || dir.node.len() > 128
+            || dir.trig_node.as_ref().is_some_and(|node| node.len() > 128)
+        {
+            errors.push("Directiva .measure con nombre o nodo invalido.".to_string());
+            continue;
+        }
+        if !measure_names.insert(dir.name.as_str()) {
+            errors.push(format!("Directiva .measure duplicada: [{}].", dir.name));
+            continue;
+        }
+        let requested_nodes = std::iter::once(dir.node.as_str())
+            .chain(dir.trig_node.as_deref())
+            .collect::<HashSet<_>>();
+        if let Some(invalid_node) = requested_nodes.iter().find(|node| {
+            results.iter().any(|step| {
+                step.node_voltages
+                    .get(**node)
+                    .is_none_or(|voltage| !voltage.is_finite())
+            })
+        }) {
+            errors.push(format!(
+                "Directiva [{}]: el nodo '{}' falta en alguna muestra o contiene voltajes no finitos.",
+                dir.name, invalid_node
+            ));
+            continue;
+        }
         let t_start = dir.t_start.unwrap_or(t_global_start);
         let t_end = dir.t_end.unwrap_or(t_global_end);
         let threshold_frac = dir.threshold.unwrap_or(0.5);
+        if !t_start.is_finite()
+            || !t_end.is_finite()
+            || t_start > t_end
+            || !threshold_frac.is_finite()
+            || !(0.0..=1.0).contains(&threshold_frac)
+        {
+            errors.push(format!(
+                "Directiva [{}]: rango temporal o umbral invalido.",
+                dir.name
+            ));
+            continue;
+        }
 
         match dir.measure_type.to_lowercase().as_str() {
             "delay" => {
@@ -304,5 +380,48 @@ pub fn evaluate_measures(
         } else {
             Some(errors.join("\n"))
         },
+    }
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+
+    fn step(time: f64, node: Option<f64>) -> TimeStepResult {
+        TimeStepResult {
+            time,
+            node_voltages: node
+                .map(|voltage| HashMap::from([("1".to_string(), voltage)]))
+                .unwrap_or_default(),
+            branch_currents: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn reports_missing_nodes_and_duplicate_measure_names() {
+        let directives = vec![
+            MeasureDirective {
+                name: "pico".to_string(),
+                measure_type: "max".to_string(),
+                node: "1".to_string(),
+                trig_node: None,
+                threshold: None,
+                t_start: None,
+                t_end: None,
+            },
+            MeasureDirective {
+                name: "pico".to_string(),
+                measure_type: "min".to_string(),
+                node: "1".to_string(),
+                trig_node: None,
+                threshold: None,
+                t_start: None,
+                t_end: None,
+            },
+        ];
+        let result = evaluate_measures(&[step(0.0, Some(1.0)), step(1.0, None)], &directives);
+        let error = result.error_log.expect("validation error");
+        assert!(error.contains("falta en alguna muestra"));
+        assert!(error.contains("duplicada"));
     }
 }

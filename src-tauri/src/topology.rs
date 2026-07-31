@@ -1,6 +1,90 @@
 use crate::solver::CircuitNetlist;
 use std::collections::{HashMap, HashSet, VecDeque};
 
+pub const MAX_NETLIST_COMPONENTS: usize = 10_000;
+pub const MAX_NETLIST_NODES: usize = 5_000;
+const MAX_COMPONENT_ID_LEN: usize = 128;
+const MAX_COMPONENT_PINS: usize = 64;
+
+fn expected_pin_range(comp_type: &str) -> Option<(usize, usize)> {
+    match comp_type {
+        "ground" => Some((1, 1)),
+        "resistor" | "capacitor" | "inductor" | "diode" | "led" | "vsource" | "isource"
+        | "bvoltage" | "bcurrent" | "switch" | "cccs" | "ccvs" => Some((2, 2)),
+        "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => Some((3, 4)),
+        "npn" | "pnp" | "njf" | "pjf" => Some((3, 3)),
+        "vcvs" | "vccs" | "opto" => Some((4, 4)),
+        "opamp" => Some((5, 5)),
+        "not_gate" => Some((2, 2)),
+        "and_gate" | "or_gate" | "nand_gate" | "nor_gate" | "xor_gate" => Some((3, 3)),
+        "arduino_uno" | "esp32" | "raspberry_pi_pico" => Some((6, 6)),
+        "verilog_a" => Some((3, MAX_COMPONENT_PINS)),
+        "ic_directive" | "nodeset_directive" => Some((1, MAX_COMPONENT_PINS)),
+        _ => None,
+    }
+}
+
+fn validate_component_contracts(netlist: &CircuitNetlist) -> Result<(), String> {
+    if netlist.components.len() > MAX_NETLIST_COMPONENTS {
+        return Err(format!(
+            "El circuito excede el limite de {MAX_NETLIST_COMPONENTS} componentes."
+        ));
+    }
+
+    let mut ids = HashSet::new();
+    for comp in &netlist.components {
+        if comp.id.trim().is_empty() || comp.id.len() > MAX_COMPONENT_ID_LEN {
+            return Err(format!(
+                "El componente de tipo '{}' tiene un identificador vacio o mayor de {MAX_COMPONENT_ID_LEN} caracteres.",
+                comp.comp_type
+            ));
+        }
+        if !ids.insert(comp.id.as_str()) {
+            return Err(format!(
+                "Identificador de componente duplicado: '{}'.",
+                comp.id
+            ));
+        }
+
+        let (min_pins, max_pins) = expected_pin_range(&comp.comp_type).ok_or_else(|| {
+            if matches!(comp.comp_type.as_str(), "mcu_8051" | "mcu_avr") {
+                format!(
+                    "El componente '{}' usa el runtime MCU temporal, que no ejecuta firmware y no es aceptado por el solver Rust.",
+                    comp.id
+                )
+            } else {
+                format!(
+                    "Tipo de componente no soportado por el solver Rust: '{}' en '{}'.",
+                    comp.comp_type, comp.id
+                )
+            }
+        })?;
+        if comp.pins.len() < min_pins || comp.pins.len() > max_pins {
+            return Err(format!(
+                "El componente '{}' (tipo '{}') tiene {} pines; se esperaban entre {} y {}.",
+                comp.id,
+                comp.comp_type,
+                comp.pins.len(),
+                min_pins,
+                max_pins
+            ));
+        }
+        if !comp.value.is_finite() {
+            return Err(format!(
+                "El componente '{}' tiene un valor electrico no finito.",
+                comp.id
+            ));
+        }
+    }
+
+    if let Some(temperature) = netlist.temperature {
+        if !temperature.is_finite() || temperature <= 0.0 {
+            return Err("La temperatura del netlist debe ser finita y mayor que 0 K.".to_string());
+        }
+    }
+    Ok(())
+}
+
 /// Índice máximo de nodo activo (excluye Tierra "0").
 pub fn max_node_index(netlist: &CircuitNetlist) -> usize {
     let mut max_node = 0usize;
@@ -20,15 +104,29 @@ pub fn validate_netlist_topology(
     netlist: &CircuitNetlist,
     strict_floating: bool,
 ) -> Result<usize, String> {
+    validate_component_contracts(netlist)?;
+
     // 1. Validar que todos los pines de todos los componentes sean enteros válidos
     for comp in &netlist.components {
         for (i, pin) in comp.pins.iter().enumerate() {
-            if pin.parse::<usize>().is_err() {
-                return Err(format!(
-                    "El componente '{}' (tipo '{}') tiene un pin inválido en la posición {} ('{}'). Todos los pines deben estar conectados a nodos numéricos válidos.",
+            let node_idx = pin.parse::<usize>().map_err(|_| {
+                format!(
+                    "El componente '{}' (tipo '{}') tiene un pin invalido en la posicion {} ('{}'). Todos los pines deben estar conectados a nodos numericos validos.",
                     comp.id, comp.comp_type, i, pin
+                )
+            })?;
+            if node_idx > MAX_NETLIST_NODES {
+                return Err(format!(
+                    "El componente '{}' referencia el nodo {}, por encima del limite de {} nodos.",
+                    comp.id, node_idx, MAX_NETLIST_NODES
                 ));
             }
+        }
+        if comp.comp_type == "ground" && comp.pins[0] != "0" {
+            return Err(format!(
+                "El componente de Tierra '{}' debe estar conectado al nodo 0.",
+                comp.id
+            ));
         }
     }
 
@@ -74,27 +172,27 @@ pub fn find_floating_nodes(netlist: &CircuitNetlist, n: usize) -> HashSet<usize>
     let mut adjacency = vec![HashSet::new(); n + 1];
 
     for comp in &netlist.components {
-        let ty = comp.comp_type.as_str();
-        // Omitimos capacitores y directivas virtuales de inicialización
-        if ty == "capacitor" || ty == "ic_directive" || ty == "nodeset_directive" {
-            continue;
-        }
-
-        // Obtener los pines activos que representan conexiones físicas
-        let mut active_nodes = Vec::new();
-        for pin in &comp.pins {
-            if let Ok(node_idx) = pin.parse::<usize>() {
-                if node_idx <= n {
-                    active_nodes.push(node_idx);
-                }
-            }
-        }
-
-        // Añadir aristas entre todos los terminales conectados de este componente en DC
-        for i in 0..active_nodes.len() {
-            for j in i + 1..active_nodes.len() {
-                let u = active_nodes[i];
-                let v = active_nodes[j];
+        for (pin_a, pin_b) in dc_conduction_pin_pairs(comp.comp_type.as_str(), comp.pins.len()) {
+            let Some(u) = comp
+                .pins
+                .get(pin_a)
+                .and_then(|pin| pin.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            let v = if pin_b == usize::MAX {
+                0
+            } else {
+                let Some(node) = comp
+                    .pins
+                    .get(pin_b)
+                    .and_then(|pin| pin.parse::<usize>().ok())
+                else {
+                    continue;
+                };
+                node
+            };
+            if u <= n && v <= n {
                 adjacency[u].insert(v);
                 adjacency[v].insert(u);
             }
@@ -130,6 +228,27 @@ pub fn find_floating_nodes(netlist: &CircuitNetlist, n: usize) -> HashSet<usize>
     floating
 }
 
+fn dc_conduction_pin_pairs(comp_type: &str, pin_count: usize) -> Vec<(usize, usize)> {
+    match comp_type {
+        "resistor" | "inductor" | "diode" | "led" | "vsource" | "bvoltage" | "switch" | "ccvs"
+        | "vcvs" => vec![(0, 1)],
+        "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "verilog_a" => {
+            vec![(1, 2)]
+        }
+        "npn" | "pnp" | "njf" | "pjf" => vec![(0, 1), (0, 2), (1, 2)],
+        "opto" => vec![(0, 1), (2, 3)],
+        "opamp" => vec![(0, 1), (4, usize::MAX)],
+        "not_gate" => vec![(1, usize::MAX)],
+        "and_gate" | "or_gate" | "nand_gate" | "nor_gate" | "xor_gate" => {
+            vec![(2, usize::MAX)]
+        }
+        "arduino_uno" | "esp32" | "raspberry_pi_pico" => (0..pin_count.saturating_sub(1))
+            .map(|pin| (pin, pin_count - 1))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Detecta ciclos (lazos) cerrados formados exclusivamente por fuentes de voltaje ideales
 /// (vsource, vcvs, ccvs), lo cual generaría una matriz MNA singular debido a
 /// restricciones incompatibles según la Ley de Voltajes de Kirchhoff.
@@ -144,14 +263,20 @@ pub fn detect_ideal_voltage_loops(netlist: &CircuitNetlist, n: usize) -> Result<
             if let (Ok(u), Ok(v)) = (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>()) {
                 let u_node = if u > n { 0 } else { u };
                 let v_node = if v > n { 0 } else { v };
-                adjacency[u_node].insert(v_node);
-                adjacency[v_node].insert(u_node);
-
                 let edge = if u_node < v_node {
                     (u_node, v_node)
                 } else {
                     (v_node, u_node)
                 };
+                if let Some(previous) = edge_sources.get(&edge) {
+                    return Err(format!(
+                        "Fuentes de voltaje ideales en paralelo detectadas: '{}' y '{}'. La matriz MNA es singular.",
+                        previous, comp.id
+                    ));
+                }
+                adjacency[u_node].insert(v_node);
+                adjacency[v_node].insert(u_node);
+
                 edge_sources.insert(edge, comp.id.clone());
             }
         }
@@ -216,4 +341,77 @@ pub fn detect_ideal_voltage_loops(netlist: &CircuitNetlist, n: usize) -> Result<
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::solver::{CircuitNetlist, ComponentData};
+
+    fn component(id: &str, comp_type: &str, pins: &[&str]) -> ComponentData {
+        ComponentData {
+            id: id.to_string(),
+            comp_type: comp_type.to_string(),
+            value: 1.0,
+            pins: pins.iter().map(|pin| pin.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_types_and_invalid_pin_counts_before_stamping() {
+        let unknown = CircuitNetlist {
+            components: vec![component("X1", "mystery", &["1", "0"])],
+            ..Default::default()
+        };
+        assert!(validate_netlist_topology(&unknown, false)
+            .unwrap_err()
+            .contains("no soportado"));
+
+        let malformed = CircuitNetlist {
+            components: vec![component("R1", "resistor", &["0"])],
+            ..Default::default()
+        };
+        assert!(validate_netlist_topology(&malformed, false)
+            .unwrap_err()
+            .contains("se esperaban"));
+    }
+
+    #[test]
+    fn current_source_does_not_create_a_dc_path_to_ground() {
+        let netlist = CircuitNetlist {
+            components: vec![
+                component("I1", "isource", &["1", "0"]),
+                component("GND", "ground", &["0"]),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(find_floating_nodes(&netlist, 1), HashSet::from([1]));
+    }
+
+    #[test]
+    fn mos_gate_is_not_shortened_topologically_to_channel() {
+        let netlist = CircuitNetlist {
+            components: vec![
+                component("M1", "nmos", &["1", "2", "0"]),
+                component("R1", "resistor", &["2", "0"]),
+                component("GND", "ground", &["0"]),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(find_floating_nodes(&netlist, 2), HashSet::from([1]));
+    }
+
+    #[test]
+    fn parallel_voltage_sources_are_rejected() {
+        let netlist = CircuitNetlist {
+            components: vec![
+                component("V1", "vsource", &["1", "0"]),
+                component("V2", "vsource", &["1", "0"]),
+            ],
+            ..Default::default()
+        };
+        let error = detect_ideal_voltage_loops(&netlist, 1).unwrap_err();
+        assert!(error.contains("paralelo"));
+    }
 }

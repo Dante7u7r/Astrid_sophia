@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "caseId": "external-ac-rc-low-pass-cutoff",
+  "method": "ngspice_live",
+  "source": "ngspice ejecutado en vivo; versión registrada en el reporte y fixture versionado validation/ngspice/ac_rc_low_pass_cutoff.cir.",
+  "observations": [
+    {
+      "id": "gain_at_fc",
+      "expected": -3.010299956639812,
+      "absoluteTolerance": 0.000002,
+      "relativeTolerance": 0.0,
+      "units": "dB",
+      "expression": "20·log10(|v(2)|) del raw complejo generado en cada ejecución"
+    },
+    {
+      "id": "phase_at_fc",
+      "expected": -45.0,
+      "absoluteTolerance": 0.00002,
+      "relativeTolerance": 0.0,
+      "units": "deg",
+      "expression": "arg(v(2)) del raw complejo generado en cada ejecución"
+    }
+  ]
+}

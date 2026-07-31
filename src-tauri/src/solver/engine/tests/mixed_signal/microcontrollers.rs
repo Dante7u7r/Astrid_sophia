@@ -60,6 +60,72 @@ fn test_mcu_discrete_clock_blink() {
 }
 
 #[test]
+fn test_arduino_blink_drives_led_load_without_dc_oscillation() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "U1".to_string(),
+                comp_type: "arduino_uno".to_string(),
+                value: 1.0,
+                pins: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "0".to_string(),
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 330.0,
+                pins: vec!["2".to_string(), "6".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "LED1".to_string(),
+                comp_type: "led".to_string(),
+                value: 0.0,
+                pins: vec!["6".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: Some(true),
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-5,
+        t_max: 5e-4,
+        fixed_step: Some(true),
+        integration_method: None,
+    };
+
+    solve_dc_circuit(&netlist).expect("el punto de operacion Arduino + LED debe converger");
+    let results = solve_transient_circuit(&netlist, &settings)
+        .expect("Arduino con una carga LED normal debe converger");
+    let last = results.last().expect("la simulacion debe producir muestras");
+    let output_voltage = *last.node_voltages.get("2").unwrap();
+    let led_voltage = *last.node_voltages.get("6").unwrap();
+
+    assert!(
+        output_voltage > 3.0 && output_voltage < 5.1,
+        "salida digital fuera de rango: {output_voltage} V"
+    );
+    assert!(
+        led_voltage > 0.4 && led_voltage < output_voltage,
+        "tension LED fuera de rango: {led_voltage} V, salida: {output_voltage} V"
+    );
+}
+
+#[test]
 fn test_microcontrollers_mixed_signal() {
     // 1. Test Arduino Uno - Mode 1 (Blink)
     // Pins layout: [Pin_In, Pin_Out, Pin_ADC, Pin_DAC, Pin_VCC, Pin_GND]

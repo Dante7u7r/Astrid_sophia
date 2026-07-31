@@ -189,3 +189,71 @@ fn test_ac_sweep_csc_performance() {
         amp_db
     );
 }
+
+#[test]
+fn test_rc_low_pass_parametric_against_closed_form() {
+    let cases = [
+        (100.0, 100e-9),
+        (1_000.0, 1e-6),
+        (47_000.0, 22e-9),
+        (330_000.0, 4.7e-9),
+    ];
+
+    for (resistance, capacitance) in cases {
+        let cutoff = 1.0 / (2.0 * std::f64::consts::PI * resistance * capacitance);
+        let netlist = CircuitNetlist {
+            components: vec![
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: 1.0,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: resistance,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "C1".to_string(),
+                    comp_type: "capacitor".to_string(),
+                    value: capacitance,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let result = solve_ac_sweep(
+            &netlist,
+            &AcSweepSettings {
+                f_start: cutoff / 100.0,
+                f_end: cutoff * 100.0,
+                points_per_decade: 8,
+                op_guess: None,
+            },
+        )
+        .unwrap();
+        let amplitudes = &result.node_amplitudes["2"];
+        let phases = &result.node_phases["2"];
+
+        for (index, &frequency) in result.frequencies.iter().enumerate() {
+            let normalized = 2.0 * std::f64::consts::PI * frequency * resistance * capacitance;
+            let expected_db = 20.0 * (1.0 / (1.0 + normalized * normalized).sqrt()).log10();
+            let expected_phase = -normalized.atan().to_degrees();
+            assert!(
+                (amplitudes[index] - expected_db).abs() < 0.02,
+                "R={resistance}, C={capacitance}, f={frequency}: amplitud esperada {expected_db}, obtenida {}",
+                amplitudes[index]
+            );
+            assert!(
+                (phases[index] - expected_phase).abs() < 0.05,
+                "R={resistance}, C={capacitance}, f={frequency}: fase esperada {expected_phase}, obtenida {}",
+                phases[index]
+            );
+        }
+    }
+}

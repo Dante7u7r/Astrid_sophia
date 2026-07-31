@@ -16,10 +16,10 @@ export const MCU_AVR_PIN_LABELS = [
 ] as const;
 
 export const BOARD_PIN_LABELS = [
-  "IN (GP0)",
-  "OUT (GP1)",
-  "ADC (A0)",
-  "DAC (D0)",
+  "IN0",
+  "OUT1",
+  "ADC",
+  "DAC",
   "VCC",
   "GND",
 ] as const;

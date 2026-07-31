@@ -15,7 +15,7 @@ import { isTypingInFormField, installWebviewKeyGuards } from "./canvas/keyboard_
 import { TooltipManager } from "./ui/tooltip_manager";
 import { TabManager } from "./ui/tab_manager";
 import { PropertyEditor } from "./ui/property_editor";
-import { CommandHistory } from "./canvas/command_history";
+import { CircuitSnapshotHistory } from "./app/circuit_snapshot_history";
 import { PanelLayoutManager } from "./ui/panel_layout_manager";
 import { InstrumentsDock } from "./ui/instruments_dock";
 import { createInstrumentCenterController } from "./ui/instrument_center_controller";
@@ -104,8 +104,16 @@ const probePlacementController = createProbePlacementController({
   getOscilloscopePanel: () => oscilloscopePanel,
 });
 
-// Historial de comandos para undo/redo
-const commandHistory = new CommandHistory({ maxHistorySize: 200 });
+const circuitHistory = new CircuitSnapshotHistory({
+  getActiveTabId: () => tabManager?.getActiveTabId() ?? null,
+  serializeCircuit: () => circuitDocumentController?.serializeCircuit() ?? null,
+  applyCircuit: (snapshot) => circuitDocumentController?.deserializeCircuit(snapshot) ?? false,
+  onHistoryApplied: (direction) => {
+    tabManager?.markCurrentTabAsModified();
+    if (orchestrator) orchestrator.ercIssues = [];
+    addLog(direction === "undo" ? "Cambio deshecho." : "Cambio rehecho.", "system");
+  },
+});
 
 // Mapa global de voltajes resueltos para visualización
 // (centralizado en circuitState.getVoltageMap())
@@ -377,8 +385,8 @@ function initCanvasCAD() {
     onComponentPlaced: (comp) => {
       updatePropertiesPanel(comp);
     },
-    onUndo: () => commandHistory.undo(),
-    onRedo: () => commandHistory.redo(),
+    onUndo: () => circuitHistory.undo(),
+    onRedo: () => circuitHistory.redo(),
     onSelectAll: () => orchestrator?.selectAll(),
     onFitAll: () => orchestrator?.resetCameraToCircuit(),
     onEscape: () => orchestrator?.cancelWire(),
@@ -456,6 +464,9 @@ window.addEventListener("DOMContentLoaded", () => {
     resetPerformanceCaches,
     updateCanvasRendering,
     updateOscilloscopeRendering,
+    markCurrentTabAsModified,
+    onActiveTabChanged: () => circuitHistory.syncActiveState(),
+    onCircuitLoaded: () => circuitHistory.syncActiveState(true),
     setInstrumentDockCollapsed: (collapsed) => panelLayoutManager?.setPanelCollapsed("dock", collapsed),
     setIpcStatus: (text, color) => ipcStatusController.setStatus(text, color),
     addLog,
@@ -511,6 +522,7 @@ function initFilePersistence() {
 // --- GESTOR DE PESTAÑAS (WORKSPACE TABS DELEGADO) ---
 
 function markCurrentTabAsModified() {
+  circuitHistory.recordCurrentState();
   tabManager?.markCurrentTabAsModified();
 }
 

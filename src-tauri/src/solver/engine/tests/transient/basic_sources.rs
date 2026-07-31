@@ -128,3 +128,217 @@ fn test_ic_transient_initialization() {
         "La diferencia de potencial del capacitor debe iniciarse en 1.8V"
     );
 }
+
+#[test]
+fn test_rc_step_parametric_against_closed_form() {
+    let cases = [
+        (100.0, 1e-6, 1.0),
+        (1_000.0, 10e-6, 5.0),
+        (47_000.0, 100e-9, 12.0),
+        (330_000.0, 22e-9, 3.3),
+    ];
+
+    for (resistance, capacitance, source) in cases {
+        let tau = resistance * capacitance;
+        let netlist = CircuitNetlist {
+            components: vec![
+                ComponentData {
+                    id: "V1".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: source,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R1".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: resistance,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "C1".to_string(),
+                    comp_type: "capacitor".to_string(),
+                    value: capacitance,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+            ],
+            fixed_step: Some(true),
+            ..Default::default()
+        };
+        let result = solve_transient_circuit(
+            &netlist,
+            &TransientSettings {
+                dt: tau / 100.0,
+                t_max: tau * 5.0,
+                fixed_step: Some(true),
+                integration_method: Some("BE".to_string()),
+            },
+        )
+        .unwrap();
+
+        for tau_multiple in [0.25, 0.5, 1.0, 2.0, 5.0] {
+            let target_time = tau * tau_multiple;
+            let sample = result
+                .iter()
+                .min_by(|left, right| {
+                    (left.time - target_time)
+                        .abs()
+                        .total_cmp(&(right.time - target_time).abs())
+                })
+                .unwrap();
+            let actual = sample.node_voltages["2"];
+            let expected = source * (1.0 - (-sample.time / tau).exp());
+            let tolerance = source.abs() * 0.012 + 1e-6;
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "R={resistance}, C={capacitance}, t={}: esperado {expected}, obtenido {actual}",
+                sample.time
+            );
+        }
+    }
+}
+
+#[test]
+fn test_transient_reactive_companions_are_not_polluted_by_dc_stamps() {
+    let dt = 5e-6;
+    let rl_netlist = CircuitNetlist {
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 100.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "L1".to_string(),
+                comp_type: "inductor".to_string(),
+                value: 0.1,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        fixed_step: Some(true),
+        ..Default::default()
+    };
+    let settings = TransientSettings {
+        dt,
+        t_max: 2.0 * dt,
+        fixed_step: Some(true),
+        integration_method: Some("BE".to_string()),
+    };
+    let rl_result = solve_transient_circuit(&rl_netlist, &settings).unwrap();
+    let actual_first_current = rl_result[0].branch_currents["V1"];
+    let expected_first_current = -5.0 / (100.0 + 0.1 / dt);
+    assert!(
+        (actual_first_current - expected_first_current).abs() < 1e-9,
+        "El primer paso RL contiene una conductancia DC parásita: esperado {expected_first_current}, obtenido {actual_first_current}"
+    );
+
+    let rc_netlist = CircuitNetlist {
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1_000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 1e-6,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        fixed_step: Some(true),
+        ..Default::default()
+    };
+    let rc_result = solve_transient_circuit(&rc_netlist, &settings).unwrap();
+    let current = &rc_result[1];
+    let previous = &rc_result[0];
+    let resistor_current = (current.node_voltages["2"] - current.node_voltages["1"]) / 1_000.0;
+    let capacitor_current =
+        1e-6 * (current.node_voltages["2"] - previous.node_voltages["2"]) / dt;
+    let kcl_residual = (resistor_current + capacitor_current).abs();
+    assert!(
+        kcl_residual < 1e-10,
+        "El companion RC conserva una conductancia DC parásita: residuo KCL {kcl_residual}"
+    );
+}
+
+#[test]
+fn test_transient_time_axis_uses_accepted_steps_and_exact_tmax() {
+    let frequency = 100.0;
+    let t_max = 950e-6;
+    let netlist = CircuitNetlist {
+        components: vec![ComponentData {
+            id: "V1".to_string(),
+            comp_type: "vsource".to_string(),
+            value: 0.0,
+            pins: vec!["1".to_string(), "0".to_string()],
+            wave_type: Some("sine".to_string()),
+            amplitude: Some(1.0),
+            frequency: Some(frequency),
+            offset: Some(0.0),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    for fixed_step in [true, false] {
+        let results = solve_transient_circuit(
+            &netlist,
+            &TransientSettings {
+                dt: 100e-6,
+                t_max,
+                fixed_step: Some(fixed_step),
+                integration_method: Some("BE".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert!(!results.is_empty());
+        assert!(
+            results[0].time > 0.0,
+            "La primera solución integrada no debe etiquetarse como t=0."
+        );
+        assert!(
+            (results.last().unwrap().time - t_max).abs() < 1e-12,
+            "El último tiempo debe coincidir exactamente con tMax."
+        );
+        for pair in results.windows(2) {
+            assert!(
+                pair[1].time > pair[0].time,
+                "Los tiempos aceptados deben ser estrictamente crecientes."
+            );
+        }
+        for step in &results {
+            assert!(step.time <= t_max + 1e-12);
+            let expected = (2.0 * std::f64::consts::PI * frequency * step.time).sin();
+            assert!(
+                (step.node_voltages["1"] - expected).abs() < 1e-10,
+                "La fuente se evaluó en un tiempo distinto al publicado: t={}, esperado {expected}, obtenido {}",
+                step.time,
+                step.node_voltages["1"]
+            );
+        }
+    }
+}

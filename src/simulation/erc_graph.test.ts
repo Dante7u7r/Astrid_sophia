@@ -31,6 +31,28 @@ describe("erc_graph", () => {
     expect(isolated.sort()).toEqual(["2", "3"]);
   });
 
+  it("no inventa una ruta DC a traves de una fuente de corriente", () => {
+    const isolated = findIsolatedActiveNodes(netlist([
+      { id: "I1", type: "isource", value: 1, pins: ["1", "0"] },
+    ], [
+      { id: "W1", nodes: ["1", "0"] },
+    ]));
+
+    expect(isolated).toEqual(["1"]);
+  });
+
+  it("no conecta topologicamente la compuerta MOS con el canal", () => {
+    const isolated = findIsolatedActiveNodes(netlist([
+      { id: "M1", type: "nmos", value: 1, pins: ["1", "2", "0"] },
+      { id: "R1", type: "resistor", value: 1, pins: ["2", "0"] },
+    ], [
+      { id: "WG", nodes: ["1", "1"] },
+      { id: "WD", nodes: ["2", "0"] },
+    ]));
+
+    expect(isolated).toEqual(["1"]);
+  });
+
   it("detecta ciclos de fuentes ideales", () => {
     expect(hasIdealVoltageSourceCycle(netlist([
       { id: "V1", type: "vsource", value: 1, pins: ["1", "2"] },

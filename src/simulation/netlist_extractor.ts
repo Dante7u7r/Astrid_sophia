@@ -23,6 +23,7 @@ import {
   mapPinKeysToNodes,
   pinKey,
 } from "./netlist_node_model";
+import { allowsFloatingPins } from "./component_pin_rules";
 
 // ==========================================================================
 // INTERFACES DE LA NETLIST ELÉCTRICA
@@ -540,9 +541,26 @@ export function extractElectricalNetlist(
       }
     }
 
+    const connectedPinKeys = new Set<string>();
+    for (const wire of wires) {
+      connectedPinKeys.add(pinKey(wire.from.componentId, wire.from.pinIndex));
+      connectedPinKeys.add(pinKey(wire.to.componentId, wire.to.pinIndex));
+    }
+
+    const allowedFloatingNodes = new Set<string>();
+    for (const comp of components) {
+      if (!allowsFloatingPins(comp.type)) continue;
+      for (const pin of getPins(comp)) {
+        const key = pinKey(comp.id, pin.pinIndex);
+        if (!connectedPinKeys.has(key)) {
+          allowedFloatingNodes.add(pinToNodeMap[key]);
+        }
+      }
+    }
+
     const lowDegreeNodes: string[] = [];
     for (const [nodeId, count] of Object.entries(nodeCounts)) {
-      if (nodeId !== "0" && count < 2) {
+      if (nodeId !== "0" && count < 2 && !allowedFloatingNodes.has(nodeId)) {
         lowDegreeNodes.push(nodeId);
       }
     }

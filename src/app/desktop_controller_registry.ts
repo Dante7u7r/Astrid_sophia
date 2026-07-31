@@ -70,6 +70,9 @@ export interface DesktopControllerRegistryDeps {
   resetPerformanceCaches(): void;
   updateCanvasRendering(immediate?: boolean): void;
   updateOscilloscopeRendering(immediate?: boolean): void;
+  markCurrentTabAsModified(): void;
+  onActiveTabChanged(tabId: string): void;
+  onCircuitLoaded(): void;
   setInstrumentDockCollapsed(collapsed: boolean): void;
   setIpcStatus(text: string, color: string): void;
   addLog(text: string, type?: LogType): void;
@@ -132,6 +135,9 @@ export function createDesktopControllerRegistry(
     resetPerformanceCaches: deps.resetPerformanceCaches,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
+    markCurrentTabAsModified: deps.markCurrentTabAsModified,
+    onActiveTabChanged: deps.onActiveTabChanged,
+    onCircuitLoaded: deps.onCircuitLoaded,
     addLog: deps.addLog,
     logError: deps.logError,
     invokeTauri: deps.invokeTauri,

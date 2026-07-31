@@ -182,6 +182,7 @@ pub async fn run_pvt_matrix_analysis(
                     &transient_settings,
                     HashMap::new(),
                     HashMap::new(),
+                    solver::SolverNumericalSettings::default(),
                     None,
                     None,
                     Some(move |_: &solver::TimeStepResult| corner_running.load(Ordering::SeqCst)),

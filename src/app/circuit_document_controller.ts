@@ -42,6 +42,8 @@ export interface CircuitDocumentControllerDependencies {
   extractNetlist(): void;
   updateCanvasRendering(): void;
   updateOscilloscopeRendering(): void;
+  clearPropertiesPanel(): void;
+  onCircuitLoaded?(): void;
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
   logError(message: string): void;
 }
@@ -127,6 +129,7 @@ export class CircuitDocumentController implements CircuitDocumentPort {
       orchestrator.tempWireEnd = null;
       orchestrator.selectionStart = null;
       orchestrator.selectionEnd = null;
+      this.dependencies.clearPropertiesPanel();
 
       this.dependencies.circuitState.clearVoltages();
       if (oscilloscopePanel) {
@@ -169,6 +172,7 @@ export class CircuitDocumentController implements CircuitDocumentPort {
       this.dependencies.extractNetlist();
       this.dependencies.updateCanvasRendering();
       this.dependencies.updateOscilloscopeRendering();
+      this.dependencies.onCircuitLoaded?.();
 
       if (candidate.migratedFrom) {
         this.dependencies.addLog(`Archivo migrado de la version ${candidate.migratedFrom} a la ${data.version}.`, "system");

@@ -6,6 +6,58 @@ Todas las mejoras y cambios importantes en este proyecto.
 
 ## [Unreleased] - En Desarrollo
 
+### Corrección de alcance científico
+- Retirados los márgenes de fase/ganancia de STB: eran heurísticas derivadas de polos, no
+  mediciones de ganancia de lazo.
+- PSS, extracción de polos/ceros y BSIM quedan marcados como experimentales hasta contar
+  con correlación externa reproducible.
+- El runtime 8051/AVR queda descrito como incompleto y experimental; no es cycle-accurate
+  ni ejecuta una ISA y periféricos completos.
+- Los ajustes de tolerancia e iteraciones de la UI ahora llegan a Newton DC/transitorio y
+  al shooting PSS.
+- Se añadieron límites defensivos para transitorio, AC y PSS.
+
+### Línea base de validación científica
+- Añadido un arnés versionado en `validation/` con casos, referencias y reportes separados.
+- Casos iniciales: divisor DC, filtro RC en frecuencia de corte y escalón RC en `t=τ`.
+- Las tolerancias, unidades y derivaciones quedan almacenadas junto a cada referencia.
+- `npm run validate:scientific` falla si una observación excede su error permitido.
+- La línea base se ejecuta en CI y declara que `ngspice` todavía no aporta una referencia externa.
+
+### Matriz científica de Fase 2
+- Ampliada la suite a 7 casos y 29 observaciones: divisor DC, barrido Shockley, RC, RL,
+  resonancia RLC y escalones RC/RL.
+- Añadidas corrientes de rama, barrido DC y residuos KCL para DC, AC complejo y transitorio.
+- Corregida la doble estampación transitoria de capacitores e inductores: sus aproximaciones DC
+  ya no se suman a los companion models.
+- Corregido el signo del término histórico del capacitor en el companion model TRAP.
+- Añadida una regresión que verifica el primer paso RL y el residuo KCL del RC.
+- Documentada la deuda restante: la primera muestra etiquetada `t=0` ya incorpora un paso.
+
+### Matriz temporal de Fase 3
+- Corregido el eje transitorio: cada resultado se etiqueta con el tiempo final del paso que
+  realmente produjo la solución.
+- Separados `dt` aceptado y `dt` candidato siguiente en el controlador adaptativo.
+- El último paso se recorta para finalizar exactamente en `tMax`; no se generan puntos fuera
+  del intervalo solicitado.
+- Las fuentes dinámicas se evalúan en la misma coordenada temporal que se publica.
+- TRAP arranca con un paso BE y después utiliza historia trapezoidal coherente.
+- Eliminado el estampado transitorio duplicado de compuertas lógicas que competía con el
+  planificador de eventos y generaba niveles intermedios falsos durante los retardos.
+- La matriz científica crece a 9 casos y 35 observaciones e incorpora RC multipunto con
+  BE, TRAP y Gear2.
+
+### Correlación externa de Fase 4
+- Integrado ngspice en ejecución batch como referencia viva; los casos externos fallan si el
+  ejecutable no está disponible.
+- Añadido parser validado del formato raw ASCII, incluidos fasores complejos e interpolación
+  de la malla temporal adaptativa.
+- Incorporadas correlaciones externas para divisor DC, filtro RC AC, escalón RC con TRAP y
+  barrido no lineal de diodo Shockley.
+- La matriz crece a 13 casos y 46 observaciones; la versión de ngspice queda en cada reporte.
+- Añadido bootstrap portátil de ngspice 46 para Windows con SHA-256 fijado, sin instalación
+  global ni modificación de `PATH`; CI instala ngspice explícitamente.
+
 ### Rendimiento de pruebas
 - `test_scr_phase_control` conserva las verificaciones de bloqueo, disparo y apagado
   del SCR, pero usa una malla temporal ajustada a los puntos observados.
@@ -47,7 +99,7 @@ Todas las mejoras y cambios importantes en este proyecto.
 - **DC Operating Point** con pseudo-transient analysis (PTA)
 - **Sensibilidad paramétrica** ∂V/∂R, ∂V/∂C con límites worst-case
 - **Periodic Steady-State (PSS)** mediante shooting method
-- **Stability Analysis** con extracción de polos/ceros, phase/gain margin
+- **Stability Analysis experimental** con extracción reducida de polos/ceros, sin márgenes de lazo
 
 ### 🔌 Modelos de Dispositivos (20+)
 - Pasivos: R, L, C, transformador con acoplamiento magnético
@@ -61,11 +113,11 @@ Todas las mejoras y cambios importantes en este proyecto.
 - Líneas de transmisión
 
 ### 🎛️ Co-Simulación Mixed-Signal
-- **MCU 8051:** Cycle-accurate a 12 MHz (12 ciclos/µs)
-- **MCU AVR:** ATmega328P a 16 MHz (16 ciclos/µs)
-- **Inyección de interrupciones** por cruces de umbral analógico
-- **Puente GPIO SPICE:** Estados digitales 0,1,X,Z como fuentes Thevenin/Norton
-- **Depuración en tiempo real:** Visualización de registros, firmware .hex, step/run/reset
+- **MCU 8051:** runtime temporal experimental a frecuencia nominal de 12 MHz
+- **MCU AVR:** runtime temporal experimental a frecuencia nominal de 16 MHz
+- **Hooks experimentales de eventos** por cruces de umbral analógico
+- **Puente GPIO aproximado:** Estados digitales 0,1,X,Z como fuentes Thevenin/Norton
+- **UI de depuración experimental:** firmware .hex y controles step/run/reset sin ISA completa
 
 ### 📊 Análisis Avanzado
 - **PVT:** Process-Voltage-Temperature corner sweep (Commercial, Industrial, Automotive)

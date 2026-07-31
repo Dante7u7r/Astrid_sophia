@@ -93,10 +93,10 @@ export function initSimulationControls(
         mode === 'AC' ? 'Barrido CA (CA)' :
         mode === 'TRAN' ? 'Transitorio (TRAN)' :
         mode === 'SENS' ? 'Sensibilidad y Peor Caso (SENS)' :
-        mode === 'PSS' ? 'Régimen Permanente Periódico (PSS)' :
+        mode === 'PSS' ? 'PSS experimental (shooting periódico)' :
         mode === 'PVT' ? 'Análisis PVT (Process-Voltage-Temperature)' :
         mode === 'SPAR' ? 'Parámetros S (Touchstone)' :
-        'Análisis de Estabilidad (STB)';
+        'Polos y ceros del modelo reducido (experimental)';
       handlers.addLog(`Modo de Simulación: ${modoTexto}`, 'system');
 
       if (mode !== 'PVT') {

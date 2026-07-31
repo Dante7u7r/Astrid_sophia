@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "caseId": "external-transient-rc-step-trap",
+  "method": "ngspice_live",
+  "source": "ngspice ejecutado en vivo con method=trap y raw adaptativo; versión registrada en el reporte.",
+  "observations": [
+    {
+      "id": "vc_at_0_25tau",
+      "expected": 1.1059960846429755,
+      "absoluteTolerance": 0.0002,
+      "relativeTolerance": 0.001,
+      "units": "V",
+      "expression": "v(2) interpolado en t=0.25τ desde el raw generado en cada ejecución"
+    },
+    {
+      "id": "vc_at_1tau",
+      "expected": 3.1606027941427883,
+      "absoluteTolerance": 0.0002,
+      "relativeTolerance": 0.001,
+      "units": "V",
+      "expression": "v(2) interpolado en t=τ desde el raw generado en cada ejecución"
+    },
+    {
+      "id": "vc_at_2tau",
+      "expected": 4.323323583816936,
+      "absoluteTolerance": 0.0002,
+      "relativeTolerance": 0.001,
+      "units": "V",
+      "expression": "v(2) interpolado en t=2τ desde el raw generado en cada ejecución"
+    }
+  ]
+}

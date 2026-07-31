@@ -1,4 +1,5 @@
-/** Simulación instruction-set accurate para 8051.
+/** Tabla experimental de decodificación/desensamblado para 8051.
+ * No constituye una implementación instruction-set accurate.
  * Implementa el subset más común de instrucciones.
  */
 import type { McuRuntime } from "./mcu-runtime";

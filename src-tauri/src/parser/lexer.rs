@@ -60,6 +60,22 @@ pub fn parse_spice_value(s: &str) -> Result<f64, String> {
 }
 
 // Analiza los parámetros de una función como sine(0 5 10k) o pulse(0 5 10k 0.5)
+pub fn parse_independent_source_dc_value(tokens: &[String], value_index: usize) -> Option<f64> {
+    let value_token = tokens.get(value_index)?;
+    if value_token.eq_ignore_ascii_case("dc") {
+        return tokens
+            .get(value_index + 1)
+            .and_then(|value| parse_spice_value(value).ok());
+    }
+    if let Some(value) = value_token
+        .strip_prefix("dc=")
+        .or_else(|| value_token.strip_prefix("DC="))
+    {
+        return parse_spice_value(value).ok();
+    }
+    parse_spice_value(value_token).ok()
+}
+
 pub fn parse_waveform(wave_str: &str) -> Option<(String, Vec<f64>)> {
     let clean = wave_str.trim();
     let open_idx = clean.find('(')?;

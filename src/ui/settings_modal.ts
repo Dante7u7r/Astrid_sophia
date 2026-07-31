@@ -89,9 +89,37 @@ export class SettingsModal {
 
   private save(): void {
     if (this.dtInput && this.tolInput && this.iterInput) {
-      this.settings.dt = parseFloat(this.dtInput.value) || 0.0001;
-      this.settings.tolerance = parseFloat(this.tolInput.value) || 0.00001;
-      this.settings.maxIterations = parseInt(this.iterInput.value) || 100;
+      const dt = Number(this.dtInput.value);
+      const tolerance = Number(this.tolInput.value);
+      const maxIterations = Number(this.iterInput.value);
+
+      this.dtInput.setCustomValidity(
+        Number.isFinite(dt) && dt > 0
+          ? ""
+          : "El paso temporal debe ser un número mayor que cero.",
+      );
+      this.tolInput.setCustomValidity(
+        Number.isFinite(tolerance) && tolerance > 0 && tolerance <= 1
+          ? ""
+          : "La tolerancia debe ser mayor que cero y menor o igual que 1.",
+      );
+      this.iterInput.setCustomValidity(
+        Number.isInteger(maxIterations) && maxIterations >= 1 && maxIterations <= 10_000
+          ? ""
+          : "Las iteraciones deben ser un entero entre 1 y 10 000.",
+      );
+
+      const invalidInput = [this.dtInput, this.tolInput, this.iterInput]
+        .find(input => !input.checkValidity());
+      if (invalidInput) {
+        invalidInput.reportValidity();
+        invalidInput.focus();
+        return;
+      }
+
+      this.settings.dt = dt;
+      this.settings.tolerance = tolerance;
+      this.settings.maxIterations = maxIterations;
       this.onSaveCallback({ ...this.settings });
     }
     this.close();

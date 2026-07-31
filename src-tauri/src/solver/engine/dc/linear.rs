@@ -11,6 +11,17 @@ pub fn stamp_linear_components_sparse(
     matrix_a: &mut SparseMatrix,
     vector_z: &mut DVector<f64>,
 ) -> Result<(), String> {
+    stamp_linear_components_sparse_mode(netlist, n, vsource_map, matrix_a, vector_z, true)
+}
+
+fn stamp_linear_components_sparse_mode(
+    netlist: &CircuitNetlist,
+    n: usize,
+    vsource_map: &HashMap<String, usize>,
+    matrix_a: &mut SparseMatrix,
+    vector_z: &mut DVector<f64>,
+    include_reactive_dc_approximations: bool,
+) -> Result<(), String> {
     // 1. Ejecutar análisis de topología por teoría de grafos para detectar y estabilizar nodos flotantes en DC
     let floating_nodes = crate::topology::find_floating_nodes(netlist, n);
     for &node_idx in &floating_nodes {
@@ -76,6 +87,9 @@ pub fn stamp_linear_components_sparse(
                 stamp_voltage_branch(matrix_a, vector_z, vs_idx, node_pos, node_neg, v_static);
             }
             "capacitor" => {
+                if !include_reactive_dc_approximations {
+                    continue;
+                }
                 let node_a = comp.pins[0].parse::<usize>().unwrap();
                 let node_b = comp.pins[1].parse::<usize>().unwrap();
                 let conductance = 1e-9;
@@ -85,6 +99,9 @@ pub fn stamp_linear_components_sparse(
                 stamp_conductance(matrix_a, node_b, node_a, -conductance);
             }
             "inductor" => {
+                if !include_reactive_dc_approximations {
+                    continue;
+                }
                 let is_coupled = if let Some(ref mutuals) = netlist.mutual_inductances {
                     mutuals
                         .iter()
@@ -240,6 +257,29 @@ pub fn stamp_linear_components(
     let size = matrix_a.nrows();
     let mut sparse = SparseMatrix::new(size);
     stamp_linear_components_sparse(netlist, n, vsource_map, &mut sparse, vector_z)?;
+    for r in 0..size {
+        for (&c, &val) in &sparse.rows[r] {
+            matrix_a[(r, c)] = val;
+        }
+    }
+    Ok(())
+}
+
+/// Estampa la base estática del análisis transitorio.
+///
+/// Capacitores e inductores se omiten porque sus companion models se añaden en
+/// cada paso temporal. Incluir también sus aproximaciones DC crea conductancias
+/// paralelas artificiales y contamina la dinámica.
+pub fn stamp_transient_linear_components(
+    netlist: &CircuitNetlist,
+    n: usize,
+    vsource_map: &HashMap<String, usize>,
+    matrix_a: &mut DMatrix<f64>,
+    vector_z: &mut DVector<f64>,
+) -> Result<(), String> {
+    let size = matrix_a.nrows();
+    let mut sparse = SparseMatrix::new(size);
+    stamp_linear_components_sparse_mode(netlist, n, vsource_map, &mut sparse, vector_z, false)?;
     for r in 0..size {
         for (&c, &val) in &sparse.rows[r] {
             matrix_a[(r, c)] = val;

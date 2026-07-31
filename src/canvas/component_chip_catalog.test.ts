@@ -21,6 +21,10 @@ describe("component_chip_catalog", () => {
     expect(BOARD_PIN_LABELS).toContain("GND");
   });
 
+  it("mantiene etiquetas compactas para placas de desarrollo", () => {
+    expect(BOARD_PIN_LABELS).toEqual(["IN0", "OUT1", "ADC", "DAC", "VCC", "GND"]);
+  });
+
   it("resuelve informacion visual de placas", () => {
     expect(getBoardRenderInfo("arduino_uno").title).toBe("ARDUINO");
     expect(getBoardRenderInfo("esp32").title).toBe("ESP32");

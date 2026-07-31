@@ -39,6 +39,7 @@ export class TabManager {
       getVoltageSnapshot: () => Readonly<Record<string, number>>;
       setVoltageSnapshot: (voltages: Record<string, number>) => void;
       resetRuntimeState: () => void;
+      onActiveTabChanged: (tabId: string) => void;
       canChangeActiveTab: () => boolean;
       documentController: Pick<CircuitDocumentPort, "serializeCircuit">;
       addLog: (text: string, type?: "system" | "send" | "receive" | "error") => void;
@@ -212,6 +213,7 @@ export class TabManager {
     }
 
     this.renderTabsBar();
+    this.callbacks.onActiveTabChanged(tabId);
     return true;
   }
 

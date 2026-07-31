@@ -99,6 +99,12 @@ fn test_stability_analysis_rc_pole() {
     assert_eq!(data.poles.len(), 1, "Debería haber exactamente 1 polo");
 
     let p = data.poles[0];
+    let serialized = serde_json::to_value(&data).expect("el resultado debe serializarse");
+    assert!(
+        serialized["poles"][0]["re"].is_number()
+            && serialized["poles"][0]["im"].is_number(),
+        "Los polos IPC deben usar objetos explícitos {{re, im}}, no tuplas"
+    );
     // El polo debe estar muy cercano a -1000 rad/s
     assert!(
         (p.re + 1000.0).abs() < 1.0,

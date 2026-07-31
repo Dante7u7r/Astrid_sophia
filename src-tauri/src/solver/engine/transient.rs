@@ -15,7 +15,7 @@ use super::advanced::*;
 use super::dc::*;
 #[allow(unused_imports)]
 use super::devices::*;
-use super::simulation_types::{TimeStepResult, TransientSettings};
+use super::simulation_types::{SolverNumericalSettings, TimeStepResult, TransientSettings};
 use super::transient_companions::{stamp_transient_companions, CompanionStampState};
 use super::transient_mcu::{update_mcu_accepted_states, McuAcceptedStateMaps};
 use super::transient_mixed_signal::{
@@ -39,11 +39,24 @@ pub fn solve_transient_circuit(
     netlist: &CircuitNetlist,
     settings: &TransientSettings,
 ) -> Result<Vec<TimeStepResult>, String> {
-    let (results, _, _) = solve_transient_circuit_with_initial_states(
+    solve_transient_circuit_with_numerical_settings(
+        netlist,
+        settings,
+        SolverNumericalSettings::default(),
+    )
+}
+
+pub fn solve_transient_circuit_with_numerical_settings(
+    netlist: &CircuitNetlist,
+    settings: &TransientSettings,
+    numerical_settings: SolverNumericalSettings,
+) -> Result<Vec<TimeStepResult>, String> {
+    let (results, _, _) = solve_transient_circuit_with_initial_states_and_numerical_settings(
         netlist,
         settings,
         HashMap::new(),
         HashMap::new(),
+        numerical_settings,
     )?;
     Ok(results)
 }
@@ -61,11 +74,35 @@ pub fn solve_transient_circuit_with_initial_states(
     ),
     String,
 > {
+    solve_transient_circuit_with_initial_states_and_numerical_settings(
+        netlist,
+        settings,
+        cap_init,
+        ind_init,
+        SolverNumericalSettings::default(),
+    )
+}
+
+pub fn solve_transient_circuit_with_initial_states_and_numerical_settings(
+    netlist: &CircuitNetlist,
+    settings: &TransientSettings,
+    cap_init: HashMap<String, f64>,
+    ind_init: HashMap<String, f64>,
+    numerical_settings: SolverNumericalSettings,
+) -> Result<
+    (
+        Vec<TimeStepResult>,
+        HashMap<String, f64>,
+        HashMap<String, f64>,
+    ),
+    String,
+> {
     solve_transient_circuit_inner(
         netlist,
         settings,
         cap_init,
         ind_init,
+        numerical_settings,
         None::<Arc<Mutex<Vec<crate::ComponentMutation>>>>,
         None,
         None::<fn(&TimeStepResult) -> bool>,
@@ -78,6 +115,7 @@ pub(crate) fn solve_transient_circuit_inner<F>(
     settings: &TransientSettings,
     cap_init: HashMap<String, f64>,
     ind_init: HashMap<String, f64>,
+    numerical_settings: SolverNumericalSettings,
     live_overrides: Option<Arc<Mutex<Vec<crate::ComponentMutation>>>>,
     live_run_id: Option<u64>,
     mut on_step: Option<F>,
@@ -92,10 +130,16 @@ pub(crate) fn solve_transient_circuit_inner<F>(
 where
     F: FnMut(&TimeStepResult) -> bool,
 {
+    settings.validate()?;
+    numerical_settings.validate()?;
     let n = crate::topology::validate_netlist_topology(netlist, false)?;
     let (vt, _is_temp) = get_thermal_parameters(netlist.temperature, None);
     let is_fixed = settings.fixed_step.unwrap_or(false) || netlist.fixed_step.unwrap_or(false);
-    let integration_method = settings.integration_method.as_deref().unwrap_or("euler");
+    let integration_method = match settings.integration_method.as_deref().unwrap_or("euler") {
+        "BE" => "euler",
+        "trapezoidal" => "trap",
+        method => method,
+    };
     let v_sources: Vec<&ComponentData> = netlist
         .components
         .iter()
@@ -143,7 +187,7 @@ where
     let mut matrix_a_linear = DMatrix::<f64>::zeros(size, size);
     let mut vector_z_linear = DVector::<f64>::zeros(size);
 
-    stamp_linear_components(
+    stamp_transient_linear_components(
         netlist,
         n,
         &vsource_map,
@@ -167,17 +211,41 @@ where
 
     // Tolerancia LTE y límites de paso
     let lte_tol = 2e-4; // 200 uV de tolerancia de truncamiento
-    let dt_min = 1e-7; // 100 ns paso mínimo
+                        // El mínimo adaptativo nunca puede ser mayor que el paso nominal solicitado.
+    let dt_min = settings.dt.min(1e-7);
     let dt_max = settings.dt * 2.5;
 
     let mut results = Vec::new();
     let mut current_solution = DVector::<f64>::zeros(size);
+    if netlist.components.iter().any(|comp| {
+        matches!(
+            comp.comp_type.as_str(),
+            "arduino_uno" | "esp32" | "raspberry_pi_pico"
+        )
+    }) {
+        if let Ok(dc_result) = solve_dc_circuit(netlist) {
+            for i in 1..=n {
+                current_solution[i - 1] =
+                    *dc_result.node_voltages.get(&i.to_string()).unwrap_or(&0.0);
+            }
+            for (source_id, source_index) in &vsource_map {
+                current_solution[n + source_index] =
+                    *dc_result.branch_currents.get(source_id).unwrap_or(&0.0);
+            }
+        }
+    }
     let mut local_overrides = ComponentOverrideMap::new();
 
-    // Iterar en el tiempo de forma dinámica
-    while t <= t_max {
+    // `t` representa siempre el último tiempo aceptado. No se publica un falso
+    // estado inicial: la primera solución integrada corresponde a t=dt.
+    let time_epsilon = (t_max.abs() * 1e-12).max(f64::EPSILON * t_max.abs().max(settings.dt));
+    while t + time_epsilon < t_max {
+        // El último paso puede ser menor que el nominal para terminar exactamente
+        // en tMax sin calcular ni etiquetar una muestra fuera del intervalo.
+        dt = dt.min(t_max - t);
         drain_live_overrides(&mut local_overrides, &live_overrides, live_run_id);
 
+        let trap_active_this_step = integration_method == "trap" && steps_completed >= 1;
         let gear2_active_this_step = integration_method == "gear2" && steps_completed >= 2;
 
         // Respaldar estados antes de intentar resolver el paso
@@ -201,6 +269,7 @@ where
                 event_intercepted = true;
             }
         }
+        let step_time = t + dt;
 
         // Clonar matrices base que no cambian
         let mut matrix_a = matrix_a_linear.clone();
@@ -218,7 +287,7 @@ where
         stamp_dynamic_transient_sources(
             netlist,
             n,
-            t,
+            step_time,
             &vsource_map,
             &local_overrides,
             &mut vector_z,
@@ -242,6 +311,7 @@ where
         };
         let companion_params = IntegrationHistoryParams {
             integration_method,
+            trap_active_this_step,
             gear2_active_this_step,
             gear_a,
             gear_b,
@@ -253,7 +323,6 @@ where
             &mut matrix_a,
             &mut vector_z,
             &CompanionStampState {
-                current_solution: &current_solution,
                 cap_states: &cap_states,
                 cap_states_prev: &cap_states_prev,
                 cap_currents: &cap_currents,
@@ -268,8 +337,8 @@ where
 
         // Si hay componentes no lineales, resolvemos con Newton-Raphson
         let step_solution_res = if has_nonlinear {
-            let max_iter = 50;
-            let tolerance = 1e-5;
+            let max_iter = numerical_settings.max_iterations;
+            let tolerance = numerical_settings.tolerance;
             let mut converged = false;
             let mut solution_iter = current_solution.clone();
 
@@ -295,7 +364,7 @@ where
                         n,
                         size,
                         vsource_map: &vsource_map,
-                        t,
+                        t: step_time,
                         dt,
                         t_amb,
                         prev_v: &prev_v,
@@ -317,7 +386,7 @@ where
                     n,
                     size,
                     vsource_map: &vsource_map,
-                    t,
+                    t: step_time,
                     dt,
                     t_amb,
                     prev_v: &prev_v,
@@ -429,23 +498,11 @@ where
                 continue; // Volver a intentar la misma iteración temporal con el dt reducido
             } else {
                 // ACEPTAR PASO: Guardar resultado y avanzar
+                let accepted_dt = dt;
+                let accepted_time = step_time;
+                let completed_before_accept = steps_completed;
                 current_solution = step_solution.clone();
-                prev_dt = dt;
-
-                if event_intercepted {
-                    dt = original_dt;
-                } else if !is_fixed && steps_completed >= 2 {
-                    if lte_max > 1e-15 {
-                        let ratio = lte_tol / lte_max;
-                        let factor = 0.9 * ratio.powf(1.0 / (integrator_order + 1.0));
-                        let bounded_factor = factor.clamp(1.0, 2.0);
-                        dt = (dt * bounded_factor).min(dt_max);
-                    } else {
-                        dt = (dt * 2.0).min(dt_max);
-                    }
-                } else if is_fixed {
-                    dt = settings.dt;
-                }
+                prev_dt = accepted_dt;
 
                 // Rotar histórico de soluciones
                 sol_n2 = sol_n1.clone();
@@ -458,12 +515,13 @@ where
                     update_trapezoidal_history(
                         netlist,
                         step_solution,
-                        dt,
+                        accepted_dt,
                         &cap_states,
                         &mut cap_currents,
                         &mut ind_states,
                         &mut ind_states_prev,
                         &mut ind_voltages,
+                        trap_active_this_step,
                     );
                 }
 
@@ -482,30 +540,28 @@ where
                 }
 
                 results.push(TimeStepResult {
-                    time: t,
+                    time: accepted_time,
                     node_voltages,
                     branch_currents,
                 });
 
-                // --- STREAMING CALLBACK: punto de extension para emision en vivo ---
-                if let Some(ref mut cb) = on_step {
-                    if let Some(last_result) = results.last() {
-                        if !cb(last_result) {
-                            break;
-                        }
-                    }
-                }
-
-                detect_mixed_signal_crossings(netlist, &mut ms_scheduler, &step_solution, t, dt);
-                process_mixed_signal_events(netlist, &mut ms_scheduler, t + dt);
+                detect_mixed_signal_crossings(
+                    netlist,
+                    &mut ms_scheduler,
+                    &step_solution,
+                    t,
+                    accepted_dt,
+                );
+                process_mixed_signal_events(netlist, &mut ms_scheduler, accepted_time);
 
                 let integration_history = IntegrationHistoryParams {
                     integration_method,
+                    trap_active_this_step,
                     gear2_active_this_step,
                     gear_a,
                     gear_b,
                     gear_c,
-                    dt,
+                    dt: accepted_dt,
                 };
 
                 update_passive_storage_states(
@@ -525,8 +581,8 @@ where
                         vsample: &mut mcu_vsample,
                         vdaceff: &mut mcu_vdaceff,
                     },
-                    t,
-                    dt,
+                    accepted_time,
+                    accepted_dt,
                     t_amb,
                 );
 
@@ -542,16 +598,40 @@ where
                     &step_solution,
                     &mut device_tjunc,
                     t_amb,
-                    dt,
+                    accepted_dt,
                 );
 
-                // Avanzar tiempo t con el dt actual
-                t += dt;
+                // Avanzar exclusivamente con el paso que produjo esta solución.
+                t = accepted_time;
 
-                // Ajustar dt dinámicamente para el paso siguiente
+                // Calcular por separado el paso candidato de la siguiente iteración.
+                let mut next_dt = if event_intercepted {
+                    original_dt
+                } else if is_fixed {
+                    settings.dt
+                } else if completed_before_accept >= 2 {
+                    if lte_max > 1e-15 {
+                        let ratio = lte_tol / lte_max;
+                        let factor = 0.9 * ratio.powf(1.0 / (integrator_order + 1.0));
+                        accepted_dt * factor.clamp(1.0, 2.0)
+                    } else {
+                        accepted_dt * 2.0
+                    }
+                } else {
+                    accepted_dt
+                };
                 if !is_fixed && lte_max < 0.1 * lte_tol {
-                    // Si el error es sumamente pequeño, duplicamos el paso para ir más rápido
-                    dt = (dt * 1.5).min(dt_max);
+                    next_dt *= 1.5;
+                }
+                dt = next_dt.clamp(dt_min, dt_max);
+
+                // El callback observa un estado ya aceptado y con historiales coherentes.
+                if let Some(ref mut cb) = on_step {
+                    if let Some(last_result) = results.last() {
+                        if !cb(last_result) {
+                            break;
+                        }
+                    }
                 }
             }
         } else {
@@ -570,7 +650,9 @@ where
                 dt = (dt / 2.0).max(dt_min);
                 continue;
             } else {
-                return Err("Error de convergencia o circuito mal condicionado".to_string());
+                return Err(format!(
+                    "Error de convergencia o circuito mal condicionado en t={step_time:.6e} s (dt={dt:.6e} s)"
+                ));
             }
         }
     }
@@ -584,4 +666,48 @@ pub struct PssSettings {
     pub period: f64,
     pub max_shooting_iters: usize,
     pub shooting_tolerance: f64,
+}
+
+impl PssSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.period.is_finite() || self.period <= 0.0 || self.period / 200.0 == 0.0 {
+            return Err("El periodo PSS debe ser finito y mayor que cero.".to_string());
+        }
+        if self.max_shooting_iters == 0 || self.max_shooting_iters > 1_000 {
+            return Err("Las iteraciones de shooting PSS deben estar entre 1 y 1 000.".to_string());
+        }
+        if !self.shooting_tolerance.is_finite()
+            || self.shooting_tolerance <= 0.0
+            || self.shooting_tolerance > 1.0
+        {
+            return Err(
+                "La tolerancia de shooting PSS debe ser finita, mayor que cero y menor o igual que 1."
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod pss_validation_tests {
+    use super::*;
+
+    #[test]
+    fn pss_settings_reject_zero_period_and_iterations() {
+        assert!(PssSettings {
+            period: 0.0,
+            max_shooting_iters: 10,
+            shooting_tolerance: 1e-4,
+        }
+        .validate()
+        .is_err());
+        assert!(PssSettings {
+            period: 1e-3,
+            max_shooting_iters: 0,
+            shooting_tolerance: 1e-4,
+        }
+        .validate()
+        .is_err());
+    }
 }

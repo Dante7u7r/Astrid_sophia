@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 pub(crate) struct IntegrationHistoryParams<'a> {
     pub integration_method: &'a str,
+    pub trap_active_this_step: bool,
     pub gear2_active_this_step: bool,
     pub gear_a: f64,
     pub gear_b: f64,

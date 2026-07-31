@@ -14,6 +14,26 @@ pub use subcircuits::*;
 use std::fs;
 use std::path::Path;
 
+pub const MAX_SPICE_TEXT_BYTES: usize = 10 * 1024 * 1024;
+
+pub fn contains_external_include_directive(netlist_str: &str) -> bool {
+    netlist_str.lines().any(|line| {
+        let clean = line.split('$').next().unwrap_or(line).trim();
+        let tokens: Vec<&str> = clean.split_whitespace().collect();
+        let Some(first) = tokens.first() else {
+            return false;
+        };
+        if first.eq_ignore_ascii_case(".include") {
+            return true;
+        }
+        if !first.eq_ignore_ascii_case(".lib") || tokens.len() < 2 {
+            return false;
+        }
+        let target = tokens[1].trim_matches(|character| character == '\'' || character == '"');
+        tokens.len() >= 3 || target.contains('.') || target.contains('/') || target.contains('\\')
+    })
+}
+
 /// Resuelve recursivamente las directivas globales de inclusión (.include y .lib)
 /// anidadas de forma jerárquica hasta un límite máximo de 8 niveles para evitar bucles.
 pub fn resolve_includes(netlist_str: &str, depth: usize) -> Result<String, String> {
@@ -26,6 +46,9 @@ pub fn resolve_includes_with_section(
     target_section: Option<&str>,
     depth: usize,
 ) -> Result<String, String> {
+    if netlist_str.len() > MAX_SPICE_TEXT_BYTES {
+        return Err("El texto SPICE excede el limite de 10 MB.".to_string());
+    }
     if depth > 8 {
         return Err("Límite máximo de recursividad de inclusión alcanzado (.include/.lib anidados más de 8 veces). Verifica que no existan bucles infinitos.".to_string());
     }
@@ -141,6 +164,18 @@ pub fn resolve_includes_with_section(
                 ));
             }
 
+            let metadata = fs::metadata(file_path).map_err(|error| {
+                format!(
+                    "No se pudo inspeccionar el archivo de inclusion {}: {}",
+                    raw_path, error
+                )
+            })?;
+            if metadata.len() > MAX_SPICE_TEXT_BYTES as u64 {
+                return Err(format!(
+                    "El archivo de inclusion {} excede el limite de 10 MB.",
+                    raw_path
+                ));
+            }
             let include_content = fs::read_to_string(file_path).map_err(|e| {
                 format!(
                     "No se pudo leer el archivo de inclusión {}: {}",
@@ -170,6 +205,11 @@ pub fn resolve_includes_with_section(
                 result.push_str(&line);
                 result.push('\n');
             }
+        }
+        if result.len() > MAX_SPICE_TEXT_BYTES {
+            return Err(
+                "La expansion acumulada de .include/.lib excede el limite de 10 MB.".to_string(),
+            );
         }
     }
 

@@ -35,6 +35,49 @@ export interface TSResult {
   readonly convergenceIterations: number;
 }
 
+const FALLBACK_COMPONENT_TYPES = new Set([
+  "ground",
+  "resistor",
+  "vsource",
+  "isource",
+  "capacitor",
+  "inductor",
+]);
+
+function validateFallbackNetlist(netlist: CircuitNetlist): string | null {
+  if (netlist.components.length > 10_000) {
+    return "El fallback local excede el limite de 10 000 componentes.";
+  }
+  const ids = new Set<string>();
+  let maxNode = 0;
+  for (const comp of netlist.components) {
+    if (!FALLBACK_COMPONENT_TYPES.has(comp.type)) {
+      return `El componente [${comp.id}] de tipo '${comp.type}' no tiene un modelo científico en el fallback local. Use la aplicación Tauri.`;
+    }
+    if (!comp.id.trim() || comp.id.length > 128 || ids.has(comp.id)) {
+      return `El componente [${comp.id}] tiene un ID vacio, duplicado o demasiado largo.`;
+    }
+    ids.add(comp.id);
+    const expectedPins = comp.type === "ground" ? 1 : 2;
+    if (comp.pins.length !== expectedPins) {
+      return `El componente [${comp.id}] requiere ${expectedPins} pines y recibio ${comp.pins.length}.`;
+    }
+    if (!Number.isFinite(comp.value)) {
+      return `El componente [${comp.id}] tiene un valor no finito.`;
+    }
+    for (const pin of comp.pins) {
+      if (!/^\d+$/.test(pin)) {
+        return `El componente [${comp.id}] contiene un nodo no numerico.`;
+      }
+      maxNode = Math.max(maxNode, Number(pin));
+    }
+  }
+  if (maxNode > 5_000) {
+    return "El fallback local excede el limite de 5 000 nodos.";
+  }
+  return null;
+}
+
 // ==========================================================================
 // ELIMINACIÓN GAUSSIANA CON PIVOTEO PARCIAL
 //
@@ -110,6 +153,9 @@ export function solveGaussian(A: readonly number[][], Z: readonly number[]): num
 // ==========================================================================
 
 export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
+  const validationError = validateFallbackNetlist(netlist);
+  if (validationError) return validationError;
+
   const n = getMaxNodeIndex(netlist);
   const vSources = netlist.components.filter(c => c.type === 'vsource');
   const m = vSources.length;
@@ -228,8 +274,8 @@ export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
 //               → Fuente de corriente equivalente: i_eq = Il(t)
 //
 // CO-SIMULACIÓN CON MICROCONTROLADORES:
-// Los MCUs locales (8051, AVR) se simulan mediante runtimes digitales
-// que ejecutan ciclos de reloj completos en cada paso de tiempo. Sus
+// Los MCUs locales (8051, AVR) usan runtimes digitales experimentales
+// que avanzan contadores temporales en cada paso. Sus
 // salidas digitales se estampan en la matriz MNA como fuentes Norton
 // equivalentes (resistencia de 50Ω + fuente de corriente).
 //
@@ -247,6 +293,15 @@ export function solveTransientCircuitTS(
   tMax: number,
   componentFirmware: Readonly<Record<string, Uint8Array>>,
 ): TimeStepResult[] | string {
+  const validationError = validateFallbackNetlist(netlist);
+  if (validationError) return validationError;
+  if (!Number.isFinite(dt) || dt <= 0 || !Number.isFinite(tMax) || tMax < 0) {
+    return "El fallback transitorio requiere dt finito positivo y tMax finito no negativo.";
+  }
+  if (tMax / dt > 2_000_000) {
+    return "El fallback transitorio excede el limite de 2 000 000 de pasos.";
+  }
+
   const n = getMaxNodeIndex(netlist);
   const vSources = netlist.components.filter(c => c.type === 'vsource');
   const m = vSources.length;

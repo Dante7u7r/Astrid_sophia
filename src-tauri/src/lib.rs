@@ -25,7 +25,7 @@ mod telemetry;
 mod topology;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -81,7 +81,10 @@ impl From<String> for SimulationError {
                 message: "Matriz singular: circuito no resuelto. Puede haber un nodo flotante o falta de referencia a tierra.".to_string(),
                 node,
             }
-        } else if err.contains("limit") || err.contains("max") || err.contains("iteration") {
+        } else if (err.contains("limit") || err.contains("max") || err.contains("iteration"))
+            && !err.contains("debe")
+            && !err.contains("excede")
+        {
             let component = err
                 .split("diode ")
                 .nth(1)
@@ -107,6 +110,8 @@ impl From<String> for SimulationError {
             || err.contains("netlist")
             || err.contains("missing")
             || err.contains("Tierra")
+            || err.contains("debe")
+            || err.contains("excede")
         {
             SimulationError::InvalidCircuit {
                 message: "Circuito o netlist inválida.".to_string(),
@@ -134,6 +139,7 @@ pub struct SimulationControlState {
     pub is_running: Arc<AtomicBool>,
     pub active_run_id: Arc<AtomicU64>,
     pub hot_mutations: Arc<Mutex<Vec<ComponentMutation>>>,
+    pub approved_circuit_paths: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -154,6 +160,17 @@ pub struct SimulationStreamError {
     pub error: SimulationError,
 }
 
+fn numerical_settings(
+    tolerance: Option<f64>,
+    max_iterations: Option<usize>,
+) -> solver::SolverNumericalSettings {
+    let defaults = solver::SolverNumericalSettings::default();
+    solver::SolverNumericalSettings {
+        tolerance: tolerance.unwrap_or(defaults.tolerance),
+        max_iterations: max_iterations.unwrap_or(defaults.max_iterations),
+    }
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn ping() -> Result<String, String> {
@@ -163,18 +180,31 @@ fn ping() -> Result<String, String> {
 #[tauri::command]
 async fn run_dc_simulation(
     netlist: solver::CircuitNetlist,
+    tolerance: Option<f64>,
+    max_iterations: Option<usize>,
 ) -> Result<solver::SimulationResult, SimulationError> {
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
-    solver::solve_dc_circuit(&netlist).map_err(SimulationError::from)
+    solver::solve_dc_circuit_with_numerical_settings(
+        &netlist,
+        numerical_settings(tolerance, max_iterations),
+    )
+    .map_err(SimulationError::from)
 }
 
 #[tauri::command]
 async fn run_transient_simulation(
     netlist: solver::CircuitNetlist,
     settings: solver::TransientSettings,
+    tolerance: Option<f64>,
+    max_iterations: Option<usize>,
 ) -> Result<Vec<solver::TimeStepResult>, SimulationError> {
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
-    solver::solve_transient_circuit(&netlist, &settings).map_err(SimulationError::from)
+    solver::solve_transient_circuit_with_numerical_settings(
+        &netlist,
+        &settings,
+        numerical_settings(tolerance, max_iterations),
+    )
+    .map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -199,6 +229,17 @@ async fn run_dc_sweep(
 async fn parse_spice_netlist(
     netlist_str: String,
 ) -> Result<solver::CircuitNetlist, SimulationError> {
+    if netlist_str.len() > parser::MAX_SPICE_TEXT_BYTES {
+        return Err(SimulationError::from(
+            "El texto SPICE excede el limite de 10 MB.".to_string(),
+        ));
+    }
+    if parser::contains_external_include_directive(&netlist_str) {
+        return Err(SimulationError::from(
+            "El parser IPC no puede leer archivos mediante .include/.lib; importa el contenido de la biblioteca de forma explicita."
+                .to_string(),
+        ));
+    }
     parser::parse_spice_netlist_to_native(&netlist_str).map_err(SimulationError::from)
 }
 
@@ -254,7 +295,7 @@ async fn evaluate_measures(
 async fn expand_transmission_line(
     params: solver::TransmissionLineParams,
 ) -> Result<Vec<solver::ComponentData>, SimulationError> {
-    Ok(solver::expand_transmission_line(&params))
+    solver::expand_transmission_line(&params).map_err(SimulationError::from)
 }
 
 #[tauri::command]
@@ -296,6 +337,17 @@ fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
     mut mutation: ComponentMutation,
 ) -> Result<(), SimulationError> {
+    if mutation.component_id.trim().is_empty() || mutation.component_id.len() > 128 {
+        return Err(SimulationError::from(
+            "La mutacion interactiva requiere un ID de componente valido.".to_string(),
+        ));
+    }
+    if mutation.field != "value" || !mutation.value.is_finite() {
+        return Err(SimulationError::from(
+            "La mutacion interactiva solo admite el campo 'value' con un numero finito."
+                .to_string(),
+        ));
+    }
     mutation.run_id = state.active_run_id.load(Ordering::SeqCst);
     if mutation.run_id == 0 || !state.is_running.load(Ordering::SeqCst) {
         return Err(SimulationError::from(
@@ -306,6 +358,11 @@ fn inject_live_mutation(
         .hot_mutations
         .lock()
         .map_err(|e| SimulationError::from(e.to_string()))?;
+    if queue.len() >= 10_000 {
+        return Err(SimulationError::from(
+            "La cola de mutaciones interactivas excede el limite de 10 000 elementos.".to_string(),
+        ));
+    }
     queue.push(mutation);
     Ok(())
 }
@@ -317,12 +374,19 @@ async fn start_interactive_transient(
     netlist: solver::CircuitNetlist,
     settings: solver::TransientSettings,
     run_id: u64,
+    tolerance: Option<f64>,
+    max_iterations: Option<usize>,
 ) -> Result<(), SimulationError> {
     if run_id == 0 {
         return Err(SimulationError::from(
             "El identificador de corrida debe ser mayor que cero.".to_string(),
         ));
     }
+    settings.validate().map_err(SimulationError::from)?;
+    let numerical_settings = numerical_settings(tolerance, max_iterations);
+    numerical_settings
+        .validate()
+        .map_err(SimulationError::from)?;
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
     state.active_run_id.store(run_id, Ordering::SeqCst);
     state.is_running.store(true, Ordering::SeqCst);
@@ -349,6 +413,7 @@ async fn start_interactive_transient(
                 &settings,
                 HashMap::new(),
                 HashMap::new(),
+                numerical_settings,
                 Some(hot_mutations),
                 Some(run_id),
                 Some(|step: &solver::TimeStepResult| -> bool {
@@ -449,7 +514,11 @@ fn get_performance_telemetry() -> Result<telemetry::TelemetryData, String> {
 }
 
 #[tauri::command]
-async fn save_circuit_file(content: String) -> Result<String, String> {
+async fn save_circuit_file(
+    state: tauri::State<'_, SimulationControlState>,
+    content: String,
+) -> Result<String, String> {
+    validate_circuit_file_content(&content)?;
     let file_path = rfd::AsyncFileDialog::new()
         .add_filter("Esquemático Astryd", &["astryd", "json"])
         .set_title("Guardar Esquemático")
@@ -458,7 +527,13 @@ async fn save_circuit_file(content: String) -> Result<String, String> {
 
     if let Some(file_handle) = file_path {
         let path = file_handle.path();
+        validate_circuit_file_path(path)?;
         write_file_atomically(path, &content)?;
+        state
+            .approved_circuit_paths
+            .lock()
+            .map_err(|error| error.to_string())?
+            .insert(path.to_path_buf());
         Ok(path.to_string_lossy().to_string())
     } else {
         Err("Operación cancelada por el usuario".to_string())
@@ -466,8 +541,63 @@ async fn save_circuit_file(content: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn save_circuit_to_path(path: String, content: String) -> Result<(), String> {
-    write_file_atomically(Path::new(&path), &content)
+async fn save_circuit_to_path(
+    state: tauri::State<'_, SimulationControlState>,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    validate_circuit_file_content(&content)?;
+    let path = PathBuf::from(path);
+    validate_circuit_file_path(&path)?;
+    let is_approved = state
+        .approved_circuit_paths
+        .lock()
+        .map_err(|error| error.to_string())?
+        .contains(&path);
+    if !is_approved && !is_wdio_temporary_path(&path) {
+        return Err(
+            "La ruta no fue autorizada mediante el dialogo Abrir/Guardar de esta sesion."
+                .to_string(),
+        );
+    }
+    write_file_atomically(&path, &content)
+}
+
+#[cfg(feature = "wdio")]
+fn is_wdio_temporary_path(path: &Path) -> bool {
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    parent
+        .canonicalize()
+        .ok()
+        .zip(std::env::temp_dir().canonicalize().ok())
+        .is_some_and(|(candidate, temp)| candidate == temp)
+}
+
+#[cfg(not(feature = "wdio"))]
+fn is_wdio_temporary_path(_path: &Path) -> bool {
+    false
+}
+
+const MAX_CIRCUIT_FILE_BYTES: usize = 50 * 1024 * 1024;
+
+fn validate_circuit_file_content(content: &str) -> Result<(), String> {
+    if content.is_empty() || content.len() > MAX_CIRCUIT_FILE_BYTES {
+        return Err("El esquematico esta vacio o excede el limite de 50 MB.".to_string());
+    }
+    Ok(())
+}
+
+fn validate_circuit_file_path(path: &Path) -> Result<(), String> {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(extension.as_deref(), Some("astryd" | "json")) {
+        return Err("La ruta debe usar extension .astryd o .json.".to_string());
+    }
+    Ok(())
 }
 
 fn unique_sibling_path(path: &Path, suffix: &str) -> Result<PathBuf, String> {
@@ -572,7 +702,9 @@ mod persistence_tests {
 }
 
 #[tauri::command]
-async fn open_circuit_file() -> Result<(String, String), String> {
+async fn open_circuit_file(
+    state: tauri::State<'_, SimulationControlState>,
+) -> Result<(String, String), String> {
     use std::fs::read_to_string;
 
     let file_path = rfd::AsyncFileDialog::new()
@@ -583,7 +715,18 @@ async fn open_circuit_file() -> Result<(String, String), String> {
 
     if let Some(file_handle) = file_path {
         let path = file_handle.path();
+        validate_circuit_file_path(path)?;
+        let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
+        if metadata.len() > MAX_CIRCUIT_FILE_BYTES as u64 {
+            return Err("El esquematico excede el limite de 50 MB.".to_string());
+        }
         let content = read_to_string(path).map_err(|e| e.to_string())?;
+        validate_circuit_file_content(&content)?;
+        state
+            .approved_circuit_paths
+            .lock()
+            .map_err(|error| error.to_string())?
+            .insert(path.to_path_buf());
         Ok((path.to_string_lossy().to_string(), content))
     } else {
         Err("Operación cancelada por el usuario".to_string())
@@ -611,6 +754,7 @@ pub fn run() {
             is_running: Arc::new(AtomicBool::new(false)),
             active_run_id: Arc::new(AtomicU64::new(0)),
             hot_mutations: Arc::new(Mutex::new(Vec::new())),
+            approved_circuit_paths: Arc::new(Mutex::new(HashSet::new())),
         })
         .invoke_handler(tauri::generate_handler![
             ping,

@@ -21,6 +21,41 @@ mod parser_tests {
     }
 
     #[test]
+    fn test_independent_source_dc_keyword() {
+        let netlist_str = "
+        V1 1 0 DC 5
+        I1 2 0 dc=2m
+        R1 1 0 1k
+        ";
+
+        let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+        let voltage = parsed.components.iter().find(|c| c.id == "V1").unwrap();
+        let current = parsed.components.iter().find(|c| c.id == "I1").unwrap();
+
+        assert_eq!(voltage.value, 5.0);
+        assert!((current.value - 2e-3).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_independent_source_dc_keyword_inside_subcircuit() {
+        let netlist_str = "
+        .subckt biased out gnd
+        VBIAS out gnd DC 3.3
+        .ends
+        X1 1 0 biased
+        ";
+
+        let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+        let voltage = parsed
+            .components
+            .iter()
+            .find(|c| c.id == "X1.VBIAS")
+            .unwrap();
+
+        assert_eq!(voltage.value, 3.3);
+    }
+
+    #[test]
     fn test_spice_netlist_flattening() {
         let netlist_str = "
         * Test circuit with subcircuit

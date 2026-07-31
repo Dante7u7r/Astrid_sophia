@@ -38,6 +38,39 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
     document.body.innerHTML = '';
   });
 
+  it('propaga tolerancia e iteraciones configuradas al comando DC nativo', async () => {
+    const circuit: CircuitNetlist = {
+      components: [{ id: 'V1', type: 'vsource', value: 5, pins: ['1', '0'] }],
+      wires: [],
+    };
+    mockInvoke.mockResolvedValue({
+      nodeVoltages: { '0': 0, '1': 5 },
+      branchCurrents: { V1: 0 },
+      converged: true,
+    });
+
+    await dispatchSimulation(
+      circuit,
+      'DC',
+      {
+        simSettings: { dt: 1e-4, tolerance: 2e-7, maxIterations: 321 },
+        transientDuration: 0.05,
+      },
+      {
+        addLog: vi.fn(),
+        onResultsReady: vi.fn(),
+        onIpcStatusUpdate: vi.fn(),
+        updateCanvasRendering: vi.fn(),
+      },
+    );
+
+    expect(mockInvoke).toHaveBeenCalledWith('run_dc_simulation', {
+      netlist: circuit,
+      tolerance: 2e-7,
+      maxIterations: 321,
+    });
+  });
+
   /**
    * TEST 1: Circuito RC Simple - Carga de Capacitor
    * Valida que un circuito RC básico cargue exponencialmente de forma correcta
@@ -110,7 +143,7 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
    */
   describe('Filtro RC - AC Frequency Sweep', () => {
     
-    it('debe mostrar atenuación a altas frecuencias', async () => {
+    it('debe informar que AC requiere el solver Rust sin fabricar resultados', async () => {
       vi.useFakeTimers();
 
       const filterCircuit: CircuitNetlist = {
@@ -145,9 +178,8 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
       vi.advanceTimersByTime(310);
 
       // Assert
-      expect(readyResults).toBeDefined();
-      expect(readyResults.frequencies).toBeDefined();
-      expect(readyResults.nodeAmplitudes['2']).toBeDefined();
+      expect(readyResults).toBeNull();
+      expect(logs.some(message => message.includes('no dispone de fallback científico'))).toBe(true);
       
       vi.useRealTimers();
     });
@@ -176,7 +208,7 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
       expect(resultsArr.length).toBeGreaterThan(0);
     });
 
-    it('debe simular y converger un amplificador con transistor BJT en DC', () => {
+    it('debe rechazar BJT en el fallback en vez de inventar un modelo', () => {
       const bjtCircuit: CircuitNetlist = {
         components: [
           { id: 'V1', type: 'vsource', value: 12, pins: ['1', '0'] },
@@ -188,9 +220,7 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
       };
 
       const result = solveCircuitTS(bjtCircuit);
-      expect(typeof result).not.toBe('string');
-      const tsResult = result as TSResult;
-      expect(tsResult.nodeVoltages['2']).toBeDefined();
+      expect(result).toMatch(/no tiene un modelo científico/i);
     });
   });
 

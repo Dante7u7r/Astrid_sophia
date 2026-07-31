@@ -45,6 +45,7 @@ describe("component_render_model", () => {
   it("formatea valores visibles sin mojibake", () => {
     expect(formatComponentValue(component("resistor", 2200))).toBe("2.2 kOhm");
     expect(formatComponentValue(component("capacitor", 1e-7))).toBe("100 nF");
+    expect(formatComponentValue(component("arduino_uno", 1))).toBe("Modo integrado: Blink · USB 5 V");
     expect(formatComponentValue(component("inductor", 2e-6))).toBe("2 uH");
     expect(formatComponentValue({ ...component("switch"), switchState: true })).toBe("Cerrado");
     expect(formatComponentValue({ ...component("mcu_avr"), firmwareHex: ":00" })).toBe("Firmware cargado");

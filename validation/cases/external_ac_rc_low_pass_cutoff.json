@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "external-ac-rc-low-pass-cutoff",
+  "title": "Correlación ngspice del filtro RC",
+  "rationale": "Compara magnitud y fase complejas de Astryd Sophia con un barrido AC independiente.",
+  "analysis": {
+    "kind": "ac",
+    "fStart": 159.15494309189535,
+    "fEnd": 159.15494309189535,
+    "pointsPerDecade": 1
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 0.0,
+        "pins": ["1", "0"],
+        "amplitude": 1.0
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 1000.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "C1",
+        "type": "capacitor",
+        "value": 0.000001,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": []
+  },
+  "observations": [
+    {
+      "id": "gain_at_fc",
+      "quantity": "node_amplitude_db",
+      "node": "2",
+      "frequencyHz": 159.15494309189535
+    },
+    {
+      "id": "phase_at_fc",
+      "quantity": "node_phase_degrees",
+      "node": "2",
+      "frequencyHz": 159.15494309189535
+    }
+  ],
+  "reference": "../references/external_ac_rc_low_pass_cutoff.json",
+  "externalReference": {
+    "engine": "ngspice",
+    "fixture": "../ngspice/ac_rc_low_pass_cutoff.cir"
+  }
+}

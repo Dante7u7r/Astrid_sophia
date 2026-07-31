@@ -22,7 +22,7 @@ pub(crate) fn initialize_mixed_signal_scheduler(netlist: &CircuitNetlist) -> Mix
                     .insert(1, 0.0);
             }
         } else if is_mcu_component_type(&comp.comp_type) {
-            scheduler.set_state(&comp.id, 1, false);
+            scheduler.set_state(&comp.id, 1, comp.value as i32 == 1);
             scheduler.schedule_event(MixedSignalEvent {
                 time: 0.0,
                 component_id: comp.id.clone(),

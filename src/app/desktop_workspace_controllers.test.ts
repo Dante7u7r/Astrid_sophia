@@ -60,6 +60,7 @@ describe("createDesktopWorkspaceControllers", () => {
       settings = nextSettings as typeof settings;
     });
     const addLog = vi.fn();
+    const markCurrentTabAsModified = vi.fn();
     const simulationControls = {
       isSimulationRunning: vi.fn(() => false),
       setActiveModeButton: vi.fn(),
@@ -93,6 +94,9 @@ describe("createDesktopWorkspaceControllers", () => {
       resetPerformanceCaches: vi.fn(),
       updateCanvasRendering: vi.fn(),
       updateOscilloscopeRendering: vi.fn(),
+      markCurrentTabAsModified,
+      onActiveTabChanged: vi.fn(),
+      onCircuitLoaded: vi.fn(),
       addLog,
       logError: vi.fn(),
       invokeTauri: vi.fn(),
@@ -104,7 +108,7 @@ describe("createDesktopWorkspaceControllers", () => {
     expect(controllers.exporterPanel).toBe(mocks.exporterPanel);
 
     (mocks.propertyEditorCallbacks!.markCurrentTabAsModified as () => void)();
-    expect(mocks.tabManager.markCurrentTabAsModified).toHaveBeenCalledOnce();
+    expect(markCurrentTabAsModified).toHaveBeenCalledOnce();
 
     expect((mocks.tabCallbacks!.canChangeActiveTab as () => boolean)()).toBe(true);
     (mocks.tabCallbacks!.resetRuntimeState as () => void)();

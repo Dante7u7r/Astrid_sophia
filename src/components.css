@@ -224,6 +224,31 @@
   transform: translateY(-1px);
 }
 
+/* WebView2 otherwise opens this native menu with the Windows light palette. */
+#btn-open-demo {
+  color-scheme: dark;
+  background-color: var(--bg-elevated);
+  border-color: var(--border-mid);
+}
+
+#btn-open-demo:hover,
+#btn-open-demo:focus {
+  background-color: hsl(225, 20%, 15%);
+  border-color: rgba(91, 243, 228, 0.35);
+  color: var(--cyan);
+}
+
+#btn-open-demo option {
+  color: var(--text-main);
+  background-color: var(--bg-elevated);
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+#btn-open-demo option[value=""] {
+  color: var(--text-sub);
+}
+
 :where(button, select, input, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--cyan) !important;
   outline-offset: 2px;
@@ -1019,11 +1044,8 @@ select.btn-text-only.sim-locked {
   filter: grayscale(0.6);
 }
 
-@media (max-width: 1100px) {
-  .system-status .header-action-label,
-  .system-status .status-text,
-  .system-status > .status-indicator,
-  .system-status > .header-separator {
+@media (max-width: 1300px) {
+  .system-status .header-action-label {
     display: none;
   }
 
@@ -1039,6 +1061,14 @@ select.btn-text-only.sim-locked {
 
   #btn-open-demo {
     width: 42px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .system-status .status-text,
+  .system-status > .status-indicator,
+  .system-status > .header-separator {
+    display: none;
   }
 }
 

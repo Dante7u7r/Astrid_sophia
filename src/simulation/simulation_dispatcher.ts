@@ -29,12 +29,13 @@ import { type ComponentInstance, type PinInstance, type WireInstance } from "../
 import { type AnalysisMode } from "../ui/simulation_controls";
 import { type TSResult } from "./fallback_solver";
 import { type TimeStepResult } from "../ui/oscilloscope_panel";
+import { type SimulationSettings } from "../ui/settings_modal";
 import { classifySimulationError } from "./simulation-error";
-import { createFallbackAcDemoResult } from "./fallback_ac_demo";
 import {
   findIsolatedActiveNodes,
   hasIdealVoltageSourceCycle,
 } from "./erc_graph";
+import { allowsFloatingPins } from "./component_pin_rules";
 
 let fallbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -55,7 +56,7 @@ export function clearPendingTimeouts(): void {
 //   3. Cortocircuito franco en fuentes de tensión: si ambos terminales
 //      (pins[0] y pins[1]) están en el mismo nodo eléctrico.
 //   4. Fuentes de tensión en paralelo: si dos VSources comparten el
-//      mismo par de nodos, se emite advertencia (no bloqueante).
+//      mismo par de nodos, se bloquea por restricción MNA redundante.
 //   5. Conteo de conexiones por pin físico: se itera sobre los
 //      componentes del orchestrator y se cuentan las uniones por
 //      cable. Si un pin tiene 0 conexiones y no es GND, se reporta:
@@ -98,17 +99,28 @@ export function runElectricalRuleCheck(
     }
   }
 
-  // 4. Fuentes de tensión en paralelo (advertencia)
+  // 4. Fuentes de tensión en paralelo (restricción MNA singular)
   const vsourceNodes: Record<string, string> = {};
+  let hasParallelVoltageSources = false;
   for (const comp of netlist.components) {
     if (comp.type === 'vsource') {
       const nodePair = [comp.pins[0], comp.pins[1]].sort().join('-');
       if (vsourceNodes[nodePair]) {
-        warnings.push(`Fuentes en Paralelo: Las fuentes de tensión [${comp.id}] y [${vsourceNodes[nodePair]}] están en paralelo. Esto puede producir inconsistencias de simulación si sus valores nominales difieren.`);
+        hasParallelVoltageSources = true;
+        errors.push(`Fuentes en Paralelo: Las fuentes de tensión [${comp.id}] y [${vsourceNodes[nodePair]}] imponen restricciones redundantes y generan una matriz MNA singular.`);
       } else {
         vsourceNodes[nodePair] = comp.id;
       }
     }
+  }
+
+  const temporalMcu = netlist.components.find(component =>
+    component.type === "mcu_8051" || component.type === "mcu_avr"
+  );
+  if (temporalMcu) {
+    errors.push(
+      `MCU temporal no simulable [${temporalMcu.id}]: el runtime actual no ejecuta firmware. Use un modelo funcional de placa o retire el componente.`,
+    );
   }
 
   // 5. Conteo de conexiones por pin (pines flotantes / huérfanos)
@@ -137,6 +149,10 @@ export function runElectricalRuleCheck(
       if (pinConnectionCount[pinKey] === 0) unconnectedCount++;
     }
 
+    if (allowsFloatingPins(comp.type)) {
+      continue;
+    }
+
     if (unconnectedCount === pins.length && comp.type !== 'ground') {
       warnings.push(`Componente huérfano detectado [${comp.id}]: No tiene ninguna conexión activa de red.`);
     } else if (unconnectedCount > 0 && comp.type !== 'ground') {
@@ -163,7 +179,7 @@ export function runElectricalRuleCheck(
   }
 
   // 7. Bucle de fuentes de tensión ideales
-  if (hasIdealVoltageSourceCycle(netlist)) {
+  if (!hasParallelVoltageSources && hasIdealVoltageSourceCycle(netlist)) {
     errors.push("Bucle de fuentes de tensión detectado: Hay un lazo cerrado compuesto únicamente por fuentes de tensión ideales. Esto produce una corriente indeterminada (matriz singular).");
   }
 
@@ -175,7 +191,10 @@ export function runElectricalRuleCheck(
 // ==========================================================================
 
 export interface DispatchConfig {
-  readonly simSettings: Readonly<{ dt: number }>;
+  readonly simSettings: Readonly<
+    Pick<SimulationSettings, "dt">
+    & Partial<Pick<SimulationSettings, "tolerance" | "maxIterations">>
+  >;
   readonly transientDuration: number;
   readonly simulationOwnerId?: string;
   readonly simulationRunner?: SimulationRunner | null;
@@ -222,6 +241,8 @@ export async function dispatchSimulation(
   callbacks: DispatchCallbacks,
 ): Promise<void> {
   clearPendingTimeouts();
+  const tolerance = config.simSettings.tolerance ?? 1e-6;
+  const maxIterations = config.simSettings.maxIterations ?? 100;
   // --- Modos especiales (PVT, SPAR) — delegan a main.ts ---
   if (mode === 'PVT' || mode === 'SPAR') {
     try {
@@ -242,7 +263,12 @@ export async function dispatchSimulation(
           throw new Error("El simulationRunner no está inicializado. No se puede iniciar la simulación transitoria interactiva.");
         }
         callbacks.addLog("Iniciando simulación transitoria interactiva (streaming)...", "send");
-        const settings = { dt: config.simSettings.dt, tMax: config.transientDuration };
+        const settings = {
+          dt: config.simSettings.dt,
+          tMax: config.transientDuration,
+          tolerance,
+          maxIterations,
+        };
         await config.simulationRunner.startInteractiveTransient(
           netlist,
           settings,
@@ -291,13 +317,21 @@ export async function dispatchSimulation(
       }
 
       case 'PSS': {
+        callbacks.addLog(
+          "PSS EXPERIMENTAL: shooting periódico sin validación externa ni garantía de cierre físico.",
+          "system",
+        );
         callbacks.addLog("Enviando conexiones al motor PSS [Shooting Method] de Rust...", "send");
         let period = 1e-3;
         const acSource = netlist.components.find(c => c.frequency && c.frequency > 0);
         if (acSource && acSource.frequency) {
           period = 1.0 / acSource.frequency;
         }
-        const pssSettings = { period, maxShootingIters: 15, shootingTolerance: 1e-4 };
+        const pssSettings = {
+          period,
+          maxShootingIters: Math.min(maxIterations, 1_000),
+          shootingTolerance: tolerance,
+        };
         const results = await invokeTyped("run_pss_simulation", { netlist, settings: pssSettings });
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [PSS Shooting Method]!", "receive");
         callbacks.onResultsReady(mode, results);
@@ -307,15 +341,20 @@ export async function dispatchSimulation(
       }
 
       case 'STB': {
-        callbacks.addLog("Enviando conexiones al motor de análisis de Estabilidad [Polos y Ceros] de Rust...", "send");
+        callbacks.addLog(
+          "POLOS/CEROS EXPERIMENTAL: modelo reducido. No calcula ganancia de lazo ni márgenes de fase/ganancia.",
+          "system",
+        );
+        callbacks.addLog("Enviando conexiones al extractor experimental de polos y ceros de Rust...", "send");
         const results = await invokeTyped("run_stability_analysis", { netlist });
         callbacks.addLog("¡Resultados de Estabilidad calculados exitosamente en Rust!", "receive");
 
         callbacks.addLog("----------------------------------------------------------------", "system");
-        callbacks.addLog("=== ANÁLISIS DE ESTABILIDAD DE POLOS Y CEROS (STB) ===", "system");
-        callbacks.addLog(`Estado de Estabilidad: ${results.isStable ? "✅ CIRCUITO ESTABLE" : "⚠️ CIRCUITO INESTABLE (Peligro de Oscilación)"}`, "system");
-        callbacks.addLog(`Margen de Fase (Phase Margin): ${results.phaseMargin.toFixed(2)}º`, "receive");
-        callbacks.addLog(`Margen de Ganancia (Gain Margin): ${results.gainMargin.toFixed(2)} dB`, "receive");
+        callbacks.addLog("=== EXTRACCIÓN EXPERIMENTAL DE POLOS Y CEROS ===", "system");
+        callbacks.addLog(
+          `Polos del modelo reducido: ${results.isStable ? "todos en el semiplano izquierdo" : "hay polos en el semiplano derecho"}`,
+          "system",
+        );
         callbacks.addLog("Lista de Polos del Sistema en el Plano de Laplace (s):", "receive");
         results.poles.forEach((p, idx) => {
           callbacks.addLog(`  • Polo ${idx + 1}: ${p.re.toFixed(2)} ${p.im >= 0 ? "+" : "-"} ${Math.abs(p.im).toFixed(2)}j rad/s`, "receive");
@@ -331,7 +370,11 @@ export async function dispatchSimulation(
       default: {
         // DC — modo por defecto
         callbacks.addLog(`Enviando conexiones a Rust con ${netlist.components.length} componentes...`, "send");
-        const results = await invokeTyped("run_dc_simulation", { netlist });
+        const results = await invokeTyped("run_dc_simulation", {
+          netlist,
+          tolerance,
+          maxIterations,
+        });
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [MNA Newton-Raphson]!", "receive");
         callbacks.addLog("----------------------------------------------------------------", "system");
         callbacks.addLog("=== VOLTAJES DE NODOS (DC) ===", "system");
@@ -360,12 +403,11 @@ export async function dispatchSimulation(
       fallbackTimeoutId = setTimeout(async () => {
         fallbackTimeoutId = null;
         if (mode === 'AC') {
-          // Filtro pasa-bajos demo para respuesta en frecuencia
-          callbacks.addLog("Simulando respuesta en frecuencia del circuito localmente en navegador...", "receive");
-          const acResults = createFallbackAcDemoResult(netlist);
-          callbacks.onResultsReady(mode, acResults);
-          callbacks.onIpcStatusUpdate("Respaldo local Activo (Filtro Demo CA)", "var(--warning)");
-          callbacks.updateCanvasRendering();
+          callbacks.addLog(
+            "El análisis AC no dispone de fallback científico en navegador. Abra la aplicación Tauri para usar el solver Rust.",
+            "error",
+          );
+          callbacks.onIpcStatusUpdate("Análisis AC no disponible sin Rust", "var(--accent-red)");
           if (callbacks.onSimulationFinished) {
             callbacks.onSimulationFinished();
           }

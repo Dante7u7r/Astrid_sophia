@@ -57,7 +57,7 @@ self.onmessage = (e: MessageEvent) => {
         dispatchAnalogTrigger(frame.triggerEvent, interactiveMcuRuntimes);
       }
 
-      // 2. Avanzar cada MCU en dt ciclos de reloj
+      // 2. Avanzar el contador temporal del runtime MCU experimental
       for (const entry of Object.values(interactiveMcuRuntimes)) {
         const clockSpeed = entry.runtime.definition.clockSpeed;
         const cyclesToRun = Math.round(dt * clockSpeed);

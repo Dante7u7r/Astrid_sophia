@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "caseId": "ac-rl-low-pass-sweep",
+  "method": "closed_form",
+  "source": "H(jω)=R/(R+jωL), con R=100 Ω, L=100 mH y fc=R/(2πL).",
+  "observations": [
+    {
+      "id": "gain_fc_over_10",
+      "expected": -0.043213737826425784,
+      "absoluteTolerance": 0.002,
+      "relativeTolerance": 0.001,
+      "units": "dB",
+      "expression": "−10·log10(1+0.1²)"
+    },
+    {
+      "id": "phase_fc_over_10",
+      "expected": -5.710593137499643,
+      "absoluteTolerance": 0.02,
+      "relativeTolerance": 0.001,
+      "units": "deg",
+      "expression": "−atan(0.1)"
+    },
+    {
+      "id": "kcl_fc_over_10",
+      "expected": 0.0,
+      "absoluteTolerance": 1e-10,
+      "relativeTolerance": 0.0,
+      "units": "A",
+      "expression": "|Vout/R + (Vout−Vin)/(jωL)|"
+    },
+    {
+      "id": "gain_fc",
+      "expected": -3.010299956639812,
+      "absoluteTolerance": 0.002,
+      "relativeTolerance": 0.001,
+      "units": "dB",
+      "expression": "−10·log10(2)"
+    },
+    {
+      "id": "phase_fc",
+      "expected": -45.0,
+      "absoluteTolerance": 0.02,
+      "relativeTolerance": 0.001,
+      "units": "deg",
+      "expression": "−atan(1)"
+    },
+    {
+      "id": "kcl_fc",
+      "expected": 0.0,
+      "absoluteTolerance": 1e-10,
+      "relativeTolerance": 0.0,
+      "units": "A",
+      "expression": "|Vout/R + (Vout−Vin)/(jωL)|"
+    },
+    {
+      "id": "gain_10fc",
+      "expected": -20.043213737826427,
+      "absoluteTolerance": 0.002,
+      "relativeTolerance": 0.001,
+      "units": "dB",
+      "expression": "−10·log10(1+10²)"
+    },
+    {
+      "id": "phase_10fc",
+      "expected": -84.28940686250037,
+      "absoluteTolerance": 0.02,
+      "relativeTolerance": 0.001,
+      "units": "deg",
+      "expression": "−atan(10)"
+    },
+    {
+      "id": "kcl_10fc",
+      "expected": 0.0,
+      "absoluteTolerance": 1e-10,
+      "relativeTolerance": 0.0,
+      "units": "A",
+      "expression": "|Vout/R + (Vout−Vin)/(jωL)|"
+    }
+  ]
+}

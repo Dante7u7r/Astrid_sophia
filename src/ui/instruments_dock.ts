@@ -121,10 +121,10 @@ export class InstrumentsDock {
       box.toggleAttribute("hidden", !isTarget);
     });
 
-    // Notificar redibujado
-    if (tabId === "oscilloscope") {
+    // Hidden instrument canvases initialize at 0x0; resize after revealing any tab.
+    requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"));
-    }
+    });
   }
 
   public getActiveTab(): string {

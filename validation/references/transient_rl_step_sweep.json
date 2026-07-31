@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "caseId": "transient-rl-step-sweep",
+  "method": "closed_form",
+  "source": "Respuesta de corriente de un RL serie: I(t)=V/R·(1−e^(−tR/L)), con τ=L/R=1 ms.",
+  "observations": [
+    {
+      "id": "source_current_0_25tau",
+      "expected": -0.011059960846429757,
+      "absoluteTolerance": 0.0003,
+      "relativeTolerance": 0.01,
+      "units": "A",
+      "expression": "−0.05·(1−e^−0.25)"
+    },
+    {
+      "id": "source_current_0_5tau",
+      "expected": -0.01967346701436833,
+      "absoluteTolerance": 0.0003,
+      "relativeTolerance": 0.01,
+      "units": "A",
+      "expression": "−0.05·(1−e^−0.5)"
+    },
+    {
+      "id": "source_current_1tau",
+      "expected": -0.03160602794142788,
+      "absoluteTolerance": 0.0003,
+      "relativeTolerance": 0.01,
+      "units": "A",
+      "expression": "−0.05·(1−e^−1)"
+    },
+    {
+      "id": "source_current_2tau",
+      "expected": -0.04323323583816937,
+      "absoluteTolerance": 0.0003,
+      "relativeTolerance": 0.01,
+      "units": "A",
+      "expression": "−0.05·(1−e^−2)"
+    },
+    {
+      "id": "source_current_5tau",
+      "expected": -0.049663102650045726,
+      "absoluteTolerance": 0.0003,
+      "relativeTolerance": 0.01,
+      "units": "A",
+      "expression": "−0.05·(1−e^−5); tolerancia incluye error de Backward Euler con dt=τ/200"
+    }
+  ]
+}

@@ -87,6 +87,6 @@ describe("runElectricalRuleCheck", () => {
     const { netlist } = extractElectricalNetlist(components, wires, stubPins);
     const erc = runElectricalRuleCheck(netlist, components, wires, stubPins);
     expect(erc.passed).toBe(false);
-    expect(erc.errors.some(e => e.includes("Bucle de fuentes"))).toBe(true);
+    expect(erc.errors.some(e => e.includes("Fuentes en Paralelo"))).toBe(true);
   });
 });

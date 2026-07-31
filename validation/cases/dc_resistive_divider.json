@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "dc-resistive-divider",
+  "title": "Divisor resistivo DC 12 V → 4 V",
+  "rationale": "Caso lineal cerrado para comprobar estampado MNA, referencia a tierra y solución nodal.",
+  "analysis": {
+    "kind": "dc",
+    "tolerance": 1e-10,
+    "maxIterations": 100
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 12.0,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 2000.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "R2",
+        "type": "resistor",
+        "value": 1000.0,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": []
+  },
+  "observations": [
+    {
+      "id": "vout",
+      "quantity": "node_voltage",
+      "node": "2"
+    },
+    {
+      "id": "kcl_node_2",
+      "quantity": "dc_kcl_residual",
+      "node": "2"
+    }
+  ],
+  "reference": "../references/dc_resistive_divider.json"
+}

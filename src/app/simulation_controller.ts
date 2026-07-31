@@ -51,8 +51,8 @@ const ANALYSIS_LABELS: Record<AnalysisMode, string> = {
   AC: "Barrido CA",
   TRAN: "Transitorio",
   SENS: "Sensibilidad",
-  PSS: "Régimen Permanente Periódico",
-  STB: "Estabilidad",
+  PSS: "PSS experimental",
+  STB: "Polos y ceros experimentales",
   PVT: "PVT Corner Analysis",
   SPAR: "Parámetros S",
 };
@@ -88,6 +88,36 @@ export class SimulationController {
     if (!netlist) {
       this.dependencies.setSimulationRunning(false);
       return;
+    }
+
+    if (netlist.components.some(component =>
+      component.type === "mcu_8051" || component.type === "mcu_avr"
+    )) {
+      this.dependencies.addLog(
+        "MCU EXPERIMENTAL: el runtime no ejecuta la ISA, registros, memoria, interrupciones ni periféricos completos. No es cycle-accurate.",
+        "error",
+      );
+    }
+    if (netlist.components.some(component =>
+      component.type === "arduino_uno"
+      || component.type === "esp32"
+      || component.type === "raspberry_pi_pico"
+    )) {
+      this.dependencies.addLog(
+        "MCU DE PLACA: se usa un modelo funcional analógico de alto nivel; no se ejecuta firmware real.",
+        "error",
+      );
+    }
+    if (netlist.components.some(component =>
+      component.type === "bsim3nmos"
+      || component.type === "bsim3pmos"
+      || component.type === "bsim4nmos"
+      || component.type === "bsim4pmos"
+    )) {
+      this.dependencies.addLog(
+        "BSIM EXPERIMENTAL: implementación parcial, aún sin correlación sistemática contra un simulador de referencia.",
+        "error",
+      );
     }
 
     const ercResult = runElectricalRuleCheck(

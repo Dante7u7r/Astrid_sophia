@@ -1,5 +1,6 @@
 use crate::solver::matrix::SparseMatrix;
 use crate::solver::types::CircuitNetlist;
+use crate::solver::SolverNumericalSettings;
 use nalgebra::DVector;
 use std::collections::HashMap;
 
@@ -20,11 +21,12 @@ pub(super) fn solve_homotopy_core(
     lambda: f64,
     x_init: &Vec<f64>,
     initial_guess: &Vec<f64>,
+    numerical_settings: SolverNumericalSettings,
 ) -> Result<DVector<f64>, String> {
     let (vt, is_temp) = get_thermal_parameters(netlist.temperature, None);
     let size = n + m;
-    let max_iter = 100;
-    let tolerance = 1e-6;
+    let max_iter = numerical_settings.max_iterations;
+    let tolerance = numerical_settings.tolerance;
 
     let mut prev_voltages = initial_guess.clone();
     let mut prev_prev_voltages = initial_guess.clone();

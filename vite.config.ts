@@ -32,5 +32,18 @@ export default defineConfig(async () => ({
   test: {
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     environment: "node",
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary", "html"],
+      reportsDirectory: "coverage",
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.test.ts"],
+      thresholds: {
+        statements: 40,
+        branches: 35,
+        functions: 45,
+        lines: 40,
+      },
+    },
   },
 }));

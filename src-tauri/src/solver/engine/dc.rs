@@ -1,5 +1,6 @@
 use crate::solver::matrix::{SparseLU, SparseMatrix};
 use crate::solver::types::{CircuitNetlist, ComponentData, SimulationResult};
+use crate::solver::SolverNumericalSettings;
 use nalgebra::DVector;
 use std::collections::HashMap;
 
@@ -13,17 +14,40 @@ use diagnostics::{diagnose_convergence_failure, multiply_sparse_matrix_vector};
 use homotopy::solve_homotopy_core;
 use result::build_simulation_result;
 
-pub use linear::{stamp_linear_components, stamp_linear_components_sparse};
+pub use linear::{
+    stamp_linear_components, stamp_linear_components_sparse, stamp_transient_linear_components,
+};
 pub use newton::solve_newton_raphson_core;
 
 pub fn solve_dc_circuit(netlist: &CircuitNetlist) -> Result<SimulationResult, String> {
-    solve_dc_circuit_with_guess(netlist, None).map(|(res, _)| res)
+    solve_dc_circuit_with_numerical_settings(netlist, SolverNumericalSettings::default())
+}
+
+pub fn solve_dc_circuit_with_numerical_settings(
+    netlist: &CircuitNetlist,
+    numerical_settings: SolverNumericalSettings,
+) -> Result<SimulationResult, String> {
+    solve_dc_circuit_with_guess_and_numerical_settings(netlist, None, numerical_settings)
+        .map(|(res, _)| res)
 }
 
 pub fn solve_dc_circuit_with_guess(
     netlist: &CircuitNetlist,
     initial_guess_opt: Option<&Vec<f64>>,
 ) -> Result<(SimulationResult, Vec<f64>), String> {
+    solve_dc_circuit_with_guess_and_numerical_settings(
+        netlist,
+        initial_guess_opt,
+        SolverNumericalSettings::default(),
+    )
+}
+
+pub fn solve_dc_circuit_with_guess_and_numerical_settings(
+    netlist: &CircuitNetlist,
+    initial_guess_opt: Option<&Vec<f64>>,
+    numerical_settings: SolverNumericalSettings,
+) -> Result<(SimulationResult, Vec<f64>), String> {
+    numerical_settings.validate()?;
     // 1. Identificar el número máximo de nodos activos y validar topología
     let n = crate::topology::validate_netlist_topology(netlist, false)?;
 
@@ -76,7 +100,14 @@ pub fn solve_dc_circuit_with_guess(
 
     // Si tiene componentes no lineales, ejecutamos el Solver iterativo Newton-Raphson
     if has_nonlinear {
-        return solve_newton_raphson(netlist, n, m, &vsource_map, initial_guess_opt);
+        return solve_newton_raphson(
+            netlist,
+            n,
+            m,
+            &vsource_map,
+            initial_guess_opt,
+            numerical_settings,
+        );
     }
 
     // Si es un circuito puramente lineal, resolvemos con una sola ejecución MNA dispersa directa
@@ -129,6 +160,7 @@ pub fn solve_newton_raphson(
     m: usize,
     vsource_map: &HashMap<String, usize>,
     initial_guess_opt: Option<&Vec<f64>>,
+    numerical_settings: SolverNumericalSettings,
 ) -> Result<(SimulationResult, Vec<f64>), String> {
     let mut initial_guess = match initial_guess_opt {
         Some(guess) if guess.len() == n + 1 => guess.clone(),
@@ -239,6 +271,7 @@ pub fn solve_newton_raphson(
             &initial_guess,
             None,
             &switch_frozen_states,
+            numerical_settings,
         ) {
             Ok(solution) => {
                 let (sw_changed, new_sw) =
@@ -278,6 +311,7 @@ pub fn solve_newton_raphson(
                 &current_guess,
                 None,
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 Ok(sol) => {
                     for i in 1..=n {
@@ -309,6 +343,7 @@ pub fn solve_newton_raphson(
                 &current_guess,
                 None,
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 let (sw_changed, new_sw) =
                     check_switch_convergence(&solution, &switch_frozen_states);
@@ -355,6 +390,7 @@ pub fn solve_newton_raphson(
                 &current_guess,
                 None,
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 Ok(sol) => {
                     for i in 1..=n {
@@ -384,6 +420,7 @@ pub fn solve_newton_raphson(
                 &current_guess,
                 None,
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 let (sw_changed, new_sw) =
                     check_switch_convergence(&solution, &switch_frozen_states);
@@ -430,6 +467,7 @@ pub fn solve_newton_raphson(
                 next_lambda,
                 &x_init,
                 &current_guess_hom,
+                numerical_settings,
             ) {
                 Ok(sol) => {
                     for i in 1..=n {
@@ -459,6 +497,7 @@ pub fn solve_newton_raphson(
                 &current_guess_hom,
                 None,
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 Ok(solution) => {
                     let (sw_changed, new_sw) =
@@ -523,6 +562,7 @@ pub fn solve_newton_raphson(
                 &current_guess,
                 Some((g_pseudo, r_pseudo, &pta_sol)),
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 Ok(sol) => {
                     pta_sol = sol;
@@ -555,6 +595,7 @@ pub fn solve_newton_raphson(
                 &final_guess,
                 None,
                 &switch_frozen_states,
+                numerical_settings,
             ) {
                 let (sw_changed, new_sw) =
                     check_switch_convergence(&solution, &switch_frozen_states);

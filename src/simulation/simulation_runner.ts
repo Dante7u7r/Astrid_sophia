@@ -4,18 +4,18 @@
 // Responsabilidades:
 //   1. Gestionar el ciclo de vida de la simulación streaming Tauri v2 IPC
 //      (start/stop/destroy) con blindaje de doble listener.
-//   2. Mantener el registro de runtimes MCU activos (co-simulación mixta)
-//      y ejecutar el avance cycle-accurate sincronizado con dt analógico.
+//   2. Coordinar el runtime MCU experimental con el paso analógico. El
+//      runtime actual no implementa semántica completa de ISA ni periféricos.
 //   3. Exponer un pipeline de Inversión de Control mediante callbacks
 //      (onFrameReceived, onSimulationError, etc.) para desacoplar
 //      completamente el motor de la capa de UI (main.ts, osciloscopio,
 //      canvas, actuadores).
 //
-// Flujo de co-simulación (ciclo exacto):
+// Flujo de co-simulación experimental:
 //   Rust IPC 'sim-frame-update' → SimulationRunner
 //     ├── 1. executeCycleWithInterrupts(): inyecta triggers analógicos
 //     │      como vectores de interrupción en los runtimes MCU (8051 12MHz
-//     │      / AVR 16MHz) y avanza sus registros de ciclo en dt.
+//     │      / AVR 16MHz) y avanza un contador temporal aproximado.
 //     └── 2. callbacks.onFrameReceived(): notifica a la UI con el frame
 //            ya sincronizado (pines MCU actualizados).
 // ==========================================================================
@@ -79,7 +79,12 @@ export interface SimulationRunner {
    *  listener previo (blindaje de doble registro — Enmienda 2). */
   startInteractiveTransient(
     netlist: CircuitNetlist,
-    settings: Readonly<{ dt: number; tMax: number }>,
+    settings: Readonly<{
+      dt: number;
+      tMax: number;
+      tolerance?: number;
+      maxIterations?: number;
+    }>,
     ownerTabId: string,
   ): Promise<void>;
   /** Detiene la simulación, desregistra el stream IPC, limpia los
@@ -148,7 +153,12 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
   return {
     async startInteractiveTransient(
       netlist: CircuitNetlist,
-      settings: Readonly<{ dt: number; tMax: number }>,
+      settings: Readonly<{
+        dt: number;
+        tMax: number;
+        tolerance?: number;
+        maxIterations?: number;
+      }>,
       ownerTabId: string,
     ): Promise<void> {
       // ENMIENDA 2: Blindaje de doble listener
@@ -250,8 +260,10 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       try {
         await invoke('start_interactive_transient', {
           netlist,
-          settings,
+          settings: { dt: settings.dt, tMax: settings.tMax },
           runId: context.runId,
+          tolerance: settings.tolerance ?? 1e-6,
+          maxIterations: settings.maxIterations ?? 100,
         });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);

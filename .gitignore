@@ -44,3 +44,6 @@ audit-*.png
 audit-*.json
 pw-*.log
 vite-*.log
+
+# Portable scientific-validation tools (downloaded locally, never versioned)
+validation/.tools/

@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ "master" ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-frontend:
     name: Check Frontend
@@ -17,17 +24,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
-      - name: Lint and Build
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Type-check and build
         run: npm run build
 
-      - name: Unit tests (Vitest)
-        run: npm test
+      - name: Unit tests and coverage floor
+        run: npm run test:coverage
 
   check-backend:
     name: Check Backend (Rust)
@@ -45,6 +55,7 @@ jobs:
             librsvg2-dev \
             patchelf \
             build-essential \
+            ngspice \
             curl \
             wget \
             file \
@@ -53,8 +64,9 @@ jobs:
             libayatana-appindicator3-dev
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.96.1
           components: clippy, rustfmt
 
       - name: Cache cargo registry and build
@@ -62,14 +74,66 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
+      - name: Install RustSec audit tool
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Audit Rust dependencies
+        run: cargo audit --file src-tauri/Cargo.lock
+
       - name: Cargo Check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+        run: cargo check --locked --all-targets --manifest-path src-tauri/Cargo.toml
 
       - name: Cargo Format
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Cargo Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+        run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
 
       - name: Run Tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Scientific harness tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --example scientific_validation
+
+      - name: Scientific validation matrix
+        run: cargo run --quiet --manifest-path src-tauri/Cargo.toml --example scientific_validation -- validation/manifest.json
+
+  check-windows-desktop:
+    name: Check Windows Desktop E2E
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.1
+
+      - name: Cache cargo registry and build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build instrumented desktop application
+        run: npm run test:e2e:desktop:build
+
+      - name: Run desktop E2E suite
+        run: npm run test:e2e:desktop:run
+
+      - name: Upload E2E logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-e2e-logs
+          path: logs/
+          if-no-files-found: ignore

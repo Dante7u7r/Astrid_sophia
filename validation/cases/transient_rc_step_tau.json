@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "transient-rc-step-tau",
+  "title": "Carga RC a una constante de tiempo",
+  "rationale": "Comprueba el companion model de capacitor y Backward Euler contra la respuesta exponencial cerrada.",
+  "analysis": {
+    "kind": "transient",
+    "dt": 0.00001,
+    "tMax": 0.001,
+    "fixedStep": true,
+    "integrationMethod": "BE",
+    "tolerance": 1e-8,
+    "maxIterations": 100
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 5.0,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 1000.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "C1",
+        "type": "capacitor",
+        "value": 0.000001,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": [],
+    "fixedStep": true
+  },
+  "observations": [
+    {
+      "id": "vc_at_tau",
+      "quantity": "transient_node_voltage",
+      "node": "2",
+      "timeSeconds": 0.001
+    },
+    {
+      "id": "kcl_at_tau",
+      "quantity": "transient_kcl_residual",
+      "node": "2",
+      "timeSeconds": 0.001
+    }
+  ],
+  "reference": "../references/transient_rc_step_tau.json"
+}

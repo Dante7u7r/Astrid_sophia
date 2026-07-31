@@ -70,6 +70,7 @@ pub(crate) fn update_trapezoidal_history(
     ind_states: &mut HashMap<String, f64>,
     ind_states_prev: &mut HashMap<String, f64>,
     ind_voltages: &mut HashMap<String, f64>,
+    trap_active_this_step: bool,
 ) {
     for comp in &netlist.components {
         let node_voltage = |node: usize| {
@@ -84,8 +85,12 @@ pub(crate) fn update_trapezoidal_history(
             let node_neg = comp.pins[1].parse::<usize>().unwrap();
             let previous_voltage = *cap_states.get(&comp.id).unwrap_or(&0.0);
             let voltage = node_voltage(node_pos) - node_voltage(node_neg);
-            let previous_current = *cap_currents.get(&comp.id).unwrap_or(&0.0);
-            let current = (2.0 * comp.value / dt) * (voltage - previous_voltage) - previous_current;
+            let current = if trap_active_this_step {
+                let previous_current = *cap_currents.get(&comp.id).unwrap_or(&0.0);
+                (2.0 * comp.value / dt) * (voltage - previous_voltage) - previous_current
+            } else {
+                comp.value * (voltage - previous_voltage) / dt
+            };
             cap_currents.insert(comp.id.clone(), current);
         } else if comp.comp_type == "inductor" {
             let node_pos = comp.pins[0].parse::<usize>().unwrap();
@@ -93,8 +98,11 @@ pub(crate) fn update_trapezoidal_history(
             let voltage = node_voltage(node_pos) - node_voltage(node_neg);
             let previous_current = *ind_states.get(&comp.id).unwrap();
             let previous_voltage = *ind_voltages.get(&comp.id).unwrap_or(&0.0);
-            let current =
-                previous_current + (dt / (2.0 * comp.value)) * (voltage + previous_voltage);
+            let current = if trap_active_this_step {
+                previous_current + (dt / (2.0 * comp.value)) * (voltage + previous_voltage)
+            } else {
+                previous_current + (dt / comp.value) * voltage
+            };
             ind_states_prev.insert(comp.id.clone(), previous_current);
             ind_states.insert(comp.id.clone(), current);
             ind_voltages.insert(comp.id.clone(), voltage);

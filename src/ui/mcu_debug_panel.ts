@@ -1,7 +1,6 @@
 import { 
   createMcuRuntime, 
   resetRuntime, 
-  singleStep, 
   getRuntimeState, 
   getRegisterDump, 
   disassemble8051,
@@ -38,22 +37,23 @@ export class McuDebugPanel {
     
     this.container.innerHTML = `
       <div class="property-group">
-        <label class="property-label">Firmware del MCU</label>
+        <label class="property-label">Inspector de firmware (sin ejecución ISA)</label>
         <div class="mcu-firmware-area">
           <input type="file" id="mcu-file-loader" accept=".hex,.bin" style="display: none;" />
           <button id="mcu-btn-upload" class="btn-ctrl" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 8px;">
-            📥 Cargar Código (.HEX / .BIN)
+            Cargar para inspección (.HEX / .BIN)
           </button>
           <span id="mcu-file-status" class="comp-desc" style="display: block; text-align: center; margin-top: 6px; color: var(--text-muted);">Sin firmware cargado</span>
         </div>
       </div>
 
       <div class="property-group">
-        <label class="property-label">Control de Depuración</label>
+        <label class="property-label">Ejecución no disponible</label>
+        <span class="comp-desc" style="display: block; margin-bottom: 8px; color: var(--warning);">Este módulo no ejecuta instrucciones 8051/AVR. Solo inspecciona la imagen y el desensamblado.</span>
         <div class="mcu-debug-controls" style="display: flex; gap: 8px; justify-content: space-between;">
-          <button id="mcu-btn-run" class="btn-adj" style="flex-grow: 1; height: 32px;" title="Iniciar Ejecución">▶</button>
-          <button id="mcu-btn-step" class="btn-adj" style="flex-grow: 1; height: 32px;" title="Paso a Paso">⏯</button>
-          <button id="mcu-btn-reset" class="btn-adj" style="flex-grow: 1; height: 32px;" title="Reiniciar">↺</button>
+          <button id="mcu-btn-run" class="btn-adj" style="flex-grow: 1; height: 32px;" title="Runtime ISA no implementado" disabled>Ejecutar</button>
+          <button id="mcu-btn-step" class="btn-adj" style="flex-grow: 1; height: 32px;" title="Runtime ISA no implementado" disabled>Paso</button>
+          <button id="mcu-btn-reset" class="btn-adj" style="flex-grow: 1; height: 32px;" title="Volver al inicio del inspector">Reiniciar vista</button>
         </div>
       </div>
 
@@ -87,21 +87,10 @@ export class McuDebugPanel {
   private bindEvents() {
     const btnUpload = this.container?.querySelector("#mcu-btn-upload") as HTMLButtonElement;
     const fileLoader = this.container?.querySelector("#mcu-file-loader") as HTMLInputElement;
-    const btnRun = this.container?.querySelector("#mcu-btn-run") as HTMLButtonElement;
-    const btnStep = this.container?.querySelector("#mcu-btn-step") as HTMLButtonElement;
     const btnReset = this.container?.querySelector("#mcu-btn-reset") as HTMLButtonElement;
 
     btnUpload?.addEventListener("click", () => fileLoader?.click());
     fileLoader?.addEventListener("change", (e) => this.handleFileChange(e));
-
-    btnStep?.addEventListener("click", () => {
-      if (this.currentComponent && this.currentComponent.mcuRuntime) {
-        singleStep(this.currentComponent.mcuRuntime);
-        this.updateGPIOFromRuntime();
-        this.updateData();
-        this.onUpdateCallback();
-      }
-    });
 
     btnReset?.addEventListener("click", () => {
       if (this.currentComponent && this.currentComponent.mcuRuntime) {
@@ -112,36 +101,6 @@ export class McuDebugPanel {
       }
     });
 
-    btnRun?.addEventListener("click", () => {
-      // Toggle run mode for debug panel (simulated cycle stepping)
-      if (this.currentComponent && this.currentComponent.mcuRuntime) {
-        const runtime = this.currentComponent.mcuRuntime;
-        runtime.state.running = !runtime.state.running;
-        btnRun.textContent = runtime.state.running ? "⏸" : "▶";
-        btnRun.title = runtime.state.running ? "Pausar" : "Iniciar Ejecución";
-        if (runtime.state.running) {
-          this.startVisualRunLoop();
-        }
-      }
-    });
-  }
-
-  private startVisualRunLoop() {
-    const stepLoop = () => {
-      if (this.currentComponent && this.currentComponent.mcuRuntime && this.currentComponent.mcuRuntime.state.running) {
-        for (let i = 0; i < 1000; i++) {
-          singleStep(this.currentComponent.mcuRuntime);
-        }
-        this.updateGPIOFromRuntime();
-        this.updateData();
-        this.onUpdateCallback();
-        requestAnimationFrame(stepLoop);
-      } else {
-        const btnRun = this.container?.querySelector("#mcu-btn-run") as HTMLButtonElement;
-        if (btnRun) btnRun.textContent = "▶";
-      }
-    };
-    requestAnimationFrame(stepLoop);
   }
 
   private handleFileChange(e: Event) {
@@ -151,7 +110,7 @@ export class McuDebugPanel {
     const file = loader.files[0];
     const reader = new FileReader();
     
-    const isHex = file.name.endsWith(".hex");
+    const isHex = file.name.toLowerCase().endsWith(".hex");
 
     reader.onload = (event) => {
       if (!this.currentComponent) return;
@@ -165,33 +124,46 @@ export class McuDebugPanel {
         clockSpeed: this.currentComponent.mcuClockSpeed ?? baseDefinition.clockSpeed,
       };
       
-      if (isHex && typeof content === "string") {
-        this.currentComponent.firmwareHex = content;
-        this.currentComponent.firmware = parseIntelHex(content, def.flashSize);
-      } else if (content instanceof ArrayBuffer) {
-        this.currentComponent.firmware = new Uint8Array(content);
-        this.currentComponent.firmwareHex = "[Binario de firmware]";
-      }
+      try {
+        if (isHex && typeof content === "string") {
+          this.currentComponent.firmware = parseIntelHex(content, def.flashSize);
+          this.currentComponent.firmwareHex = content;
+        } else if (content instanceof ArrayBuffer) {
+          if (content.byteLength > def.flashSize) {
+            throw new Error(`El binario excede la flash de ${def.flashSize} bytes.`);
+          }
+          this.currentComponent.firmware = new Uint8Array(content);
+          this.currentComponent.firmwareHex = "[Binario de firmware]";
+        } else {
+          throw new Error("El archivo no pudo leerse en el formato esperado.");
+        }
 
-      // Recreate runtime with firmware
-      this.currentComponent.mcuRuntime = createMcuRuntime({
-        definition: def,
-        firmware: this.currentComponent.firmware
-      });
-      
-      // Clear pin states
-      this.currentComponent.mcuPinStates = {};
-      
-      this.updateGPIOFromRuntime();
-      this.updateData();
-      this.onUpdateCallback();
+        this.currentComponent.mcuRuntime = createMcuRuntime({
+          definition: def,
+          firmware: this.currentComponent.firmware
+        });
+        this.currentComponent.mcuPinStates = {};
+        this.updateGPIOFromRuntime();
+        this.updateData();
+        this.onUpdateCallback();
+      } catch (error) {
+        this.setFileStatus(error instanceof Error ? error.message : "Firmware inválido.", true);
+      }
     };
+    reader.onerror = () => this.setFileStatus("No se pudo leer el archivo.", true);
 
     if (isHex) {
       reader.readAsText(file);
     } else {
       reader.readAsArrayBuffer(file);
     }
+  }
+
+  private setFileStatus(message: string, isError: boolean) {
+    const statusLabel = this.container?.querySelector("#mcu-file-status") as HTMLElement | null;
+    if (!statusLabel) return;
+    statusLabel.textContent = message;
+    statusLabel.style.color = isError ? "var(--danger)" : "var(--text-muted)";
   }
 
   private updateGPIOFromRuntime() {
@@ -286,15 +258,9 @@ export class McuDebugPanel {
     const statusLabel = this.container.querySelector("#mcu-file-status") as HTMLElement;
     if (statusLabel) {
       statusLabel.textContent = this.currentComponent.firmwareHex 
-        ? `Código Cargado (${this.currentComponent.firmware?.length} bytes)` 
+        ? `Imagen cargada (${this.currentComponent.firmware?.length} bytes); ejecución ISA no disponible`
         : "Sin firmware cargado";
       statusLabel.style.color = this.currentComponent.firmwareHex ? "var(--accent-cyan)" : "var(--text-muted)";
-    }
-
-    // Controls button text
-    const btnRun = this.container.querySelector("#mcu-btn-run") as HTMLButtonElement;
-    if (btnRun) {
-      btnRun.textContent = state.running ? "⏸" : "▶";
     }
 
     // Registers

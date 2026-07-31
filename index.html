@@ -7,9 +7,6 @@
     <title>Astryd Sophia - Simulador Físico de Circuitos Electrónicos</title>
     <meta name="description" content="Astryd Sophia Evolution combina la precisión analítica de un solver en Rust mediante MNA con un motor de lienzo en TypeScript y diseño estético Glassmorphic." />
     <script type="module" src="/src/main.ts" defer></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   </head>
 
   <body>
@@ -28,8 +25,8 @@
             <option value="AC">📈 Barrido CA</option>
             <option value="TRAN">⏱️ Transitorio</option>
             <option value="SENS">🔍 Sensibilidad</option>
-            <option value="PSS">🔄 PSS</option>
-            <option value="STB">⚖️ Estabilidad</option>
+            <option value="PSS">🔄 PSS (experimental)</option>
+            <option value="STB">⚖️ Polos/ceros (experimental)</option>
             <option value="PVT">🔬 PVT</option>
             <option value="SPAR">📡 S-Param</option>
           </select>
@@ -53,9 +50,9 @@
           </button>
           <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo" aria-label="Cargar circuito de ejemplo">
             <option value="">📋 Demos…</option>
-            <option value="01_divisor_rc.astryd">Divisor RC</option>
+            <option value="01_filtro_rc.astryd">Filtro RC pasa-bajos</option>
             <option value="02_puente_rectificador.astryd">Puente rectificador</option>
-            <option value="03_blink_8051.astryd">Blink Arduino</option>
+            <option value="03_arduino_led.astryd">Arduino + LED</option>
             <option value="04_amp_bjt_bode.astryd">Amp BJT (Bode)</option>
           </select>
           <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
@@ -529,7 +526,7 @@
                     </div>
                     <div class="comp-details">
                       <span class="comp-name">Intel 8051</span>
-                      <span class="comp-desc">Mapeado Cycle-Accurate</span>
+                      <span class="comp-desc">Runtime incompleto (experimental)</span>
                     </div>
                   </div>
                   <!-- AVR ATmega328P -->
@@ -543,7 +540,7 @@
                     </div>
                     <div class="comp-details">
                       <span class="comp-name">ATmega328P</span>
-                      <span class="comp-desc">Micro AVR (DIP-28)</span>
+                      <span class="comp-desc">Runtime incompleto (experimental)</span>
                     </div>
                   </div>
                   <!-- Arduino Uno -->
@@ -557,7 +554,7 @@
                     </div>
                     <div class="comp-details">
                       <span class="comp-name">Arduino Uno</span>
-                      <span class="comp-desc">Placa Mixta (Rust)</span>
+                      <span class="comp-desc">Modelo funcional, sin firmware</span>
                     </div>
                   </div>
                   <!-- ESP32 -->
@@ -570,7 +567,7 @@
                     </div>
                     <div class="comp-details">
                       <span class="comp-name">ESP32 SoC</span>
-                      <span class="comp-desc">Placa Mixta (Rust)</span>
+                      <span class="comp-desc">Modelo funcional, sin firmware</span>
                     </div>
                   </div>
                   <!-- RPI Pico -->
@@ -583,7 +580,7 @@
                     </div>
                     <div class="comp-details">
                       <span class="comp-name">RPI Pico</span>
-                      <span class="comp-desc">Placa Mixta (Rust)</span>
+                      <span class="comp-desc">Modelo funcional, sin firmware</span>
                     </div>
                   </div>
                 </div>
@@ -1070,15 +1067,15 @@
           <form class="properties-form" id="settings-form">
             <div class="property-group">
               <label class="property-label" for="settings-dt-input">Paso de Tiempo (dt)</label>
-              <input id="settings-dt-input" class="prop-input" type="number" step="0.000001" value="0.0001" />
+              <input id="settings-dt-input" class="prop-input" type="number" min="0.000000001" step="any" value="0.0001" />
             </div>
             <div class="property-group">
-              <label class="property-label" for="settings-tol-input">Tolerancia de Convergencia</label>
-              <input id="settings-tol-input" class="prop-input" type="number" step="0.000001" value="0.00001" />
+              <label class="property-label" for="settings-tol-input">Tolerancia DC/TRAN/PSS</label>
+              <input id="settings-tol-input" class="prop-input" type="number" min="0.000000000001" max="1" step="any" value="0.00001" />
             </div>
             <div class="property-group">
-              <label class="property-label" for="settings-iter-input">Máximas Iteraciones Newton</label>
-              <input id="settings-iter-input" class="prop-input" type="number" value="100" />
+              <label class="property-label" for="settings-iter-input">Iteraciones DC/TRAN/PSS</label>
+              <input id="settings-iter-input" class="prop-input" type="number" min="1" max="10000" step="1" value="100" />
             </div>
           </form>
         </div>
