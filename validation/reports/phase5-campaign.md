@@ -7,7 +7,7 @@ Resultado: **PASS** — 500/500 ejecuciones dentro de tolerancia.
 - Sesiones cronológicas: 20
 - Familias: 5
 - Modos de análisis: AC, DC, TRAN
-- Tiempo: 423 ms
+- Tiempo: 429 ms
 
 | Familia | Análisis | Ejecuciones | Aprobadas | Error absoluto máximo |
 |---|---:|---:|---:|---:|
