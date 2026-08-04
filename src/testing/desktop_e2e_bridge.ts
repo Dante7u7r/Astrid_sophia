@@ -1,6 +1,14 @@
 import type { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { CircuitDocumentController } from "../app/circuit_document_controller";
 import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
+import type { CircuitNetlist } from "../simulation/netlist_extractor";
+import { invokeTyped } from "../simulation/tauri_commands";
+import {
+  beginFeedbackRun,
+  completeFeedbackRun,
+  recordCircuitSummary,
+  recordConvergence,
+} from "../feedback/instrumentation";
 
 interface DesktopE2eSnapshot {
   readonly componentCount: number;
@@ -24,6 +32,11 @@ interface DesktopE2eBridge {
   snapshot(): DesktopE2eSnapshot;
   serializeCircuit(): string;
   loadSerializedCircuit(content: string): boolean;
+  benchmarkFeedbackDc(netlist: CircuitNetlist, iterations: number): Promise<Array<{
+    totalMs: number;
+    solverMs: number;
+    instrumentationMs: number;
+  }>>;
 }
 
 declare global {
@@ -99,6 +112,47 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
       const loaded = dependencies.getDocumentController()?.deserializeCircuit(content) ?? false;
       if (loaded) dependencies.updateCanvasRendering();
       return loaded;
+    },
+
+    async benchmarkFeedbackDc(netlist: CircuitNetlist, requestedIterations: number) {
+      const iterations = Math.max(1, Math.min(requestedIterations, 50));
+      const execute = async () => {
+        const startedAt = performance.now();
+        const preInstrumentationStartedAt = performance.now();
+        const run = beginFeedbackRun({
+          analysis: "DC",
+          workspaceId: "feedback-benchmark",
+          netlist,
+          settings: { tolerance: 1e-6, maxIterations: 100 },
+        });
+        recordCircuitSummary(run, netlist);
+        const preInstrumentationMs = performance.now() - preInstrumentationStartedAt;
+        const solverStartedAt = performance.now();
+        const result = await invokeTyped("run_dc_simulation", {
+          netlist,
+          tolerance: 1e-6,
+          maxIterations: 100,
+        });
+        const solverMs = performance.now() - solverStartedAt;
+        const postInstrumentationStartedAt = performance.now();
+        recordConvergence(run, result);
+        completeFeedbackRun(run, { pointCount: 1, converged: result.converged ?? true });
+        const postInstrumentationMs = performance.now() - postInstrumentationStartedAt;
+        return {
+          totalMs: performance.now() - startedAt,
+          solverMs,
+          instrumentationMs: preInstrumentationMs + postInstrumentationMs,
+        };
+      };
+
+      for (let warmup = 0; warmup < 3; warmup += 1) await execute();
+      const durations: Array<{
+        totalMs: number;
+        solverMs: number;
+        instrumentationMs: number;
+      }> = [];
+      for (let index = 0; index < iterations; index += 1) durations.push(await execute());
+      return durations;
     },
   };
 }

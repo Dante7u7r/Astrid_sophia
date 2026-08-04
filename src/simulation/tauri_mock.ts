@@ -9,8 +9,23 @@ let webTransientRunId = 0;
 let webActiveExternalRunId: number | null = null;
 let webTransientTimers: ReturnType<typeof setTimeout>[] = [];
 
+export interface SafeInvokeObserver {
+  before(command: string, args?: Record<string, unknown>): unknown;
+  after(token: unknown, result: unknown, error: unknown | undefined): void;
+}
+
+let invokeObserver: SafeInvokeObserver | null = null;
+
+export function setSafeInvokeObserver(observer: SafeInvokeObserver | null): void {
+  invokeObserver = observer;
+}
+
 function isTauriEnvironment(): boolean {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+}
+
+export function shouldEnableWebMocks(mode: string, isDevelopment: boolean): boolean {
+  return isDevelopment || mode === "test" || mode === "audit" || mode === "wdio";
 }
 
 function emitWebEvent<T>(eventName: string, payload: T, id: number): void {
@@ -94,12 +109,27 @@ export async function safeListen<T>(
 /**
  * Invoca un comando de Tauri de manera segura.
  * Si se ejecuta dentro del contenedor de Tauri (desktop), llama a invoke real.
- * Si se ejecuta en un navegador web convencional (sin __TAURI_INTERNALS__),
- * devuelve respuestas simuladas (mock) para evitar fallos y permitir pruebas de UI.
+ * Los mocks web solo existen en desarrollo y en modos instrumentados de prueba.
+ * En produccion sin Tauri, falla para activar un solver local real o informar
+ * que el analisis solicitado requiere el backend Rust.
  */
 export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauriEnvironment()) {
-    return await invoke<T>(cmd, args);
+    const token = invokeObserver?.before(cmd, args);
+    try {
+      const result = await invoke<T>(cmd, args);
+      invokeObserver?.after(token, result, undefined);
+      return result;
+    } catch (error) {
+      invokeObserver?.after(token, undefined, error);
+      throw error;
+    }
+  }
+
+  if (!shouldEnableWebMocks(import.meta.env.MODE, import.meta.env.DEV)) {
+    throw new Error(
+      `window.__TAURI__ no esta disponible: el comando '${cmd}' requiere el escritorio Astryd Sophia.`,
+    );
   }
 
   // MOCK FALLBACK FOR WEB BROWSER
@@ -205,7 +235,6 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
       return undefined as T;
 
     default:
-      console.warn(`[Tauri Web Mock] Comando sin mock explícito '${cmd}', devolviendo objeto vacío.`);
-      return { converged: true } as T;
+      throw new Error(`No existe un mock web explícito para el comando Tauri '${cmd}'.`);
   }
 }

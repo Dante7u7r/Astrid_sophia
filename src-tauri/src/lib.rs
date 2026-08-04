@@ -14,6 +14,7 @@
 pub mod ad_value;
 mod advanced_ipc;
 pub mod dual3;
+pub mod feedback;
 mod gpu_solver;
 mod krylov;
 pub mod parser;
@@ -29,7 +30,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", content = "details")]
@@ -750,6 +751,17 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_wdio::init());
 
     builder
+        .setup(|app| {
+            let feedback_root = app
+                .path()
+                .app_data_dir()
+                .map_err(std::io::Error::other)?
+                .join("feedback");
+            let feedback_state =
+                feedback::FeedbackState::start(feedback_root).map_err(std::io::Error::other)?;
+            app.manage(feedback_state);
+            Ok(())
+        })
         .manage(SimulationControlState {
             is_running: Arc::new(AtomicBool::new(false)),
             active_run_id: Arc::new(AtomicU64::new(0)),
@@ -783,6 +795,13 @@ pub fn run() {
             advanced_ipc::run_pvt_matrix_analysis,
             advanced_ipc::extract_sparameter,
             advanced_ipc::export_touchstone_file,
+            feedback::store::ingest_feedback_batch,
+            feedback::store::set_feedback_consent,
+            feedback::store::get_feedback_status,
+            feedback::store::query_feedback_events,
+            feedback::store::export_feedback_events,
+            feedback::store::delete_feedback_data,
+            feedback::store::flush_feedback_store,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -36,6 +36,13 @@ import {
   hasIdealVoltageSourceCycle,
 } from "./erc_graph";
 import { allowsFloatingPins } from "./component_pin_rules";
+import {
+  completeFeedbackRun,
+  failFeedbackRun,
+  inferPointCount,
+  recordConvergence,
+  type FeedbackRunHandle,
+} from "../feedback/instrumentation";
 
 let fallbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -198,6 +205,7 @@ export interface DispatchConfig {
   readonly transientDuration: number;
   readonly simulationOwnerId?: string;
   readonly simulationRunner?: SimulationRunner | null;
+  readonly feedbackRun?: FeedbackRunHandle;
   readonly solveCircuitTS?: (netlist: CircuitNetlist) => TSResult | string;
   readonly solveTransientCircuitLocal?:
     (netlist: CircuitNetlist, dt: number, tMax: number) => Promise<TimeStepResult[] | string> | TimeStepResult[] | string;
@@ -256,6 +264,7 @@ export async function dispatchSimulation(
   }
 
   try {
+    let dispatchResult: SimulationDispatchResult | undefined;
     switch (mode) {
       case 'TRAN': {
         // Salvaguarda: simulationRunner debe estar instanciado
@@ -273,6 +282,7 @@ export async function dispatchSimulation(
           netlist,
           settings,
           config.simulationOwnerId ?? "unknown",
+          config.feedbackRun,
         );
         callbacks.onIpcStatusUpdate("Solucionador Rust Activo", "var(--accent-cyan)");
         break;
@@ -282,6 +292,7 @@ export async function dispatchSimulation(
         callbacks.addLog("Enviando conexiones al motor de CA de Rust...", "send");
         const settings = { fStart: 10.0, fEnd: 100000.0, pointsPerDecade: 20 };
         const results = await invokeTyped("run_ac_sweep", { netlist, settings });
+        dispatchResult = results;
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [Respuesta en Frecuencia CA]!", "receive");
         callbacks.onResultsReady(mode, results);
         callbacks.onIpcStatusUpdate("Solucionador Rust Activo", "var(--accent-cyan)");
@@ -292,6 +303,7 @@ export async function dispatchSimulation(
       case 'SENS': {
         callbacks.addLog("Enviando conexiones al solucionador de sensibilidad de Rust...", "send");
         const results = await invokeTyped("run_sensitivity_analysis", { netlist });
+        dispatchResult = results;
         callbacks.addLog("¡Resultados de Sensibilidad calculados exitosamente en Rust!", "receive");
 
         // Mostrar resultados detallados en la consola
@@ -318,7 +330,7 @@ export async function dispatchSimulation(
 
       case 'PSS': {
         callbacks.addLog(
-          "PSS EXPERIMENTAL: shooting periódico sin validación externa ni garantía de cierre físico.",
+          "PSS EXPERIMENTAL: shooting periódico validado sólo en un RC lineal; sin validación externa ni garantía para osciladores o circuitos no lineales.",
           "system",
         );
         callbacks.addLog("Enviando conexiones al motor PSS [Shooting Method] de Rust...", "send");
@@ -333,6 +345,7 @@ export async function dispatchSimulation(
           shootingTolerance: tolerance,
         };
         const results = await invokeTyped("run_pss_simulation", { netlist, settings: pssSettings });
+        dispatchResult = results;
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [PSS Shooting Method]!", "receive");
         callbacks.onResultsReady(mode, results);
         callbacks.onIpcStatusUpdate("Solucionador Rust Activo", "var(--accent-cyan)");
@@ -347,6 +360,7 @@ export async function dispatchSimulation(
         );
         callbacks.addLog("Enviando conexiones al extractor experimental de polos y ceros de Rust...", "send");
         const results = await invokeTyped("run_stability_analysis", { netlist });
+        dispatchResult = results;
         callbacks.addLog("¡Resultados de Estabilidad calculados exitosamente en Rust!", "receive");
 
         callbacks.addLog("----------------------------------------------------------------", "system");
@@ -375,6 +389,7 @@ export async function dispatchSimulation(
           tolerance,
           maxIterations,
         });
+        dispatchResult = results;
         callbacks.addLog("¡Resultados calculados exitosamente en Rust [MNA Newton-Raphson]!", "receive");
         callbacks.addLog("----------------------------------------------------------------", "system");
         callbacks.addLog("=== VOLTAJES DE NODOS (DC) ===", "system");
@@ -387,6 +402,18 @@ export async function dispatchSimulation(
         callbacks.updateCanvasRendering();
         break;
       }
+    }
+    if (mode !== "TRAN" && config.feedbackRun && dispatchResult !== undefined) {
+      recordConvergence(config.feedbackRun, dispatchResult);
+      completeFeedbackRun(config.feedbackRun, {
+        pointCount: inferPointCount(dispatchResult),
+        converged: !(
+          typeof dispatchResult === "object"
+          && dispatchResult !== null
+          && "converged" in dispatchResult
+          && dispatchResult.converged === false
+        ),
+      });
     }
     if (mode !== 'TRAN' && callbacks.onSimulationFinished) {
       callbacks.onSimulationFinished();
@@ -402,18 +429,30 @@ export async function dispatchSimulation(
       // y permitir que la UI termine de renderizar el estado de carga.
       fallbackTimeoutId = setTimeout(async () => {
         fallbackTimeoutId = null;
-        if (mode === 'AC') {
+        try {
+        const rustOnlyModes: Partial<Record<AnalysisMode, string>> = {
+          AC: "AC",
+          SENS: "de sensibilidad",
+          PSS: "PSS",
+          STB: "de estabilidad",
+        };
+        const rustOnlyLabel = rustOnlyModes[mode];
+        if (rustOnlyLabel) {
+          if (config.feedbackRun) {
+            failFeedbackRun(config.feedbackRun, `${mode} requires Rust`, "ipc", "FALLBACK_UNAVAILABLE");
+          }
           callbacks.addLog(
-            "El análisis AC no dispone de fallback científico en navegador. Abra la aplicación Tauri para usar el solver Rust.",
+            `El análisis ${rustOnlyLabel} no dispone de fallback científico en navegador. Abra la aplicación Tauri para usar el solver Rust.`,
             "error",
           );
-          callbacks.onIpcStatusUpdate("Análisis AC no disponible sin Rust", "var(--accent-red)");
+          callbacks.onIpcStatusUpdate(`Análisis ${rustOnlyLabel} no disponible sin Rust`, "var(--accent-red)");
           if (callbacks.onSimulationFinished) {
             callbacks.onSimulationFinished();
           }
 
         } else if (mode === 'TRAN') {
           if (!config.solveTransientCircuitLocal) {
+            if (config.feedbackRun) failFeedbackRun(config.feedbackRun, "Transient fallback unavailable", "ipc", "FALLBACK_UNAVAILABLE");
             callbacks.addLog("Error: Solver transitorio local no disponible.", "error");
             if (callbacks.onSimulationFinished) {
               callbacks.onSimulationFinished();
@@ -422,8 +461,10 @@ export async function dispatchSimulation(
           }
           const tsRes = await config.solveTransientCircuitLocal(netlist, config.simSettings.dt, config.transientDuration);
           if (typeof tsRes === "string") {
+            if (config.feedbackRun) failFeedbackRun(config.feedbackRun, tsRes, "iteration");
             callbacks.addLog(`Error del solucionador transitorio local: ${tsRes}`, "error");
           } else {
+            if (config.feedbackRun) completeFeedbackRun(config.feedbackRun, { pointCount: tsRes.length, converged: true });
             callbacks.onResultsReady(mode, tsRes);
             callbacks.onIpcStatusUpdate("Respaldo Transitorio local", "var(--warning)");
             callbacks.updateCanvasRendering();
@@ -433,6 +474,7 @@ export async function dispatchSimulation(
           }
         } else {
           if (!config.solveCircuitTS) {
+            if (config.feedbackRun) failFeedbackRun(config.feedbackRun, "DC fallback unavailable", "ipc", "FALLBACK_UNAVAILABLE");
             callbacks.addLog("Error: Solver DC local no disponible.", "error");
             if (callbacks.onSimulationFinished) {
               callbacks.onSimulationFinished();
@@ -441,8 +483,10 @@ export async function dispatchSimulation(
           }
           const tsRes = config.solveCircuitTS(netlist);
           if (typeof tsRes === "string") {
+            if (config.feedbackRun) failFeedbackRun(config.feedbackRun, tsRes, "iteration");
             callbacks.addLog(`Error del solucionador local: ${tsRes}`, "error");
           } else {
+            if (config.feedbackRun) completeFeedbackRun(config.feedbackRun, { pointCount: inferPointCount(tsRes), converged: true });
             callbacks.addLog("Solucionador de respaldo: Resultados calculados en TypeScript.", "receive");
             callbacks.addLog("----------------------------------------------------------------", "system");
             callbacks.addLog("=== VOLTAJES DE NODOS (DC - Fallback) ===", "system");
@@ -458,8 +502,16 @@ export async function dispatchSimulation(
             callbacks.onSimulationFinished();
           }
         }
+        } catch (fallbackError) {
+          if (config.feedbackRun) failFeedbackRun(config.feedbackRun, fallbackError, "iteration");
+          const message = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+          callbacks.addLog(`Error del solucionador local: ${message}`, "error");
+          callbacks.onIpcStatusUpdate("Error del respaldo local", "var(--accent-red)");
+          if (callbacks.onSimulationFinished) callbacks.onSimulationFinished();
+        }
       }, 300);
     } else {
+      if (config.feedbackRun) failFeedbackRun(config.feedbackRun, error, "ipc");
       const classified = classifySimulationError(errorMsg);
       callbacks.addLog(`Error en el solver de Rust: ${classified.userMessage}`, "error");
       callbacks.addLog(`[Detalles técnicos] ${classified.rawMessage}`, "system");

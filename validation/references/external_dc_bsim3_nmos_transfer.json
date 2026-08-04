@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "caseId": "external-dc-bsim3-nmos-transfer",
+  "method": "ngspice_live",
+  "source": "ngspice ejecutado en vivo con BSIM3v3 LEVEL=49, VDS=1 V, W=10 um, L=0.18 um, VTH0=0.4 V, TOX=4 nm, U0=450 cm2/Vs y VSAT=8e4 m/s.",
+  "observations": [
+    { "id": "drain_current_0_8v", "expected": 0.0, "absoluteTolerance": 1e-8, "relativeTolerance": 0.25, "units": "A", "expression": "i(VD) en VG=0.8 V" },
+    { "id": "drain_current_1_0v", "expected": 0.0, "absoluteTolerance": 1e-8, "relativeTolerance": 0.25, "units": "A", "expression": "i(VD) en VG=1.0 V" },
+    { "id": "drain_current_1_2v", "expected": 0.0, "absoluteTolerance": 1e-8, "relativeTolerance": 0.25, "units": "A", "expression": "i(VD) en VG=1.2 V" },
+    { "id": "drain_current_1_4v", "expected": 0.0, "absoluteTolerance": 1e-8, "relativeTolerance": 0.25, "units": "A", "expression": "i(VD) en VG=1.4 V" },
+    { "id": "drain_current_1_6v", "expected": 0.0, "absoluteTolerance": 1e-8, "relativeTolerance": 0.25, "units": "A", "expression": "i(VD) en VG=1.6 V" }
+  ]
+}

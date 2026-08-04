@@ -328,4 +328,34 @@ mod parser_tests {
             i_vd
         );
     }
+
+    #[test]
+    fn malformed_spice_corpus_never_panics() {
+        let malformed = [
+            "X1 PARAMS: foo=1",
+            "X1 1 PARAMS:",
+            "X1 1 2 PARAMS: foo=1",
+            ".subckt",
+            ".ends orphan",
+            ".model",
+            "R",
+            "V1 1",
+            "K1",
+            "\0\0\0",
+            "X1 1 2 missing PARAMS: broken={",
+        ];
+
+        for netlist in malformed {
+            let result = std::panic::catch_unwind(|| parse_spice_netlist_to_native(netlist));
+            assert!(result.is_ok(), "El parser entró en pánico con: {netlist:?}");
+        }
+
+        let invalid_params = parse_spice_netlist_to_native("X1 PARAMS: foo=1");
+        assert!(
+            invalid_params
+                .unwrap_err()
+                .contains("Instancia de subcircuito inválida"),
+            "La instancia malformada debe producir un error accionable"
+        );
+    }
 }

@@ -50,6 +50,8 @@ import { initCanvasToolbarController } from "./app/canvas_toolbar_controller";
 import { createIpcStatusController } from "./app/ipc_status_controller";
 import { runStartupSequence } from "./app/startup_sequence";
 import { createDesktopControllerRegistry } from "./app/desktop_controller_registry";
+import { initializeFeedbackRuntime } from "./feedback/runtime";
+import { configureAdvisorRuntime } from "./intelligence/advisor_runtime";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 const visualAudit = resolveVisualAuditConfig(window.location.search, {
@@ -73,6 +75,15 @@ let simSettings: SimulationSettings = {
   tolerance: 0.00001,
   maxIterations: 100
 };
+configureAdvisorRuntime({
+  getSettings: () => ({ ...simSettings }),
+  setSettings: (settings) => {
+    simSettings = { ...settings };
+    window.dispatchEvent(new CustomEvent("astryd-settings-synchronized", {
+      detail: { ...settings },
+    }));
+  },
+});
 
 let activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' | 'PVT' | 'SPAR' = 'DC';
 let mcuDebugPanel: McuDebugPanel | null = null;
@@ -390,7 +401,7 @@ function initCanvasCAD() {
     onSelectAll: () => orchestrator?.selectAll(),
     onFitAll: () => orchestrator?.resetCameraToCircuit(),
     onEscape: () => orchestrator?.cancelWire(),
-    onWireMode: () => addLog("Wire mode placeholder (doble click en pin para conectar)", "system"),
+    onWireMode: () => addLog("Modo cable activo: haz doble clic en un pin y despues en el pin destino.", "system"),
   });
   if (visualAudit.isStep("input")) return;
 
@@ -498,6 +509,7 @@ window.addEventListener("DOMContentLoaded", () => {
     updateCanvasRendering: () => updateCanvasRendering(true),
   });
   consoleLogController.bindClearButton();
+  void initializeFeedbackRuntime(addLog);
 
   addLog("Entorno de escritorio cargado con telemetría de rendimiento activa.", "system");
   addLog("Colocación de sondas interactivas: Haz Shift+Click en Canal 1 o Canal 2 para conectar las sondas en el circuito.", "system");

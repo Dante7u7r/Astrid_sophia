@@ -33,6 +33,12 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
+      - name: Check generated feedback contracts
+        run: npm run feedback:contracts:check
+
+      - name: Check application version consistency
+        run: npm run version:check
+
       - name: Type-check and build
         run: npm run build
 
@@ -97,6 +103,9 @@ jobs:
 
       - name: Scientific validation matrix
         run: cargo run --quiet --manifest-path src-tauri/Cargo.toml --example scientific_validation -- validation/manifest.json
+
+      - name: Phase 5 solver diversity campaign
+        run: cargo run --locked --quiet --manifest-path src-tauri/Cargo.toml --example phase5_validation_campaign
 
   check-windows-desktop:
     name: Check Windows Desktop E2E

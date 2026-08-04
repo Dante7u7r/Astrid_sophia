@@ -227,4 +227,56 @@ describe("contratos IPC nativos de escritorio", () => {
     expect(components.some((component) => component.type === "capacitor")).toBe(true);
     expect(components.some((component) => component.type === "resistor")).toBe(true);
   });
+
+  it("persiste, consulta y borra un evento de feedback con consentimiento local", async () => {
+    const original = await browser.tauri.execute(
+      (tauri) => tauri.core.invoke("get_feedback_status"),
+    );
+    const sessionId = `e2e-feedback-${Date.now()}`;
+    const eventId = `${sessionId}-event`;
+
+    await browser.tauri.execute(
+      (tauri) => tauri.core.invoke("set_feedback_consent", { mode: "local" }),
+    );
+    const receipt = await browser.tauri.execute(
+      (tauri, event) => tauri.core.invoke("ingest_feedback_batch", {
+        batch: {
+          events: [event],
+          userContentConfirmed: false,
+        },
+      }),
+      {
+        schemaVersion: 1,
+        eventId,
+        occurredAtUnixMs: Date.now(),
+        sessionId,
+        appVersion: "0.1.0",
+        privacyClass: "operational",
+        kind: "session.started",
+        payload: {
+          os: "Windows",
+          locale: "es-MX",
+        },
+      },
+    );
+    expect(receipt.accepted).toBe(1);
+
+    const page = await browser.tauri.execute(
+      (tauri, query) => tauri.core.invoke("query_feedback_events", { query }),
+      { sessionId, limit: 10 },
+    );
+    expect(page.events).toHaveLength(1);
+    expect(page.events[0].eventId).toBe(eventId);
+
+    const deleted = await browser.tauri.execute(
+      (tauri, request) => tauri.core.invoke("delete_feedback_data", { request }),
+      { scope: "session", sessionId },
+    );
+    expect(deleted.rowsDeleted).toBe(1);
+
+    await browser.tauri.execute(
+      (tauri, mode) => tauri.core.invoke("set_feedback_consent", { mode }),
+      original.consentMode,
+    );
+  });
 });

@@ -1,0 +1,9 @@
+Astryd Sophia external correlation: BSIM3 NMOS transfer
+VD 2 0 DC 1
+VG 1 0 DC 0.8
+M1 2 1 0 0 NTEST W=10u L=0.18u
+.model NTEST NMOS LEVEL=49 VERSION=3.3.0 VTH0=0.4 TOX=4n U0=450 VSAT=8e6
+.temp 27
+.options tnom=27
+.dc VG 0.8 1.6 0.2
+.end

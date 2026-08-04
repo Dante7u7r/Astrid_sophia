@@ -6,6 +6,14 @@ import type {
 } from "../simulation";
 import { formatTouchstone } from "../simulation/touchstone";
 import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
+import {
+  completeFeedbackRun,
+  failFeedbackRun,
+  recordConvergence,
+  recordExport,
+  recordUiError,
+  type FeedbackRunHandle,
+} from "../feedback/instrumentation";
 
 export interface SParameterPortSelection {
   nodeId: string;
@@ -34,12 +42,15 @@ export class SParameterExportController {
     private readonly sweepSettings: SParameterSweepSettings,
   ) {}
 
-  async run(netlist: CircuitNetlist): Promise<void> {
+  async run(netlist: CircuitNetlist, existingFeedbackRun?: FeedbackRunHandle): Promise<void> {
     const oscilloscopePanel = this.dependencies.getOscilloscopePanel();
     if (!oscilloscopePanel) return;
 
     const selectedPorts = this.dependencies.getPorts();
     if (selectedPorts.length === 0) {
+      if (existingFeedbackRun) {
+        failFeedbackRun(existingFeedbackRun, "No RF ports selected", "preflight", "SPAR_PORTS_MISSING");
+      }
       this.dependencies.addLog(
         "Modo Seleccion de Puertos RF: Haz clic en los nodos del circuito para designarlos como puertos.",
         "system",
@@ -79,6 +90,9 @@ export class SParameterExportController {
       );
 
       if (!result.converged) {
+        if (existingFeedbackRun) {
+          failFeedbackRun(existingFeedbackRun, result.error ?? "S-parameter convergence failure", "iteration");
+        }
         this.dependencies.addLog(`Error en extraccion S: ${result.error ?? "desconocido"}`, "error");
         return;
       }
@@ -87,9 +101,17 @@ export class SParameterExportController {
       oscilloscopePanel.activeAnalysisMode = "SPAR";
       this.dependencies.resetPerformanceCaches();
       oscilloscopePanel.start();
+      if (existingFeedbackRun) {
+        recordConvergence(existingFeedbackRun, { method: "s-parameter", acceptedSteps: result.frequencies.length });
+        completeFeedbackRun(existingFeedbackRun, {
+          pointCount: result.frequencies.length,
+          converged: true,
+        });
+      }
 
       const touchstoneContent = formatTouchstone(result);
       if (!touchstoneContent) {
+        recordUiError("export", "TOUCHSTONE_FORMAT_FAILED", "Touchstone format failed");
         this.dependencies.addLog("Error al formatear el archivo Touchstone.", "error");
         return;
       }
@@ -109,16 +131,19 @@ export class SParameterExportController {
           `Archivo Touchstone .s${nPorts}p exportado exitosamente: ${savedPath}`,
           "receive",
         );
+        recordExport("touchstone", result.frequencies.length);
       } catch (dialogErr) {
         if (typeof dialogErr === "string" && dialogErr.includes("cancelada")) {
           this.dependencies.addLog("Exportacion cancelada por el usuario.", "system");
         } else {
+          recordUiError("export", "TOUCHSTONE_SAVE_FAILED", dialogErr);
           this.dependencies.addLog(`Error al guardar archivo Touchstone: ${dialogErr}`, "error");
         }
       }
 
       this.dependencies.setIpcStatus("S-Parameter Solver Activo", "var(--accent-cyan)");
     } catch (error) {
+      if (existingFeedbackRun) failFeedbackRun(existingFeedbackRun, error, "ipc");
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.dependencies.addLog(`Error en extraccion de parametros S: ${errorMsg}`, "error");
     }

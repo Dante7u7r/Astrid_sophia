@@ -681,6 +681,7 @@
                 <button class="inst-tab" data-tab="logic" data-short-label="LOG" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⌗ Lógico</button>
                 <button class="inst-tab" data-tab="fft" data-short-label="FFT" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
                 <button class="inst-tab" data-tab="tracer" data-short-label="I-V" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">🔬 Trazador I-V</button>
+                <button class="inst-tab" data-tab="intelligence" data-short-label="IA" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">◈ Inteligencia</button>
               </div>
 
               <!-- Contenedores de cada instrumento -->
@@ -843,6 +844,119 @@
                 <!-- 5. Trazador de Curvas I-V -->
                 <div class="inst-content-box" id="inst-tracer" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9); overflow-y: auto;">
                   <!-- Contenido dinámico del trazador de curvas -->
+                </div>
+
+                <!-- 6. Centro local de inteligencia -->
+                <div class="inst-content-box intelligence-center" id="inst-intelligence" style="display: none;" aria-label="Centro local de inteligencia">
+                  <div class="intelligence-toolbar">
+                    <div>
+                      <h3>Inteligencia local</h3>
+                      <p id="intelligence-consent-summary">Cargando estado local…</p>
+                    </div>
+                    <div class="intelligence-actions">
+                      <button id="intelligence-refresh-btn" class="btn-osc-mini" type="button">Actualizar</button>
+                      <button id="intelligence-export-btn" class="btn-osc-mini" type="button">Exportar paquete redactado</button>
+                    </div>
+                  </div>
+
+                  <div class="intelligence-scroll">
+                    <section class="intelligence-metrics" aria-labelledby="intelligence-health-title">
+                      <h4 id="intelligence-health-title">Salud de simulación</h4>
+                      <dl>
+                        <div><dt>Eventos</dt><dd id="intelligence-event-count">0</dd></div>
+                        <div><dt>Datos</dt><dd id="intelligence-byte-count">0 B</dd></div>
+                        <div><dt>Éxito</dt><dd id="intelligence-success-rate">—</dd></div>
+                        <div><dt>Duración p95</dt><dd id="intelligence-p95">—</dd></div>
+                      </dl>
+                    </section>
+
+                    <section class="intelligence-section" aria-labelledby="intelligence-recommendations-title">
+                      <h4 id="intelligence-recommendations-title">Sugerencias deterministas</h4>
+                      <p>Las sugerencias se explican y nunca modifican el circuito automáticamente.</p>
+                      <div id="intelligence-recommendations-list">No hay sugerencias activas.</div>
+                    </section>
+
+                    <section class="intelligence-section" aria-labelledby="intelligence-history-title">
+                      <div class="intelligence-section-heading">
+                        <h4 id="intelligence-history-title">Historial reciente</h4>
+                        <label>Filtrar
+                          <select id="intelligence-kind-filter" class="prop-input">
+                            <option value="">Todos los eventos</option>
+                            <option value="simulation.completed">Simulaciones completadas</option>
+                            <option value="simulation.failed">Fallos</option>
+                            <option value="erc.completed">ERC</option>
+                            <option value="user.feedback_submitted">Correcciones humanas</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div class="intelligence-table-wrap">
+                        <table class="intelligence-table">
+                          <thead><tr><th scope="col">Fecha</th><th scope="col">Evento</th><th scope="col">Análisis</th><th scope="col">Estado</th></tr></thead>
+                          <tbody id="intelligence-history-body"></tbody>
+                        </table>
+                      </div>
+                      <p id="intelligence-empty-state">No hay datos locales para este filtro.</p>
+                    </section>
+
+                    <section class="intelligence-section" aria-labelledby="intelligence-feedback-title">
+                      <h4 id="intelligence-feedback-title">Marcar resultado</h4>
+                      <form id="intelligence-feedback-form">
+                        <fieldset>
+                          <legend>¿El resultado fue físicamente plausible?</legend>
+                          <label><input type="radio" name="feedback-rating" value="correct" required> Correcto</label>
+                          <label><input type="radio" name="feedback-rating" value="uncertain"> Dudoso</label>
+                          <label><input type="radio" name="feedback-rating" value="incorrect"> Incorrecto</label>
+                        </fieldset>
+                        <label>Categoría
+                          <select id="intelligence-feedback-category" class="prop-input">
+                            <option value="model">Modelo</option><option value="convergence">Convergencia</option>
+                            <option value="performance">Rendimiento</option><option value="interface">Interfaz</option>
+                            <option value="other">Otra</option>
+                          </select>
+                        </label>
+                        <div class="intelligence-feedback-value">
+                          <label>Valor esperado <input id="intelligence-expected-value" class="prop-input" type="number" step="any"></label>
+                          <label>Unidad <input id="intelligence-expected-unit" class="prop-input" maxlength="32" placeholder="V, A, Hz…"></label>
+                        </div>
+                        <label>Comentario opcional
+                          <textarea id="intelligence-feedback-note" class="prop-input" maxlength="2000" rows="3"></textarea>
+                        </label>
+                        <label class="intelligence-confirm"><input id="intelligence-content-confirm" type="checkbox" required> Confirmo que deseo guardar este comentario como contenido local de usuario.</label>
+                        <button id="intelligence-feedback-submit" class="btn-osc-mini" type="submit">Guardar feedback</button>
+                      </form>
+                    </section>
+
+                    <section class="intelligence-section" aria-labelledby="intelligence-comparison-title">
+                      <h4 id="intelligence-comparison-title">Comparación entre versiones</h4>
+                      <div id="intelligence-version-comparison">Aún no hay versiones comparables.</div>
+                    </section>
+
+                    <section class="intelligence-section" aria-labelledby="intelligence-shadow-title">
+                      <h4 id="intelligence-shadow-title">Aprendizaje en modo sombra</h4>
+                      <p id="intelligence-shadow-status">No evaluado. Nunca modifica parámetros ni recomendaciones visibles.</p>
+                      <div class="intelligence-actions">
+                        <button id="intelligence-shadow-evaluate" class="btn-osc-mini" type="button">Evaluar dataset local</button>
+                        <button id="intelligence-shadow-rollback" class="btn-osc-mini" type="button">Restaurar modelo anterior</button>
+                        <button id="intelligence-shadow-disable" class="btn-osc-mini" type="button">Desactivar modelo</button>
+                      </div>
+                    </section>
+
+                    <section class="intelligence-section" aria-labelledby="intelligence-privacy-title">
+                      <h4 id="intelligence-privacy-title">Visor de privacidad</h4>
+                      <p>Vista exacta del último evento seleccionado; no muestra datos fuera de SQLite.</p>
+                      <pre id="intelligence-privacy-viewer" tabindex="0">Selecciona una fila del historial.</pre>
+                    </section>
+
+                    <section class="intelligence-section intelligence-danger" aria-labelledby="intelligence-data-title">
+                      <h4 id="intelligence-data-title">Mis datos</h4>
+                      <button id="intelligence-delete-expired" class="btn-osc-mini" type="button">Borrar vencidos</button>
+                      <label>Escribe ELIMINAR para borrar todo
+                        <input id="intelligence-delete-confirm" class="prop-input" autocomplete="off">
+                      </label>
+                      <button id="intelligence-delete-all" class="btn-osc-mini" type="button" disabled>Eliminar todo</button>
+                    </section>
+                  </div>
+                  <p id="intelligence-live-status" class="sr-only" role="status" aria-live="polite"></p>
                 </div>
               </div>
             </div>
@@ -1076,6 +1190,20 @@
             <div class="property-group">
               <label class="property-label" for="settings-iter-input">Iteraciones DC/TRAN/PSS</label>
               <input id="settings-iter-input" class="prop-input" type="number" min="1" max="10000" step="1" value="100" />
+            </div>
+            <div class="property-group">
+              <label class="property-label" for="feedback-consent-mode">Datos de mejora y diagnóstico</label>
+              <select id="feedback-consent-mode" class="prop-input">
+                <option value="disabled">Desactivado</option>
+                <option value="local">Sólo local</option>
+                <option value="share-on-export">Local; compartir únicamente al exportar</option>
+              </select>
+              <p id="feedback-consent-status" role="status" aria-live="polite">
+                Desactivado: no se guardan eventos.
+              </p>
+              <button id="btn-apply-feedback-consent" class="btn-cancel" type="button">
+                Aplicar privacidad
+              </button>
             </div>
           </form>
         </div>

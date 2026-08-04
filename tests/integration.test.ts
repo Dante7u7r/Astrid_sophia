@@ -142,18 +142,17 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
    * Valida respuesta en frecuencia de un filtro pasa-bajos en el despachador
    */
   describe('Filtro RC - AC Frequency Sweep', () => {
-    
+    const filterCircuit: CircuitNetlist = {
+      components: [
+        { id: 'VIN', type: 'vsource', value: 1, pins: ['1', '0'], frequency: 1000 },
+        { id: 'R1', type: 'resistor', value: 1000, pins: ['1', '2'] },
+        { id: 'C1', type: 'capacitor', value: 159e-9, pins: ['2', '0'] }
+      ],
+      wires: []
+    };
+
     it('debe informar que AC requiere el solver Rust sin fabricar resultados', async () => {
       vi.useFakeTimers();
-
-      const filterCircuit: CircuitNetlist = {
-        components: [
-          { id: 'VIN', type: 'vsource', value: 1, pins: ['1', '0'], frequency: 1000 },
-          { id: 'R1', type: 'resistor', value: 1000, pins: ['1', '2'] },
-          { id: 'C1', type: 'capacitor', value: 159e-9, pins: ['2', '0'] }
-        ],
-        wires: []
-      };
 
       const logs: string[] = [];
       let readyResults: any = null;
@@ -181,6 +180,62 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
       expect(readyResults).toBeNull();
       expect(logs.some(message => message.includes('no dispone de fallback científico'))).toBe(true);
       
+      vi.useRealTimers();
+    });
+
+    it.each(['SENS', 'PSS', 'STB'] as const)(
+      'debe rechazar %s sin Rust en vez de devolver un resultado DC con forma incorrecta',
+      async (mode) => {
+        vi.useFakeTimers();
+        const onResultsReady = vi.fn();
+        const logs: string[] = [];
+        mockInvoke.mockRejectedValue(new Error('window.__TAURI__ not found'));
+
+        await dispatchSimulation(
+          filterCircuit,
+          mode,
+          { simSettings: { dt: 1e-4 }, transientDuration: 0.05, solveCircuitTS },
+          {
+            addLog: message => logs.push(message),
+            onResultsReady,
+            onIpcStatusUpdate: vi.fn(),
+            updateCanvasRendering: vi.fn(),
+          },
+        );
+        await vi.advanceTimersByTimeAsync(310);
+
+        expect(onResultsReady).not.toHaveBeenCalled();
+        expect(logs.some(message => message.includes('no dispone de fallback científico'))).toBe(true);
+        vi.useRealTimers();
+      },
+    );
+
+    it('convierte una excepción del fallback local en un error controlado', async () => {
+      vi.useFakeTimers();
+      const logs: string[] = [];
+      const onFinished = vi.fn();
+      mockInvoke.mockRejectedValue(new Error('window.__TAURI__ not found'));
+
+      await dispatchSimulation(
+        filterCircuit,
+        'DC',
+        {
+          simSettings: { dt: 1e-4 },
+          transientDuration: 0.05,
+          solveCircuitTS: () => { throw new Error('fallo local controlado'); },
+        },
+        {
+          addLog: message => logs.push(message),
+          onResultsReady: vi.fn(),
+          onIpcStatusUpdate: vi.fn(),
+          updateCanvasRendering: vi.fn(),
+          onSimulationFinished: onFinished,
+        },
+      );
+      await vi.advanceTimersByTimeAsync(310);
+
+      expect(logs).toContain('Error del solucionador local: fallo local controlado');
+      expect(onFinished).toHaveBeenCalledOnce();
       vi.useRealTimers();
     });
   });

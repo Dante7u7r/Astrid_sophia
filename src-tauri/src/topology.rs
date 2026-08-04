@@ -414,4 +414,60 @@ mod tests {
         let error = detect_ideal_voltage_loops(&netlist, 1).unwrap_err();
         assert!(error.contains("paralelo"));
     }
+
+    #[test]
+    fn public_analysis_entrypoints_reject_malformed_nodes_without_panicking() {
+        let malformed = CircuitNetlist {
+            components: vec![
+                component("R1", "resistor", &["no-es-un-nodo", "0"]),
+                component("GND", "ground", &["0"]),
+            ],
+            ..Default::default()
+        };
+
+        let dc = std::panic::catch_unwind(|| crate::solver::solve_dc_circuit(&malformed));
+        assert!(dc.is_ok() && dc.unwrap().is_err());
+
+        let ac = std::panic::catch_unwind(|| {
+            crate::solver::solve_ac_sweep(
+                &malformed,
+                &crate::solver::AcSweepSettings {
+                    f_start: 10.0,
+                    f_end: 1_000.0,
+                    points_per_decade: 10,
+                    op_guess: None,
+                },
+            )
+        });
+        assert!(ac.is_ok() && ac.unwrap().is_err());
+
+        let transient = std::panic::catch_unwind(|| {
+            crate::solver::solve_transient_circuit(
+                &malformed,
+                &crate::solver::TransientSettings {
+                    dt: 1e-6,
+                    t_max: 1e-3,
+                    fixed_step: Some(true),
+                    integration_method: Some("euler".to_string()),
+                },
+            )
+        });
+        assert!(transient.is_ok() && transient.unwrap().is_err());
+
+        let pss = std::panic::catch_unwind(|| {
+            crate::solver::solve_pss(
+                &malformed,
+                &crate::solver::PssSettings {
+                    period: 1e-3,
+                    max_shooting_iters: 5,
+                    shooting_tolerance: 1e-4,
+                },
+            )
+        });
+        assert!(pss.is_ok() && pss.unwrap().is_err());
+
+        let stability =
+            std::panic::catch_unwind(|| crate::solver::run_stability_analysis(&malformed));
+        assert!(stability.is_ok() && stability.unwrap().is_err());
+    }
 }

@@ -6,6 +6,7 @@ import {
   buildTouchstoneExport,
 } from "./exporter_model";
 import { type AnalysisMode } from "./simulation_controls";
+import { recordExport, recordUiError } from "../feedback/instrumentation";
 
 interface Hdf5LiteDatasetMetadata {
   length: number;
@@ -40,26 +41,32 @@ export class ExporterPanel {
   ) {}
 
   public exportarDatosCSV(): void {
-    const { filename, content } = buildCsvExport(this.createExportSnapshot());
+    const snapshot = this.createExportSnapshot();
+    const { filename, content } = buildCsvExport(snapshot);
     this.downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8;' }), filename);
     this.callbacks.addLog(`Datos exportados exitosamente a ${filename}`, "receive");
+    recordExport("csv", this.exportItemCount(snapshot));
   }
 
   public exportarDatosSVG(): void {
-    const { filename, content } = buildSvgExport(this.createExportSnapshot());
+    const snapshot = this.createExportSnapshot();
+    const { filename, content } = buildSvgExport(snapshot);
     this.downloadBlob(new Blob([content], { type: 'image/svg+xml;charset=utf-8' }), filename);
     this.callbacks.addLog(`Grafico vectorial exportado exitosamente a ${filename}`, "receive");
+    recordExport("svg", this.exportItemCount(snapshot));
   }
 
   public exportarDatosTouchstone(): void {
     const exportData = buildTouchstoneExport(this.createExportSnapshot(), new Date().toISOString());
     if (!exportData) {
+      recordUiError("export", "TOUCHSTONE_DATA_MISSING", "AC sweep required");
       this.callbacks.addLog("Realiza un analisis de Barrido CA (AC Sweep) antes de exportar datos Touchstone.", "error");
       return;
     }
 
     this.downloadBlob(new Blob([exportData.content], { type: 'text/plain;charset=utf-8;' }), exportData.filename);
     this.callbacks.addLog("Datos de Barrido CA exportados a formato Touchstone (.s2p) exitosamente.", "receive");
+    recordExport("touchstone", this.exportItemCount(this.createExportSnapshot()));
   }
 
   public exportarDatosHDF5(): void {
@@ -186,6 +193,7 @@ export class ExporterPanel {
 
     this.downloadBlob(new Blob([mainBuffer], { type: 'application/octet-stream' }), filename);
     this.callbacks.addLog(`Datos binarios exportados a formato HDF5 Lite (.h5) en ${filename}`, "receive");
+    recordExport("hdf5", binaryArrays.reduce((total, array) => total + array.length, 0));
   }
 
   private createExportSnapshot(): ExportSnapshot {
@@ -384,10 +392,20 @@ export class ExporterPanel {
 
       doc.save(`reporte_astryd_sophia_${activeAnalysisMode.toLowerCase()}.pdf`);
       this.callbacks.addLog("Reporte científico PDF descargado exitosamente.", "receive");
+      recordExport("pdf", 2);
     } catch (err: unknown) {
+      recordUiError("export", "PDF_EXPORT_FAILED", err);
       console.error("Error al exportar PDF:", err);
       this.callbacks.addLog(`Error al exportar PDF: ${formatErrorMessage(err)}`, "error");
     }
+  }
+
+  private exportItemCount(snapshot: ExportSnapshot): number {
+    if (snapshot.activeAnalysisMode === "AC") return snapshot.acResults?.frequencies.length ?? 0;
+    if (snapshot.activeAnalysisMode === "TRAN" || snapshot.activeAnalysisMode === "PSS") {
+      return snapshot.transientResults.length;
+    }
+    return Object.keys(snapshot.voltageMap).length;
   }
 
   public init() {

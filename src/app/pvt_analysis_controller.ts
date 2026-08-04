@@ -11,6 +11,13 @@ import type {
   PvtTrace,
 } from "../ui/oscilloscope_panel";
 import type { SimulationSettings } from "../ui/settings_modal";
+import {
+  beginFeedbackRun,
+  completeFeedbackRun,
+  failFeedbackRun,
+  recordCircuitSummary,
+  recordConvergence,
+} from "../feedback/instrumentation";
 
 const PVT_LABELS: Record<string, string> = {
   tt: "TT (Nominal)",
@@ -32,6 +39,7 @@ export interface PvtAnalysisDependencies {
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
   invokeTauri<T>(cmd: string, args?: unknown): Promise<T>;
   documentRef?: Document;
+  getActiveTabId?(): string | null;
 }
 
 export class PvtAnalysisController {
@@ -105,13 +113,20 @@ export class PvtAnalysisController {
     ].filter((node): node is string => Boolean(node));
 
     const pvtDuration = 0.05;
-    const pvtMaxTimeSteps = 2_000;
     const simulationSettings = this.dependencies.getSimulationSettings();
     const transientSettings = {
-      dt: Math.max(simulationSettings.dt, pvtDuration / pvtMaxTimeSteps),
+      dt: simulationSettings.dt,
       tMax: pvtDuration,
       fixedStep: true,
     };
+    const feedbackRun = beginFeedbackRun({
+      analysis: "PVT",
+      workspaceId: this.dependencies.getActiveTabId?.(),
+      netlist,
+      settings: { transientSettings, cornerCount: pvtConfigs.length },
+      requestedPointCount: Math.ceil(pvtDuration / transientSettings.dt) * pvtConfigs.length,
+    });
+    recordCircuitSummary(feedbackRun, netlist);
 
     try {
       const results = await this.dependencies.invokeTauri<PvtRunResult[]>(
@@ -130,6 +145,16 @@ export class PvtAnalysisController {
         visible: true,
         color: PVT_COLORS[index % PVT_COLORS.length],
       }));
+      const converged = results.every((result) => result.converged);
+      recordConvergence(feedbackRun, {
+        method: "pvt-matrix",
+        acceptedSteps: results.filter((result) => result.converged).length,
+        rejectedSteps: results.filter((result) => !result.converged).length,
+      });
+      completeFeedbackRun(feedbackRun, {
+        pointCount: results.reduce((total, result) => total + result.transient.length, 0),
+        converged,
+      });
       oscilloscopePanel.pvtTraces = traces;
       oscilloscopePanel.pvtMode = true;
       oscilloscopePanel.transientResults = [];
@@ -155,6 +180,7 @@ export class PvtAnalysisController {
       this.dependencies.addLog("----------------------------------------------------------------", "system");
       this.dependencies.setIpcStatus("PVT Matrix Solver Activo", "var(--accent-cyan)");
     } catch (error) {
+      failFeedbackRun(feedbackRun, error, "ipc");
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.dependencies.addLog(`Error en analisis PVT: ${errorMsg}`, "error");
     }

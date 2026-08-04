@@ -118,7 +118,10 @@ export function fetchByte(runtime: McuRuntime): number {
 }
 
 export function fetchWord(runtime: McuRuntime): number {
-  return fetchByte(runtime) | (fetchByte(runtime) << 8);
+  const pc = runtime.state.pc;
+  const low = runtime.memory.flash[pc] ?? 0;
+  const high = runtime.memory.flash[pc + 1] ?? 0;
+  return low | (high << 8);
 }
 
 export function advancePc(runtime: McuRuntime, count: number = 1): void {
@@ -176,17 +179,30 @@ export function runCycles(
 ): number {
   if (runtime.halted) return 0;
 
+  if (!Number.isFinite(maxCycles) || maxCycles <= 0) {
+    return 0;
+  }
+
   startRuntime(runtime);
   let cycles = 0;
 
-  while (runtime.state.running && cycles < maxCycles) {
+  if (runtime.state.cycle >= runtime.cycleLimit) {
+    haltRuntime(runtime, "Cycle limit reached");
+    return 0;
+  }
+
+  while (
+    runtime.state.running
+    && cycles < maxCycles
+    && runtime.state.cycle < runtime.cycleLimit
+  ) {
     if (checkBreakpoints(runtime)) return cycles;
     if (checkWatchpoints(runtime)) return cycles;
 
-    const addedCycles = stepInstruction(runtime);
+    const addedCycles = executeCycleWithInterrupts(runtime);
     cycles += addedCycles;
 
-    if (cycles >= runtime.cycleLimit) {
+    if (runtime.state.cycle >= runtime.cycleLimit) {
       haltRuntime(runtime, "Cycle limit reached");
       break;
     }
@@ -213,7 +229,7 @@ export function runUntilHalt(runtime: McuRuntime): McuSimulationResult {
     if (checkBreakpoints(runtime)) break;
     if (checkWatchpoints(runtime)) break;
 
-    stepInstruction(runtime);
+    executeCycleWithInterrupts(runtime);
 
     if (runtime.state.cycle >= runtime.cycleLimit) {
       haltRuntime(runtime, "Cycle limit reached");
@@ -456,6 +472,7 @@ export function executeCycleWithInterrupts(runtime: McuRuntime): number {
 
     // 5. Retornar latencia fija de 4 ciclos (típica en 8051 y AVR
     //    para el acknowledge + salto de interrupción).
+    runtime.state.cycle += 4;
     return 4;
   }
 

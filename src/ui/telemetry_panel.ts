@@ -1,5 +1,6 @@
 import { safeInvoke } from "../simulation/tauri_mock";
 import type { PerformanceSnapshot } from "../performance/performance_monitor";
+import { recordPerformance, recordUiError } from "../feedback/instrumentation";
 
 interface PerformanceTelemetryPayload {
   ramFormatted?: string;
@@ -92,6 +93,7 @@ export class TelemetryPanel {
 
   public static logError(errorMsg: string): void {
     TelemetryPanel.lastError = errorMsg;
+    recordUiError("simulation", "UI_SIMULATION_ERROR", errorMsg);
     console.error(`[TelemetryPanel Error Log] ${errorMsg}`);
     
     // Automatically trigger a Toast error notification for logged simulation errors
@@ -121,7 +123,17 @@ export class TelemetryPanel {
           const cpuVal = data.cpuPercent !== undefined ? data.cpuPercent : data.cpu_usage;
           this.telemetryCpuText.textContent = `${(cpuVal || 0).toFixed(1)} %`;
         }
-        this.updateLocalPerformance();
+        const snapshot = this.updateLocalPerformance();
+        if (snapshot) {
+          recordPerformance({
+            fps: snapshot.fpsEstimate,
+            cpuPercent: data.cpuPercent ?? data.cpu_usage ?? 0,
+            ramBytes: Math.round((data.memory_used_mb ?? 0) * 1024 * 1024),
+            canvasFrames: snapshot.canvasFrames,
+            oscilloscopeFrames: snapshot.oscilloscopeFrames,
+            skippedDmmUpdates: snapshot.skippedDmmUpdates,
+          });
+        }
       } catch (err) {
 
         if (this.telemetryRamText) {
@@ -151,10 +163,13 @@ export class TelemetryPanel {
     }
   }
 
-  private updateLocalPerformance(): void {
-    if (!this.telemetryFpsText || !this.getPerformanceSnapshot) return;
+  private updateLocalPerformance(): PerformanceSnapshot | null {
+    if (!this.getPerformanceSnapshot) return null;
     const snapshot = this.getPerformanceSnapshot();
     const fps = Math.round(snapshot.fpsEstimate);
-    this.telemetryFpsText.textContent = fps > 0 ? `${fps} FPS` : "Reposo";
+    if (this.telemetryFpsText) {
+      this.telemetryFpsText.textContent = fps > 0 ? `${fps} FPS` : "Reposo";
+    }
+    return snapshot;
   }
 }

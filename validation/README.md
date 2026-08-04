@@ -41,7 +41,7 @@ validation/
 Los archivos usan `schemaVersion: 1`. El ejecutor rechaza IDs duplicados, referencias cruzadas
 incorrectas, tolerancias negativas, coordenadas ausentes y valores no finitos.
 
-## Matriz de Fase 4
+## Matriz científica actual
 
 | Caso | Análisis | Referencia |
 |---|---|---|
@@ -58,8 +58,10 @@ incorrectas, tolerancias negativas, coordenadas ausentes y valores no finitos.
 | `external-ac-rc-low-pass-cutoff` | AC externo | Fasor complejo ngspice |
 | `external-transient-rc-step-trap` | Transitorio externo | Raw adaptativo TRAP de ngspice |
 | `external-dc-diode-shockley-sweep` | Barrido DC externo | Diodo ideal ngspice, cinco puntos |
+| `pss-rc-sine-steady-state` | PSS | Régimen periódico de un RC lineal |
+| `stability-rc-pole-zero` | Polos/ceros | Polo y cero analíticos de una red RC |
 
-La matriz contiene 13 casos y 46 observaciones. Además de tensiones, magnitudes, fases y
+La matriz contiene 15 casos y 50 observaciones. Además de tensiones, magnitudes, fases y
 corrientes, calcula residuos KCL DC, AC complejo y transitorio RC. Los transitorios usan
 BE, TRAP y Gear2 con pasos y tolerancias documentados; no se presentan como soluciones exactas.
 
@@ -89,3 +91,9 @@ ngspice explícitamente; si falta el ejecutable, los casos externos fallan y no 
 
 Esto es correlación independiente de implementación, pero todavía no es validación de silicio:
 el caso no lineal usa un diodo Shockley ideal configurado de forma equivalente en ambos motores.
+
+La caracterización BSIM3 se ejecuta por separado con `npm run characterize:bsim`. Es
+deliberadamente no bloqueante para la entrega porque documenta una brecha conocida: el caso NMOS
+versionado falla sus cinco observaciones y presenta errores relativos de corriente entre 97.9 % y
+99.3 % frente a ngspice. Un fallo de ese comando es actualmente el resultado esperado, no una
+certificación del modelo.

@@ -34,6 +34,17 @@ export class SettingsModal {
     this.appViewport = document.querySelector("#app-viewport");
 
     this.initEvents();
+    window.addEventListener("astryd-settings-synchronized", (event) => {
+      const next = (event as CustomEvent<SimulationSettings>).detail;
+      if (
+        next
+        && Number.isFinite(next.dt) && next.dt > 0
+        && Number.isFinite(next.tolerance) && next.tolerance > 0 && next.tolerance <= 1
+        && Number.isInteger(next.maxIterations) && next.maxIterations >= 1 && next.maxIterations <= 10_000
+      ) {
+        this.settings = { ...next };
+      }
+    });
   }
 
   private initEvents() {

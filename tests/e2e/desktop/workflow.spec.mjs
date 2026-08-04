@@ -39,6 +39,21 @@ async function selectDemo(filename) {
   });
 }
 
+async function setFeedbackConsent(mode) {
+  const modal = await $("#settings-modal");
+  if (!(await modal.getAttribute("class")).includes("open")) {
+    await $("#settings-trigger-btn").click();
+  }
+  const select = await $("#feedback-consent-mode");
+  await select.selectByAttribute("value", mode);
+  await $("#btn-apply-feedback-consent").click();
+  await browser.waitUntil(async () =>
+    (await select.getValue()) === mode && await $("#btn-apply-feedback-consent").isEnabled(), {
+    timeoutMsg: `No se aplicó el consentimiento de feedback ${mode}`,
+  });
+  await $("#btn-cancel-settings").click();
+}
+
 async function captureTrustedInputEvents() {
   await browser.execute(() => {
     window.__ASTRYD_E2E_INPUT_CAPTURE__?.abort();
@@ -144,6 +159,33 @@ function expectTrustedEvents(events, requiredTypes) {
   }
 }
 
+function feedbackBenchmarkNetlist() {
+  const components = [
+    { id: "V_BENCH", type: "vsource", value: 5, pins: ["1", "0"] },
+  ];
+  for (let index = 1; index <= 239; index++) {
+    components.push({
+      id: `RS${index}`,
+      type: "resistor",
+      value: 1_000,
+      pins: [String(index), String(index + 1)],
+    });
+    components.push({
+      id: `RP${index}`,
+      type: "resistor",
+      value: 100_000,
+      pins: [String(index + 1), "0"],
+    });
+  }
+  components.push({ id: "C_BENCH", type: "capacitor", value: 1e-9, pins: ["240", "0"] });
+  return { components, wires: [] };
+}
+
+function percentile(values, ratio) {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)];
+}
+
 async function dragPaletteComponent(source, canvas, targetRatio) {
   const canvasSize = await canvas.getSize();
   await browser.action("pointer", { parameters: { pointerType: "mouse" } })
@@ -190,6 +232,66 @@ describe("flujo nativo de escritorio", () => {
     expect(baseline.wireCount).toBe(4);
     expect(baseline.activeTabName).toBe("01_filtro_rc");
 
+    const originalFeedback = await browser.tauri.execute(
+      (tauri) => tauri.core.invoke("get_feedback_status"),
+    );
+    const benchmarkNetlist = feedbackBenchmarkNetlist();
+    await setFeedbackConsent("disabled");
+    const feedbackDisabledBefore = await browser.execute(
+      (netlist) => window.__ASTRYD_E2E__.benchmarkFeedbackDc(netlist, 12),
+      benchmarkNetlist,
+    );
+    await setFeedbackConsent("local");
+    const feedbackLocalDurations = await browser.execute(
+      (netlist) => window.__ASTRYD_E2E__.benchmarkFeedbackDc(netlist, 12),
+      benchmarkNetlist,
+    );
+    await setFeedbackConsent("disabled");
+    const feedbackDisabledAfter = await browser.execute(
+      (netlist) => window.__ASTRYD_E2E__.benchmarkFeedbackDc(netlist, 12),
+      benchmarkNetlist,
+    );
+    await setFeedbackConsent("local");
+    const disabledMedian = (
+      percentile(feedbackDisabledBefore.map((sample) => sample.totalMs), 0.5)
+      + percentile(feedbackDisabledAfter.map((sample) => sample.totalMs), 0.5)
+    ) / 2;
+    const localMedian = percentile(feedbackLocalDurations.map((sample) => sample.totalMs), 0.5);
+    const typicalOverheadPercent = ((localMedian - disabledMedian) / disabledMedian) * 100;
+    const disabledP95 = (
+      percentile(feedbackDisabledBefore.map((sample) => sample.totalMs), 0.95)
+      + percentile(feedbackDisabledAfter.map((sample) => sample.totalMs), 0.95)
+    ) / 2;
+    const localP95 = percentile(feedbackLocalDurations.map((sample) => sample.totalMs), 0.95);
+    const tailOverheadPercent = ((localP95 - disabledP95) / disabledP95) * 100;
+    const instrumentationP95 = percentile(
+      feedbackLocalDurations.map((sample) => sample.instrumentationMs),
+      0.95,
+    );
+    const solverP95 = percentile(feedbackLocalDurations.map((sample) => sample.solverMs), 0.95);
+    const directInstrumentationPercent = (instrumentationP95 / solverP95) * 100;
+    const disabledNonSolverP95 = (
+      percentile(feedbackDisabledBefore.map((sample) => sample.totalMs - sample.solverMs), 0.95)
+      + percentile(feedbackDisabledAfter.map((sample) => sample.totalMs - sample.solverMs), 0.95)
+    ) / 2;
+    const localNonSolverP95 = percentile(
+      feedbackLocalDurations.map((sample) => sample.totalMs - sample.solverMs),
+      0.95,
+    );
+    const synchronousOverheadPercent = (
+      Math.max(0, localNonSolverP95 - disabledNonSolverP95) / solverP95
+    ) * 100;
+    console.log(
+      `[feedback-perf] 480 componentes: raw median=${typicalOverheadPercent.toFixed(2)}%, raw p95=${tailOverheadPercent.toFixed(2)}%, synchronous=${synchronousOverheadPercent.toFixed(2)}%, instrumentation p95=${instrumentationP95.toFixed(3)}ms (${directInstrumentationPercent.toFixed(2)}%)`,
+    );
+    // Las diferencias crudas incluyen toda la variación temporal del solver y
+    // se conservan como diagnóstico. El gate E2E usa únicamente el tramo
+    // síncrono no perteneciente al solver; la regresión total requiere una
+    // máquina controlada y múltiples corridas, como documenta el presupuesto.
+    expect(synchronousOverheadPercent).toBeLessThanOrEqual(3);
+    expect(directInstrumentationPercent).toBeLessThanOrEqual(2);
+    const feedbackStartedAfter = Date.now() - 1;
+
     await $("#run-sim-btn").click();
     await browser.waitUntil(async () => (await qaState())?.lastSolver === "rust", {
       timeout: 30_000,
@@ -198,6 +300,79 @@ describe("flujo nativo de escritorio", () => {
     const simulated = await qaState();
     expect(simulated.lastSimulationMode).toBe("DC");
     expect(Object.keys(simulated.lastDcNodeVoltages)).not.toHaveLength(0);
+
+    await browser.pause(750);
+    const feedbackPage = await browser.tauri.execute(
+      (tauri, query) => tauri.core.invoke("query_feedback_events", { query }),
+      { afterUnixMs: feedbackStartedAfter, limit: 100 },
+    );
+    const started = feedbackPage.events.find((event) => event.kind === "simulation.started");
+    expect(started).toBeDefined();
+    const correlated = feedbackPage.events.filter((event) => event.runId === started.runId);
+    expect(correlated.map((event) => event.kind)).toEqual(expect.arrayContaining([
+      "simulation.started",
+      "circuit.summary_created",
+      "erc.completed",
+      "solver.convergence_summary",
+      "simulation.completed",
+    ]));
+    expect(correlated.every((event) => event.workspaceId === started.workspaceId)).toBe(true);
+    expect(started.workspaceId).toMatch(/^fnv1a32:[0-9a-f]{8}$/);
+    const persistedFeedback = JSON.stringify(correlated);
+    for (const forbidden of ["firmware", "nodeVoltages", "branchCurrents", "01_filtro_rc", "V1", "R1", "C1"]) {
+      expect(persistedFeedback).not.toContain(forbidden);
+    }
+    await installExportCapture();
+    const feedbackCenter = await $("#bottom-dock");
+    if ((await feedbackCenter.getAttribute("class")).includes("collapsed")) {
+      await $("#instruments-menu-btn").click();
+      await $("#menu-toggle-dock").click();
+    }
+    await $('.inst-tab[data-tab="intelligence"]').click();
+    await $("#intelligence-refresh-btn").click();
+    await browser.waitUntil(async () => Number(await $("#intelligence-event-count").getText()) > 0, {
+      timeout: 10_000,
+      timeoutMsg: "El centro de inteligencia no mostró los eventos persistidos",
+    });
+    const firstFeedbackRow = await $("#intelligence-history-body tr");
+    await firstFeedbackRow.click();
+    expect(await $("#intelligence-privacy-viewer").getText()).toContain('"kind"');
+    const eventCountBeforeHumanFeedback = Number(await $("#intelligence-event-count").getText());
+    await $('[name="feedback-rating"][value="incorrect"]').click();
+    await $("#intelligence-feedback-note").setValue("Valor esperado revisado por la prueba E2E.");
+    await $("#intelligence-content-confirm").click();
+    await $("#intelligence-feedback-submit").click();
+    await browser.waitUntil(
+      async () => Number(await $("#intelligence-event-count").getText()) > eventCountBeforeHumanFeedback,
+      {
+      timeout: 10_000,
+      timeoutMsg: "El feedback humano no incrementó el conteo persistido",
+      },
+    );
+    await $("#intelligence-export-btn").click();
+    await browser.waitUntil(async () => (await capturedExports()).length === 1, {
+      timeout: 10_000,
+      timeoutMsg: "El centro de inteligencia no exportó el paquete redactado",
+    });
+    const supportExport = (await capturedExports())[0];
+    const supportBundle = JSON.parse(supportExport.text);
+    expect(supportBundle.manifest.format).toBe("astryd-feedback-support");
+    expect(supportBundle.manifest.formatVersion).toBe(2);
+    expect(supportBundle.summaryMarkdown).toContain("# Diagnóstico de Astryd Sophia");
+    expect(supportExport.text).not.toContain(started.eventId);
+    expect(supportExport.text).not.toContain(started.runId);
+    await $("#intelligence-shadow-evaluate").click();
+    await browser.waitUntil(async () => (await $("#intelligence-shadow-status").getText()).includes("500"), {
+      timeout: 10_000,
+      timeoutMsg: "El modo sombra no informó su bloqueo por datos insuficientes",
+    });
+    await $("#instrument-center-close").click();
+
+    await browser.tauri.execute(
+      (tauri, request) => tauri.core.invoke("delete_feedback_data", { request }),
+      { scope: "session", sessionId: started.sessionId },
+    );
+    await setFeedbackConsent(originalFeedback.consentMode);
 
     const serialized = await browser.execute(() => window.__ASTRYD_E2E__.serializeCircuit());
     const savedPath = join(tmpdir(), `astryd-desktop-e2e-${process.pid}.astryd`);
@@ -219,7 +394,7 @@ describe("flujo nativo de escritorio", () => {
       timeoutMsg: "El centro de instrumentos no se abrio",
     });
 
-    for (const instrument of ["oscilloscope", "generator", "logic", "fft", "tracer"]) {
+    for (const instrument of ["oscilloscope", "generator", "logic", "fft", "tracer", "intelligence"]) {
       await $(`.inst-tab[data-tab="${instrument}"]`).click();
       await browser.waitUntil(async () => (await qaState())?.activeInstrumentTab === instrument, {
         timeoutMsg: `No se activo el instrumento ${instrument}`,

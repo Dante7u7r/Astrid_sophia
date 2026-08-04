@@ -180,7 +180,10 @@ pub fn get_system_telemetry() -> TelemetryData {
     let now = Instant::now();
     let mut cpu_percent = 0.0;
 
-    let mut lock = LAST_CPU_SAMPLE.lock().unwrap();
+    // La telemetria no debe derribar el proceso si otro hilo enveneno el mutex.
+    let mut lock = LAST_CPU_SAMPLE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some(ref prev) = *lock {
         let duration = now.duration_since(prev.timestamp).as_secs_f64();
         if duration > 0.001 {

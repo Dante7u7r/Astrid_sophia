@@ -319,6 +319,12 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
 
             let (subckt_name, sub_pins, override_params) = if let Some(pk_pos) = params_keyword_pos
             {
+                if pk_pos < 3 {
+                    return Err(format!(
+                        "Instancia de subcircuito inválida: se requiere al menos un pin y el nombre del subcircuito antes de PARAMS: en '{}'.",
+                        line
+                    ));
+                }
                 // El nombre del subcircuito es el token justo antes de PARAMS:
                 let name = tokens[pk_pos - 1].clone();
                 let pins = &tokens[1..pk_pos - 1];

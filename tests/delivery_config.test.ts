@@ -41,4 +41,21 @@ describe("configuracion de entrega escritorio", () => {
     expect(cargoToml).toContain('description = "Simulador de circuitos electronicos de escritorio"');
     expect(cargoToml).toContain('authors = ["Astryd Sophia Project"]');
   });
+
+  it("mantiene una unica version de aplicacion en todos los manifiestos", () => {
+    const packageJson = readJson<{ version: string }>("package.json");
+    const packageLock = readJson<{
+      version: string;
+      packages: Record<string, { version?: string }>;
+    }>("package-lock.json");
+    const tauriConfig = readJson<{ version: string }>("src-tauri/tauri.conf.json");
+    const cargoToml = readFileSync(resolve(root, "src-tauri/Cargo.toml"), "utf8");
+    const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+    expect(packageLock.version).toBe(packageJson.version);
+    expect(packageLock.packages[""]?.version).toBe(packageJson.version);
+    expect(tauriConfig.version).toBe(packageJson.version);
+    expect(cargoVersion).toBe(packageJson.version);
+  });
 });

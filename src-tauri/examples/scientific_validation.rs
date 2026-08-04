@@ -1,8 +1,8 @@
 use astryd_sophia_lib::solver::{
-    solve_ac_sweep, solve_dc_circuit_with_numerical_settings, solve_dc_sweep,
-    solve_transient_circuit_with_numerical_settings, AcSweepResult, AcSweepSettings,
-    CircuitNetlist, DcSweepResult, DcSweepSettings, SimulationResult, SolverNumericalSettings,
-    TimeStepResult, TransientSettings,
+    run_stability_analysis, solve_ac_sweep, solve_dc_circuit_with_numerical_settings,
+    solve_dc_sweep, solve_pss, solve_transient_circuit_with_numerical_settings, AcSweepResult,
+    AcSweepSettings, CircuitNetlist, DcSweepResult, DcSweepSettings, PssSettings, SimulationResult,
+    SolverNumericalSettings, TimeStepResult, TransientSettings,
 };
 use num_complex::Complex64;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -91,6 +91,14 @@ enum AnalysisSpec {
         #[serde(rename = "maxIterations")]
         max_iterations: usize,
     },
+    Pss {
+        period: f64,
+        #[serde(rename = "maxShootingIters")]
+        max_shooting_iters: usize,
+        #[serde(rename = "shootingTolerance")]
+        shooting_tolerance: f64,
+    },
+    Stability,
 }
 
 impl AnalysisSpec {
@@ -100,6 +108,8 @@ impl AnalysisSpec {
             Self::DcSweep { .. } => "DC SWEEP",
             Self::Ac { .. } => "AC",
             Self::Transient { .. } => "TRAN",
+            Self::Pss { .. } => "PSS",
+            Self::Stability => "STABILITY",
         }
     }
 }
@@ -163,6 +173,21 @@ enum ObservationSpec {
         #[serde(rename = "timeSeconds")]
         time_seconds: f64,
     },
+    PssNodePeakToPeak {
+        id: String,
+        node: String,
+    },
+    PoleReal {
+        id: String,
+        index: usize,
+    },
+    ZeroReal {
+        id: String,
+        index: usize,
+    },
+    StabilityFlag {
+        id: String,
+    },
 }
 
 impl ObservationSpec {
@@ -177,7 +202,11 @@ impl ObservationSpec {
             | Self::AcKclResidual { id, .. }
             | Self::TransientNodeVoltage { id, .. }
             | Self::TransientBranchCurrent { id, .. }
-            | Self::TransientKclResidual { id, .. } => id,
+            | Self::TransientKclResidual { id, .. }
+            | Self::PssNodePeakToPeak { id, .. }
+            | Self::PoleReal { id, .. }
+            | Self::ZeroReal { id, .. }
+            | Self::StabilityFlag { id, .. } => id,
         }
     }
 }
@@ -377,7 +406,9 @@ fn run() -> Result<(), String> {
                 .to_string(),
             "El caso externo de diodo correlaciona un modelo ideal de Shockley configurado de forma equivalente; no valida alta inyección, ruptura, resistencia serie ni un dispositivo físico."
                 .to_string(),
-            "La matriz no valida PSS, BSIM, ruido, sensibilidad, estabilidad de lazo ni MCU."
+            "La matriz principal valida un caso PSS lineal y una extracción reducida de polos/ceros, pero no valida ruido, sensibilidad, estabilidad de lazo ni MCU."
+                .to_string(),
+            "La caracterización BSIM3 separada cuantifica una discrepancia de corriente frente a ngspice y no certifica el modelo."
                 .to_string(),
             "Aprobar la suite sólo demuestra conformidad con los casos, residuos y tolerancias versionados."
                 .to_string(),
@@ -672,7 +703,11 @@ fn external_observation_value(
         .re),
         ObservationSpec::DcKclResidual { .. }
         | ObservationSpec::AcKclResidual { .. }
-        | ObservationSpec::TransientKclResidual { .. } => Err(format!(
+        | ObservationSpec::TransientKclResidual { .. }
+        | ObservationSpec::PssNodePeakToPeak { .. }
+        | ObservationSpec::PoleReal { .. }
+        | ObservationSpec::ZeroReal { .. }
+        | ObservationSpec::StabilityFlag { .. } => Err(format!(
             "La observación {} es un residuo interno y no puede usarse como magnitud externa de ngspice.",
             observation.id()
         )),
@@ -1157,6 +1192,69 @@ fn run_solver(case: &ValidationCase) -> Result<Vec<ActualObservation>, String> {
                     }
                     _ => Err(format!(
                         "La observación {} no es compatible con análisis transitorio.",
+                        observation.id()
+                    )),
+                })
+                .collect()
+        }
+        AnalysisSpec::Pss {
+            period,
+            max_shooting_iters,
+            shooting_tolerance,
+        } => {
+            let result = solve_pss(
+                &case.netlist,
+                &PssSettings {
+                    period: *period,
+                    max_shooting_iters: *max_shooting_iters,
+                    shooting_tolerance: *shooting_tolerance,
+                },
+            )?;
+            case.observations
+                .iter()
+                .map(|observation| match observation {
+                    ObservationSpec::PssNodePeakToPeak { id, node } => {
+                        let values = result
+                            .iter()
+                            .map(|step| {
+                                step.node_voltages.get(node).copied().ok_or_else(|| {
+                                    format!("El resultado PSS no contiene el nodo {node}.")
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let minimum = values.iter().copied().fold(f64::INFINITY, f64::min);
+                        let maximum = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                        finite_actual(id, maximum - minimum, None)
+                    }
+                    _ => Err(format!(
+                        "La observación {} no es compatible con análisis PSS.",
+                        observation.id()
+                    )),
+                })
+                .collect()
+        }
+        AnalysisSpec::Stability => {
+            let result = run_stability_analysis(&case.netlist)?;
+            case.observations
+                .iter()
+                .map(|observation| match observation {
+                    ObservationSpec::PoleReal { id, index } => {
+                        let value = result.poles.get(*index).ok_or_else(|| {
+                            format!("El resultado no contiene el polo de índice {index}.")
+                        })?;
+                        finite_actual(id, value.re, None)
+                    }
+                    ObservationSpec::ZeroReal { id, index } => {
+                        let value = result.zeros.get(*index).ok_or_else(|| {
+                            format!("El resultado no contiene el cero de índice {index}.")
+                        })?;
+                        finite_actual(id, value.re, None)
+                    }
+                    ObservationSpec::StabilityFlag { id } => {
+                        finite_actual(id, if result.is_stable { 1.0 } else { 0.0 }, None)
+                    }
+                    _ => Err(format!(
+                        "La observación {} no es compatible con extracción de polos y ceros.",
                         observation.id()
                     )),
                 })

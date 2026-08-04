@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astryd.local/schemas/support-bundle.v2.schema.json",
+  "title": "Astryd Sophia Redacted Support Bundle V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest", "summaryMarkdown", "events"],
+  "properties": {
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "formatVersion",
+        "eventSchemaVersion",
+        "exportedAtUnixMs",
+        "eventCount",
+        "truncated",
+        "contentSha256",
+        "schemaValidation",
+        "redactions"
+      ],
+      "properties": {
+        "format": { "const": "astryd-feedback-support" },
+        "formatVersion": { "const": 2 },
+        "eventSchemaVersion": { "const": 1 },
+        "exportedAtUnixMs": { "type": "integer", "minimum": 0 },
+        "eventCount": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "truncated": { "type": "boolean" },
+        "contentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "schemaValidation": { "const": "validated-on-ingest" },
+        "redactions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eventIds", "sessionIds", "runIds", "workspaceIds", "fingerprints"],
+          "properties": {
+            "eventIds": { "type": "integer", "minimum": 0 },
+            "sessionIds": { "type": "integer", "minimum": 0 },
+            "runIds": { "type": "integer", "minimum": 0 },
+            "workspaceIds": { "type": "integer", "minimum": 0 },
+            "fingerprints": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "summaryMarkdown": { "type": "string", "minLength": 1, "maxLength": 100000 },
+    "events": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "https://astryd.local/schemas/feedback-event.v1.schema.json" }
+    }
+  }
+}

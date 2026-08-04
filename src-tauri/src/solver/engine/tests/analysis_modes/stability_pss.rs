@@ -178,4 +178,37 @@ fn test_stability_zeros_extraction() {
         "Debería tener un cero cerca de -1000, obtenidos: {:?}",
         data.zeros
     );
+
+    let expected_poles: Vec<(u64, u64)> = data
+        .poles
+        .iter()
+        .map(|value| (value.re.to_bits(), value.im.to_bits()))
+        .collect();
+    let expected_zeros: Vec<(u64, u64)> = data
+        .zeros
+        .iter()
+        .map(|value| (value.re.to_bits(), value.im.to_bits()))
+        .collect();
+    assert!(data.poles.windows(2).all(|pair| pair[0].re <= pair[1].re));
+    assert!(data.zeros.windows(2).all(|pair| pair[0].re <= pair[1].re));
+
+    for _ in 0..32 {
+        let repeated = run_stability_analysis(&netlist).unwrap();
+        assert_eq!(
+            repeated
+                .poles
+                .iter()
+                .map(|value| (value.re.to_bits(), value.im.to_bits()))
+                .collect::<Vec<_>>(),
+            expected_poles
+        );
+        assert_eq!(
+            repeated
+                .zeros
+                .iter()
+                .map(|value| (value.re.to_bits(), value.im.to_bits()))
+                .collect::<Vec<_>>(),
+            expected_zeros
+        );
+    }
 }

@@ -21,7 +21,7 @@ Astrid Sophia combines Modified Nodal Analysis (MNA), a Tauri v2 desktop schemat
 | Periodic steady-state | Experimental shooting method; external validation and closure criteria are still incomplete |
 | Pole/zero analysis | Experimental reduced-order extraction; **does not calculate loop gain, phase margin or gain margin** |
 
-20+ device models: resistor, capacitor, inductor, diode (Shockley), LED, BJT NPN/PNP (Ebers-Moll + Early), NMOS/PMOS (Level 1 + subthreshold), op-amp (macro-model with tanh saturation), transformer, switch (Ron/Roff with hysteresis), transmission line (RLCG Pi-segment cascade), lamp thermal model, relay electromechanical, buzzer piezoelectric and optocoupler (CTR). BSIM3v3/BSIM4 support is partial and experimental; it has not been systematically correlated against a reference simulator.
+20+ device models: resistor, capacitor, inductor, diode (Shockley), LED, BJT NPN/PNP (Ebers-Moll + Early), NMOS/PMOS (Level 1 + subthreshold), op-amp (macro-model with tanh saturation), transformer, switch (Ron/Roff with hysteresis), transmission line (RLCG Pi-segment cascade), lamp thermal model, relay electromechanical, buzzer piezoelectric and optocoupler (CTR). BSIM3v3/BSIM4 support is partial and experimental. A versioned BSIM3 NMOS characterization against ngspice currently shows 97.9%–99.3% drain-current error, so it must not be used for physical prediction.
 
 ### MCU Scaffold (Not Simulable)
 

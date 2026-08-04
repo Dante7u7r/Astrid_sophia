@@ -19,6 +19,14 @@ import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
 import type { AnalysisMode, SimulationControlHandlers } from "../ui/simulation_controls";
 import type { SimulationSettings } from "../ui/settings_modal";
 import { parseErcIssues } from "../ui/instrumentation_menu";
+import {
+  beginFeedbackRun,
+  failFeedbackRun,
+  recordCircuitSummary,
+  recordErc,
+  type FeedbackRunHandle,
+} from "../feedback/instrumentation";
+import { evaluateSimulationAdvice } from "../intelligence/advisor_runtime";
 
 export interface SimulationControllerDependencies {
   getOrchestrator(): CanvasOrchestrator | null;
@@ -36,7 +44,7 @@ export interface SimulationControllerDependencies {
     tMax: number,
   ): Promise<TimeStepResult[] | string>;
   runPvtAnalysis(netlist: CircuitNetlist): Promise<void>;
-  runSparamExport(netlist: CircuitNetlist): Promise<void>;
+  runSparamExport(netlist: CircuitNetlist, feedbackRun?: FeedbackRunHandle): Promise<void>;
   circuitState: CircuitStateManager;
   resetPerformanceCaches(): void;
   updateCanvasRendering(): void;
@@ -79,6 +87,12 @@ export class SimulationController {
     this.dependencies.setInstrumentDockCollapsed(false);
 
     if (!orchestrator || orchestrator.components.length === 0) {
+      const emptyRun = beginFeedbackRun({
+        analysis: mode,
+        workspaceId: this.dependencies.getActiveTabId(),
+        settings: this.dependencies.getSimulationSettings(),
+      });
+      failFeedbackRun(emptyRun, "Empty schematic", "preflight", "SCHEMATIC_EMPTY");
       this.dependencies.addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
       this.dependencies.setSimulationRunning(false);
       return;
@@ -86,8 +100,27 @@ export class SimulationController {
 
     const netlist = this.dependencies.extractNetlist(true);
     if (!netlist) {
+      const extractionRun = beginFeedbackRun({
+        analysis: mode,
+        workspaceId: this.dependencies.getActiveTabId(),
+        settings: this.dependencies.getSimulationSettings(),
+      });
+      failFeedbackRun(extractionRun, "Netlist extraction failed", "extraction", "NETLIST_EXTRACTION_FAILED");
       this.dependencies.setSimulationRunning(false);
       return;
+    }
+
+    const feedbackRun = mode === "PVT" ? undefined : beginFeedbackRun({
+      analysis: mode,
+      workspaceId: this.dependencies.getActiveTabId(),
+      netlist,
+      settings: this.dependencies.getSimulationSettings(),
+      ...(mode === "TRAN"
+        ? { requestedPointCount: Math.ceil(0.05 / this.dependencies.getSimulationSettings().dt) + 1 }
+        : {}),
+    });
+    if (feedbackRun) {
+      recordCircuitSummary(feedbackRun, netlist, orchestrator.wires.length);
     }
 
     if (netlist.components.some(component =>
@@ -115,17 +148,27 @@ export class SimulationController {
       || component.type === "bsim4pmos"
     )) {
       this.dependencies.addLog(
-        "BSIM EXPERIMENTAL: implementación parcial, aún sin correlación sistemática contra un simulador de referencia.",
+        "BSIM EXPERIMENTAL: implementación parcial. La caracterización NMOS BSIM3 contra ngspice muestra errores de corriente de 97.9 % a 99.3 %; no usar para predicción física.",
         "error",
       );
     }
 
+    const ercStartedAt = performance.now();
     const ercResult = runElectricalRuleCheck(
       netlist,
       orchestrator.components,
       orchestrator.wires,
       component => orchestrator.getComponentPins(component),
     );
+    recordErc(feedbackRun, ercResult, performance.now() - ercStartedAt);
+    evaluateSimulationAdvice({
+      analysis: mode,
+      netlist,
+      erc: ercResult,
+      settings: this.dependencies.getSimulationSettings(),
+      transientDuration: 0.05,
+      feedbackRun,
+    });
     for (const warn of ercResult.warnings) {
       this.dependencies.addLog(`[ERC Advertencia] ${warn}`, "error");
     }
@@ -134,6 +177,7 @@ export class SimulationController {
     orchestrator.render();
 
     if (!ercResult.passed) {
+      if (feedbackRun) failFeedbackRun(feedbackRun, ercResult.errors, "preflight", "ERC_FAILED");
       this.dependencies.addLog("----------------------------------------------------------------", "error");
       this.dependencies.addLog("¡ERC FALLIDO! La simulación se ha abortado para prevenir bloqueos matemáticos:", "error");
       for (const err of ercResult.errors) {
@@ -159,6 +203,7 @@ export class SimulationController {
 
     const simulationOwnerId = this.dependencies.getActiveTabId();
     if (!simulationOwnerId) {
+      if (feedbackRun) failFeedbackRun(feedbackRun, "No active workspace", "preflight", "WORKSPACE_MISSING");
       this.dependencies.setSimulationRunning(false);
       this.dependencies.addLog("No hay una pestaña activa para asociar la simulación.", "error");
       return;
@@ -175,11 +220,14 @@ export class SimulationController {
       transientDuration: 0.05,
       simulationOwnerId,
       simulationRunner: this.dependencies.getSimulationRunner(),
+      feedbackRun,
       solveCircuitTS,
       solveTransientCircuitLocal: this.dependencies.solveTransientCircuitLocal,
       onSpecialMode: async (specialNetlist, specialMode) => {
         if (specialMode === "PVT") await this.dependencies.runPvtAnalysis(specialNetlist);
-        if (specialMode === "SPAR") await this.dependencies.runSparamExport(specialNetlist);
+        if (specialMode === "SPAR") {
+          await this.dependencies.runSparamExport(specialNetlist, feedbackRun);
+        }
       },
     }, {
       addLog: (text, type) => this.dependencies.addLog(text, type),

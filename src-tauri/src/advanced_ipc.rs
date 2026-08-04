@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 
-const PVT_MAX_TIME_STEPS: f64 = 2_000.0;
+const MAX_PVT_TOTAL_STEPS: f64 = 2_000_000.0;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -133,10 +133,28 @@ fn filter_monitored_nodes(steps: &mut [solver::TimeStepResult], monitored_nodes:
     }
 }
 
-fn bounded_pvt_settings(mut settings: solver::TransientSettings) -> solver::TransientSettings {
-    settings.dt = settings.dt.max(settings.t_max / PVT_MAX_TIME_STEPS);
+fn fixed_pvt_settings(mut settings: solver::TransientSettings) -> solver::TransientSettings {
     settings.fixed_step = Some(true);
     settings
+}
+
+fn validate_pvt_workload(
+    settings: &solver::TransientSettings,
+    config_count: usize,
+) -> Result<(), String> {
+    settings.validate()?;
+    if settings.t_max <= 0.0 || settings.dt > settings.t_max {
+        return Err("Los ajustes transitorios PVT no son validos.".to_string());
+    }
+
+    let total_steps = (settings.t_max / settings.dt).ceil() * config_count as f64;
+    if !total_steps.is_finite() || total_steps > MAX_PVT_TOTAL_STEPS {
+        return Err(format!(
+            "La matriz PVT excede el limite combinado de {} pasos. Aumente dt, reduzca la duracion o use menos esquinas.",
+            MAX_PVT_TOTAL_STEPS as usize
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -152,20 +170,13 @@ pub async fn run_pvt_matrix_analysis(
             "La matriz PVT debe contener entre 1 y 32 configuraciones.".to_string(),
         ));
     }
-    if transient_settings.dt <= 0.0
-        || transient_settings.t_max <= 0.0
-        || transient_settings.dt > transient_settings.t_max
-    {
-        return Err(SimulationError::from(
-            "Los ajustes transitorios PVT no son validos.".to_string(),
-        ));
-    }
+    validate_pvt_workload(&transient_settings, pvt_configs.len()).map_err(SimulationError::from)?;
     for config in &pvt_configs {
         validate_pvt_config(config).map_err(SimulationError::from)?;
     }
 
     let expanded = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
-    let transient_settings = bounded_pvt_settings(transient_settings);
+    let transient_settings = fixed_pvt_settings(transient_settings);
     let monitored: HashSet<String> = monitored_nodes.into_iter().collect();
     state.is_running.store(true, Ordering::SeqCst);
     let is_running = state.is_running.clone();
@@ -514,8 +525,8 @@ mod tests {
     }
 
     #[test]
-    fn pvt_settings_are_fixed_and_bounded() {
-        let settings = bounded_pvt_settings(solver::TransientSettings {
+    fn pvt_settings_preserve_requested_step_and_are_fixed() {
+        let settings = fixed_pvt_settings(solver::TransientSettings {
             dt: 1e-9,
             t_max: 0.05,
             fixed_step: None,
@@ -523,7 +534,24 @@ mod tests {
         });
 
         assert_eq!(settings.fixed_step, Some(true));
-        assert!((settings.dt - 0.000_025).abs() < 1e-12);
-        assert!(settings.t_max / settings.dt <= PVT_MAX_TIME_STEPS);
+        assert_eq!(settings.dt, 1e-9);
+    }
+
+    #[test]
+    fn pvt_workload_uses_an_explicit_combined_limit() {
+        let settings = solver::TransientSettings {
+            dt: 1e-5,
+            t_max: 0.05,
+            fixed_step: None,
+            integration_method: None,
+        };
+        assert!(validate_pvt_workload(&settings, 3).is_ok());
+
+        let excessive = solver::TransientSettings {
+            dt: 1e-7,
+            ..settings
+        };
+        let error = validate_pvt_workload(&excessive, 5).unwrap_err();
+        assert!(error.contains("limite combinado"));
     }
 }

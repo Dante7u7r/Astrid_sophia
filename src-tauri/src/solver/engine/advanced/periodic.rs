@@ -184,7 +184,9 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
     let _n = crate::topology::validate_netlist_topology(netlist, true)?;
     let op_result = solve_dc_circuit(netlist)?;
 
-    let mut dynamic_nodes = std::collections::HashSet::new();
+    // El orden de los nodos forma parte del contrato reproducible del análisis:
+    // determina los índices de las matrices y los puertos reducidos de entrada/salida.
+    let mut dynamic_nodes = std::collections::BTreeSet::new();
     for comp in &netlist.components {
         if comp.comp_type == "capacitor" {
             for pin in &comp.pins {
@@ -504,6 +506,17 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
             }
         }
     }
+
+    poles.sort_by(|left, right| {
+        left.re
+            .total_cmp(&right.re)
+            .then_with(|| left.im.total_cmp(&right.im))
+    });
+    zeros.sort_by(|left, right| {
+        left.re
+            .total_cmp(&right.re)
+            .then_with(|| left.im.total_cmp(&right.im))
+    });
 
     Ok(PoleZeroResult {
         poles: poles.into_iter().map(PoleZeroValue::from).collect(),

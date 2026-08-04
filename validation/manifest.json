@@ -15,7 +15,9 @@
     "cases/external_dc_resistive_divider.json",
     "cases/external_ac_rc_low_pass_cutoff.json",
     "cases/external_transient_rc_step_trap.json",
-    "cases/external_dc_diode_shockley_sweep.json"
+    "cases/external_dc_diode_shockley_sweep.json",
+    "cases/pss_rc_sine_steady_state.json",
+    "cases/stability_rc_pole_zero.json"
   ],
   "reports": {
     "json": "reports/latest.json",

@@ -1,7 +1,23 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { safeInvoke, safeListen } from "./tauri_mock";
+import { safeInvoke, safeListen, shouldEnableWebMocks } from "./tauri_mock";
+
+describe("politica de mocks Tauri", () => {
+  it("los desactiva en produccion y los limita a entornos instrumentados", () => {
+    expect(shouldEnableWebMocks("production", false)).toBe(false);
+    expect(shouldEnableWebMocks("development", true)).toBe(true);
+    expect(shouldEnableWebMocks("test", false)).toBe(true);
+    expect(shouldEnableWebMocks("audit", false)).toBe(true);
+    expect(shouldEnableWebMocks("wdio", false)).toBe(true);
+  });
+
+  it("rechaza comandos desconocidos en vez de fingir exito", async () => {
+    await expect(safeInvoke("comando_inexistente")).rejects.toThrow(
+      "No existe un mock web explícito",
+    );
+  });
+});
 
 describe("Tauri web mock streaming", () => {
   beforeEach(async () => {

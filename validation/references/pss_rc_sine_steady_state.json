@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "caseId": "pss-rc-sine-steady-state",
+  "method": "analytic_closed_form",
+  "source": "Función de transferencia H(jw)=1/(1+jwRC), amplitud pico a pico=2 Vin |H|.",
+  "observations": [
+    { "id": "output_peak_to_peak", "expected": 1.5717672548, "absoluteTolerance": 0.025, "relativeTolerance": 0.02, "units": "V", "expression": "10/sqrt(1+(2*pi*1000*1000*1e-6)^2)" }
+  ]
+}

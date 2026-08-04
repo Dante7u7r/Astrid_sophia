@@ -114,6 +114,7 @@ export function createDesktopSimulationControllers(
     setIpcStatus: deps.setIpcStatus,
     addLog: deps.addLog,
     invokeTauri: deps.invokeTauri,
+    getActiveTabId: () => deps.getTabManager()?.getActiveTabId() ?? null,
   });
 
   const simulationController = createSimulationController({
@@ -130,7 +131,8 @@ export function createDesktopSimulationControllers(
     extractNetlist: deps.extractNetlist,
     solveTransientCircuitLocal: deps.solveTransientCircuitLocal,
     runPvtAnalysis: (netlist) => pvtAnalysisController?.run(netlist) ?? Promise.resolve(),
-    runSparamExport: (netlist) => sparameterExportController?.run(netlist) ?? Promise.resolve(),
+    runSparamExport: (netlist, feedbackRun) =>
+      sparameterExportController?.run(netlist, feedbackRun) ?? Promise.resolve(),
     circuitState: deps.circuitState,
     resetPerformanceCaches: deps.resetPerformanceCaches,
     updateCanvasRendering: deps.updateCanvasRendering,

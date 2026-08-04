@@ -25,6 +25,13 @@ import { TelemetryPanel } from "../ui/telemetry_panel";
 import { type McuRuntime } from "./mcu-runtime";
 import { type AnalogEventTrigger } from "./mcu-types";
 import { type CircuitNetlist } from "./netlist_extractor";
+import {
+  cancelFeedbackRun,
+  completeFeedbackRun,
+  failFeedbackRun,
+  recordConvergence,
+  type FeedbackRunHandle,
+} from "../feedback/instrumentation";
 
 // ==========================================================================
 // Interfaces públicas
@@ -47,6 +54,7 @@ export interface SimulationFrame {
 export interface SimulationRunContext {
   readonly runId: number;
   readonly ownerTabId: string;
+  readonly feedbackRun?: FeedbackRunHandle;
 }
 
 interface SimulationStreamError {
@@ -86,6 +94,7 @@ export interface SimulationRunner {
       maxIterations?: number;
     }>,
     ownerTabId: string,
+    feedbackRun?: FeedbackRunHandle,
   ): Promise<void>;
   /** Detiene la simulación, desregistra el stream IPC, limpia los
    *  runtimes MCU y notifica el cambio de estado. */
@@ -145,6 +154,13 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
   ): void => {
     if (activeContext?.runId !== context.runId) return;
     callbacks.onSimulationComplete(finalTime, context);
+    if (context.feedbackRun) {
+      recordConvergence(context.feedbackRun, { method: "interactive-transient" });
+      completeFeedbackRun(context.feedbackRun, {
+        pointCount: Math.max(1, Math.round(finalTime / currentDt) + 1),
+        converged: true,
+      });
+    }
     callbacks.onSimulationStateChanged(false, context);
     activeContext = null;
     releaseLocalResources();
@@ -160,10 +176,12 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         maxIterations?: number;
       }>,
       ownerTabId: string,
+      feedbackRun?: FeedbackRunHandle,
     ): Promise<void> {
       // ENMIENDA 2: Blindaje de doble listener
       if (activeContext) {
         const previousContext = activeContext;
+        if (previousContext.feedbackRun) cancelFeedbackRun(previousContext.feedbackRun, "replaced");
         await invoke("stop_interactive_transient", { runId: previousContext.runId });
         callbacks.onSimulationStateChanged(false, previousContext);
         releaseLocalResources();
@@ -172,6 +190,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       const context: SimulationRunContext = {
         runId: nextRunId,
         ownerTabId,
+        feedbackRun,
       };
       nextRunId += 1;
       activeContext = context;
@@ -253,6 +272,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         const error = typeof event.payload.error === "string"
           ? event.payload.error
           : JSON.stringify(event.payload.error);
+        if (context.feedbackRun) failFeedbackRun(context.feedbackRun, error, "iteration");
         callbacks.onSimulationError(error, context);
       });
 
@@ -268,6 +288,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(errorMsg);
+        if (context.feedbackRun) failFeedbackRun(context.feedbackRun, err, "ipc");
         if (activeContext?.runId === context.runId) {
           callbacks.onSimulationStateChanged(false, context);
           activeContext = null;
@@ -290,6 +311,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         TelemetryPanel.logError(errorMsg);
       } finally {
         if (context && activeContext?.runId === context.runId) {
+          if (context.feedbackRun) cancelFeedbackRun(context.feedbackRun, "user");
           callbacks.onSimulationStateChanged(false, context);
           activeContext = null;
         }
