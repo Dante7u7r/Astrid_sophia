@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "suiteId": "phase4-external-correlation",
   "title": "Correlación científica externa de Astryd Sophia — Fase 4",
-  "generatedAtUnixSeconds": 1785462347,
+  "generatedAtUnixSeconds": 1785811732,
   "solverVersion": "0.1.0",
-  "gitHead": "42f5b29eb6f6",
+  "gitHead": "72e630f141e7",
   "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {
     "ngspice": "** ngspice-46 : Circuit level simulation program"
   },
   "passed": true,
-  "passedCases": 13,
+  "passedCases": 15,
   "failedCases": 0,
-  "passedObservations": 46,
+  "passedObservations": 50,
   "failedObservations": 0,
   "cases": [
     {
@@ -335,7 +335,7 @@
           "expression": "−10·log10(1+10²)",
           "coordinate": {
             "name": "frequency",
-            "requested": 1591.5494309189537,
+            "requested": 1591.5494309189535,
             "sampled": 1591.5494309189535,
             "units": "Hz"
           },
@@ -352,7 +352,7 @@
           "expression": "−atan(10)",
           "coordinate": {
             "name": "frequency",
-            "requested": 1591.5494309189537,
+            "requested": 1591.5494309189535,
             "sampled": 1591.5494309189535,
             "units": "Hz"
           },
@@ -369,7 +369,7 @@
           "expression": "|Vout/R + (Vout−Vin)/(jωL)|",
           "coordinate": {
             "name": "frequency",
-            "requested": 1591.5494309189537,
+            "requested": 1591.5494309189535,
             "sampled": 1591.5494309189535,
             "units": "Hz"
           },
@@ -938,13 +938,86 @@
           "passed": true
         }
       ]
+    },
+    {
+      "id": "pss-rc-sine-steady-state",
+      "title": "PSS de filtro RC excitado por seno",
+      "analysis": "PSS",
+      "rationale": "Valida que shooting encuentre el régimen periódico y reproduzca la amplitud cerrada de un filtro RC lineal.",
+      "referenceMethod": "analytic_closed_form",
+      "referenceSource": "Función de transferencia H(jw)=1/(1+jwRC), amplitud pico a pico=2 Vin |H|.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "output_peak_to_peak",
+          "actual": 1.5678268900270043,
+          "expected": 1.5717672548,
+          "absoluteError": 0.0039403647729956415,
+          "relativeError": 0.0025069645400501964,
+          "allowedError": 0.031435345095999996,
+          "units": "V",
+          "expression": "10/sqrt(1+(2*pi*1000*1000*1e-6)^2)",
+          "coordinate": null,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "stability-rc-pole-zero",
+      "title": "Extracción reducida de polo y cero RC",
+      "analysis": "STABILITY",
+      "rationale": "Valida polos, ceros y clasificación estable del modelo reducido contra expresiones cerradas.",
+      "referenceMethod": "analytic_closed_form",
+      "referenceSource": "Red RC: polo -2000 rad/s, cero -1000 rad/s y todos los polos en semiplano izquierdo.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "dominant_pole_real",
+          "actual": -2000.0000000000002,
+          "expected": -2000.0,
+          "absoluteError": 2.2737367544323206e-13,
+          "relativeError": 1.1368683772161603e-16,
+          "allowedError": 10.0,
+          "units": "rad/s",
+          "expression": "-2000",
+          "coordinate": null,
+          "passed": true
+        },
+        {
+          "id": "transmission_zero_real",
+          "actual": -1000.0,
+          "expected": -1000.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 10.0,
+          "units": "rad/s",
+          "expression": "-1000",
+          "coordinate": null,
+          "passed": true
+        },
+        {
+          "id": "stable_flag",
+          "actual": 1.0,
+          "expected": 1.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.0,
+          "units": "boolean",
+          "expression": "all(Re(p)) < 0",
+          "coordinate": null,
+          "passed": true
+        }
+      ]
     }
   ],
   "limitations": [
     "La correlación ngspice cubre únicamente los casos marcados como referencia externa; el resto conserva referencias analíticas cerradas.",
     "El solver no emite un punto de operación separado en t=0; la primera muestra publicada es la primera solución integrada en t=dt.",
     "El caso externo de diodo correlaciona un modelo ideal de Shockley configurado de forma equivalente; no valida alta inyección, ruptura, resistencia serie ni un dispositivo físico.",
-    "La matriz no valida PSS, BSIM, ruido, sensibilidad, estabilidad de lazo ni MCU.",
+    "La matriz principal valida un caso PSS lineal y una extracción reducida de polos/ceros, pero no valida ruido, sensibilidad, estabilidad de lazo ni MCU.",
+    "La caracterización BSIM3 separada cuantifica una discrepancia de corriente frente a ngspice y no certifica el modelo.",
     "Aprobar la suite sólo demuestra conformidad con los casos, residuos y tolerancias versionados."
   ]
 }

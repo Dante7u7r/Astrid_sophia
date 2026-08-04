@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "bsim3-gap-characterization",
+  "title": "Caracterización no bloqueante de la brecha BSIM3",
+  "generatedAtUnixSeconds": 1785809218,
+  "solverVersion": "0.1.0",
+  "gitHead": "72e630f141e7",
+  "gitWorktree": "dirty",
+  "platform": "windows-x86_64",
+  "externalReferenceStatus": {
+    "ngspice": "** ngspice-46 : Circuit level simulation program"
+  },
+  "passed": false,
+  "passedCases": 0,
+  "failedCases": 1,
+  "passedObservations": 0,
+  "failedObservations": 5,
+  "cases": [
+    {
+      "id": "external-dc-bsim3-nmos-transfer",
+      "title": "Correlación ngspice de transferencia NMOS BSIM3",
+      "analysis": "DC SWEEP",
+      "rationale": "Compara la corriente de drenador del modelo bsim3nmos con ngspice BSIM3v3 en cinco puntos de fuerte inversión, con geometría y parámetros explícitos.",
+      "referenceMethod": "ngspice_live",
+      "referenceSource": "ngspice ejecutado en vivo con BSIM3v3 LEVEL=49, VDS=1 V, W=10 um, L=0.18 um, VTH0=0.4 V, TOX=4 nm, U0=450 cm2/Vs y VSAT=8e4 m/s.",
+      "passed": false,
+      "error": null,
+      "observations": [
+        {
+          "id": "drain_current_0_8v",
+          "actual": -0.000013903708278675377,
+          "expected": -0.0006526283780079409,
+          "absoluteError": 0.0006387246697292654,
+          "relativeError": 0.9786958263734798,
+          "allowedError": 0.0001631570945019852,
+          "units": "A",
+          "expression": "i(VD) en VG=0.8 V",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.8,
+            "sampled": 0.8,
+            "units": "V"
+          },
+          "passed": false
+        },
+        {
+          "id": "drain_current_1_0v",
+          "actual": -0.000020140804926382963,
+          "expected": -0.001511278197670753,
+          "absoluteError": 0.00149113739274437,
+          "relativeError": 0.9866729997445706,
+          "allowedError": 0.00037781954941768826,
+          "units": "A",
+          "expression": "i(VD) en VG=1.0 V",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 1.0,
+            "sampled": 1.0,
+            "units": "V"
+          },
+          "passed": false
+        },
+        {
+          "id": "drain_current_1_2v",
+          "actual": -0.000025483653510753796,
+          "expected": -0.002620383445900149,
+          "absoluteError": 0.002594899792389395,
+          "relativeError": 0.9902748380010469,
+          "allowedError": 0.0006550958614750372,
+          "units": "A",
+          "expression": "i(VD) en VG=1.2 V",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 1.2,
+            "sampled": 1.2,
+            "units": "V"
+          },
+          "passed": false
+        },
+        {
+          "id": "drain_current_1_4v",
+          "actual": -0.000030799437896090375,
+          "expected": -0.003924193687568378,
+          "absoluteError": 0.003893394249672288,
+          "relativeError": 0.9921513971153715,
+          "allowedError": 0.0009810484218920946,
+          "units": "A",
+          "expression": "i(VD) en VG=1.4 V",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 1.4,
+            "sampled": 1.4,
+            "units": "V"
+          },
+          "passed": false
+        },
+        {
+          "id": "drain_current_1_6v",
+          "actual": -0.000035079156875586354,
+          "expected": -0.005338878692226082,
+          "absoluteError": 0.005303799535350495,
+          "relativeError": 0.9934294898052909,
+          "allowedError": 0.0013347196730565205,
+          "units": "A",
+          "expression": "i(VD) en VG=1.6 V",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 1.6,
+            "sampled": 1.5999999999999999,
+            "units": "V"
+          },
+          "passed": false
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "La correlación ngspice cubre únicamente los casos marcados como referencia externa; el resto conserva referencias analíticas cerradas.",
+    "El solver no emite un punto de operación separado en t=0; la primera muestra publicada es la primera solución integrada en t=dt.",
+    "El caso externo de diodo correlaciona un modelo ideal de Shockley configurado de forma equivalente; no valida alta inyección, ruptura, resistencia serie ni un dispositivo físico.",
+    "La matriz principal valida un caso PSS lineal y una extracción reducida de polos/ceros, pero no valida ruido, sensibilidad, estabilidad de lazo ni MCU.",
+    "La caracterización BSIM3 separada cuantifica una discrepancia de corriente frente a ngspice y no certifica el modelo.",
+    "Aprobar la suite sólo demuestra conformidad con los casos, residuos y tolerancias versionados."
+  ]
+}

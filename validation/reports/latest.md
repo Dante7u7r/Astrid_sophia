@@ -1,11 +1,11 @@
 # Correlación científica externa de Astryd Sophia — Fase 4
 
-Resultado: **PASS** — 13/13 casos aprobados.
-Observaciones: **46/46** dentro de tolerancia.
+Resultado: **PASS** — 15/15 casos aprobados.
+Observaciones: **50/50** dentro de tolerancia.
 
 - Suite: `phase4-external-correlation`
 - Solver: `0.1.0`
-- Git: `42f5b29eb6f6` (`dirty`)
+- Git: `72e630f141e7` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-46 : Circuit level simulation program`
 
@@ -57,6 +57,10 @@ Observaciones: **46/46** dentro de tolerancia.
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_3v | -1.0959113160e-7 A | -1.0959156327e-7 A | 4.317e-13 | 1.096e-11 | PASS |
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_4v | -5.2445013003e-6 A | -5.2445288435e-6 A | 2.754e-11 | 5.245e-10 | PASS |
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_5v | -2.5097491050e-4 A | -2.5097655809e-4 A | 1.648e-9 | 2.510e-8 | PASS |
+| pss-rc-sine-steady-state | PSS | output_peak_to_peak | 1.5678268900e0 V | 1.5717672548e0 V | 3.940e-3 | 3.144e-2 | PASS |
+| stability-rc-pole-zero | STABILITY | dominant_pole_real | -2.0000000000e3 rad/s | -2.0000000000e3 rad/s | 2.274e-13 | 1.000e1 | PASS |
+| stability-rc-pole-zero | STABILITY | transmission_zero_real | -1.0000000000e3 rad/s | -1.0000000000e3 rad/s | 0.000e0 | 1.000e1 | PASS |
+| stability-rc-pole-zero | STABILITY | stable_flag | 1.0000000000e0 boolean | 1.0000000000e0 boolean | 0.000e0 | 0.000e0 | PASS |
 
 ## Referencias y derivaciones
 
@@ -119,11 +123,18 @@ Observaciones: **46/46** dentro de tolerancia.
   - `source_current_0_3v`: i(V1) en V1=0.3 V del raw generado en cada ejecución
   - `source_current_0_4v`: i(V1) en V1=0.4 V del raw generado en cada ejecución
   - `source_current_0_5v`: i(V1) en V1=0.5 V del raw generado en cada ejecución
+- **pss-rc-sine-steady-state** — analytic_closed_form: Función de transferencia H(jw)=1/(1+jwRC), amplitud pico a pico=2 Vin \|H\|.
+  - `output_peak_to_peak`: 10/sqrt(1+(2*pi*1000*1000*1e-6)^2)
+- **stability-rc-pole-zero** — analytic_closed_form: Red RC: polo -2000 rad/s, cero -1000 rad/s y todos los polos en semiplano izquierdo.
+  - `dominant_pole_real`: -2000
+  - `transmission_zero_real`: -1000
+  - `stable_flag`: all(Re(p)) < 0
 
 ## Limitaciones
 
 - La correlación ngspice cubre únicamente los casos marcados como referencia externa; el resto conserva referencias analíticas cerradas.
 - El solver no emite un punto de operación separado en t=0; la primera muestra publicada es la primera solución integrada en t=dt.
 - El caso externo de diodo correlaciona un modelo ideal de Shockley configurado de forma equivalente; no valida alta inyección, ruptura, resistencia serie ni un dispositivo físico.
-- La matriz no valida PSS, BSIM, ruido, sensibilidad, estabilidad de lazo ni MCU.
+- La matriz principal valida un caso PSS lineal y una extracción reducida de polos/ceros, pero no valida ruido, sensibilidad, estabilidad de lazo ni MCU.
+- La caracterización BSIM3 separada cuantifica una discrepancia de corriente frente a ngspice y no certifica el modelo.
 - Aprobar la suite sólo demuestra conformidad con los casos, residuos y tolerancias versionados.
