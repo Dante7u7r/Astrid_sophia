@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "pss-rc-sine-steady-state",
+  "title": "PSS de filtro RC excitado por seno",
+  "rationale": "Valida que shooting encuentre el régimen periódico y reproduzca la amplitud cerrada de un filtro RC lineal.",
+  "analysis": {
+    "kind": "pss",
+    "period": 0.001,
+    "maxShootingIters": 8,
+    "shootingTolerance": 0.0001
+  },
+  "netlist": {
+    "components": [
+      { "id": "V1", "type": "vsource", "value": 0.0, "pins": ["1", "0"], "waveType": "sine", "amplitude": 5.0, "frequency": 1000.0, "offset": 0.0 },
+      { "id": "R1", "type": "resistor", "value": 1000.0, "pins": ["1", "2"] },
+      { "id": "C1", "type": "capacitor", "value": 0.000001, "pins": ["2", "0"] }
+    ],
+    "wires": []
+  },
+  "observations": [
+    { "id": "output_peak_to_peak", "quantity": "pss_node_peak_to_peak", "node": "2" }
+  ],
+  "reference": "../references/pss_rc_sine_steady_state.json"
+}

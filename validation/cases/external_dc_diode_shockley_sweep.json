@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "external-dc-diode-shockley-sweep",
+  "title": "Correlación ngspice del diodo Shockley",
+  "rationale": "Compara el modelo no lineal ideal y la continuación DC con ngspice en cinco puntos.",
+  "analysis": {
+    "kind": "dc_sweep",
+    "sourceId": "V1",
+    "vStart": 0.1,
+    "vEnd": 0.5,
+    "vStep": 0.1
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 0.1,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "D1",
+        "type": "diode",
+        "value": 0.0,
+        "pins": ["1", "0"],
+        "diodeIs": 1e-12,
+        "diodeN": 1.0,
+        "diodeRs": 0.0
+      }
+    ],
+    "wires": [],
+    "temperature": 300.0
+  },
+  "observations": [
+    {
+      "id": "source_current_0_1v",
+      "quantity": "dc_sweep_branch_current",
+      "source": "V1",
+      "sourceValue": 0.1
+    },
+    {
+      "id": "source_current_0_2v",
+      "quantity": "dc_sweep_branch_current",
+      "source": "V1",
+      "sourceValue": 0.2
+    },
+    {
+      "id": "source_current_0_3v",
+      "quantity": "dc_sweep_branch_current",
+      "source": "V1",
+      "sourceValue": 0.3
+    },
+    {
+      "id": "source_current_0_4v",
+      "quantity": "dc_sweep_branch_current",
+      "source": "V1",
+      "sourceValue": 0.4
+    },
+    {
+      "id": "source_current_0_5v",
+      "quantity": "dc_sweep_branch_current",
+      "source": "V1",
+      "sourceValue": 0.5
+    }
+  ],
+  "reference": "../references/external_dc_diode_shockley_sweep.json",
+  "externalReference": {
+    "engine": "ngspice",
+    "fixture": "../ngspice/dc_diode_shockley_sweep.cir"
+  }
+}

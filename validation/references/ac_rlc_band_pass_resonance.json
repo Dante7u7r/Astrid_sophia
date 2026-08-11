@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "caseId": "ac-rlc-band-pass-resonance",
+  "method": "closed_form",
+  "source": "RLC serie ideal con salida en R y f0=1/(2π√LC).",
+  "observations": [
+    {
+      "id": "gain_at_resonance",
+      "expected": 0.0,
+      "absoluteTolerance": 0.002,
+      "relativeTolerance": 0.0,
+      "units": "dB",
+      "expression": "20·log10(R/|R+j(ωL−1/ωC)|), con ωL=1/ωC"
+    },
+    {
+      "id": "phase_at_resonance",
+      "expected": 0.0,
+      "absoluteTolerance": 0.02,
+      "relativeTolerance": 0.0,
+      "units": "deg",
+      "expression": "−atan((ωL−1/ωC)/R)=0"
+    },
+    {
+      "id": "kcl_at_resonance",
+      "expected": 0.0,
+      "absoluteTolerance": 1e-10,
+      "relativeTolerance": 0.0,
+      "units": "A",
+      "expression": "|Vout/R + jωC·(Vout−V2)|"
+    }
+  ]
+}

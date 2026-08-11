@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Astryd Sophia — Design System Demo</title>
+  <link rel="stylesheet" href="design_system.css" />
+  <style>
+    /* Demo-only layout */
+    body { padding: 32px; display: flex; flex-direction: column; gap: 40px; }
+    .section { display: flex; flex-direction: column; gap: 16px; }
+    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-disabled); }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Buttons ─────────────────────────────────────────── -->
+  <div class="section">
+    <span class="section-title">Buttons</span>
+    <div class="row">
+      <button class="btn-primary">▶ Run Simulation</button>
+      <button class="btn-primary" disabled>▶ Run Simulation</button>
+      <button class="btn-ghost">◼ Stop</button>
+      <button class="btn-ghost">⤓ Export CSV</button>
+      <button class="btn-icon" title="Settings">⚙</button>
+      <button class="btn-icon" title="Zoom in">+</button>
+      <button class="btn-icon" title="Zoom out">−</button>
+    </div>
+  </div>
+
+  <!-- ── Badges ──────────────────────────────────────────── -->
+  <div class="section">
+    <span class="section-title">Badges</span>
+    <div class="row">
+      <span class="badge-accent">DC</span>
+      <span class="badge-accent">AC</span>
+      <span class="badge-accent">Transient</span>
+    </div>
+  </div>
+
+  <!-- ── Glass panels ────────────────────────────────────── -->
+  <div class="section">
+    <span class="section-title">Glass panels</span>
+    <div class="row">
+      <div class="glass-panel" style="padding:20px; width:220px;">
+        <div class="text-sm text-secondary">Node voltages</div>
+        <div class="text-lg" style="margin-top:8px;">
+          V(1) = <span class="text-mono text-accent">4.998 V</span>
+        </div>
+        <div class="text-sm" style="margin-top:4px;">
+          V(2) = <span class="text-mono text-accent">2.499 V</span>
+        </div>
+        <div class="divider" style="margin:12px 0;"></div>
+        <div class="text-xs text-secondary">Solve time: <span class="text-mono">0.3 ms</span></div>
+      </div>
+
+      <div class="glass-panel--elevated glass-panel" style="padding:20px; width:220px;">
+        <div class="text-sm text-secondary">Status</div>
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;"></span>
+          <span class="text-base text-success">Converged</span>
+        </div>
+        <div class="text-xs text-secondary" style="margin-top:8px;">NR: 6 iterations</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Cards ───────────────────────────────────────────── -->
+  <div class="section">
+    <span class="section-title">Interactive cards</span>
+    <div class="stat-row">
+      <div class="card">
+        <div class="text-xs text-secondary">Total nodes</div>
+        <div class="text-lg text-mono" style="margin-top:6px;">128</div>
+      </div>
+      <div class="card">
+        <div class="text-xs text-secondary">Components</div>
+        <div class="text-lg text-mono" style="margin-top:6px;">347</div>
+      </div>
+      <div class="card">
+        <div class="text-xs text-secondary">Step size</div>
+        <div class="text-lg text-mono" style="margin-top:6px;">1 ns</div>
+      </div>
+      <div class="card">
+        <div class="text-xs text-secondary">Stop time</div>
+        <div class="text-lg text-mono" style="margin-top:6px;">10 µs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Canvas viewport ─────────────────────────────────── -->
+  <div class="section">
+    <span class="section-title">Schematic / oscilloscope viewport</span>
+    <div class="canvas-wrapper" style="max-width:640px;">
+      <canvas id="demo-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Typography scale ────────────────────────────────── -->
+  <div class="section">
+    <span class="section-title">Typography</span>
+    <div style="display:flex; flex-direction:column; gap:6px;">
+      <div class="text-xl">Display — Circuit Simulation</div>
+      <div class="text-lg">Heading — Modified Nodal Analysis</div>
+      <div class="text-md">Subheading — Newton-Raphson</div>
+      <div class="text-base">Body — Trapezoidal integration with adaptive step size.</div>
+      <div class="text-sm text-secondary">Label — Convergence criterion: |ΔV| &lt; εₐᵦₛ + ε_rel·|V|</div>
+      <div class="text-xs text-disabled">Caption — Node 0 = GND reference, excluded from MNA matrix.</div>
+      <div class="text-mono text-accent">V(Node1) = +4.997832 V</div>
+    </div>
+  </div>
+
+  <script>
+    // Minimal canvas demo — dot grid + waveform line
+    const canvas = document.getElementById("demo-canvas");
+    const dpr    = window.devicePixelRatio || 1;
+
+    function resize() {
+      canvas.width  = canvas.clientWidth  * dpr;
+      canvas.height = canvas.clientHeight * dpr;
+      draw();
+    }
+
+    function draw() {
+      const ctx = canvas.getContext("2d");
+      const W   = canvas.clientWidth;
+      const H   = canvas.clientHeight;
+      ctx.clearRect(0, 0, W * dpr, H * dpr);
+      ctx.scale(dpr, dpr);
+
+      // Grid dots
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 20)
+        for (let y = 0; y <= H; y += 20) {
+          ctx.moveTo(x + 1.5, y);
+          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        }
+      ctx.fill();
+
+      // Sinusoidal waveform
+      ctx.beginPath();
+      ctx.strokeStyle = "hsl(190, 100%, 55%)";
+      ctx.lineWidth   = 2;
+      ctx.shadowColor = "hsla(190, 100%, 55%, 0.4)";
+      ctx.shadowBlur  = 8;
+      for (let px = 0; px <= W; px++) {
+        const t = px / W;
+        const y = H / 2 + Math.sin(t * Math.PI * 8) * (H * 0.35);
+        px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+      }
+      ctx.stroke();
+
+      // Reset scale for next call
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    new ResizeObserver(resize).observe(canvas);
+    resize();
+  </script>
+
+</body>
+</html>

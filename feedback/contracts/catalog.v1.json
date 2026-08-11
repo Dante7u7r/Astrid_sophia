@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "schemaId": "https://astryd.local/schemas/feedback-event.v1.schema.json",
+  "privacyClasses": [
+    "operational",
+    "circuit-derived",
+    "user-content"
+  ],
+  "events": [
+    {
+      "kind": "session.started",
+      "privacyClass": "operational",
+      "fields": [
+        { "name": "previousSessionId", "type": "string", "optional": true, "maxLength": 128 },
+        { "name": "os", "type": "string", "maxLength": 64 },
+        { "name": "locale", "type": "string", "optional": true, "maxLength": 32 }
+      ]
+    },
+    {
+      "kind": "session.ended",
+      "privacyClass": "operational",
+      "fields": [
+        { "name": "durationMs", "type": "integer", "min": 0, "max": 604800000 },
+        { "name": "cleanShutdown", "type": "boolean" }
+      ]
+    },
+    {
+      "kind": "circuit.summary_created",
+      "privacyClass": "circuit-derived",
+      "fields": [
+        { "name": "topologyFingerprint", "type": "string", "maxLength": 128 },
+        { "name": "componentCount", "type": "integer", "min": 0, "max": 10000 },
+        { "name": "nodeCount", "type": "integer", "min": 0, "max": 5001 },
+        { "name": "wireCount", "type": "integer", "min": 0, "max": 100000 },
+        { "name": "nonlinearDeviceCount", "type": "integer", "min": 0, "max": 10000 },
+        { "name": "reactiveDeviceCount", "type": "integer", "min": 0, "max": 10000 },
+        { "name": "componentHistogram", "type": "integerMap", "maxProperties": 64 },
+        { "name": "containsFirmware", "type": "boolean" }
+      ]
+    },
+    {
+      "kind": "erc.completed",
+      "privacyClass": "circuit-derived",
+      "fields": [
+        { "name": "passed", "type": "boolean" },
+        { "name": "errorCount", "type": "integer", "min": 0, "max": 100000 },
+        { "name": "warningCount", "type": "integer", "min": 0, "max": 100000 },
+        { "name": "codeCounts", "type": "integerMap", "maxProperties": 128 },
+        { "name": "durationMs", "type": "number", "min": 0, "max": 600000 }
+      ]
+    },
+    {
+      "kind": "simulation.started",
+      "privacyClass": "circuit-derived",
+      "fields": [
+        {
+          "name": "analysis",
+          "type": "enum",
+          "values": ["DC", "DC_SWEEP", "AC", "TRAN", "TRAN_MC", "SENS", "PSS", "STB", "PVT", "SPAR", "FFT", "IMD", "NOISE", "THERMAL"]
+        },
+        { "name": "settingsFingerprint", "type": "string", "maxLength": 128 },
+        { "name": "componentCount", "type": "integer", "min": 0, "max": 10000 },
+        { "name": "nodeCount", "type": "integer", "min": 0, "max": 5001 },
+        { "name": "requestedPointCount", "type": "integer", "optional": true, "min": 0, "max": 2000000 }
+      ]
+    },
+    {
+      "kind": "simulation.completed",
+      "privacyClass": "operational",
+      "fields": [
+        {
+          "name": "analysis",
+          "type": "enum",
+          "values": ["DC", "DC_SWEEP", "AC", "TRAN", "TRAN_MC", "SENS", "PSS", "STB", "PVT", "SPAR", "FFT", "IMD", "NOISE", "THERMAL"]
+        },
+        { "name": "durationMs", "type": "number", "min": 0, "max": 86400000 },
+        { "name": "pointCount", "type": "integer", "min": 0, "max": 2000000 },
+        { "name": "converged", "type": "boolean" },
+        { "name": "finalResidual", "type": "number", "optional": true, "min": 0 }
+      ]
+    },
+    {
+      "kind": "simulation.failed",
+      "privacyClass": "operational",
+      "fields": [
+        {
+          "name": "analysis",
+          "type": "enum",
+          "values": ["DC", "DC_SWEEP", "AC", "TRAN", "TRAN_MC", "SENS", "PSS", "STB", "PVT", "SPAR", "FFT", "IMD", "NOISE", "THERMAL"]
+        },
+        {
+          "name": "phase",
+          "type": "enum",
+          "values": ["preflight", "extraction", "stamping", "iteration", "serialization", "ipc", "unknown"]
+        },
+        { "name": "errorCode", "type": "string", "maxLength": 96 },
+        { "name": "messageFingerprint", "type": "string", "maxLength": 128 },
+        { "name": "durationMs", "type": "number", "min": 0, "max": 86400000 }
+      ]
+    },
+    {
+      "kind": "simulation.cancelled",
+      "privacyClass": "operational",
+      "fields": [
+        {
+          "name": "reason",
+          "type": "enum",
+          "values": ["user", "replaced", "shutdown", "timeout"]
+        },
+        { "name": "durationMs", "type": "number", "min": 0, "max": 86400000 }
+      ]
+    },
+    {
+      "kind": "solver.convergence_summary",
+      "privacyClass": "operational",
+      "fields": [
+        {
+          "name": "analysis",
+          "type": "enum",
+          "values": ["DC", "DC_SWEEP", "AC", "TRAN", "TRAN_MC", "SENS", "PSS", "STB", "PVT", "SPAR", "FFT", "IMD", "NOISE", "THERMAL"]
+        },
+        { "name": "method", "type": "string", "maxLength": 64 },
+        { "name": "iterations", "type": "integer", "min": 0, "max": 10000000 },
+        { "name": "acceptedSteps", "type": "integer", "min": 0, "max": 2000000 },
+        { "name": "rejectedSteps", "type": "integer", "min": 0, "max": 2000000 },
+        { "name": "finalResidual", "type": "number", "optional": true, "min": 0 },
+        { "name": "homotopyUsed", "type": "boolean" }
+      ]
+    },
+    {
+      "kind": "performance.sampled",
+      "privacyClass": "operational",
+      "fields": [
+        { "name": "fps", "type": "number", "min": 0, "max": 1000 },
+        { "name": "cpuPercent", "type": "number", "min": 0, "max": 100 },
+        { "name": "ramBytes", "type": "integer", "min": 0 },
+        { "name": "canvasFrames", "type": "integer", "min": 0 },
+        { "name": "oscilloscopeFrames", "type": "integer", "min": 0 },
+        { "name": "skippedDmmUpdates", "type": "integer", "min": 0 }
+      ]
+    },
+    {
+      "kind": "parser.completed",
+      "privacyClass": "circuit-derived",
+      "fields": [
+        { "name": "format", "type": "enum", "values": ["spice"] },
+        { "name": "success", "type": "boolean" },
+        { "name": "componentCount", "type": "integer", "min": 0, "max": 10000 },
+        { "name": "durationMs", "type": "number", "min": 0, "max": 600000 },
+        { "name": "errorCode", "type": "string", "optional": true, "maxLength": 96 }
+      ]
+    },
+    {
+      "kind": "ui.error_observed",
+      "privacyClass": "operational",
+      "fields": [
+        { "name": "area", "type": "enum", "values": ["simulation", "parser", "export", "canvas", "file", "settings", "unknown"] },
+        { "name": "errorCode", "type": "string", "maxLength": 96 },
+        { "name": "messageFingerprint", "type": "string", "maxLength": 128 }
+      ]
+    },
+    {
+      "kind": "recommendation.shown",
+      "privacyClass": "operational",
+      "fields": [
+        { "name": "recommendationId", "type": "string", "maxLength": 128 },
+        { "name": "ruleId", "type": "string", "maxLength": 128 },
+        {
+          "name": "safetyClass",
+          "type": "enum",
+          "values": ["informational", "reversible", "scientific-review-required"]
+        },
+        { "name": "confidence", "type": "number", "min": 0, "max": 1 },
+        { "name": "proposedProfile", "type": "string", "optional": true, "maxLength": 96 }
+      ]
+    },
+    {
+      "kind": "recommendation.outcome",
+      "privacyClass": "operational",
+      "fields": [
+        { "name": "recommendationId", "type": "string", "maxLength": 128 },
+        {
+          "name": "decision",
+          "type": "enum",
+          "values": ["accepted", "rejected", "dismissed"]
+        },
+        { "name": "applied", "type": "boolean" },
+        { "name": "improved", "type": "boolean", "optional": true },
+        { "name": "deltaDurationPercent", "type": "number", "optional": true, "min": -100, "max": 100000 }
+      ]
+    },
+    {
+      "kind": "user.feedback_submitted",
+      "privacyClass": "user-content",
+      "fields": [
+        { "name": "subjectEventId", "type": "string", "optional": true, "maxLength": 128 },
+        {
+          "name": "rating",
+          "type": "enum",
+          "values": ["correct", "uncertain", "incorrect"]
+        },
+        {
+          "name": "category",
+          "type": "enum",
+          "values": ["convergence", "performance", "interface", "model", "other"]
+        },
+        { "name": "expectedValue", "type": "number", "optional": true },
+        { "name": "expectedUnit", "type": "string", "optional": true, "maxLength": 32 },
+        { "name": "note", "type": "string", "optional": true, "maxLength": 2000 },
+        { "name": "noteFingerprint", "type": "string", "optional": true, "maxLength": 128 },
+        { "name": "attachmentIncluded", "type": "boolean" }
+      ]
+    },
+    {
+      "kind": "validation.case_completed",
+      "privacyClass": "circuit-derived",
+      "fields": [
+        { "name": "caseId", "type": "string", "maxLength": 128 },
+        {
+          "name": "analysis",
+          "type": "enum",
+          "values": ["DC", "DC_SWEEP", "AC", "TRAN", "TRAN_MC", "SENS", "PSS", "STB", "PVT", "SPAR", "FFT", "IMD", "NOISE", "THERMAL"]
+        },
+        { "name": "passed", "type": "boolean" },
+        { "name": "observationCount", "type": "integer", "min": 0, "max": 1000000 },
+        { "name": "maxNormalizedError", "type": "number", "min": 0 },
+        {
+          "name": "referenceMethod",
+          "type": "enum",
+          "values": ["closed-form", "ngspice-live", "measurement", "other"]
+        }
+      ]
+    },
+    {
+      "kind": "export.created",
+      "privacyClass": "operational",
+      "fields": [
+        {
+          "name": "exportKind",
+          "type": "enum",
+          "values": ["support-bundle", "touchstone", "csv", "svg", "hdf5", "pdf"]
+        },
+        { "name": "itemCount", "type": "integer", "min": 0, "max": 2000000 },
+        { "name": "redactionCount", "type": "integer", "min": 0, "max": 2000000 }
+      ]
+    },
+    {
+      "kind": "data.deleted",
+      "privacyClass": "operational",
+      "fields": [
+        {
+          "name": "scope",
+          "type": "enum",
+          "values": ["all", "expired", "session"]
+        },
+        { "name": "rowsDeleted", "type": "integer", "min": 0 },
+        { "name": "attachmentsDeleted", "type": "integer", "min": 0 }
+      ]
+    }
+  ]
+}

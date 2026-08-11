@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "caseId": "external-dc-resistive-divider",
+  "method": "ngspice_live",
+  "source": "ngspice ejecutado en vivo; versión registrada en el reporte y fixture versionado validation/ngspice/dc_resistive_divider.cir.",
+  "observations": [
+    {
+      "id": "vout",
+      "expected": 4.0,
+      "absoluteTolerance": 1e-9,
+      "relativeTolerance": 1e-9,
+      "units": "V",
+      "expression": "v(2) del raw ASCII generado en cada ejecución"
+    }
+  ]
+}

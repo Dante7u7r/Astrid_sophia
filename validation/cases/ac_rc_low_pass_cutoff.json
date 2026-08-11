@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "ac-rc-low-pass-cutoff",
+  "title": "Filtro RC pasa-bajos en frecuencia de corte",
+  "rationale": "Comprueba admitancia compleja, magnitud y fase en un punto con solución cerrada.",
+  "analysis": {
+    "kind": "ac",
+    "fStart": 159.15494309189535,
+    "fEnd": 159.15494309189535,
+    "pointsPerDecade": 1
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 0.0,
+        "pins": ["1", "0"],
+        "amplitude": 1.0
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 1000.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "C1",
+        "type": "capacitor",
+        "value": 0.000001,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": []
+  },
+  "observations": [
+    {
+      "id": "gain_at_fc",
+      "quantity": "node_amplitude_db",
+      "node": "2",
+      "frequencyHz": 159.15494309189535
+    },
+    {
+      "id": "phase_at_fc",
+      "quantity": "node_phase_degrees",
+      "node": "2",
+      "frequencyHz": 159.15494309189535
+    },
+    {
+      "id": "kcl_at_fc",
+      "quantity": "ac_kcl_residual",
+      "node": "2",
+      "frequencyHz": 159.15494309189535
+    }
+  ],
+  "reference": "../references/ac_rc_low_pass_cutoff.json"
+}

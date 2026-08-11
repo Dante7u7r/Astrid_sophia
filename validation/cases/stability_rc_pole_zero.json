@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "stability-rc-pole-zero",
+  "title": "Extracción reducida de polo y cero RC",
+  "rationale": "Valida polos, ceros y clasificación estable del modelo reducido contra expresiones cerradas.",
+  "analysis": { "kind": "stability" },
+  "netlist": {
+    "components": [
+      { "id": "R1", "type": "resistor", "value": 1000.0, "pins": ["1", "2"] },
+      { "id": "C1", "type": "capacitor", "value": 0.000001, "pins": ["1", "2"] },
+      { "id": "R2", "type": "resistor", "value": 1000.0, "pins": ["2", "0"] }
+    ],
+    "wires": []
+  },
+  "observations": [
+    { "id": "dominant_pole_real", "quantity": "pole_real", "index": 0 },
+    { "id": "transmission_zero_real", "quantity": "zero_real", "index": 0 },
+    { "id": "stable_flag", "quantity": "stability_flag" }
+  ],
+  "reference": "../references/stability_rc_pole_zero.json"
+}

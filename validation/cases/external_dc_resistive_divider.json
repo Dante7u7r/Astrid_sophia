@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "external-dc-resistive-divider",
+  "title": "Correlación ngspice del divisor resistivo",
+  "rationale": "Compara directamente el punto de operación MNA de Astryd Sophia con ngspice.",
+  "analysis": {
+    "kind": "dc",
+    "tolerance": 1e-10,
+    "maxIterations": 100
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "V1",
+        "type": "vsource",
+        "value": 12.0,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "R1",
+        "type": "resistor",
+        "value": 2000.0,
+        "pins": ["1", "2"]
+      },
+      {
+        "id": "R2",
+        "type": "resistor",
+        "value": 1000.0,
+        "pins": ["2", "0"]
+      }
+    ],
+    "wires": []
+  },
+  "observations": [
+    {
+      "id": "vout",
+      "quantity": "node_voltage",
+      "node": "2"
+    }
+  ],
+  "reference": "../references/external_dc_resistive_divider.json",
+  "externalReference": {
+    "engine": "ngspice",
+    "fixture": "../ngspice/dc_resistive_divider.cir"
+  }
+}

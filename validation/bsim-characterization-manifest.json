@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "bsim3-gap-characterization",
+  "title": "Caracterización no bloqueante de la brecha BSIM3",
+  "cases": [
+    "cases/external_dc_bsim3_nmos_transfer.json"
+  ],
+  "reports": {
+    "json": "reports/bsim-characterization.json",
+    "markdown": "reports/bsim-characterization.md"
+  }
+}

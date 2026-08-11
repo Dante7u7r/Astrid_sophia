@@ -1,0 +1,19 @@
+{
+  "version": "3.0",
+  "components": [
+    { "id": "V1", "type": "vsource", "value": 5, "x": -160, "y": 80, "rotation": 90, "waveType": "square", "amplitude": 5, "frequency": 100, "offset": 0 },
+    { "id": "R1", "type": "resistor", "value": 1000, "x": 0, "y": 0, "rotation": 0 },
+    { "id": "C1", "type": "capacitor", "value": 0.000001, "x": 160, "y": 80, "rotation": 90 },
+    { "id": "GND1", "type": "ground", "value": 0, "x": 0, "y": 200, "rotation": 0 }
+  ],
+  "wires": [
+    { "id": "w1", "from": { "componentId": "V1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w2", "from": { "componentId": "V1", "pinIndex": 0 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [] },
+    { "id": "w3", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "C1", "pinIndex": 0 }, "points": [] },
+    { "id": "w4", "from": { "componentId": "C1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] }
+  ],
+  "viewport": { "zoom": 1.2, "offsetX": 405, "offsetY": 160 },
+  "simSettings": { "dt": 0.00001, "tolerance": 0.00001, "maxIterations": 100 },
+  "activeAnalysisMode": "TRAN",
+  "probes": { "ch1ProbeNode": "2", "ch2ProbeNode": "0" }
+}

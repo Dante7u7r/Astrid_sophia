@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "caseId": "stability-rc-pole-zero",
+  "method": "analytic_closed_form",
+  "source": "Red RC: polo -2000 rad/s, cero -1000 rad/s y todos los polos en semiplano izquierdo.",
+  "observations": [
+    { "id": "dominant_pole_real", "expected": -2000.0, "absoluteTolerance": 10.0, "relativeTolerance": 0.005, "units": "rad/s", "expression": "-2000" },
+    { "id": "transmission_zero_real", "expected": -1000.0, "absoluteTolerance": 10.0, "relativeTolerance": 0.01, "units": "rad/s", "expression": "-1000" },
+    { "id": "stable_flag", "expected": 1.0, "absoluteTolerance": 0.0, "relativeTolerance": 0.0, "units": "boolean", "expression": "all(Re(p)) < 0" }
+  ]
+}

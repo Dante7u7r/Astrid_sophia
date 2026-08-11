@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "external-dc-bsim3-nmos-transfer",
+  "title": "Correlación ngspice de transferencia NMOS BSIM3",
+  "rationale": "Compara la corriente de drenador del modelo bsim3nmos con ngspice BSIM3v3 en cinco puntos de fuerte inversión, con geometría y parámetros explícitos.",
+  "analysis": {
+    "kind": "dc_sweep",
+    "sourceId": "VG",
+    "vStart": 0.8,
+    "vEnd": 1.6,
+    "vStep": 0.2
+  },
+  "netlist": {
+    "components": [
+      {
+        "id": "VD",
+        "type": "vsource",
+        "value": 1.0,
+        "pins": ["2", "0"]
+      },
+      {
+        "id": "VG",
+        "type": "vsource",
+        "value": 0.8,
+        "pins": ["1", "0"]
+      },
+      {
+        "id": "M1",
+        "type": "bsim3nmos",
+        "value": 0.4,
+        "pins": ["1", "2", "0", "0"],
+        "w": 0.00001,
+        "l": 1.8e-7,
+        "bsimTox": 4e-9,
+        "bsimU0": 0.045,
+        "bsimVmax": 80000.0,
+        "bsimTheta": 0.0,
+        "bsimEta0": 0.08
+      }
+    ],
+    "wires": [],
+    "temperature": 300.15
+  },
+  "observations": [
+    { "id": "drain_current_0_8v", "quantity": "dc_sweep_branch_current", "source": "VD", "sourceValue": 0.8 },
+    { "id": "drain_current_1_0v", "quantity": "dc_sweep_branch_current", "source": "VD", "sourceValue": 1.0 },
+    { "id": "drain_current_1_2v", "quantity": "dc_sweep_branch_current", "source": "VD", "sourceValue": 1.2 },
+    { "id": "drain_current_1_4v", "quantity": "dc_sweep_branch_current", "source": "VD", "sourceValue": 1.4 },
+    { "id": "drain_current_1_6v", "quantity": "dc_sweep_branch_current", "source": "VD", "sourceValue": 1.6 }
+  ],
+  "reference": "../references/external_dc_bsim3_nmos_transfer.json",
+  "externalReference": {
+    "engine": "ngspice",
+    "fixture": "../ngspice/dc_bsim3_nmos_transfer.cir"
+  }
+}

@@ -1,0 +1,1023 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "phase4-external-correlation",
+  "title": "Correlación científica externa de Astryd Sophia — Fase 4",
+  "generatedAtUnixSeconds": 1785820954,
+  "solverVersion": "0.1.0",
+  "gitHead": "aedab80dc9a6",
+  "gitWorktree": "clean",
+  "platform": "windows-x86_64",
+  "externalReferenceStatus": {
+    "ngspice": "** ngspice-46 : Circuit level simulation program"
+  },
+  "passed": true,
+  "passedCases": 15,
+  "failedCases": 0,
+  "passedObservations": 50,
+  "failedObservations": 0,
+  "cases": [
+    {
+      "id": "dc-resistive-divider",
+      "title": "Divisor resistivo DC 12 V → 4 V",
+      "analysis": "DC",
+      "rationale": "Caso lineal cerrado para comprobar estampado MNA, referencia a tierra y solución nodal.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Ley de Ohm y divisor resistivo ideal.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "vout",
+          "actual": 4.0,
+          "expected": 4.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 4e-9,
+          "units": "V",
+          "expression": "Vout = Vin·R2/(R1+R2) = 12·1000/(2000+1000)",
+          "coordinate": null,
+          "passed": true
+        },
+        {
+          "id": "kcl_node_2",
+          "actual": 0.0,
+          "expected": 0.0,
+          "absoluteError": 0.0,
+          "relativeError": null,
+          "allowedError": 1e-12,
+          "units": "A",
+          "expression": "|(V2−V1)/R1 + V2/R2|",
+          "coordinate": null,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "dc-diode-shockley-sweep",
+      "title": "Curva I–V de diodo ideal a 300 K",
+      "analysis": "DC SWEEP",
+      "rationale": "Comprueba el modelo no lineal de Shockley y la continuación del barrido DC en cinco décadas de corriente.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Ecuación de Shockley con Is=1 pA, n=1 y Vt=kT/q a T=300 K.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "source_current_0_1v",
+          "actual": -4.6954861294181936e-11,
+          "expected": -4.685486129418194e-11,
+          "absoluteError": 9.999999999999836e-14,
+          "relativeError": 0.002134250262147624,
+          "allowedError": 5e-13,
+          "units": "A",
+          "expression": "−Is·(exp(0.1/Vt)−1)",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.1,
+            "sampled": 0.1,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_2v",
+          "actual": -2.289287749485394e-9,
+          "expected": -2.289087749485392e-9,
+          "absoluteError": 2.000000000021293e-13,
+          "relativeError": 0.00008737104990714801,
+          "allowedError": 5e-12,
+          "units": "A",
+          "expression": "−Is·(exp(0.2/Vt)−1)",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.2,
+            "sampled": 0.2,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_3v",
+          "actual": -1.0959113160312906e-7,
+          "expected": -1.0959083160312857e-7,
+          "absoluteError": 3.000000004926781e-13,
+          "relativeError": 2.7374552789150817e-6,
+          "allowedError": 2.1918166320625715e-10,
+          "units": "A",
+          "expression": "−Is·(exp(0.3/Vt)−1)",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.3,
+            "sampled": 0.30000000000000004,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_4v",
+          "actual": -5.24450130034308e-6,
+          "expected": -5.2445009003430685e-6,
+          "absoluteError": 4.0000001161539286e-13,
+          "relativeError": 7.627036761290801e-8,
+          "allowedError": 1.0489001800686137e-8,
+          "units": "A",
+          "expression": "−Is·(exp(0.4/Vt)−1)",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.4,
+            "sampled": 0.4,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_5v",
+          "actual": -0.0002509749104979914,
+          "expected": -0.000250974909997991,
+          "absoluteError": 5.00000377472859e-13,
+          "relativeError": 1.9922325202820524e-9,
+          "allowedError": 5.019498199959821e-7,
+          "units": "A",
+          "expression": "−Is·(exp(0.5/Vt)−1)",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.5,
+            "sampled": 0.5,
+            "units": "V"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "ac-rc-low-pass-cutoff",
+      "title": "Filtro RC pasa-bajos en frecuencia de corte",
+      "analysis": "AC",
+      "rationale": "Comprueba admitancia compleja, magnitud y fase en un punto con solución cerrada.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Función de transferencia H(jω)=1/(1+jωRC).",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "gain_at_fc",
+          "actual": -3.0102999566398116,
+          "expected": -3.010299956639812,
+          "absoluteError": 4.440892098500626e-16,
+          "relativeError": 1.4752324228372524e-16,
+          "allowedError": 0.002,
+          "units": "dB",
+          "expression": "20·log10(1/√2)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "phase_at_fc",
+          "actual": -45.0,
+          "expected": -45.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.02,
+          "units": "deg",
+          "expression": "-atan(ωRC), con ωRC=1",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "kcl_at_fc",
+          "actual": 2.168404344971009e-19,
+          "expected": 0.0,
+          "absoluteError": 2.168404344971009e-19,
+          "relativeError": null,
+          "allowedError": 1e-10,
+          "units": "A",
+          "expression": "|(Vout−Vin)/R + jωC·Vout|",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "ac-rl-low-pass-sweep",
+      "title": "Filtro RL pasa-bajos en dos décadas",
+      "analysis": "AC",
+      "rationale": "Comprueba el estampado complejo del inductor, magnitud, fase y KCL por debajo, en y por encima del polo.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "H(jω)=R/(R+jωL), con R=100 Ω, L=100 mH y fc=R/(2πL).",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "gain_fc_over_10",
+          "actual": -0.04321373782642462,
+          "expected": -0.043213737826425784,
+          "absoluteError": 1.1657341758564144e-15,
+          "relativeError": 2.6976008891865684e-14,
+          "allowedError": 0.002,
+          "units": "dB",
+          "expression": "−10·log10(1+0.1²)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 15.915494309189535,
+            "sampled": 15.915494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "phase_fc_over_10",
+          "actual": -5.710593137499642,
+          "expected": -5.710593137499643,
+          "absoluteError": 8.881784197001252e-16,
+          "relativeError": 1.5553172819610294e-16,
+          "allowedError": 0.02,
+          "units": "deg",
+          "expression": "−atan(0.1)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 15.915494309189535,
+            "sampled": 15.915494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "kcl_fc_over_10",
+          "actual": 1.0408340855860843e-17,
+          "expected": 0.0,
+          "absoluteError": 1.0408340855860843e-17,
+          "relativeError": null,
+          "allowedError": 1e-10,
+          "units": "A",
+          "expression": "|Vout/R + (Vout−Vin)/(jωL)|",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 15.915494309189535,
+            "sampled": 15.915494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "gain_fc",
+          "actual": -3.0102999566398116,
+          "expected": -3.010299956639812,
+          "absoluteError": 4.440892098500626e-16,
+          "relativeError": 1.4752324228372524e-16,
+          "allowedError": 0.003010299956639812,
+          "units": "dB",
+          "expression": "−10·log10(2)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "phase_fc",
+          "actual": -45.0,
+          "expected": -45.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.045,
+          "units": "deg",
+          "expression": "−atan(1)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "kcl_fc",
+          "actual": 1.734723475976807e-18,
+          "expected": 0.0,
+          "absoluteError": 1.734723475976807e-18,
+          "relativeError": null,
+          "allowedError": 1e-10,
+          "units": "A",
+          "expression": "|Vout/R + (Vout−Vin)/(jωL)|",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "gain_10fc",
+          "actual": -20.043213737826427,
+          "expected": -20.043213737826427,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.02004321373782643,
+          "units": "dB",
+          "expression": "−10·log10(1+10²)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 1591.5494309189535,
+            "sampled": 1591.5494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "phase_10fc",
+          "actual": -84.28940686250037,
+          "expected": -84.28940686250037,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.08428940686250037,
+          "units": "deg",
+          "expression": "−atan(10)",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 1591.5494309189535,
+            "sampled": 1591.5494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "kcl_10fc",
+          "actual": 1.0842021724855044e-19,
+          "expected": 0.0,
+          "absoluteError": 1.0842021724855044e-19,
+          "relativeError": null,
+          "allowedError": 1e-10,
+          "units": "A",
+          "expression": "|Vout/R + (Vout−Vin)/(jωL)|",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 1591.5494309189535,
+            "sampled": 1591.5494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "ac-rlc-band-pass-resonance",
+      "title": "RLC serie en resonancia",
+      "analysis": "AC",
+      "rationale": "Comprueba la cancelación de reactancias inductiva y capacitiva y el cumplimiento de KCL en un circuito RLC.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "RLC serie ideal con salida en R y f0=1/(2π√LC).",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "gain_at_resonance",
+          "actual": 0.0,
+          "expected": 0.0,
+          "absoluteError": 0.0,
+          "relativeError": null,
+          "allowedError": 0.002,
+          "units": "dB",
+          "expression": "20·log10(R/|R+j(ωL−1/ωC)|), con ωL=1/ωC",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189532,
+            "sampled": 159.15494309189532,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "phase_at_resonance",
+          "actual": 0.0,
+          "expected": 0.0,
+          "absoluteError": 0.0,
+          "relativeError": null,
+          "allowedError": 0.02,
+          "units": "deg",
+          "expression": "−atan((ωL−1/ωC)/R)=0",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189532,
+            "sampled": 159.15494309189532,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "kcl_at_resonance",
+          "actual": 2.817737779804285e-18,
+          "expected": 0.0,
+          "absoluteError": 2.817737779804285e-18,
+          "relativeError": null,
+          "allowedError": 1e-10,
+          "units": "A",
+          "expression": "|Vout/R + jωC·(Vout−V2)|",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189532,
+            "sampled": 159.15494309189532,
+            "units": "Hz"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "transient-rc-step-tau",
+      "title": "Carga RC a una constante de tiempo",
+      "analysis": "TRAN",
+      "rationale": "Comprueba el companion model de capacitor y Backward Euler contra la respuesta exponencial cerrada.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Respuesta al escalón de un circuito RC ideal.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "vc_at_tau",
+          "actual": 3.151443938354401,
+          "expected": 3.1606027941427883,
+          "absoluteError": 0.009158855788387488,
+          "relativeError": 0.0028978193037608613,
+          "allowedError": 0.03,
+          "units": "V",
+          "expression": "Vc(τ)=5·(1-e^-1); tolerancia incluye error global O(dt/τ) de Backward Euler con dt=τ/100",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.001,
+            "sampled": 0.001,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "kcl_at_tau",
+          "actual": 2.3852447794681098e-18,
+          "expected": 0.0,
+          "absoluteError": 2.3852447794681098e-18,
+          "relativeError": null,
+          "allowedError": 1e-9,
+          "units": "A",
+          "expression": "|(Vc−Vin)/R + C·(Vc[n]−Vc[n−1])/dt|",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.001,
+            "sampled": 0.001,
+            "units": "s"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "transient-rc-step-trap",
+      "title": "Respuesta RC con integración trapezoidal",
+      "analysis": "TRAN",
+      "rationale": "Comprueba la historia trapezoidal del capacitor en tres puntos temporales contra la respuesta exponencial.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Respuesta RC ideal Vc(t)=5·(1−e^(−t/RC)); TRAP con dt=τ/100.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "vc_at_0_25tau",
+          "actual": 1.1058104564910638,
+          "expected": 1.1059960846429755,
+          "absoluteError": 0.00018562815191169868,
+          "relativeError": 0.00016783798287280642,
+          "allowedError": 0.0011059960846429755,
+          "units": "V",
+          "expression": "5·(1−e^−0.25)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.00025,
+            "sampled": 0.00025,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "vc_at_1tau",
+          "actual": 3.160526606529673,
+          "expected": 3.1606027941427883,
+          "absoluteError": 0.00007618761311523059,
+          "relativeError": 0.00002410540586005336,
+          "allowedError": 0.003160602794142788,
+          "units": "V",
+          "expression": "5·(1−e^−1)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.001,
+            "sampled": 0.001000000000000002,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "vc_at_2tau",
+          "actual": 4.323301195225193,
+          "expected": 4.323323583816936,
+          "absoluteError": 0.000022388591743194297,
+          "relativeError": 5.1785602694647395e-6,
+          "allowedError": 0.004323323583816936,
+          "units": "V",
+          "expression": "5·(1−e^−2)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.002,
+            "sampled": 0.002,
+            "units": "s"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "transient-rc-step-gear2",
+      "title": "Respuesta RC con Gear2",
+      "analysis": "TRAN",
+      "rationale": "Comprueba el arranque y la historia BDF2 del capacitor en tres puntos temporales contra la respuesta exponencial.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Respuesta RC ideal Vc(t)=5·(1−e^(−t/RC)); BDF2 con arranque BE y dt=τ/100.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "vc_at_0_25tau",
+          "actual": 1.1055399832180015,
+          "expected": 1.1059960846429755,
+          "absoluteError": 0.000456101424973987,
+          "relativeError": 0.00041238972841501536,
+          "allowedError": 0.0011059960846429755,
+          "units": "V",
+          "expression": "5·(1−e^−0.25)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.00025,
+            "sampled": 0.00025,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "vc_at_1tau",
+          "actual": 3.1604336880413055,
+          "expected": 3.1606027941427883,
+          "absoluteError": 0.0001691061014827966,
+          "relativeError": 0.00005350438270705293,
+          "allowedError": 0.003160602794142788,
+          "units": "V",
+          "expression": "5·(1−e^−1)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.001,
+            "sampled": 0.001000000000000002,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "vc_at_2tau",
+          "actual": 4.323284103004246,
+          "expected": 4.323323583816936,
+          "absoluteError": 0.00003948081269022907,
+          "relativeError": 9.132051285268963e-6,
+          "allowedError": 0.004323323583816936,
+          "units": "V",
+          "expression": "5·(1−e^−2)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.002,
+            "sampled": 0.002,
+            "units": "s"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "transient-rl-step-sweep",
+      "title": "Respuesta RL al escalón entre 0.25τ y 5τ",
+      "analysis": "TRAN",
+      "rationale": "Comprueba el companion model del inductor y la evolución temporal de la corriente en cinco puntos de la respuesta cerrada.",
+      "referenceMethod": "closed_form",
+      "referenceSource": "Respuesta de corriente de un RL serie: I(t)=V/R·(1−e^(−tR/L)), con τ=L/R=1 ms.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "source_current_0_25tau",
+          "actual": -0.011035696590344826,
+          "expected": -0.011059960846429757,
+          "absoluteError": 0.000024264256084930574,
+          "relativeError": 0.002193882638631878,
+          "allowedError": 0.0003,
+          "units": "A",
+          "expression": "−0.05·(1−e^−0.25)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.00025,
+            "sampled": 0.00025000000000000033,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_5tau",
+          "actual": -0.019635661192970246,
+          "expected": -0.01967346701436833,
+          "absoluteError": 0.00003780582139808336,
+          "relativeError": 0.0019216654273734384,
+          "allowedError": 0.0003,
+          "units": "A",
+          "expression": "−0.05·(1−e^−0.5)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.0005,
+            "sampled": 0.000500000000000001,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_1tau",
+          "actual": -0.03156013857439417,
+          "expected": -0.03160602794142788,
+          "absoluteError": 0.00004588936703370933,
+          "relativeError": 0.0014519181948061063,
+          "allowedError": 0.00031606027941427883,
+          "units": "A",
+          "expression": "−0.05·(1−e^−1)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.001,
+            "sampled": 0.0010000000000000022,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_2tau",
+          "actual": -0.043199430211409005,
+          "expected": -0.04323323583816937,
+          "absoluteError": 0.000033805626760363694,
+          "relativeError": 0.0007819360754514166,
+          "allowedError": 0.0004323323583816937,
+          "units": "A",
+          "expression": "−0.05·(1−e^−2)",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.002,
+            "sampled": 0.0020000000000000026,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_5tau",
+          "actual": -0.04965887916349386,
+          "expected": -0.049663102650045726,
+          "absoluteError": 4.223486551865885e-6,
+          "relativeError": 0.0000850427445427032,
+          "allowedError": 0.0004966310265004573,
+          "units": "A",
+          "expression": "−0.05·(1−e^−5); tolerancia incluye error de Backward Euler con dt=τ/200",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.005,
+            "sampled": 0.00499999999999988,
+            "units": "s"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "external-dc-resistive-divider",
+      "title": "Correlación ngspice del divisor resistivo",
+      "analysis": "DC",
+      "rationale": "Compara directamente el punto de operación MNA de Astryd Sophia con ngspice.",
+      "referenceMethod": "ngspice_live",
+      "referenceSource": "ngspice ejecutado en vivo; versión registrada en el reporte y fixture versionado validation/ngspice/dc_resistive_divider.cir.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "vout",
+          "actual": 4.0,
+          "expected": 4.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 4e-9,
+          "units": "V",
+          "expression": "v(2) del raw ASCII generado en cada ejecución",
+          "coordinate": null,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "external-ac-rc-low-pass-cutoff",
+      "title": "Correlación ngspice del filtro RC",
+      "analysis": "AC",
+      "rationale": "Compara magnitud y fase complejas de Astryd Sophia con un barrido AC independiente.",
+      "referenceMethod": "ngspice_live",
+      "referenceSource": "ngspice ejecutado en vivo; versión registrada en el reporte y fixture versionado validation/ngspice/ac_rc_low_pass_cutoff.cir.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "gain_at_fc",
+          "actual": -3.0102999566398116,
+          "expected": -3.0102999566398116,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 2e-6,
+          "units": "dB",
+          "expression": "20·log10(|v(2)|) del raw complejo generado en cada ejecución",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        },
+        {
+          "id": "phase_at_fc",
+          "actual": -45.0,
+          "expected": -45.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.00002,
+          "units": "deg",
+          "expression": "arg(v(2)) del raw complejo generado en cada ejecución",
+          "coordinate": {
+            "name": "frequency",
+            "requested": 159.15494309189535,
+            "sampled": 159.15494309189535,
+            "units": "Hz"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "external-transient-rc-step-trap",
+      "title": "Correlación ngspice del transitorio RC TRAP",
+      "analysis": "TRAN",
+      "rationale": "Compara la integración trapezoidal en tres tiempos contra una simulación transitoria independiente.",
+      "referenceMethod": "ngspice_live",
+      "referenceSource": "ngspice ejecutado en vivo con method=trap y raw adaptativo; versión registrada en el reporte.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "vc_at_0_25tau",
+          "actual": 1.1058104564910638,
+          "expected": 1.1059683931224593,
+          "absoluteError": 0.0001579366313955166,
+          "relativeError": 0.00014280392855497176,
+          "allowedError": 0.0011059683931224594,
+          "units": "V",
+          "expression": "v(2) interpolado en t=0.25τ desde el raw generado en cada ejecución",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.00025,
+            "sampled": 0.00025,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "vc_at_1tau",
+          "actual": 3.160526606529673,
+          "expected": 3.160601210045515,
+          "absoluteError": 0.00007460351584187563,
+          "relativeError": 0.000023604216692937763,
+          "allowedError": 0.003160601210045515,
+          "units": "V",
+          "expression": "v(2) interpolado en t=τ desde el raw generado en cada ejecución",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.001,
+            "sampled": 0.001000000000000002,
+            "units": "s"
+          },
+          "passed": true
+        },
+        {
+          "id": "vc_at_2tau",
+          "actual": 4.323301195225193,
+          "expected": 4.323334604442779,
+          "absoluteError": 0.00003340921758621107,
+          "relativeError": 7.727650215155409e-6,
+          "allowedError": 0.0043233346044427795,
+          "units": "V",
+          "expression": "v(2) interpolado en t=2τ desde el raw generado en cada ejecución",
+          "coordinate": {
+            "name": "time",
+            "requested": 0.002,
+            "sampled": 0.002,
+            "units": "s"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "external-dc-diode-shockley-sweep",
+      "title": "Correlación ngspice del diodo Shockley",
+      "analysis": "DC SWEEP",
+      "rationale": "Compara el modelo no lineal ideal y la continuación DC con ngspice en cinco puntos.",
+      "referenceMethod": "ngspice_live",
+      "referenceSource": "ngspice ejecutado en vivo; diodo ideal Is=1 pA, N=1, TEMP=TNOM=26.85 °C y versión registrada en el reporte.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "source_current_0_1v",
+          "actual": -4.6954861294181936e-11,
+          "expected": -4.695492412527808e-11,
+          "absoluteError": 6.283109614654708e-17,
+          "relativeError": 1.3381151671954698e-6,
+          "allowedError": 1e-13,
+          "units": "A",
+          "expression": "i(V1) en V1=0.1 V del raw generado en cada ejecución",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.1,
+            "sampled": 0.1,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_2v",
+          "actual": -2.289287749485394e-9,
+          "expected": -2.289293763036123e-9,
+          "absoluteError": 6.013550728710093e-15,
+          "relativeError": 2.6268147958149156e-6,
+          "allowedError": 2.289293763036123e-13,
+          "units": "A",
+          "expression": "i(V1) en V1=0.2 V del raw generado en cada ejecución",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.2,
+            "sampled": 0.2,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_3v",
+          "actual": -1.0959113160312906e-7,
+          "expected": -1.095915632698664e-7,
+          "absoluteError": 4.316667373407177e-13,
+          "relativeError": 3.938868325819475e-6,
+          "allowedError": 1.0959156326986641e-11,
+          "units": "A",
+          "expression": "i(V1) en V1=0.3 V del raw generado en cada ejecución",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.3,
+            "sampled": 0.30000000000000004,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_4v",
+          "actual": -5.24450130034308e-6,
+          "expected": -5.244528843496941e-6,
+          "absoluteError": 2.7543153860638304e-11,
+          "relativeError": 5.251788040939272e-6,
+          "allowedError": 5.244528843496941e-10,
+          "units": "A",
+          "expression": "i(V1) en V1=0.4 V del raw generado en cada ejecución",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.4,
+            "sampled": 0.4,
+            "units": "V"
+          },
+          "passed": true
+        },
+        {
+          "id": "source_current_0_5v",
+          "actual": -0.0002509749104979914,
+          "expected": -0.0002509765580913327,
+          "absoluteError": 1.647593341272402e-9,
+          "relativeError": 6.564730004277242e-6,
+          "allowedError": 2.509765580913327e-8,
+          "units": "A",
+          "expression": "i(V1) en V1=0.5 V del raw generado en cada ejecución",
+          "coordinate": {
+            "name": "source_value",
+            "requested": 0.5,
+            "sampled": 0.5,
+            "units": "V"
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "pss-rc-sine-steady-state",
+      "title": "PSS de filtro RC excitado por seno",
+      "analysis": "PSS",
+      "rationale": "Valida que shooting encuentre el régimen periódico y reproduzca la amplitud cerrada de un filtro RC lineal.",
+      "referenceMethod": "analytic_closed_form",
+      "referenceSource": "Función de transferencia H(jw)=1/(1+jwRC), amplitud pico a pico=2 Vin |H|.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "output_peak_to_peak",
+          "actual": 1.5678268900270043,
+          "expected": 1.5717672548,
+          "absoluteError": 0.0039403647729956415,
+          "relativeError": 0.0025069645400501964,
+          "allowedError": 0.031435345095999996,
+          "units": "V",
+          "expression": "10/sqrt(1+(2*pi*1000*1000*1e-6)^2)",
+          "coordinate": null,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "stability-rc-pole-zero",
+      "title": "Extracción reducida de polo y cero RC",
+      "analysis": "STABILITY",
+      "rationale": "Valida polos, ceros y clasificación estable del modelo reducido contra expresiones cerradas.",
+      "referenceMethod": "analytic_closed_form",
+      "referenceSource": "Red RC: polo -2000 rad/s, cero -1000 rad/s y todos los polos en semiplano izquierdo.",
+      "passed": true,
+      "error": null,
+      "observations": [
+        {
+          "id": "dominant_pole_real",
+          "actual": -2000.0000000000002,
+          "expected": -2000.0,
+          "absoluteError": 2.2737367544323206e-13,
+          "relativeError": 1.1368683772161603e-16,
+          "allowedError": 10.0,
+          "units": "rad/s",
+          "expression": "-2000",
+          "coordinate": null,
+          "passed": true
+        },
+        {
+          "id": "transmission_zero_real",
+          "actual": -1000.0,
+          "expected": -1000.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 10.0,
+          "units": "rad/s",
+          "expression": "-1000",
+          "coordinate": null,
+          "passed": true
+        },
+        {
+          "id": "stable_flag",
+          "actual": 1.0,
+          "expected": 1.0,
+          "absoluteError": 0.0,
+          "relativeError": 0.0,
+          "allowedError": 0.0,
+          "units": "boolean",
+          "expression": "all(Re(p)) < 0",
+          "coordinate": null,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "La correlación ngspice cubre únicamente los casos marcados como referencia externa; el resto conserva referencias analíticas cerradas.",
+    "El solver no emite un punto de operación separado en t=0; la primera muestra publicada es la primera solución integrada en t=dt.",
+    "El caso externo de diodo correlaciona un modelo ideal de Shockley configurado de forma equivalente; no valida alta inyección, ruptura, resistencia serie ni un dispositivo físico.",
+    "La matriz principal valida un caso PSS lineal y una extracción reducida de polos/ceros, pero no valida ruido, sensibilidad, estabilidad de lazo ni MCU.",
+    "La caracterización BSIM3 separada cuantifica una discrepancia de corriente frente a ngspice y no certifica el modelo.",
+    "Aprobar la suite sólo demuestra conformidad con los casos, residuos y tolerancias versionados."
+  ]
+}

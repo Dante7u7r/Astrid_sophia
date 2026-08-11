@@ -1,0 +1,8 @@
+Astryd Sophia external correlation: ideal Shockley diode
+V1 1 0 DC 0
+D1 1 0 DIDEAL
+.model DIDEAL D(Is=1p N=1 Rs=0 Cjo=0 Tt=0)
+.temp 26.85
+.options tnom=26.85
+.dc V1 0.1 0.5 0.1
+.end

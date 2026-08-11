@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "caseId": "transient-rc-step-gear2",
+  "method": "closed_form",
+  "source": "Respuesta RC ideal Vc(t)=5·(1−e^(−t/RC)); BDF2 con arranque BE y dt=τ/100.",
+  "observations": [
+    {
+      "id": "vc_at_0_25tau",
+      "expected": 1.1059960846429755,
+      "absoluteTolerance": 0.001,
+      "relativeTolerance": 0.001,
+      "units": "V",
+      "expression": "5·(1−e^−0.25)"
+    },
+    {
+      "id": "vc_at_1tau",
+      "expected": 3.1606027941427883,
+      "absoluteTolerance": 0.001,
+      "relativeTolerance": 0.001,
+      "units": "V",
+      "expression": "5·(1−e^−1)"
+    },
+    {
+      "id": "vc_at_2tau",
+      "expected": 4.323323583816936,
+      "absoluteTolerance": 0.001,
+      "relativeTolerance": 0.001,
+      "units": "V",
+      "expression": "5·(1−e^−2)"
+    }
+  ]
+}

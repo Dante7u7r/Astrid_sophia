@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "caseId": "dc-diode-shockley-sweep",
+  "method": "closed_form",
+  "source": "Ecuación de Shockley con Is=1 pA, n=1 y Vt=kT/q a T=300 K.",
+  "observations": [
+    {
+      "id": "source_current_0_1v",
+      "expected": -4.685486129418194e-11,
+      "absoluteTolerance": 5e-13,
+      "relativeTolerance": 0.002,
+      "units": "A",
+      "expression": "−Is·(exp(0.1/Vt)−1)"
+    },
+    {
+      "id": "source_current_0_2v",
+      "expected": -2.289087749485392e-9,
+      "absoluteTolerance": 5e-12,
+      "relativeTolerance": 0.002,
+      "units": "A",
+      "expression": "−Is·(exp(0.2/Vt)−1)"
+    },
+    {
+      "id": "source_current_0_3v",
+      "expected": -1.0959083160312857e-7,
+      "absoluteTolerance": 2e-10,
+      "relativeTolerance": 0.002,
+      "units": "A",
+      "expression": "−Is·(exp(0.3/Vt)−1)"
+    },
+    {
+      "id": "source_current_0_4v",
+      "expected": -5.2445009003430685e-6,
+      "absoluteTolerance": 1e-8,
+      "relativeTolerance": 0.002,
+      "units": "A",
+      "expression": "−Is·(exp(0.4/Vt)−1)"
+    },
+    {
+      "id": "source_current_0_5v",
+      "expected": -2.50974909997991e-4,
+      "absoluteTolerance": 5e-7,
+      "relativeTolerance": 0.002,
+      "units": "A",
+      "expression": "−Is·(exp(0.5/Vt)−1)"
+    }
+  ]
+}

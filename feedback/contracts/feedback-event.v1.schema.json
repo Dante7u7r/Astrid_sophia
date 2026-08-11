@@ -1,0 +1,1787 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astryd.local/schemas/feedback-event.v1.schema.json",
+  "title": "Astryd Sophia Feedback Event V1",
+  "description": "Contrato local-first para eventos de retroalimentacion.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "session.started"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "os"
+          ],
+          "properties": {
+            "previousSessionId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "os": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locale": {
+              "type": "string",
+              "maxLength": 32
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "session.ended"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "durationMs",
+            "cleanShutdown"
+          ],
+          "properties": {
+            "durationMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 604800000
+            },
+            "cleanShutdown": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "circuit-derived"
+        },
+        "kind": {
+          "const": "circuit.summary_created"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "topologyFingerprint",
+            "componentCount",
+            "nodeCount",
+            "wireCount",
+            "nonlinearDeviceCount",
+            "reactiveDeviceCount",
+            "componentHistogram",
+            "containsFirmware"
+          ],
+          "properties": {
+            "topologyFingerprint": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "componentCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "nodeCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5001
+            },
+            "wireCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "nonlinearDeviceCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "reactiveDeviceCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "componentHistogram": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxProperties": 64
+            },
+            "containsFirmware": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "circuit-derived"
+        },
+        "kind": {
+          "const": "erc.completed"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "passed",
+            "errorCount",
+            "warningCount",
+            "codeCounts",
+            "durationMs"
+          ],
+          "properties": {
+            "passed": {
+              "type": "boolean"
+            },
+            "errorCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "codeCounts": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxProperties": 128
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "circuit-derived"
+        },
+        "kind": {
+          "const": "simulation.started"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "analysis",
+            "settingsFingerprint",
+            "componentCount",
+            "nodeCount"
+          ],
+          "properties": {
+            "analysis": {
+              "type": "string",
+              "enum": [
+                "DC",
+                "DC_SWEEP",
+                "AC",
+                "TRAN",
+                "TRAN_MC",
+                "SENS",
+                "PSS",
+                "STB",
+                "PVT",
+                "SPAR",
+                "FFT",
+                "IMD",
+                "NOISE",
+                "THERMAL"
+              ]
+            },
+            "settingsFingerprint": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "componentCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "nodeCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5001
+            },
+            "requestedPointCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "simulation.completed"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "analysis",
+            "durationMs",
+            "pointCount",
+            "converged"
+          ],
+          "properties": {
+            "analysis": {
+              "type": "string",
+              "enum": [
+                "DC",
+                "DC_SWEEP",
+                "AC",
+                "TRAN",
+                "TRAN_MC",
+                "SENS",
+                "PSS",
+                "STB",
+                "PVT",
+                "SPAR",
+                "FFT",
+                "IMD",
+                "NOISE",
+                "THERMAL"
+              ]
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 86400000
+            },
+            "pointCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            },
+            "converged": {
+              "type": "boolean"
+            },
+            "finalResidual": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "simulation.failed"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "analysis",
+            "phase",
+            "errorCode",
+            "messageFingerprint",
+            "durationMs"
+          ],
+          "properties": {
+            "analysis": {
+              "type": "string",
+              "enum": [
+                "DC",
+                "DC_SWEEP",
+                "AC",
+                "TRAN",
+                "TRAN_MC",
+                "SENS",
+                "PSS",
+                "STB",
+                "PVT",
+                "SPAR",
+                "FFT",
+                "IMD",
+                "NOISE",
+                "THERMAL"
+              ]
+            },
+            "phase": {
+              "type": "string",
+              "enum": [
+                "preflight",
+                "extraction",
+                "stamping",
+                "iteration",
+                "serialization",
+                "ipc",
+                "unknown"
+              ]
+            },
+            "errorCode": {
+              "type": "string",
+              "maxLength": 96
+            },
+            "messageFingerprint": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 86400000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "simulation.cancelled"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason",
+            "durationMs"
+          ],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "enum": [
+                "user",
+                "replaced",
+                "shutdown",
+                "timeout"
+              ]
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 86400000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "solver.convergence_summary"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "analysis",
+            "method",
+            "iterations",
+            "acceptedSteps",
+            "rejectedSteps",
+            "homotopyUsed"
+          ],
+          "properties": {
+            "analysis": {
+              "type": "string",
+              "enum": [
+                "DC",
+                "DC_SWEEP",
+                "AC",
+                "TRAN",
+                "TRAN_MC",
+                "SENS",
+                "PSS",
+                "STB",
+                "PVT",
+                "SPAR",
+                "FFT",
+                "IMD",
+                "NOISE",
+                "THERMAL"
+              ]
+            },
+            "method": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "iterations": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000000
+            },
+            "acceptedSteps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            },
+            "rejectedSteps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            },
+            "finalResidual": {
+              "type": "number",
+              "minimum": 0
+            },
+            "homotopyUsed": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "performance.sampled"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fps",
+            "cpuPercent",
+            "ramBytes",
+            "canvasFrames",
+            "oscilloscopeFrames",
+            "skippedDmmUpdates"
+          ],
+          "properties": {
+            "fps": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "cpuPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "ramBytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "canvasFrames": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "oscilloscopeFrames": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "skippedDmmUpdates": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "circuit-derived"
+        },
+        "kind": {
+          "const": "parser.completed"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "success",
+            "componentCount",
+            "durationMs"
+          ],
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": [
+                "spice"
+              ]
+            },
+            "success": {
+              "type": "boolean"
+            },
+            "componentCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600000
+            },
+            "errorCode": {
+              "type": "string",
+              "maxLength": 96
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "ui.error_observed"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "area",
+            "errorCode",
+            "messageFingerprint"
+          ],
+          "properties": {
+            "area": {
+              "type": "string",
+              "enum": [
+                "simulation",
+                "parser",
+                "export",
+                "canvas",
+                "file",
+                "settings",
+                "unknown"
+              ]
+            },
+            "errorCode": {
+              "type": "string",
+              "maxLength": 96
+            },
+            "messageFingerprint": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "recommendation.shown"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recommendationId",
+            "ruleId",
+            "safetyClass",
+            "confidence"
+          ],
+          "properties": {
+            "recommendationId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "ruleId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "safetyClass": {
+              "type": "string",
+              "enum": [
+                "informational",
+                "reversible",
+                "scientific-review-required"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "proposedProfile": {
+              "type": "string",
+              "maxLength": 96
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "recommendation.outcome"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recommendationId",
+            "decision",
+            "applied"
+          ],
+          "properties": {
+            "recommendationId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "decision": {
+              "type": "string",
+              "enum": [
+                "accepted",
+                "rejected",
+                "dismissed"
+              ]
+            },
+            "applied": {
+              "type": "boolean"
+            },
+            "improved": {
+              "type": "boolean"
+            },
+            "deltaDurationPercent": {
+              "type": "number",
+              "minimum": -100,
+              "maximum": 100000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "user-content"
+        },
+        "kind": {
+          "const": "user.feedback_submitted"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rating",
+            "category",
+            "attachmentIncluded"
+          ],
+          "properties": {
+            "subjectEventId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "rating": {
+              "type": "string",
+              "enum": [
+                "correct",
+                "uncertain",
+                "incorrect"
+              ]
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "convergence",
+                "performance",
+                "interface",
+                "model",
+                "other"
+              ]
+            },
+            "expectedValue": {
+              "type": "number"
+            },
+            "expectedUnit": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "noteFingerprint": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "attachmentIncluded": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "circuit-derived"
+        },
+        "kind": {
+          "const": "validation.case_completed"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "caseId",
+            "analysis",
+            "passed",
+            "observationCount",
+            "maxNormalizedError",
+            "referenceMethod"
+          ],
+          "properties": {
+            "caseId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "analysis": {
+              "type": "string",
+              "enum": [
+                "DC",
+                "DC_SWEEP",
+                "AC",
+                "TRAN",
+                "TRAN_MC",
+                "SENS",
+                "PSS",
+                "STB",
+                "PVT",
+                "SPAR",
+                "FFT",
+                "IMD",
+                "NOISE",
+                "THERMAL"
+              ]
+            },
+            "passed": {
+              "type": "boolean"
+            },
+            "observationCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "maxNormalizedError": {
+              "type": "number",
+              "minimum": 0
+            },
+            "referenceMethod": {
+              "type": "string",
+              "enum": [
+                "closed-form",
+                "ngspice-live",
+                "measurement",
+                "other"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "export.created"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exportKind",
+            "itemCount",
+            "redactionCount"
+          ],
+          "properties": {
+            "exportKind": {
+              "type": "string",
+              "enum": [
+                "support-bundle",
+                "touchstone",
+                "csv",
+                "svg",
+                "hdf5",
+                "pdf"
+              ]
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            },
+            "redactionCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "occurredAtUnixMs",
+        "sessionId",
+        "appVersion",
+        "privacyClass",
+        "kind",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "occurredAtUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "gitRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "privacyClass": {
+          "const": "operational"
+        },
+        "kind": {
+          "const": "data.deleted"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "rowsDeleted",
+            "attachmentsDeleted"
+          ],
+          "properties": {
+            "scope": {
+              "type": "string",
+              "enum": [
+                "all",
+                "expired",
+                "session"
+              ]
+            },
+            "rowsDeleted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "attachmentsDeleted": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  ]
+}
