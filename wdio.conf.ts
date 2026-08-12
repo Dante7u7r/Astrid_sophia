@@ -1,6 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
+const appBinaryPath = process.env.ASTRYD_E2E_BINARY_PATH
+  ? resolve(process.env.ASTRYD_E2E_BINARY_PATH)
+  : resolve("src-tauri/target/debug/astryd-sophia.exe");
+
 function cleanupWindowsWebDrivers(): void {
   if (process.platform !== "win32") return;
   for (const imageName of ["tauri-driver.exe", "msedgedriver.exe"]) {
@@ -17,7 +21,7 @@ export const config = {
   specs: ["./tests/e2e/desktop/**/*.spec.mjs"],
   maxInstances: 1,
   services: [["@wdio/tauri-service", {
-    appBinaryPath: resolve("src-tauri/target/debug/astryd-sophia.exe"),
+    appBinaryPath,
     driverProvider: "external",
     autoInstallTauriDriver: true,
     autoDownloadEdgeDriver: true,
@@ -29,7 +33,7 @@ export const config = {
   capabilities: [{
     browserName: "tauri",
     "tauri:options": {
-      application: resolve("src-tauri/target/debug/astryd-sophia.exe"),
+      application: appBinaryPath,
     },
   }],
   framework: "mocha",

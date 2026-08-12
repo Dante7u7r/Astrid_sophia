@@ -34,6 +34,9 @@ export interface RenderControllerDependencies {
 
 type VisualAuditRenderStep = "skip-render" | "skip-canvas-render" | "skip-osc-render";
 
+const MIN_TRANSIENT_PLAYBACK_DURATION_MS = 1_500;
+const MAX_TRANSIENT_PLAYBACK_DURATION_MS = 6_000;
+
 export class RenderController {
   private renderFramePending = false;
   private oscilloscopeFramePending = false;
@@ -41,6 +44,7 @@ export class RenderController {
   private playbackFrameIndex = 0;
   private playbackLastCanvasRenderAt = 0;
   private playbackLastFftSignature = "";
+  private transientPlaybackGeneration = 0;
 
   constructor(private readonly dependencies: RenderControllerDependencies) {}
 
@@ -73,6 +77,7 @@ export class RenderController {
   }
 
   resetPerformanceCaches(): void {
+    this.transientPlaybackGeneration += 1;
     this.dmmRenderCacheKey = "";
     this.playbackFrameIndex = 0;
     this.playbackLastCanvasRenderAt = 0;
@@ -134,6 +139,51 @@ export class RenderController {
     if (this.shouldRenderPlaybackCanvas()) {
       this.updateCanvasRendering();
     }
+  }
+
+  /**
+   * Reproduce una ventana transitoria ya calculada sobre el lienzo. No vuelve
+   * a ejecutar el solver ni interpola valores: cada fotograma usa una muestra
+   * aceptada por Rust. Así el esquema puede mostrar su respuesta aunque el
+   * centro de instrumentos esté cerrado.
+   */
+  startTransientPlayback(): boolean {
+    const results = this.dependencies.getOscilloscopePanel()?.transientResults ?? [];
+    if (results.length < 2) return false;
+
+    const firstTime = results[0]?.time ?? Number.NaN;
+    const lastTime = results[results.length - 1]?.time ?? Number.NaN;
+    if (!Number.isFinite(firstTime) || !Number.isFinite(lastTime) || lastTime <= firstTime) {
+      return false;
+    }
+
+    const generation = this.transientPlaybackGeneration + 1;
+    this.transientPlaybackGeneration = generation;
+    this.playbackFrameIndex = 0;
+    this.playbackLastCanvasRenderAt = 0;
+
+    const physicalDuration = lastTime - firstTime;
+    const playbackDurationMs = Math.min(
+      MAX_TRANSIENT_PLAYBACK_DURATION_MS,
+      Math.max(MIN_TRANSIENT_PLAYBACK_DURATION_MS, physicalDuration * 1_000),
+    );
+    const startedAt = this.dependencies.now();
+
+    const playNextFrame = (): void => {
+      if (generation !== this.transientPlaybackGeneration) return;
+
+      const elapsed = Math.max(0, this.dependencies.now() - startedAt);
+      const progress = Math.min(1, elapsed / playbackDurationMs);
+      const physicalTime = firstTime + physicalDuration * progress;
+      this.handlePlaybackFrame(physicalTime);
+
+      if (progress < 1) {
+        this.dependencies.requestAnimationFrame(() => playNextFrame());
+      }
+    };
+
+    this.dependencies.requestAnimationFrame(() => playNextFrame());
+    return true;
   }
 
   private doCanvasRender(): void {

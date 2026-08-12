@@ -574,6 +574,10 @@ describe("flujo nativo de escritorio", () => {
       if (finalState.lastLogType === "error") {
         throw new Error(`${demo.file} termino con error: ${finalState.lastLog}`);
       }
+      if (demo.mode === "TRAN") {
+        expect((await appSnapshot()).transientSampleCount).toBeGreaterThan(1);
+        expect(await $("#bottom-dock").getAttribute("aria-hidden")).toBe("true");
+      }
     }
   });
 });

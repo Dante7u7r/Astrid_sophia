@@ -244,6 +244,9 @@ export class SimulationController {
     this.dependencies.circuitState.audioOrchestrator.stopAll();
     this.dependencies.getOscilloscopePanel()?.stop();
     this.dependencies.circuitState.resetAll();
+    // También invalida cualquier reproducción visual de resultados ya
+    // calculados; «Detener» debe dejar el lienzo inmediatamente en reposo.
+    this.dependencies.resetPerformanceCaches();
   }
 
   setActiveAnalysisMode(mode: AnalysisMode): void {

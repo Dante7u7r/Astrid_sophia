@@ -17,6 +17,7 @@ export interface InteractiveSimulationCallbackDependencies {
   setSimulationRunning(active: boolean): void;
   updateCanvasRendering(): void;
   updateOscilloscopeRendering(): void;
+  startTransientPlayback?(): boolean;
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
 }
 
@@ -53,6 +54,7 @@ export function createInteractiveSimulationCallbacks(
             { ...dependencies.circuitState.getPinToNodeMap() },
           );
         }
+        dependencies.startTransientPlayback?.();
       }
     },
     onSimulationError: (error, context) => {
@@ -78,6 +80,7 @@ export function createInteractiveSimulationCallbacks(
 
       const orchestrator = dependencies.getOrchestrator();
       if (orchestrator) orchestrator.simulationActive = active;
+      if (!active) dependencies.getOscilloscopePanel()?.finish();
       dependencies.setSimulationRunning(active);
     },
   };

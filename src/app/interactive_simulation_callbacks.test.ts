@@ -83,4 +83,41 @@ describe("createInteractiveSimulationCallbacks", () => {
     expect(updateCanvasRendering).not.toHaveBeenCalled();
     expect(addLog).not.toHaveBeenCalled();
   });
+
+  it("reproduce en el lienzo las muestras reales al finalizar", () => {
+    const circuitState = createCircuitStateManager();
+    const startTransientPlayback = vi.fn(() => true);
+    const ownerTab = {
+      id: "tab-1",
+      transientResults: [
+        { time: 0.01, nodeVoltages: { "1": 5 }, branchCurrents: { V1: 0.02 } },
+      ],
+    } as Tab;
+    const tabManager = {
+      appendTransientFrameToTab: vi.fn(() => ownerTab),
+      isActiveTab: vi.fn(() => true),
+    } as unknown as TabManager;
+    const oscilloscopePanel = {
+      transientResults: ownerTab.transientResults,
+      finish: vi.fn(),
+    } as unknown as OscilloscopePanel;
+    const callbacks = createInteractiveSimulationCallbacks({
+      getTabManager: () => tabManager,
+      getOrchestrator: () => ({ components: [] }) as unknown as CanvasOrchestrator,
+      getOscilloscopePanel: () => oscilloscopePanel,
+      getSimulationRunner: () => null,
+      circuitState,
+      setSimulationRunning: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      updateOscilloscopeRendering: vi.fn(),
+      startTransientPlayback,
+      addLog: vi.fn(),
+    });
+
+    callbacks.onFrameReceived(createFrame({ isFinal: true }), { runId: 1, ownerTabId: "tab-1" });
+    callbacks.onSimulationStateChanged(false, { runId: 1, ownerTabId: "tab-1" });
+
+    expect(startTransientPlayback).toHaveBeenCalledOnce();
+    expect(oscilloscopePanel.finish).toHaveBeenCalledOnce();
+  });
 });

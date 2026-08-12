@@ -148,4 +148,16 @@ describe("SimulationController", () => {
     );
     expect(deps.runPvtAnalysis).toHaveBeenCalledWith(netlist);
   });
+
+  it("cancela la reproduccion visual al detener la simulacion", async () => {
+    const stopInteractiveTransient = vi.fn(async () => undefined);
+    const { controller, deps, oscilloscopePanel } = createHarness();
+    deps.getSimulationRunner = () => ({ stopInteractiveTransient }) as never;
+
+    await controller.stopSimulation();
+
+    expect(stopInteractiveTransient).toHaveBeenCalledOnce();
+    expect(oscilloscopePanel.stop).toHaveBeenCalledOnce();
+    expect(deps.resetPerformanceCaches).toHaveBeenCalledOnce();
+  });
 });

@@ -89,6 +89,7 @@ describe("createDesktopSimulationControllers", () => {
       resetPerformanceCaches: vi.fn(),
       updateCanvasRendering: vi.fn(),
       updateOscilloscopeRendering: vi.fn(),
+      startTransientPlayback: vi.fn(() => true),
       setIpcStatus: vi.fn(),
       addLog: vi.fn(),
       invokeTauri: vi.fn(),

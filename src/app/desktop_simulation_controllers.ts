@@ -59,6 +59,7 @@ export interface DesktopSimulationControllerDeps {
   resetPerformanceCaches(): void;
   updateCanvasRendering(immediate?: boolean): void;
   updateOscilloscopeRendering(immediate?: boolean): void;
+  startTransientPlayback(): boolean;
   setIpcStatus(text: string, color: string): void;
   addLog(text: string, type?: LogType): void;
   invokeTauri: InvokeTauri;
@@ -91,6 +92,7 @@ export function createDesktopSimulationControllers(
     setSimulationRunning,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
+    startTransientPlayback: deps.startTransientPlayback,
     addLog: deps.addLog,
   }));
 

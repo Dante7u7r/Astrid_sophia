@@ -681,6 +681,13 @@ export class OscilloscopePanel {
     this.refreshVisibility();
   }
 
+  /** Finaliza el streaming sin borrar las muestras recibidas. */
+  public finish(): void {
+    this.isSimulating = false;
+    this.cancelScheduledFrame();
+    this.refreshVisibility();
+  }
+
   public autoFit(channel: OscilloscopeChannel | null = null): boolean {
     const selectedChannel = channel ?? this.getAutoFitChannel();
     const probeNode = selectedChannel ? this.getProbeNodeByChannel(selectedChannel) : null;

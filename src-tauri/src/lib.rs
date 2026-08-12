@@ -154,6 +154,15 @@ pub struct SimulationFrame {
     pub is_final: bool,
 }
 
+const INTERACTIVE_TRANSIENT_FRAME_BUDGET: f64 = 240.0;
+
+/// El muestreo del stream debe seguir el tiempo físico, no la velocidad de la
+/// CPU. De otro modo, un circuito pequeño termina antes del primer intervalo
+/// de pared y la interfaz recibe únicamente la muestra final.
+fn interactive_transient_sample_period(t_max: f64, dt: f64) -> f64 {
+    (t_max / INTERACTIVE_TRANSIENT_FRAME_BUDGET).max(dt)
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SimulationStreamError {
@@ -405,9 +414,9 @@ async fn start_interactive_transient(
         let panic_run_id = active_run_id.clone();
 
         let catch_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-            let mut last_emit = std::time::Instant::now();
-            let frame_interval = std::time::Duration::from_millis(16);
             let mut frame_index = 0u64;
+            let sample_period = interactive_transient_sample_period(settings.t_max, settings.dt);
+            let mut next_sample_time = sample_period;
 
             let result = solver::solve_transient_circuit_inner(
                 &netlist,
@@ -423,8 +432,7 @@ async fn start_interactive_transient(
                     {
                         return false;
                     }
-                    let now = std::time::Instant::now();
-                    if now - last_emit >= frame_interval {
+                    if step.time >= next_sample_time {
                         let packet = SimulationFrame {
                             run_id,
                             time: step.time,
@@ -434,8 +442,10 @@ async fn start_interactive_transient(
                             is_final: false,
                         };
                         window_inner.emit("sim-frame-update", &packet).ok();
-                        last_emit = now;
                         frame_index += 1;
+                        while next_sample_time <= step.time {
+                            next_sample_time += sample_period;
+                        }
                     }
                     true
                 }),
@@ -699,6 +709,25 @@ mod persistence_tests {
         assert_eq!(fs::read_dir(&root).expect("read test directory").count(), 1);
 
         fs::remove_dir_all(&root).expect("cleanup test directory");
+    }
+}
+
+#[cfg(test)]
+mod interactive_transient_tests {
+    use super::interactive_transient_sample_period;
+
+    #[test]
+    fn samples_a_short_transient_by_physical_progress() {
+        let period = interactive_transient_sample_period(0.05, 1e-4);
+
+        assert!(period >= 1e-4);
+        assert!((period - (0.05 / 240.0)).abs() < 1e-15);
+        assert!((0.05 / period).ceil() <= 240.0);
+    }
+
+    #[test]
+    fn never_requests_samples_finer_than_the_solver_step() {
+        assert_eq!(interactive_transient_sample_period(1e-6, 1e-4), 1e-4);
     }
 }
 
