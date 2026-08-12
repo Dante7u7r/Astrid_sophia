@@ -112,6 +112,7 @@ export function createDesktopWorkspaceControllers(
     addLog: deps.addLog,
     updateCanvasRendering: deps.updateCanvasRendering,
     markCurrentTabAsModified: deps.markCurrentTabAsModified,
+    extractNetlist: deps.extractNetlist,
     invokeTauri: deps.invokeTauri,
   });
 

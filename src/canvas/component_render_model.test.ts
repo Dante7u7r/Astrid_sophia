@@ -18,16 +18,16 @@ function component(
 describe("component_render_model", () => {
   it("resuelve color, grosor y brillo por estado visual", () => {
     expect(getComponentVisualState(false, false)).toEqual({
-      color: "hsl(174, 97%, 69%)",
+      color: "#66fcf1",
       lineWidth: 2,
-      shadowBlur: 0,
+      shadowBlur: 4,
     });
     expect(getComponentVisualState(true, false)).toMatchObject({
-      color: "hsl(270, 89%, 65%)",
+      color: "#a855f7",
       lineWidth: 3,
-      shadowBlur: 8,
+      shadowBlur: 14,
     });
-    expect(getComponentVisualState(false, true).shadowBlur).toBe(4);
+    expect(getComponentVisualState(false, true).shadowBlur).toBe(8);
   });
 
   it("identifica componentes con leads estandar y labels de valor", () => {

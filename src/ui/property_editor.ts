@@ -34,6 +34,7 @@ export class PropertyEditor {
       addLog: (text: string, type?: 'system' | 'send' | 'receive' | 'error') => void;
       updateCanvasRendering: () => void;
       markCurrentTabAsModified: () => void;
+      extractNetlist?: () => void;
       invokeTauri: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
     }
   ) {}
@@ -406,6 +407,14 @@ export class PropertyEditor {
       });
     }
 
+    const applyFromKeyboard = (event: KeyboardEvent): void => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      this.btnApplyProperties?.click();
+    };
+    this.propIdInput?.addEventListener("keydown", applyFromKeyboard);
+    this.propValInput?.addEventListener("keydown", applyFromKeyboard);
+
     if (this.btnApplyProperties && this.propIdInput && this.propValInput) {
       this.btnApplyProperties.addEventListener("click", () => {
         const activeOrchestrator = this.callbacks.getOrchestrator();
@@ -450,8 +459,14 @@ export class PropertyEditor {
               selected.offset = parseFloat(waveOffsetInput.value) || 0;
               selected.dutyCycle = parseFloat(waveDutyInput.value) || 0.5;
 
-              selected.value = selected.offset;
-              this.propValInput!.value = formatSpiceValue(selected.value);
+              // En CC el valor nominal es la excitación efectiva. Para formas
+              // de onda conserva el valor nominal editado y usa los parámetros
+              // explícitos de la forma de onda durante el análisis transitorio.
+              if (selected.waveType === "dc") {
+                selected.value = newVal;
+                selected.offset = newVal;
+              }
+              this.propValInput!.value = formatSpiceValue(Number(selected.value) || 0);
               this.propValSlider!.value = selected.value.toString();
             }
           }
@@ -549,6 +564,7 @@ export class PropertyEditor {
 
           this.callbacks.updateCanvasRendering();
           this.callbacks.markCurrentTabAsModified();
+          this.callbacks.extractNetlist?.();
           this.callbacks.addLog(
             `Propiedades aplicadas a [${selected.id}]: Valor = [${selected.value}]`,
             "system",

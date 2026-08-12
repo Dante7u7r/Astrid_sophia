@@ -14,6 +14,15 @@ export interface TyTracePoint {
   y: number;
 }
 
+export const OSCILLOSCOPE_VOLTS_PER_DIV = [
+  0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20,
+] as const;
+
+export const OSCILLOSCOPE_TIME_PER_DIV = [
+  1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4,
+  1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5,
+] as const;
+
 const traceCache = new WeakMap<readonly TimeStepResult[], Map<string, readonly TyTracePoint[]>>();
 const metricsCache = new WeakMap<readonly TimeStepResult[], Map<string, OscilloscopeMetrics>>();
 
@@ -219,4 +228,57 @@ export function buildTyTracePoints(
   );
   resultCache.set(cacheKey, points);
   return points;
+}
+
+export interface AutoFitSettings {
+  voltsPerDiv: number;
+  timeDivValue: number;
+  centerVoltage: number;
+}
+
+function nearestTimePerDiv(target: number): number {
+  if (!Number.isFinite(target) || target <= 0) return 0.02;
+  return OSCILLOSCOPE_TIME_PER_DIV.reduce((nearest, candidate) => (
+    Math.abs(Math.log(candidate / target)) < Math.abs(Math.log(nearest / target))
+      ? candidate
+      : nearest
+  ));
+}
+
+export function calculateAutoFitSettings(
+  results: readonly TimeStepResult[],
+  nodeId: string | null,
+): AutoFitSettings {
+  if (!nodeId || results.length === 0) {
+    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
+  }
+
+  let minVoltage = Infinity;
+  let maxVoltage = -Infinity;
+  for (const result of results) {
+    const voltage = result.nodeVoltages[nodeId] ?? 0;
+    if (!Number.isFinite(voltage)) continue;
+    minVoltage = Math.min(minVoltage, voltage);
+    maxVoltage = Math.max(maxVoltage, voltage);
+  }
+  if (!Number.isFinite(minVoltage) || !Number.isFinite(maxVoltage)) {
+    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
+  }
+
+  const requiredVoltsPerDiv = Math.max((maxVoltage - minVoltage) / 4, OSCILLOSCOPE_VOLTS_PER_DIV[0]);
+  const voltsPerDiv = OSCILLOSCOPE_VOLTS_PER_DIV.find((value) => value >= requiredVoltsPerDiv)
+    ?? OSCILLOSCOPE_VOLTS_PER_DIV[OSCILLOSCOPE_VOLTS_PER_DIV.length - 1];
+  const metrics = calculateOscilloscopeMetrics(results, nodeId);
+  const totalDuration = Math.max(0, results[results.length - 1].time - results[0].time);
+  const desiredTimePerDiv = metrics.freq > 0
+    ? 0.3 / metrics.freq
+    : totalDuration > 0
+      ? totalDuration / 10
+      : 0.02;
+
+  return {
+    voltsPerDiv,
+    timeDivValue: nearestTimePerDiv(desiredTimePerDiv),
+    centerVoltage: (maxVoltage + minVoltage) / 2,
+  };
 }

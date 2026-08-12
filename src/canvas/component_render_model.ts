@@ -32,17 +32,17 @@ export function getComponentVisualState(
   isSelected: boolean,
   isHovered: boolean,
 ): ComponentVisualState {
-  let color = "hsl(174, 97%, 69%)";
+  let color = "#66fcf1";
   if (isSelected) {
-    color = "hsl(270, 89%, 65%)";
+    color = "#a855f7";
   } else if (isHovered) {
-    color = "hsl(210, 100%, 56%)";
+    color = "#3b82f6";
   }
 
   return {
     color,
     lineWidth: isSelected ? 3 : 2,
-    shadowBlur: isSelected ? 8 : isHovered ? 4 : 0,
+    shadowBlur: isSelected ? 14 : isHovered ? 8 : 4,
   };
 }
 

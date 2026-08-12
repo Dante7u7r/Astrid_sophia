@@ -97,6 +97,8 @@ export function createSidePanelController(deps: SidePanelControllerDeps): SidePa
     const btnDockRight = queryButton("#btn-dock-toggle-right");
     const btnExpandLeft = queryButton("#btn-expand-left");
     const btnExpandRight = queryButton("#btn-expand-right");
+    const btnDockBottom = queryButton("#btn-dock-toggle-bottom");
+    const btnFloaterInstruments = queryButton("#btn-floater-instruments");
 
     const toggleLeft = () => {
       const panelLayoutManager = deps.getPanelLayoutManager();
@@ -126,12 +128,18 @@ export function createSidePanelController(deps: SidePanelControllerDeps): SidePa
       if (btnExpandRight) btnExpandRight.style.display = isCollapsed ? "block" : "none";
     };
 
+    const toggleDock = () => {
+      deps.getPanelLayoutManager()?.togglePanel("dock");
+    };
+
     btnToggleLeft?.addEventListener("click", toggleLeft);
     btnDockLeft?.addEventListener("click", toggleLeft);
     btnExpandLeft?.addEventListener("click", toggleLeft);
     btnToggleRight?.addEventListener("click", toggleRight);
     btnDockRight?.addEventListener("click", toggleRight);
     btnExpandRight?.addEventListener("click", toggleRight);
+    btnDockBottom?.addEventListener("click", toggleDock);
+    btnFloaterInstruments?.addEventListener("click", toggleDock);
 
     drawerBackdrop = document.querySelector("#mobile-drawer-backdrop");
     if (!drawerBackdrop) {

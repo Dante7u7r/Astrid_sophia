@@ -276,6 +276,20 @@ export function attachCanvasInput(
       return;
     }
 
+    if (e.key === "+" || e.key === "=" || e.key === "NumpadAdd") {
+      e.preventDefault();
+      orchestrator.zoomAt(1.15, canvas.clientWidth / 2, canvas.clientHeight / 2);
+      callbacks.requestRender(true);
+      return;
+    }
+
+    if (e.key === "-" || e.key === "_" || e.key === "NumpadSubtract") {
+      e.preventDefault();
+      orchestrator.zoomAt(0.85, canvas.clientWidth / 2, canvas.clientHeight / 2);
+      callbacks.requestRender(true);
+      return;
+    }
+
     // --- Selection-required shortcuts ---
     const hasSelection = hasCanvasSelection(orchestrator);
 

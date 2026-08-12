@@ -15,6 +15,13 @@ function installPropertyDom(): void {
       <input id="prop-val-slider" type="range" />
     </div>
     <div id="group-comp-unit"><input id="prop-unit-input" /></div>
+    <div id="wave-properties-container">
+      <select id="prop-wave-type"><option value="dc">CC</option><option value="sine">Seno</option></select>
+      <div id="field-wave-amp"><input id="prop-wave-amp" /></div>
+      <div id="field-wave-freq"><input id="prop-wave-freq" /></div>
+      <div id="field-wave-offset"><input id="prop-wave-offset" /></div>
+      <div id="field-wave-duty"><input id="prop-wave-duty" /></div>
+    </div>
     <div id="dmm-properties-container">
       <select id="prop-dmm-mode">
         <option value="V">V</option><option value="A">A</option><option value="R">R</option>
@@ -55,6 +62,7 @@ function createEditor(component: ComponentInstance) {
     renameComponent: vi.fn(() => null),
   } as unknown as CanvasOrchestrator;
   const markModified = vi.fn();
+  const extractNetlist = vi.fn();
   const editor = new PropertyEditor({
     getOrchestrator: () => orchestrator,
     getMcuDebugPanel: () => null,
@@ -62,11 +70,12 @@ function createEditor(component: ComponentInstance) {
     addLog: vi.fn(),
     updateCanvasRendering: vi.fn(),
     markCurrentTabAsModified: markModified,
+    extractNetlist,
     invokeTauri: vi.fn(),
   });
   editor.init();
   editor.updatePropertiesPanel(component);
-  return { editor, markModified };
+  return { editor, markModified, extractNetlist };
 }
 
 describe("PropertyEditor componentes especiales", () => {
@@ -141,5 +150,19 @@ describe("PropertyEditor componentes especiales", () => {
     document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
     expect(opamp.offsetVoltage).toBe(0);
     expect(document.querySelector("#prop-opamp-vos-display")?.textContent).toBe("0.0 mV");
+  });
+
+  test("Enter aplica la fuente CC y sincroniza la netlist", () => {
+    const source: ComponentInstance = {
+      id: "V1", type: "vsource", value: 5, x: 0, y: 0, rotation: 0,
+    };
+    const { extractNetlist } = createEditor(source);
+    const valueInput = document.querySelector("#prop-val-input") as HTMLInputElement;
+    valueInput.value = "12";
+    valueInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(source.value).toBe(12);
+    expect(source.offset).toBe(12);
+    expect(extractNetlist).toHaveBeenCalledOnce();
   });
 });

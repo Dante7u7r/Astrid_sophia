@@ -255,6 +255,15 @@ function initOscilloscopeInterface() {
   setupChBtn(oscCh3Btn, 'CH3', () => probePlacementController.getNode("CH3"), 'Naranja');
   setupChBtn(oscCh4Btn, 'CH4', () => probePlacementController.getNode("CH4"), 'Verde');
 
+  const oscAutofitBtn = document.querySelector("#osc-autofit-btn") as HTMLButtonElement | null;
+  oscAutofitBtn?.addEventListener("click", () => {
+    if (!oscilloscopePanel?.autoFit()) {
+      addLog("[Osciloscopio] No hay una traza con datos para auto-escalar.", "error");
+      return;
+    }
+    addLog("[Osciloscopio] Escalas ajustadas automáticamente.", "system");
+  });
+
   if (oscPauseBtn) {
     oscPauseBtn.addEventListener("click", () => {
       if (oscilloscopePanel) {

@@ -2,10 +2,12 @@ import type { PvtConfig, SParameterResult } from "../simulation/mcu-types";
 import type { PersistedOscilloscopeState } from "../persistence/circuit_file";
 import {
   calculateOscilloscopeMetrics,
+  calculateAutoFitSettings,
   buildTyTracePoints,
   findTriggerStartIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
+  OSCILLOSCOPE_VOLTS_PER_DIV,
   type OscilloscopeChannel,
   type TriggerEdge,
 } from "./oscilloscope_model";
@@ -407,6 +409,16 @@ export class OscilloscopePanel {
     return this.ch4ProbeNode;
   }
 
+  private getAutoFitChannel(): OscilloscopeChannel | null {
+    const channels: readonly [OscilloscopeChannel, HTMLButtonElement | null][] = [
+      ["ch1", this.oscCh1Btn], ["ch2", this.oscCh2Btn],
+      ["ch3", this.oscCh3Btn], ["ch4", this.oscCh4Btn],
+    ];
+    return channels.find(([channel, button]) => (
+      button?.classList.contains("active") && this.getProbeNodeByChannel(channel)
+    ))?.[0] ?? null;
+  }
+
   private isCanvasVisible(): boolean {
     if (!this.oscCanvas?.isConnected) return false;
     const dock = this.oscCanvas.closest("#bottom-dock");
@@ -513,17 +525,6 @@ export class OscilloscopePanel {
       const ctx = this.oscCtx;
       const { divHeight } = drawTyReticle(this.oscCtx, width, height);
 
-      if (this.isSimulating && !this.isOscPaused) {
-        // Adjust sweep speed based on timeDivValue
-        this.sweepTime += (this.timeDivValue * 10 / 100);
-        if (this.sweepTime > this.timeDivValue * 10) {
-          this.sweepTime = 0.0;
-        }
-        if (this.onFrameUpdate) {
-          this.onFrameUpdate(this.sweepTime);
-        }
-      }
-
       const triggerNode = this.getProbeNodeByChannel(this.triggerChannel);
       const triggerStartIdx = findTriggerStartIndex(
         this.transientResults,
@@ -531,6 +532,13 @@ export class OscilloscopePanel {
         this.triggerEdge,
         this.triggerLevel,
       );
+
+      const sweepWindow = this.timeDivValue * 10;
+      if (this.isSimulating && !this.isOscPaused && sweepWindow > 0) {
+        this.sweepTime = (this.sweepTime + sweepWindow / 100) % sweepWindow;
+        this.onFrameUpdate?.(this.sweepTime);
+      }
+      const sweepX = sweepWindow > 0 ? (this.sweepTime / sweepWindow) * width : width;
 
       // Draw channels
       const drawChannelTY = (nodeId: string, color: string, voltsPerDiv: number, offsetPixels: number, isActive: boolean) => {
@@ -549,19 +557,44 @@ export class OscilloscopePanel {
           { voltsPerDiv, offsetPixels, timeDivValue: this.timeDivValue },
           triggerStartIdx,
         );
+        let headPoint: { x: number; y: number } | null = null;
         for (let i = 0; i < tracePoints.length; i++) {
           const point = tracePoints[i];
+          if (this.isSimulating && !this.isOscPaused && point.x > sweepX) break;
           if (i === 0) ctx.moveTo(point.x, point.y);
           else ctx.lineTo(point.x, point.y);
+          headPoint = point;
         }
         ctx.stroke();
         ctx.shadowBlur = 0;
+
+        if (this.isSimulating && !this.isOscPaused && headPoint) {
+          ctx.fillStyle = "#ffffff";
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(headPoint.x, headPoint.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
       };
 
       drawChannelTY(this.ch1ProbeNode || "", '#66fcf1', this.voltsPerDivCh1, this.offsetCh1, isCh1Active);
       drawChannelTY(this.ch2ProbeNode || "", '#a855f7', this.voltsPerDivCh2, this.offsetCh2, isCh2Active);
       drawChannelTY(this.ch3ProbeNode || "", '#f97316', this.voltsPerDivCh3, this.offsetCh3, isCh3Active);
       drawChannelTY(this.ch4ProbeNode || "", '#22c55e', this.voltsPerDivCh4, this.offsetCh4, isCh4Active);
+
+      if (this.isSimulating && !this.isOscPaused) {
+        ctx.strokeStyle = "rgba(102, 252, 241, 0.45)";
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = "#66fcf1";
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.moveTo(sweepX, 0);
+        ctx.lineTo(sweepX, height);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
 
       this.updateMeasurementsIfNeeded(
         [
@@ -646,5 +679,59 @@ export class OscilloscopePanel {
     this.acSweepResults = null;
     this.pvtTraces = [];
     this.refreshVisibility();
+  }
+
+  public autoFit(channel: OscilloscopeChannel | null = null): boolean {
+    const selectedChannel = channel ?? this.getAutoFitChannel();
+    const probeNode = selectedChannel ? this.getProbeNodeByChannel(selectedChannel) : null;
+    if (!selectedChannel || !probeNode || this.transientResults.length === 0) return false;
+
+    const fit = calculateAutoFitSettings(this.transientResults, probeNode);
+    this.timeDivValue = fit.timeDivValue;
+    if (this.timeDivSelect) this.timeDivSelect.value = fit.timeDivValue.toString();
+
+    const divHeight = Math.max(1, (this.oscCanvas?.clientHeight ?? 240) / 8);
+    const sliderByChannel: Record<OscilloscopeChannel, HTMLInputElement | null> = {
+      ch1: this.offsetCh1Slider,
+      ch2: this.offsetCh2Slider,
+      ch3: this.offsetCh3Slider,
+      ch4: this.offsetCh4Slider,
+    };
+    const slider = sliderByChannel[selectedChannel];
+    const minOffset = slider ? Number(slider.min) : -150;
+    const maxOffset = slider ? Number(slider.max) : 150;
+    const availableOffset = fit.centerVoltage >= 0 ? Math.abs(minOffset) : Math.abs(maxOffset);
+    const requiredVoltsPerDiv = availableOffset > 0
+      ? Math.abs(fit.centerVoltage) * divHeight / availableOffset
+      : fit.voltsPerDiv;
+    const voltsPerDiv = OSCILLOSCOPE_VOLTS_PER_DIV.find((value) => (
+      value >= Math.max(fit.voltsPerDiv, requiredVoltsPerDiv)
+    )) ?? OSCILLOSCOPE_VOLTS_PER_DIV[OSCILLOSCOPE_VOLTS_PER_DIV.length - 1];
+    const offsetPixels = Math.min(
+      maxOffset,
+      Math.max(minOffset, -(fit.centerVoltage / voltsPerDiv) * divHeight),
+    );
+
+    if (selectedChannel === "ch1") this.voltsPerDivCh1 = voltsPerDiv;
+    else if (selectedChannel === "ch2") this.voltsPerDivCh2 = voltsPerDiv;
+    else if (selectedChannel === "ch3") this.voltsPerDivCh3 = voltsPerDiv;
+    else this.voltsPerDivCh4 = voltsPerDiv;
+
+    const selectByChannel: Record<OscilloscopeChannel, HTMLSelectElement | null> = {
+      ch1: this.voltsCh1Select,
+      ch2: this.voltsCh2Select,
+      ch3: this.voltsCh3Select,
+      ch4: this.voltsCh4Select,
+    };
+    const voltsSelect = selectByChannel[selectedChannel];
+    if (voltsSelect) voltsSelect.value = voltsPerDiv.toString();
+    if (selectedChannel === "ch1") this.offsetCh1 = offsetPixels;
+    else if (selectedChannel === "ch2") this.offsetCh2 = offsetPixels;
+    else if (selectedChannel === "ch3") this.offsetCh3 = offsetPixels;
+    else this.offsetCh4 = offsetPixels;
+    if (slider) slider.value = offsetPixels.toString();
+
+    this.draw();
+    return true;
   }
 }

@@ -621,6 +621,7 @@
               <!-- Renderizado dinámico de pestañas -->
             </div>
             <button id="btn-add-tab" class="btn-add-tab" data-tooltip="Nueva Pestaña" type="button">+</button>
+            <button id="btn-dock-toggle-bottom" class="btn-tab-toggle" data-tooltip="Alternar Centro de Instrumentos" type="button">🛠️ Instrumentos</button>
             <button id="btn-dock-toggle-right" class="btn-tab-toggle" data-tooltip="Alternar Panel de Propiedades" type="button">Propiedades ◨</button>
           </div>
 
@@ -630,6 +631,7 @@
             <button id="btn-expand-right" class="btn-sidebar-edge-toggle right" aria-label="Mostrar panel de propiedades" data-tooltip="Mostrar Propiedades" type="button" style="display: none;">‹</button>
 
             <div class="canvas-controls-floating" id="canvas-floater-menu">
+              <button id="btn-floater-instruments" class="btn-floating" data-tooltip="Abrir centro de instrumentos" aria-label="Abrir centro de instrumentos" type="button">🛠️</button>
               <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" aria-label="Aumentar zoom" type="button">+</button>
               <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" aria-label="Disminuir zoom" type="button">-</button>
               <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" aria-label="Desactivar ajuste a rejilla" aria-pressed="true" type="button">🌐</button>
@@ -697,6 +699,7 @@
                       <button id="osc-ch4-btn" class="btn-osc-mini" style="border-color: #22c55e; color: #22c55e;" type="button">CH4</button>
                       <span style="width: 1px; height: 16px; background: rgba(255,255,255,0.15); margin: 0 4px;"></span>
                       <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
+                      <button id="osc-autofit-btn" class="btn-osc-mini" style="border-color: var(--accent-cyan); color: var(--accent-cyan);" type="button" data-tooltip="Auto-escalar Volts/div y Tiempo/div">Auto-Escalar</button>
                     </div>
                   </div>
                   <div class="osc-main-layout" style="display: flex; flex-grow: 1; overflow: hidden; position: relative; width: 100%; height: calc(100% - 36px);">
@@ -729,11 +732,24 @@
                       <div style="display: flex; flex-direction: column; gap: 2px;">
                         <label style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Tiempo / Div</label>
                         <select id="osc-time-div" class="prop-input" aria-label="Tiempo por división" style="font-size: 0.68rem; padding: 3px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; cursor: pointer; width: 100%;">
+                          <option value="0.000001">1 µs/div</option>
+                          <option value="0.000002">2 µs/div</option>
+                          <option value="0.000005">5 µs/div</option>
+                          <option value="0.00001">10 µs/div</option>
+                          <option value="0.00002">20 µs/div</option>
+                          <option value="0.00005">50 µs/div</option>
+                          <option value="0.0001">100 µs/div</option>
+                          <option value="0.0002">200 µs/div</option>
+                          <option value="0.0005">500 µs/div</option>
+                          <option value="0.001">1 ms/div</option>
+                          <option value="0.002">2 ms/div</option>
                           <option value="0.005">5 ms/div</option>
                           <option value="0.01">10 ms/div</option>
                           <option value="0.02" selected>20 ms/div</option>
                           <option value="0.05">50 ms/div</option>
                           <option value="0.1">100 ms/div</option>
+                          <option value="0.2">200 ms/div</option>
+                          <option value="0.5">500 ms/div</option>
                         </select>
                       </div>
                       
@@ -746,11 +762,7 @@
                           <div style="font-size: 0.65rem; color: #66fcf1; font-weight: bold;">Canal 1</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                             <select id="osc-volts-ch1" class="prop-input" aria-label="Voltios por división del canal 1" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.2">0.2 V/div</option>
-                              <option value="0.5">0.5 V/div</option>
-                              <option value="1.0" selected>1.0 V/div</option>
-                              <option value="2.0">2.0 V/div</option>
-                              <option value="5.0">5.0 V/div</option>
+                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
                             </select>
                             <input id="osc-offset-ch1" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 1" />
                           </div>
@@ -761,11 +773,7 @@
                           <div style="font-size: 0.65rem; color: #a855f7; font-weight: bold;">Canal 2</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                             <select id="osc-volts-ch2" class="prop-input" aria-label="Voltios por división del canal 2" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.2">0.2 V/div</option>
-                              <option value="0.5">0.5 V/div</option>
-                              <option value="1.0" selected>1.0 V/div</option>
-                              <option value="2.0">2.0 V/div</option>
-                              <option value="5.0">5.0 V/div</option>
+                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
                             </select>
                             <input id="osc-offset-ch2" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 2" />
                           </div>
@@ -776,11 +784,7 @@
                           <div style="font-size: 0.65rem; color: #f97316; font-weight: bold;">Canal 3</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                             <select id="osc-volts-ch3" class="prop-input" aria-label="Voltios por división del canal 3" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.2">0.2 V/div</option>
-                              <option value="0.5">0.5 V/div</option>
-                              <option value="1.0" selected>1.0 V/div</option>
-                              <option value="2.0">2.0 V/div</option>
-                              <option value="5.0">5.0 V/div</option>
+                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
                             </select>
                             <input id="osc-offset-ch3" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 3" />
                           </div>
@@ -791,11 +795,7 @@
                           <div style="font-size: 0.65rem; color: #22c55e; font-weight: bold;">Canal 4</div>
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                             <select id="osc-volts-ch4" class="prop-input" aria-label="Voltios por división del canal 4" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.2">0.2 V/div</option>
-                              <option value="0.5">0.5 V/div</option>
-                              <option value="1.0" selected>1.0 V/div</option>
-                              <option value="2.0">2.0 V/div</option>
-                              <option value="5.0">5.0 V/div</option>
+                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
                             </select>
                             <input id="osc-offset-ch4" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 4" />
                           </div>

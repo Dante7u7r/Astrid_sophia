@@ -31,7 +31,8 @@ export class AccessibleMenu {
       }
     });
     document.addEventListener("click", (event) => {
-      if (!this.menu.contains(event.target as Node) && event.target !== this.trigger) {
+      const target = event.target as Node | null;
+      if (target && !this.menu.contains(target) && !this.trigger.contains(target)) {
         this.close(false);
       }
     });

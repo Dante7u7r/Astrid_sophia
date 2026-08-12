@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TimeStepResult } from "./oscilloscope_panel";
 import {
   calculateOscilloscopeMetrics,
+  calculateAutoFitSettings,
   buildTyTracePoints,
   findTriggerStartIndex,
   normalizeTriggerChannel,
@@ -91,5 +92,28 @@ describe("oscilloscope_model", () => {
     expect(indices).toHaveLength(2_000);
     expect(indices[0]).toBe(0);
     expect(indices[indices.length - 1]).toBe(999_999);
+  });
+
+  it("auto-escala una señal periódica usando valores disponibles en la interfaz", () => {
+    const settings = calculateAutoFitSettings([
+      point(0, -2),
+      point(0.00025, 0),
+      point(0.0005, 2),
+      point(0.00075, 0),
+      point(0.001, -2),
+    ], "1");
+
+    expect(settings).toEqual({ voltsPerDiv: 1, timeDivValue: 0.0002, centerVoltage: 0 });
+  });
+
+  it("auto-escala sin desbordar el máximo de la interfaz y conserva el nivel DC", () => {
+    const settings = calculateAutoFitSettings([
+      point(0, 0),
+      point(0.5, 100),
+    ], "1");
+
+    expect(settings.voltsPerDiv).toBe(20);
+    expect(settings.timeDivValue).toBe(0.2);
+    expect(settings.centerVoltage).toBe(50);
   });
 });

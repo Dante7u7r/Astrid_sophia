@@ -6,7 +6,7 @@ import { AccessibleMenu } from "./accessible_menu";
 describe("AccessibleMenu", () => {
   beforeEach(() => {
     document.body.innerHTML = `
-      <button id="trigger">Instrumentos</button>
+      <button id="trigger"><span id="trigger-label">Instrumentos</span></button>
       <div id="menu">
         <button class="dropdown-menu-item-btn">Primero</button>
         <button class="dropdown-menu-item-btn">Segundo</button>
@@ -43,5 +43,16 @@ describe("AccessibleMenu", () => {
     expect(menu.hidden).toBe(true);
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(trigger);
+  });
+
+  test("no cierra el menú al hacer clic en contenido anidado del disparador", () => {
+    const trigger = document.querySelector("#trigger") as HTMLButtonElement;
+    const menu = document.querySelector("#menu") as HTMLElement;
+    new AccessibleMenu(trigger, menu);
+
+    document.querySelector("#trigger-label")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(menu.hidden).toBe(false);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
   });
 });
