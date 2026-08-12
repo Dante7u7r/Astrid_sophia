@@ -58,51 +58,7 @@
           <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
             <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
           </button>
-          <div class="dropdown-wrapper">
-            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentos y Diagnósticos" aria-label="Instrumentos y diagnósticos" aria-haspopup="menu" aria-expanded="false" aria-controls="instruments-dropdown">
-              <span aria-hidden="true">🛠️</span><span class="header-action-label">Instrumentación</span>
-            </button>
-            <div id="instruments-dropdown" class="dropdown-menu-box" role="menu" hidden style="display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--bg-glass); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-depth); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); width: 220px; z-index: 1000; padding: 10px;">
-              <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Paneles e Interfaz</div>
-              <button class="dropdown-menu-item-btn" id="menu-toggle-left" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
-                <span>📦 Panel Componentes</span>
-                <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+1</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="menu-toggle-right" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
-                <span>⚙️ Panel Propiedades</span>
-                <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+2</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="menu-toggle-dock" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-fast);">
-                <span>▦ Centro de instrumentos</span>
-                <span style="font-size: 0.65rem; color: var(--text-muted);">Ctrl+3</span>
-              </button>
-              
-              <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Diagnósticos SPICE</div>
-              <button class="dropdown-menu-item-btn" id="menu-run-erc" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>⚡ Chequeo de Reglas ERC</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="menu-settings" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>⚙️ Ajustes Físicos</span>
-              </button>
-              
-              <div class="menu-category-title" style="font-size: 0.62rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; text-align: left;">Exportadores de Datos</div>
-              <button class="dropdown-menu-item-btn" id="export-csv-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>📊 Exportar Datos a CSV</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="export-svg-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>📈 Exportar Gráfico a SVG</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="export-s2p-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>📈 Touchstone (.s2p)</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="export-h5-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>📦 Exportar Binario HDF5</span>
-              </button>
-              <button class="dropdown-menu-item-btn" id="export-pdf-btn" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); font-size: 0.72rem; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; transition: var(--transition-fast);">
-                <span>📋 Generar Reporte PDF</span>
-              </button>
-            </div>
-          </div>
+
           <div class="header-separator"></div>
           <button id="settings-trigger-btn" class="btn-text-only" type="button" data-tooltip="Configuración de simulación" aria-label="Ajustes de simulación">
             <span aria-hidden="true">⚙️</span><span class="header-action-label">Ajustes</span>
@@ -641,339 +597,267 @@
             <!-- Canvas Interactivo Principal -->
             <canvas id="circuit-canvas" tabindex="0" aria-label="Lienzo del esquema electrónico"></canvas>
 
-            <div class="canvas-help-tip" id="canvas-help-tip">
-              Arrastra componentes del panel izquierdo para diseñar tu circuito.
-            </div>
-          </section>
+          <!-- ALMACÉN DE CONTENIDOS DE INSTRUMENTOS (OCULTO - NUNCA VISIBLE EN EL DOCK) -->
+          <div id="instruments-storage-pool" hidden style="display: none !important;">
+            <!-- 1. Osciloscopio Digital de Nivel Profesional -->
+            <div class="inst-content-box osc-theme-rack" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;">
+              <!-- Scope Header Console -->
+              <div class="osc-header-bar" id="osc-header">
+                <div class="osc-panel-controls" id="osc-controls">
+                  <!-- Channel Active Buttons -->
+                  <button id="osc-ch1-btn" class="btn-osc-mini active ch1-badge" type="button"><span class="ch-dot"></span> CH1</button>
+                  <button id="osc-ch2-btn" class="btn-osc-mini ch2-badge" type="button"><span class="ch-dot"></span> CH2</button>
+                  <button id="osc-ch3-btn" class="btn-osc-mini ch3-badge" type="button"><span class="ch-dot"></span> CH3</button>
+                  <button id="osc-ch4-btn" class="btn-osc-mini ch4-badge" type="button"><span class="ch-dot"></span> CH4</button>
+                  
+                  <span class="osc-v-divider"></span>
+                  
+                  <!-- Mode & Tools -->
+                  <button id="osc-mode-ty" class="btn-osc-mini active" type="button">T-Y</button>
+                  <button id="osc-mode-xy" class="btn-osc-mini" type="button">X-Y</button>
+                  <button id="osc-cursors-btn" class="btn-osc-mini" type="button">📏 Cursores: OFF</button>
+                  
+                  <span class="osc-v-divider"></span>
+                  
+                  <button id="osc-pause-btn" class="btn-osc-mini osc-btn-action" type="button">⏸ Pausa</button>
+                  <button id="osc-autofit-btn" class="btn-osc-mini osc-btn-autofit" type="button" data-tooltip="Auto-escalar Volts/div y Tiempo/div">✨ Auto</button>
+                </div>
+              </div>
 
-          <!-- DOCK INFERIOR (OSCILOSCOPIO + CONSOLA) -->
+              <div class="osc-main-layout">
+                <!-- Screen Viewport with CRT Bezel -->
+                <div class="osc-viewport-frame" id="osc-viewport">
+                  <div class="osc-glass-bezel">
+                    <!-- Floating Live Status Overlay HUD -->
+                    <div class="osc-hud-overlay" id="osc-hud-overlay">
+                      <div class="hud-item ch1"><span class="hud-lbl">CH1:</span> <span id="osc-hud-ch1-val">1.0 V/div</span></div>
+                      <div class="hud-item ch2"><span class="hud-lbl">CH2:</span> <span id="osc-hud-ch2-val">1.0 V/div</span></div>
+                      <div class="hud-item ch3"><span class="hud-lbl">CH3:</span> <span id="osc-hud-ch3-val">1.0 V/div</span></div>
+                      <div class="hud-item ch4"><span class="hud-lbl">CH4:</span> <span id="osc-hud-ch4-val">1.0 V/div</span></div>
+                      <div class="hud-item time"><span class="hud-lbl">TIME:</span> <span id="osc-hud-time-val">20 ms/div</span></div>
+                    </div>
+
+                    <canvas class="osc-canvas" id="osc-canvas"></canvas>
+                    <div class="osc-grid-overlay"></div>
+                  </div>
+
+                  <!-- Telemetry Bottom Bar -->
+                  <div class="osc-measurements-bar">
+                    <div id="osc-meas-ch1" class="meas-card ch1"><span class="meas-badge">CH1</span> <span class="meas-val">--</span></div>
+                    <div id="osc-meas-ch2" class="meas-card ch2"><span class="meas-badge">CH2</span> <span class="meas-val">--</span></div>
+                    <div id="osc-meas-ch3" class="meas-card ch3"><span class="meas-badge">CH3</span> <span class="meas-val">--</span></div>
+                    <div id="osc-meas-ch4" class="meas-card ch4"><span class="meas-badge">CH4</span> <span class="meas-val">--</span></div>
+                  </div>
+                </div>
+
+                <!-- Right Control Console Panel -->
+                <div class="osc-sidebar-controls">
+                  <!-- TIMEBASE CONTROL RACK -->
+                  <div class="osc-rack-section">
+                    <div class="rack-section-title">⏱️ TIEMPOBASE (HORIZ)</div>
+                    <div class="rack-row">
+                      <label for="osc-time-div" class="rack-label">Tiempo / Div</label>
+                      <select id="osc-time-div" class="osc-select" aria-label="Tiempo por división">
+                        <option value="0.000001">1 µs/div</option>
+                        <option value="0.000002">2 µs/div</option>
+                        <option value="0.000005">5 µs/div</option>
+                        <option value="0.00001">10 µs/div</option>
+                        <option value="0.00002">20 µs/div</option>
+                        <option value="0.000005">50 µs/div</option>
+                        <option value="0.0001">100 µs/div</option>
+                        <option value="0.0002">200 µs/div</option>
+                        <option value="0.0005">500 µs/div</option>
+                        <option value="0.001">1 ms/div</option>
+                        <option value="0.002">2 ms/div</option>
+                        <option value="0.005">5 ms/div</option>
+                        <option value="0.01">10 ms/div</option>
+                        <option value="0.02" selected>20 ms/div</option>
+                        <option value="0.05">50 ms/div</option>
+                        <option value="0.1">100 ms/div</option>
+                        <option value="0.2">200 ms/div</option>
+                        <option value="0.5">500 ms/div</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- TRIGGER CONTROL RACK -->
+                  <div class="osc-rack-section">
+                    <div class="rack-section-title">🎯 DISPARO (TRIGGER)</div>
+                    <div class="rack-grid-2">
+                      <div class="rack-col">
+                        <label for="osc-trigger-mode" class="rack-label">Fuente</label>
+                        <select id="osc-trigger-mode" class="osc-select" aria-label="Canal de disparo">
+                          <option value="ch1" selected>CH1</option>
+                          <option value="ch2">CH2</option>
+                          <option value="ch3">CH3</option>
+                          <option value="ch4">CH4</option>
+                        </select>
+                      </div>
+                      <div class="rack-col">
+                        <label for="osc-trigger-edge" class="rack-label">Flanco</label>
+                        <select id="osc-trigger-edge" class="osc-select" aria-label="Flanco de disparo">
+                          <option value="rising" selected>↗ Ascendente</option>
+                          <option value="falling">↘ Descendente</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="rack-row style-margin-top">
+                      <div class="rack-label-group">
+                        <label for="osc-trigger-level" class="rack-label">Nivel Disparo</label>
+                        <span id="osc-trigger-level-val" class="rack-val-badge">0.0 V</span>
+                      </div>
+                      <input id="osc-trigger-level" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Nivel de disparo" />
+                    </div>
+                  </div>
+
+                  <!-- CHANNELS CONTROL RACK -->
+                  <div class="osc-rack-section flex-grow-section">
+                    <div class="rack-section-title">⚡ CANALES VERTICALES</div>
+                    <div class="osc-channels-grid">
+                      <!-- CH1 Card -->
+                      <div class="osc-ch-card ch1">
+                        <div class="ch-card-header">
+                          <span class="ch-card-title">CANAL 1</span>
+                          <span class="ch-card-node" id="osc-ch1-node">Nodo: N01</span>
+                        </div>
+                        <div class="ch-card-controls">
+                          <div class="ch-ctrl-group">
+                            <label for="osc-volts-ch1" class="ch-ctrl-label">V/div</label>
+                            <select id="osc-volts-ch1" class="osc-select-mini" aria-label="Voltios por división del canal 1">
+                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
+                            </select>
+                          </div>
+                          <div class="ch-ctrl-group">
+                            <div class="ch-slider-head">
+                              <label for="osc-offset-ch1" class="ch-ctrl-label">Offset</label>
+                              <span id="osc-offset-ch1-val" class="ch-offset-readout">0 px</span>
+                            </div>
+                            <input id="osc-offset-ch1" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 1" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- CH2 Card -->
+                      <div class="osc-ch-card ch2">
+                        <div class="ch-card-header">
+                          <span class="ch-card-title">CANAL 2</span>
+                          <span class="ch-card-node" id="osc-ch2-node">Nodo: N02</span>
+                        </div>
+                        <div class="ch-card-controls">
+                          <div class="ch-ctrl-group">
+                            <label for="osc-volts-ch2" class="ch-ctrl-label">V/div</label>
+                            <select id="osc-volts-ch2" class="osc-select-mini" aria-label="Voltios por división del canal 2">
+                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
+                            </select>
+                          </div>
+                          <div class="ch-ctrl-group">
+                            <div class="ch-slider-head">
+                              <label for="osc-offset-ch2" class="ch-ctrl-label">Offset</label>
+                              <span id="osc-offset-ch2-val" class="ch-offset-readout">0 px</span>
+                            </div>
+                            <input id="osc-offset-ch2" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 2" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- CH3 Card -->
+                      <div class="osc-ch-card ch3">
+                        <div class="ch-card-header">
+                          <span class="ch-card-title">CANAL 3</span>
+                          <span class="ch-card-node" id="osc-ch3-node">Nodo: N03</span>
+                        </div>
+                        <div class="ch-card-controls">
+                          <div class="ch-ctrl-group">
+                            <label for="osc-volts-ch3" class="ch-ctrl-label">V/div</label>
+                            <select id="osc-volts-ch3" class="osc-select-mini" aria-label="Voltios por división del canal 3">
+                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
+                            </select>
+                          </div>
+                          <div class="ch-ctrl-group">
+                            <div class="ch-slider-head">
+                              <label for="osc-offset-ch3" class="ch-ctrl-label">Offset</label>
+                              <span id="osc-offset-ch3-val" class="ch-offset-readout">0 px</span>
+                            </div>
+                            <input id="osc-offset-ch3" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 3" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- CH4 Card -->
+                      <div class="osc-ch-card ch4">
+                        <div class="ch-card-header">
+                          <span class="ch-card-title">CANAL 4</span>
+                          <span class="ch-card-node" id="osc-ch4-node">Nodo: N04</span>
+                        </div>
+                        <div class="ch-card-controls">
+                          <div class="ch-ctrl-group">
+                            <label for="osc-volts-ch4" class="ch-ctrl-label">V/div</label>
+                            <select id="osc-volts-ch4" class="osc-select-mini" aria-label="Voltios por división del canal 4">
+                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
+                            </select>
+                          </div>
+                          <div class="ch-ctrl-group">
+                            <div class="ch-slider-head">
+                              <label for="osc-offset-ch4" class="ch-ctrl-label">Offset</label>
+                              <span id="osc-offset-ch4-val" class="ch-offset-readout">0 px</span>
+                            </div>
+                            <input id="osc-offset-ch4" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 4" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 2. Generador de Funciones Virtual -->
+            <div class="inst-content-box" id="inst-generator" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+
+            <!-- 3. Analizador Lógico Digital (8 Canales) -->
+            <div class="inst-content-box" id="inst-logic" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+
+            <!-- 4. Analizador de Espectro FFT -->
+            <div class="inst-content-box" id="inst-fft" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+
+            <!-- 5. Trazador de Curvas I-V -->
+            <div class="inst-content-box" id="inst-tracer" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+
+            <!-- 6. Asistente e Inteligencia de Simulación -->
+            <div class="inst-content-box" id="inst-intelligence" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+          </div>
+
+          <!-- DOCK INFERIOR (COMPACT INSTRUMENT LAUNCHER HUB) -->
           <div class="instrument-center-backdrop" id="instrument-center-backdrop" hidden></div>
 
           <section
             class="bottom-dock"
             id="bottom-dock"
-            role="dialog"
-            aria-modal="true"
             aria-hidden="true"
             aria-labelledby="instrument-center-title"
           >
-            <header class="instrument-center-header">
-              <div class="instrument-center-heading">
-                <span class="instrument-center-mark" aria-hidden="true">▦</span>
-                <div>
-                  <h2 id="instrument-center-title">Centro de instrumentos</h2>
-                  <span>Medición y diagnóstico</span>
-                </div>
-              </div>
-              <button
-                id="instrument-center-close"
-                class="instrument-center-close"
-                type="button"
-                tabindex="0"
-                aria-label="Cerrar centro de instrumentos"
-                data-tooltip="Cerrar instrumentos"
-              >×</button>
-            </header>
-            <!-- Columna Izquierda: Panel de Instrumentación con Pestañas -->
-            <div class="instruments-panel" id="instruments-panel" style="display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.05);">
-              <!-- Barra de pestañas de Instrumentos -->
-              <div class="instruments-tabs-bar" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid var(--border-color); height: 32px; align-items: center; padding: 0 10px; gap: 4px; flex-shrink: 0;">
-                <button class="inst-tab active" data-tab="oscilloscope" data-short-label="OSC" style="background: none; border: none; color: var(--cyan); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📊 Osciloscopio</button>
-                <button class="inst-tab" data-tab="generator" data-short-label="GEN" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⚡ Generador</button>
-                <button class="inst-tab" data-tab="logic" data-short-label="LOG" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">⌗ Lógico</button>
-                <button class="inst-tab" data-tab="fft" data-short-label="FFT" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
-                <button class="inst-tab" data-tab="tracer" data-short-label="I-V" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">🔬 Trazador I-V</button>
-                <button class="inst-tab" data-tab="intelligence" data-short-label="IA" style="background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; border-radius: 4px 4px 0 0; transition: var(--transition-fast);">◈ Inteligencia</button>
-              </div>
-
-              <!-- Contenedores de cada instrumento -->
-              <div class="instruments-content-area" style="flex-grow: 1; position: relative; overflow: hidden; display: flex; flex-direction: column;">
-                <!-- 1. Osciloscopio -->
-                <div class="inst-content-box" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%;">
-                  <div class="panel-header" id="osc-header" style="height: 36px; min-height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid var(--border-subtle);">
-                    <h3 style="font-size: 0.68rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">Osciloscopio Digital de 4 Canales</h3>
-                    <div class="osc-panel-controls" id="osc-controls" style="display: flex; gap: 4px; align-items: center;">
-                      <button id="osc-ch1-btn" class="btn-osc-mini active" style="border-color: #66fcf1; color: #66fcf1;" type="button">CH1</button>
-                      <button id="osc-ch2-btn" class="btn-osc-mini" style="border-color: #a855f7; color: #a855f7;" type="button">CH2</button>
-                      <button id="osc-ch3-btn" class="btn-osc-mini" style="border-color: #f97316; color: #f97316;" type="button">CH3</button>
-                      <button id="osc-ch4-btn" class="btn-osc-mini" style="border-color: #22c55e; color: #22c55e;" type="button">CH4</button>
-                      <span style="width: 1px; height: 16px; background: rgba(255,255,255,0.15); margin: 0 4px;"></span>
-                      <button id="osc-pause-btn" class="btn-osc-mini" type="button">Pausar</button>
-                      <button id="osc-autofit-btn" class="btn-osc-mini" style="border-color: var(--accent-cyan); color: var(--accent-cyan);" type="button" data-tooltip="Auto-escalar Volts/div y Tiempo/div">Auto-Escalar</button>
-                    </div>
-                  </div>
-                  <div class="osc-main-layout" style="display: flex; flex-grow: 1; overflow: hidden; position: relative; width: 100%; height: calc(100% - 36px);">
-                    <!-- Canvas Area -->
-                    <div class="osc-viewport" id="osc-viewport" style="flex-grow: 1; position: relative; background: rgba(2, 3, 8, 0.95); display: flex; flex-direction: column; overflow: hidden;">
-                      <canvas class="osc-canvas" id="osc-canvas" style="flex-grow: 1; width: 100%; display: block;"></canvas>
-                      <div class="osc-grid-overlay"></div>
-                      
-                      <!-- Mediciones Automáticas Bottom Bar -->
-                      <div class="osc-measurements-bar" style="height: 24px; min-height: 24px; background: rgba(0, 0, 0, 0.4); border-top: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-around; font-size: 0.65rem; color: var(--text-muted); font-family: var(--font-mono); flex-shrink: 0; overflow-x: auto; white-space: nowrap; gap: 10px; padding: 0 10px;">
-                        <div id="osc-meas-ch1" style="color: #66fcf1;">CH1: --</div>
-                        <div id="osc-meas-ch2" style="color: #a855f7;">CH2: --</div>
-                        <div id="osc-meas-ch3" style="color: #f97316;">CH3: --</div>
-                        <div id="osc-meas-ch4" style="color: #22c55e;">CH4: --</div>
-                      </div>
-                    </div>
-                    
-                    <!-- Sidebar Controls (Panel Analógico de Mandos) -->
-                    <div class="osc-sidebar-controls" style="width: 175px; min-width: 175px; border-left: 1px solid var(--border-color); background: rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow-y: auto; font-family: var(--font-sans); flex-shrink: 0; box-sizing: border-box;">
-                      <!-- Mode and Cursors -->
-                      <div style="display: flex; gap: 4px;">
-                        <button id="osc-mode-ty" class="btn-osc-mini active" style="flex-grow: 1; justify-content: center;" type="button">T-Y</button>
-                        <button id="osc-mode-xy" class="btn-osc-mini" style="flex-grow: 1; justify-content: center;" type="button">X-Y</button>
-                      </div>
-                      <button id="osc-cursors-btn" class="btn-osc-mini" style="width: 100%; justify-content: center; display: flex;" type="button">📏 Cursores: OFF</button>
-                      
-                      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 2px;"></div>
-                      
-                      <!-- Time/Div -->
-                      <div style="display: flex; flex-direction: column; gap: 2px;">
-                        <label style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Tiempo / Div</label>
-                        <select id="osc-time-div" class="prop-input" aria-label="Tiempo por división" style="font-size: 0.68rem; padding: 3px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; cursor: pointer; width: 100%;">
-                          <option value="0.000001">1 µs/div</option>
-                          <option value="0.000002">2 µs/div</option>
-                          <option value="0.000005">5 µs/div</option>
-                          <option value="0.00001">10 µs/div</option>
-                          <option value="0.00002">20 µs/div</option>
-                          <option value="0.00005">50 µs/div</option>
-                          <option value="0.0001">100 µs/div</option>
-                          <option value="0.0002">200 µs/div</option>
-                          <option value="0.0005">500 µs/div</option>
-                          <option value="0.001">1 ms/div</option>
-                          <option value="0.002">2 ms/div</option>
-                          <option value="0.005">5 ms/div</option>
-                          <option value="0.01">10 ms/div</option>
-                          <option value="0.02" selected>20 ms/div</option>
-                          <option value="0.05">50 ms/div</option>
-                          <option value="0.1">100 ms/div</option>
-                          <option value="0.2">200 ms/div</option>
-                          <option value="0.5">500 ms/div</option>
-                        </select>
-                      </div>
-                      
-                      <!-- Volts/Div and Offset -->
-                      <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <label style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold;">Tensión / Div y Offset</label>
-                        
-                        <!-- CH1 -->
-                        <div style="background: rgba(102, 252, 241, 0.04); border: 1px solid rgba(102, 252, 241, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
-                          <div style="font-size: 0.65rem; color: #66fcf1; font-weight: bold;">Canal 1</div>
-                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch1" class="prop-input" aria-label="Voltios por división del canal 1" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
-                            </select>
-                            <input id="osc-offset-ch1" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 1" />
-                          </div>
-                        </div>
-                        
-                        <!-- CH2 -->
-                        <div style="background: rgba(168, 85, 247, 0.04); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
-                          <div style="font-size: 0.65rem; color: #a855f7; font-weight: bold;">Canal 2</div>
-                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch2" class="prop-input" aria-label="Voltios por división del canal 2" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
-                            </select>
-                            <input id="osc-offset-ch2" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 2" />
-                          </div>
-                        </div>
-                        
-                        <!-- CH3 -->
-                        <div style="background: rgba(249, 115, 22, 0.04); border: 1px solid rgba(249, 115, 22, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
-                          <div style="font-size: 0.65rem; color: #f97316; font-weight: bold;">Canal 3</div>
-                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch3" class="prop-input" aria-label="Voltios por división del canal 3" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
-                            </select>
-                            <input id="osc-offset-ch3" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 3" />
-                          </div>
-                        </div>
-
-                        <!-- CH4 -->
-                        <div style="background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.15); border-radius: 4px; padding: 4px; display: flex; flex-direction: column; gap: 3px;">
-                          <div style="font-size: 0.65rem; color: #22c55e; font-weight: bold;">Canal 4</div>
-                          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                            <select id="osc-volts-ch4" class="prop-input" aria-label="Voltios por división del canal 4" style="font-size: 0.62rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                              <option value="0.005">5 mV/div</option><option value="0.01">10 mV/div</option><option value="0.02">20 mV/div</option><option value="0.05">50 mV/div</option><option value="0.1">100 mV/div</option><option value="0.2">0.2 V/div</option><option value="0.5">0.5 V/div</option><option value="1.0" selected>1.0 V/div</option><option value="2.0">2.0 V/div</option><option value="5.0">5.0 V/div</option><option value="10.0">10 V/div</option><option value="20.0">20 V/div</option>
-                            </select>
-                            <input id="osc-offset-ch4" type="range" min="-150" max="150" value="0" style="width: 50px; height: 12px;" aria-label="Desplazamiento vertical del canal 4" />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <!-- Trigger Section -->
-                      <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 2px; display: flex; flex-direction: column; gap: 3px;">
-                        <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold;">Disparo (Trigger)</div>
-                        <div style="display: flex; gap: 4px; align-items: center;">
-                          <select id="osc-trigger-mode" class="prop-input" aria-label="Canal de disparo" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                            <option value="ch1">CH1</option>
-                            <option value="ch2">CH2</option>
-                            <option value="ch3">CH3</option>
-                            <option value="ch4">CH4</option>
-                          </select>
-                          <select id="osc-trigger-edge" class="prop-input" aria-label="Flanco de disparo" style="font-size: 0.6rem; padding: 2px; flex-grow: 1; background: black; color: white;">
-                            <option value="rising">↑ Subida</option>
-                            <option value="falling">↓ Bajada</option>
-                          </select>
-                        </div>
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 0.6rem; color: var(--text-muted);">
-                          <span>Nivel:</span>
-                          <input id="osc-trigger-level" type="range" min="-150" max="150" value="0" aria-label="Nivel de disparo" style="width: 100px; height: 12px;" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 2. Generador de Funciones -->
-                <div class="inst-content-box" id="inst-generator" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9); overflow-y: auto;">
-                  <!-- Contenido dinámico del generador -->
-                </div>
-
-                <!-- 3. Analizador Lógico -->
-                <div class="inst-content-box" id="inst-logic" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9);">
-                  <!-- Contenido dinámico del analizador lógico -->
-                </div>
-
-                <!-- 4. Analizador de Espectro (FFT) -->
-                <div class="inst-content-box" id="inst-fft" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9);">
-                  <!-- Contenido dinámico del analizador de espectro -->
-                </div>
-
-                <!-- 5. Trazador de Curvas I-V -->
-                <div class="inst-content-box" id="inst-tracer" style="display: none; width: 100%; height: 100%; flex-direction: column; background: rgba(8, 12, 22, 0.9); overflow-y: auto;">
-                  <!-- Contenido dinámico del trazador de curvas -->
-                </div>
-
-                <!-- 6. Centro local de inteligencia -->
-                <div class="inst-content-box intelligence-center" id="inst-intelligence" style="display: none;" aria-label="Centro local de inteligencia">
-                  <div class="intelligence-toolbar">
-                    <div>
-                      <h3>Inteligencia local</h3>
-                      <p id="intelligence-consent-summary">Cargando estado local…</p>
-                    </div>
-                    <div class="intelligence-actions">
-                      <button id="intelligence-refresh-btn" class="btn-osc-mini" type="button">Actualizar</button>
-                      <button id="intelligence-export-btn" class="btn-osc-mini" type="button">Exportar paquete redactado</button>
-                    </div>
-                  </div>
-
-                  <div class="intelligence-scroll">
-                    <section class="intelligence-metrics" aria-labelledby="intelligence-health-title">
-                      <h4 id="intelligence-health-title">Salud de simulación</h4>
-                      <dl>
-                        <div><dt>Eventos</dt><dd id="intelligence-event-count">0</dd></div>
-                        <div><dt>Datos</dt><dd id="intelligence-byte-count">0 B</dd></div>
-                        <div><dt>Éxito</dt><dd id="intelligence-success-rate">—</dd></div>
-                        <div><dt>Duración p95</dt><dd id="intelligence-p95">—</dd></div>
-                      </dl>
-                    </section>
-
-                    <section class="intelligence-section" aria-labelledby="intelligence-recommendations-title">
-                      <h4 id="intelligence-recommendations-title">Sugerencias deterministas</h4>
-                      <p>Las sugerencias se explican y nunca modifican el circuito automáticamente.</p>
-                      <div id="intelligence-recommendations-list">No hay sugerencias activas.</div>
-                    </section>
-
-                    <section class="intelligence-section" aria-labelledby="intelligence-history-title">
-                      <div class="intelligence-section-heading">
-                        <h4 id="intelligence-history-title">Historial reciente</h4>
-                        <label>Filtrar
-                          <select id="intelligence-kind-filter" class="prop-input">
-                            <option value="">Todos los eventos</option>
-                            <option value="simulation.completed">Simulaciones completadas</option>
-                            <option value="simulation.failed">Fallos</option>
-                            <option value="erc.completed">ERC</option>
-                            <option value="user.feedback_submitted">Correcciones humanas</option>
-                          </select>
-                        </label>
-                      </div>
-                      <div class="intelligence-table-wrap">
-                        <table class="intelligence-table">
-                          <thead><tr><th scope="col">Fecha</th><th scope="col">Evento</th><th scope="col">Análisis</th><th scope="col">Estado</th></tr></thead>
-                          <tbody id="intelligence-history-body"></tbody>
-                        </table>
-                      </div>
-                      <p id="intelligence-empty-state">No hay datos locales para este filtro.</p>
-                    </section>
-
-                    <section class="intelligence-section" aria-labelledby="intelligence-feedback-title">
-                      <h4 id="intelligence-feedback-title">Marcar resultado</h4>
-                      <form id="intelligence-feedback-form">
-                        <fieldset>
-                          <legend>¿El resultado fue físicamente plausible?</legend>
-                          <label><input type="radio" name="feedback-rating" value="correct" required> Correcto</label>
-                          <label><input type="radio" name="feedback-rating" value="uncertain"> Dudoso</label>
-                          <label><input type="radio" name="feedback-rating" value="incorrect"> Incorrecto</label>
-                        </fieldset>
-                        <label>Categoría
-                          <select id="intelligence-feedback-category" class="prop-input">
-                            <option value="model">Modelo</option><option value="convergence">Convergencia</option>
-                            <option value="performance">Rendimiento</option><option value="interface">Interfaz</option>
-                            <option value="other">Otra</option>
-                          </select>
-                        </label>
-                        <div class="intelligence-feedback-value">
-                          <label>Valor esperado <input id="intelligence-expected-value" class="prop-input" type="number" step="any"></label>
-                          <label>Unidad <input id="intelligence-expected-unit" class="prop-input" maxlength="32" placeholder="V, A, Hz…"></label>
-                        </div>
-                        <label>Comentario opcional
-                          <textarea id="intelligence-feedback-note" class="prop-input" maxlength="2000" rows="3"></textarea>
-                        </label>
-                        <label class="intelligence-confirm"><input id="intelligence-content-confirm" type="checkbox" required> Confirmo que deseo guardar este comentario como contenido local de usuario.</label>
-                        <button id="intelligence-feedback-submit" class="btn-osc-mini" type="submit">Guardar feedback</button>
-                      </form>
-                    </section>
-
-                    <section class="intelligence-section" aria-labelledby="intelligence-comparison-title">
-                      <h4 id="intelligence-comparison-title">Comparación entre versiones</h4>
-                      <div id="intelligence-version-comparison">Aún no hay versiones comparables.</div>
-                    </section>
-
-                    <section class="intelligence-section" aria-labelledby="intelligence-shadow-title">
-                      <h4 id="intelligence-shadow-title">Aprendizaje en modo sombra</h4>
-                      <p id="intelligence-shadow-status">No evaluado. Nunca modifica parámetros ni recomendaciones visibles.</p>
-                      <div class="intelligence-actions">
-                        <button id="intelligence-shadow-evaluate" class="btn-osc-mini" type="button">Evaluar dataset local</button>
-                        <button id="intelligence-shadow-rollback" class="btn-osc-mini" type="button">Restaurar modelo anterior</button>
-                        <button id="intelligence-shadow-disable" class="btn-osc-mini" type="button">Desactivar modelo</button>
-                      </div>
-                    </section>
-
-                    <section class="intelligence-section" aria-labelledby="intelligence-privacy-title">
-                      <h4 id="intelligence-privacy-title">Visor de privacidad</h4>
-                      <p>Vista exacta del último evento seleccionado; no muestra datos fuera de SQLite.</p>
-                      <pre id="intelligence-privacy-viewer" tabindex="0">Selecciona una fila del historial.</pre>
-                    </section>
-
-                    <section class="intelligence-section intelligence-danger" aria-labelledby="intelligence-data-title">
-                      <h4 id="intelligence-data-title">Mis datos</h4>
-                      <button id="intelligence-delete-expired" class="btn-osc-mini" type="button">Borrar vencidos</button>
-                      <label>Escribe ELIMINAR para borrar todo
-                        <input id="intelligence-delete-confirm" class="prop-input" autocomplete="off">
-                      </label>
-                      <button id="intelligence-delete-all" class="btn-osc-mini" type="button" disabled>Eliminar todo</button>
-                    </section>
-                  </div>
-                  <p id="intelligence-live-status" class="sr-only" role="status" aria-live="polite"></p>
-                </div>
-              </div>
+            <div class="instruments-tabs-bar" style="display: flex; background: none; border: none; height: 100%; align-items: center; padding: 0 10px; gap: 8px; flex-grow: 1;">
+              <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-right: 8px;">🛠️ Instrumentos:</span>
+              <button class="inst-tab active" data-tab="oscilloscope" data-short-label="OSC" style="background: rgba(102,252,241,0.08); border: 1px solid rgba(102,252,241,0.25); color: var(--cyan); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">📊 Osciloscopio</button>
+              <button class="inst-tab" data-tab="generator" data-short-label="GEN" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">⚡ Generador</button>
+              <button class="inst-tab" data-tab="logic" data-short-label="LOG" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">⌗ Lógico</button>
+              <button class="inst-tab" data-tab="fft" data-short-label="FFT" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
+              <button class="inst-tab" data-tab="tracer" data-short-label="I-V" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">🔬 Trazador I-V</button>
+              <button class="inst-tab" data-tab="intelligence" data-short-label="IA" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">◈ Inteligencia</button>
             </div>
-
-            <!-- Columna Derecha: Consola de logs de la aplicación -->
-            <div class="console-panel" id="console-panel" style="display: flex; flex-direction: column; overflow: hidden;">
-              <div class="panel-header" id="console-header" style="height: 36px; min-height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;">
-                <h3 style="font-size: 0.68rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">Logs del Sistema</h3>
-                <button id="clear-console-btn" class="btn-clear-console" type="button">Limpiar</button>
-              </div>
-              <div class="console-output" id="console-output" style="flex-grow: 1; padding: 8px 12px;">
-                <div class="log-line system-msg">> Inicializando consola virtual en PC local...</div>
-                <div class="log-line system-msg">> Entorno de renderizado WebGL/Canvas conectado.</div>
-                <div class="log-line system-msg">> Escáner de dependencias ARGON v9.0 verificado y enlazado.</div>
-              </div>
-            </div>
+            <button
+              id="instrument-center-close"
+              class="instrument-center-close"
+              type="button"
+              tabindex="0"
+              aria-label="Cerrar centro de instrumentos"
+              data-tooltip="Ocultar barra de instrumentos"
+              style="margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 4px 10px;"
+            >×</button>
           </section>
+
+          <div class="canvas-help-tip" id="canvas-help-tip">
+            Arrastra componentes del panel izquierdo para diseñar tu circuito.
+          </div>
         </div>
 
         <!-- PANEL DERECHO: DETALLES Y PROPIEDADES CONTEXTUALES -->

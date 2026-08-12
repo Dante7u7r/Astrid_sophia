@@ -18,6 +18,7 @@ export interface InstrumentationMenuActions {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   toggleInstrumentCenter: () => void;
+  openInstrument?: (tabId: string) => void;
   runErc: () => InstrumentationMenuErcResult | null;
   openSettings: () => void;
   addLog: (text: string, type?: "system" | "send" | "receive" | "error") => void;
@@ -59,9 +60,28 @@ export function initInstrumentationMenu(actions: InstrumentationMenuActions): Ac
 
   const menu = new AccessibleMenu(button, dropdown);
 
+  button.addEventListener("click", () => {
+    actions.toggleInstrumentCenter();
+    if (actions.openInstrument) {
+      actions.openInstrument("oscilloscope");
+    }
+  });
+
   dropdown.querySelector("#menu-toggle-left")?.addEventListener("click", actions.toggleLeftPanel);
   dropdown.querySelector("#menu-toggle-right")?.addEventListener("click", actions.toggleRightPanel);
   dropdown.querySelector("#menu-toggle-dock")?.addEventListener("click", actions.toggleInstrumentCenter);
+
+  // Vincular accesos directos a instrumentos individuales
+  dropdown.querySelectorAll<HTMLButtonElement>("[data-inst-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tabId = btn.getAttribute("data-inst-tab");
+      if (tabId && actions.openInstrument) {
+        actions.openInstrument(tabId);
+      }
+      menu.close(false);
+    });
+  });
+
   dropdown.querySelector("#menu-run-erc")?.addEventListener("click", () => {
     const result = actions.runErc();
     if (!result) return;

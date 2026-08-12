@@ -109,7 +109,9 @@ export function drawTyReticle(
 ): { divWidth: number; divHeight: number } {
   const divWidth = width / 10;
   const divHeight = height / 8;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+  
+  // Dotted sub-grid lines
+  ctx.strokeStyle = "rgba(102, 252, 241, 0.05)";
   ctx.lineWidth = 1;
   for (let x = 0; x <= width; x += divWidth) {
     ctx.beginPath();
@@ -123,13 +125,34 @@ export function drawTyReticle(
     ctx.lineTo(width, y);
     ctx.stroke();
   }
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+
+  // Primary Center Crosshairs (glowing cyan accent)
+  ctx.strokeStyle = "rgba(102, 252, 241, 0.25)";
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.moveTo(0, height / 2);
   ctx.lineTo(width, height / 2);
   ctx.moveTo(width / 2, 0);
   ctx.lineTo(width / 2, height);
   ctx.stroke();
+
+  // Tick marks along center X axis (5 ticks per div)
+  const subDivX = divWidth / 5;
+  ctx.strokeStyle = "rgba(102, 252, 241, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x <= width; x += subDivX) {
+    ctx.moveTo(x, height / 2 - 3);
+    ctx.lineTo(x, height / 2 + 3);
+  }
+  // Tick marks along center Y axis (5 ticks per div)
+  const subDivY = divHeight / 5;
+  for (let y = 0; y <= height; y += subDivY) {
+    ctx.moveTo(width / 2 - 3, y);
+    ctx.lineTo(width / 2 + 3, y);
+  }
+  ctx.stroke();
+
   return { divWidth, divHeight };
 }
 

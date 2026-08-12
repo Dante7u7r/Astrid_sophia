@@ -153,6 +153,48 @@ export function validateSchematicIntegrity(
 // Todos los datos se reciben explícitamente como argumentos.
 // ==========================================================================
 
+// ==========================================================================
+// CACHÉ TOPOLÓGICA DE NETLIST
+// ==========================================================================
+
+interface CachedTopologyData {
+  signature: string;
+  pinToNodeMap: Record<string, string>;
+  compPinMapping: Record<string, string[]>;
+  subcircuitDefinitions?: string;
+  error?: string;
+}
+
+let topologicalCache: CachedTopologyData | null = null;
+
+export function invalidateTopologicalCache(): void {
+  topologicalCache = null;
+}
+
+export function computeTopologySignature(
+  components: readonly ComponentInstance[],
+  wires: readonly WireInstance[],
+  getPins: (comp: ComponentInstance) => readonly PinInstance[],
+): string {
+  const compsSig = components
+    .map(c => {
+      const pinCount = getPins(c).length;
+      let extra = "";
+      if (c.type === "dmm") extra = `:${normalizeDmmMode(c.value)}`;
+      else if (c.type === "x") extra = `:${c.spiceMacro ?? ""}`;
+      return `${c.id}:${c.type}:${pinCount}${extra}`;
+    })
+    .sort()
+    .join("|");
+
+  const wiresSig = wires
+    .map(w => `${w.id}:${w.from.componentId}:${w.from.pinIndex}->${w.to.componentId}:${w.to.pinIndex}`)
+    .sort()
+    .join("|");
+
+  return `${compsSig}||${wiresSig}`;
+}
+
 export function extractElectricalNetlist(
   components: readonly ComponentInstance[],
   wires: readonly WireInstance[],
@@ -167,56 +209,73 @@ export function extractElectricalNetlist(
   const integrityError = validateSchematicIntegrity(components, wires, getPins);
   if (integrityError) return emptyResult(integrityError);
 
+  const currentSignature = computeTopologySignature(components, wires, getPins);
+
+  let isCacheHit = false;
+  let compPinMapping: Record<string, string[]> = {};
+  let pinToNodeMap: Record<string, string> = {};
+
+  if (topologicalCache && topologicalCache.signature === currentSignature) {
+    isCacheHit = true;
+    pinToNodeMap = { ...topologicalCache.pinToNodeMap };
+    compPinMapping = { ...topologicalCache.compPinMapping };
+  }
+
   const dsu = new DisjointSetUnion();
-
-  // 1. Declarar cada pin de cada componente en el DSU
-  const allPinKeys: string[] = [];
-  const compPinMapping: Record<string, string[]> = {};
-
-  for (const comp of components) {
-    if (comp.type === 'relay') {
-      compPinMapping[comp.id] = [
-        pinKey(comp.id, 0),
-        pinKey(comp.id, 1),
-        pinKey(comp.id, 2),
-        pinKey(comp.id, 3),
-        `${comp.id}:internal`,
-      ];
-      allPinKeys.push(`${comp.id}:0`, `${comp.id}:1`, `${comp.id}:2`, `${comp.id}:3`, `${comp.id}:internal`);
-    } else {
-      const pins = getPins(comp);
-      compPinMapping[comp.id] = [];
-      for (const pin of pins) {
-        const key = pinKey(comp.id, pin.pinIndex);
-        allPinKeys.push(key);
-        compPinMapping[comp.id].push(key);
-      }
-    }
-  }
-
-  // 2. Unir los pins que están conectados por cables (wires)
-  for (const wire of wires) {
-    const keyFrom = pinKey(wire.from.componentId, wire.from.pinIndex);
-    const keyTo = pinKey(wire.to.componentId, wire.to.pinIndex);
-    dsu.union(keyFrom, keyTo);
-  }
-
-  // 3. Identificar el grupo de Tierra (GND) y asignarle el ID de nodo "0"
-  let gndRoot: string | null = null;
-  for (const comp of components) {
-    if (comp.type === 'ground') {
-      const gndPinKey = `${comp.id}:0`;
-      gndRoot = dsu.find(gndPinKey);
-      break;
-    }
-  }
-
-  // 4. Mapear cada raíz de grupo a un índice de nodo eléctrico único
   const rootToNodeIdMap: Record<string, string> = {};
   const nextNodeId = { value: 1 };
 
-  if (gndRoot) {
-    rootToNodeIdMap[gndRoot] = "0";
+  if (isCacheHit) {
+    for (const [pk, nodeId] of Object.entries(pinToNodeMap)) {
+      rootToNodeIdMap[pk] = nodeId;
+      dsu.find(pk);
+    }
+  } else {
+    // 1. Declarar cada pin de cada componente en el DSU
+    const allPinKeys: string[] = [];
+    compPinMapping = {};
+
+    for (const comp of components) {
+      if (comp.type === 'relay') {
+        compPinMapping[comp.id] = [
+          pinKey(comp.id, 0),
+          pinKey(comp.id, 1),
+          pinKey(comp.id, 2),
+          pinKey(comp.id, 3),
+          `${comp.id}:internal`,
+        ];
+        allPinKeys.push(`${comp.id}:0`, `${comp.id}:1`, `${comp.id}:2`, `${comp.id}:3`, `${comp.id}:internal`);
+      } else {
+        const pins = getPins(comp);
+        compPinMapping[comp.id] = [];
+        for (const pin of pins) {
+          const key = pinKey(comp.id, pin.pinIndex);
+          allPinKeys.push(key);
+          compPinMapping[comp.id].push(key);
+        }
+      }
+    }
+
+    // 2. Unir los pins que están conectados por cables (wires)
+    for (const wire of wires) {
+      const keyFrom = pinKey(wire.from.componentId, wire.from.pinIndex);
+      const keyTo = pinKey(wire.to.componentId, wire.to.pinIndex);
+      dsu.union(keyFrom, keyTo);
+    }
+
+    // 3. Identificar el grupo de Tierra (GND) y asignarle el ID de nodo "0"
+    let gndRoot: string | null = null;
+    for (const comp of components) {
+      if (comp.type === 'ground') {
+        const gndPinKey = `${comp.id}:0`;
+        gndRoot = dsu.find(gndPinKey);
+        break;
+      }
+    }
+
+    if (gndRoot) {
+      rootToNodeIdMap[gndRoot] = "0";
+    }
   }
 
   const extractedComponents: ExtractedComponent[] = [];
@@ -501,7 +560,7 @@ export function extractElectricalNetlist(
   });
 
   // Poblar mapa de terminales a nodos eléctricos
-  const pinToNodeMap: Record<string, string> = {};
+  pinToNodeMap = {};
   for (const comp of components) {
     const pinsKeys = compPinMapping[comp.id] || [];
     for (const pk of pinsKeys) {
@@ -569,6 +628,14 @@ export function extractElectricalNetlist(
       ercError = `Pre-flight ERC fallido: Nodo huérfano detectado (Nodo ${lowDegreeNodes.join(", ")} tiene grado de conexión < 2). Verifica que no haya cables flotantes o componentes desconectados.`;
     }
   }
+
+  topologicalCache = {
+    signature: currentSignature,
+    pinToNodeMap: { ...pinToNodeMap },
+    compPinMapping,
+    subcircuitDefinitions,
+    error: ercError,
+  };
 
   return { netlist, pinToNodeMap, error: ercError };
 }

@@ -271,50 +271,155 @@ body {
   opacity: 1;
 }
 
-.instrument-center-backdrop[hidden] {
-  display: none;
+.instrument-center-backdrop {
+  display: none !important;
 }
 
 .bottom-dock {
-  position: fixed;
-  inset: calc(var(--header-h) + 14px) 18px calc(var(--footer-h) + 14px);
-  z-index: 80;
-  height: auto;
-  min-height: 0;
-  max-height: none;
+  position: relative;
+  z-index: 10;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
   margin: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.72fr);
-  grid-template-rows: 50px minmax(0, 1fr);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
   overflow: hidden;
   min-width: 0;
-  background: rgba(11, 15, 25, 0.88);
+  background: rgba(11, 15, 25, 0.95);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(102, 252, 241, 0.22);
-  border-radius: 14px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.8), 0 0 30px rgba(102, 252, 241, 0.1);
+  border-top: 1px solid rgba(102, 252, 241, 0.22);
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.5);
   opacity: 1;
   visibility: visible;
-  transform: translateY(0) scale(1);
-  transition:
-    opacity 0.2s ease,
-    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-    visibility 0s linear;
+  transition: height 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease;
 }
 
 .bottom-dock.collapsed {
-  height: auto;
-  min-height: 0;
+  height: 0 !important;
+  min-height: 0 !important;
   margin: 0;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(10px) scale(0.99);
+  border-top: none;
   pointer-events: none;
-  transition:
-    opacity 0.16s ease,
-    transform 0.16s ease,
-    visibility 0s linear 0.16s;
+}
+
+/* Floating Instrument Windows (HUD / PIP Mode) */
+.floating-instrument-window {
+  position: absolute;
+  z-index: 100;
+  width: 560px;
+  height: 360px;
+  min-width: 420px;
+  min-height: 260px;
+  background: rgba(11, 15, 25, 0.94);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(102, 252, 241, 0.3);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 20px rgba(102, 252, 241, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: both;
+}
+
+/* Custom Micro Scrollbars for Floating Windows */
+.floating-instrument-window * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(102, 252, 241, 0.25) transparent;
+}
+.floating-instrument-window *::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.floating-instrument-window *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.floating-instrument-window *::-webkit-scrollbar-thumb {
+  background: rgba(102, 252, 241, 0.25);
+  border-radius: 4px;
+}
+.floating-instrument-window *::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 252, 241, 0.5);
+}
+
+.floating-instrument-window.active-focus {
+  z-index: 105;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 25px rgba(102, 252, 241, 0.25);
+}
+
+.floating-instrument-window.pinned-to-canvas {
+  position: absolute;
+  z-index: 95;
+  border-color: rgba(102, 252, 241, 0.45);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(102, 252, 241, 0.15);
+}
+
+.floating-window-btn.pin-btn.is-pinned {
+  color: var(--accent-cyan);
+  background: rgba(102, 252, 241, 0.15);
+  border: 1px solid rgba(102, 252, 241, 0.4);
+  border-radius: 4px;
+}
+
+.floating-window-header {
+  height: 32px;
+  min-height: 32px;
+  background: rgba(0, 0, 0, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  cursor: move;
+  user-select: none;
+}
+
+.floating-window-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.floating-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.floating-window-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: var(--transition-fast);
+}
+
+.floating-window-btn:hover {
+  color: var(--text-bright);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.floating-window-body {
+  flex-grow: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .instrument-center-header {

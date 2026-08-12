@@ -31,6 +31,7 @@ export interface DesktopUiControllerDeps {
   getOrchestrator(): CanvasOrchestrator | null;
   getPanelLayoutManager(): PanelLayoutManager | null;
   getInstrumentsDock(): InstrumentsDock | null;
+  getFloatingInstrumentManager?(): import("../ui/floating_instrument_manager").FloatingInstrumentManager | null;
   getSidePanelController(): SidePanelController | null;
   getSparPorts(): { nodeId: string; z0: number }[];
   extractNetlist(reportErrors?: boolean): CircuitNetlist | null;
@@ -71,6 +72,9 @@ export function createDesktopUiControllers(
     toggleLeftPanel: () => deps.getSidePanelController()?.toggleSidePanel("left"),
     toggleRightPanel: () => deps.getSidePanelController()?.toggleSidePanel("right"),
     toggleInstrumentCenter: () => deps.getPanelLayoutManager()?.togglePanel("dock"),
+    openInstrument: (tabId) => {
+      deps.getFloatingInstrumentManager?.()?.popOut(tabId);
+    },
     runErc: () => {
       const netlist = deps.extractNetlist(true);
       const orchestrator = deps.getOrchestrator();

@@ -53,6 +53,7 @@ export interface DesktopControllerRegistryDeps {
   getOrchestrator(): CanvasOrchestrator | null;
   getPanelLayoutManager(): PanelLayoutManager | null;
   getInstrumentsDock(): InstrumentsDock | null;
+  getFloatingInstrumentManager?(): import("../ui/floating_instrument_manager").FloatingInstrumentManager | null;
   getSidePanelController(): SidePanelController | null;
   getSimulationSettings(): SimulationSettings;
   setSimulationSettings(settings: SimulationSettings): void;
@@ -103,6 +104,7 @@ export function createDesktopControllerRegistry(
     getOrchestrator: deps.getOrchestrator,
     getPanelLayoutManager: deps.getPanelLayoutManager,
     getInstrumentsDock: deps.getInstrumentsDock,
+    getFloatingInstrumentManager: deps.getFloatingInstrumentManager,
     getSidePanelController: deps.getSidePanelController,
     getSparPorts: deps.getSparPorts,
     extractNetlist: deps.extractNetlist,

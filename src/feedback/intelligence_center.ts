@@ -235,6 +235,7 @@ export class IntelligenceCenter {
   init(): void {
     if (this.initialized) return;
     this.initialized = true;
+    this.ensureDom();
     this.element<HTMLButtonElement>("intelligence-refresh-btn")?.addEventListener("click", () => {
       void this.refresh();
     });
@@ -590,6 +591,42 @@ export class IntelligenceCenter {
     this.selectedEvent = null;
     this.announce(`Datos eliminados: ${receipt.rowsDeleted} eventos. La captura quedó desactivada.`);
     await this.refresh();
+  }
+
+  private ensureDom(): void {
+    const container = this.element("inst-intelligence");
+    if (!container || this.element("intelligence-recommendations-list")) return;
+
+    container.innerHTML = `
+      <div style="display: flex; gap: 12px; height: 100%; font-family: var(--font-sans); color: var(--text-main); padding: 10px; box-sizing: border-box;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; overflow-y: auto;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h4 style="color: var(--cyan); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">◈ Asesor Inteligente</h4>
+            <span id="intelligence-live-status" style="font-size: 0.65rem; color: var(--text-muted);">Asistente en tiempo real listo</span>
+          </div>
+          <div id="intelligence-recommendations-list" style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1;">
+            <div id="intelligence-empty-state" style="font-size: 0.7rem; color: var(--text-muted); text-align: center; padding: 20px;">Sin advertencias ni recomendaciones en el circuito actual.</div>
+          </div>
+        </div>
+
+        <div style="width: 240px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; overflow-y: auto;">
+          <h5 style="color: var(--text-muted); font-size: 0.68rem; text-transform: uppercase; margin: 0;">Telemetría y Estado</h5>
+          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.68rem; font-family: var(--font-mono);">
+            <div style="display: flex; justify-content: space-between;"><span>Modo Consentimiento:</span> <strong id="intelligence-consent-summary">Local</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span>Eventos Locales:</span> <strong id="intelligence-event-count">0</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span>Tamaño Almacén:</span> <strong id="intelligence-byte-count">0 B</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span>Tasa Éxito MNA:</span> <strong id="intelligence-success-rate">100%</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span>Latencia P95:</span> <strong id="intelligence-p95">—</strong></div>
+          </div>
+          <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0;" />
+          <div style="display: flex; gap: 6px;">
+            <button id="intelligence-refresh-btn" class="btn-osc-mini" style="flex: 1; justify-content: center;" type="button">🔄 Actualizar</button>
+            <button id="intelligence-export-btn" class="btn-osc-mini" style="flex: 1; justify-content: center;" type="button">📥 Exportar</button>
+          </div>
+          <div id="intelligence-shadow-status" style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;"></div>
+        </div>
+      </div>
+    `;
   }
 
   private element<T extends HTMLElement>(id: string): T | null {

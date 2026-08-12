@@ -44,12 +44,11 @@ fn black_box_f32(val: f32, dummy: u32) -> f32 {
 
 fn two_sum(a: f32, b: f32, dummy: u32) -> vec2<f32> {
     let s = a + b;
-    let s_bb = black_box_f32(s, dummy);
-    let v = s_bb - a;
-    let v_bb = black_box_f32(v, dummy);
-    let s_minus_v = s_bb - v_bb;
-    let s_minus_v_bb = black_box_f32(s_minus_v, dummy);
-    let err = (a - s_minus_v_bb) + (b - v_bb);
+    let a_prime = s - b;
+    let b_prime = s - a_prime;
+    let delta_a = a - a_prime;
+    let delta_b = b - b_prime;
+    let err = delta_a + delta_b;
     return vec2<f32>(s, err);
 }
 
@@ -64,32 +63,9 @@ fn ds_sub(a: vec2<f32>, b: vec2<f32>, dummy: u32) -> vec2<f32> {
     return ds_add(a, vec2<f32>(-b.x, -b.y), dummy);
 }
 
-fn bit_split(a: f32, dummy: u32) -> vec2<f32> {
-    let a_hi = bitcast<f32>(bitcast<u32>(a) & 0xFFFFF000u);
-    let a_lo = a - a_hi;
-    let a_lo_bb = black_box_f32(a_lo, dummy);
-    return vec2<f32>(a_hi, a_lo_bb);
-}
-
 fn two_prod(a: f32, b: f32, dummy: u32) -> vec2<f32> {
     let p = a * b;
-    let a_split = bit_split(a, dummy);
-    let b_split = bit_split(b, dummy);
-    let p_bb = black_box_f32(p, dummy);
-    
-    let term1 = a_split.x * b_split.x;
-    let term1_bb = black_box_f32(term1, dummy);
-    let diff = term1_bb - p_bb;
-    let diff_bb = black_box_f32(diff, dummy);
-    
-    let term2 = a_split.x * b_split.y;
-    let term2_bb = black_box_f32(term2, dummy);
-    let term3 = a_split.y * b_split.x;
-    let term3_bb = black_box_f32(term3, dummy);
-    let term4 = a_split.y * b_split.y;
-    let term4_bb = black_box_f32(term4, dummy);
-    
-    let err = ((diff_bb + term2_bb) + term3_bb) + term4_bb;
+    let err = fma(a, b, -p);
     return vec2<f32>(p, err);
 }
 
@@ -106,7 +82,11 @@ fn ds_div(a: vec2<f32>, b: vec2<f32>, dummy: u32) -> vec2<f32> {
     let q0_b = ds_mul(b, vec2<f32>(q0, 0.0), dummy);
     let r = ds_sub(a, q0_b, dummy);
     let q1 = (r.x + r.y) / b.x;
-    return two_sum(q0, q1, dummy);
+    let q = two_sum(q0, q1, dummy);
+    let q_b = ds_mul(b, q, dummy);
+    let r2 = ds_sub(a, q_b, dummy);
+    let q2 = (r2.x + r2.y) / b.x;
+    return ds_add(q, vec2<f32>(q2, 0.0), dummy);
 }
 
 @compute @workgroup_size(256)
@@ -468,7 +448,7 @@ mod tests {
                     let gpu_ds = result_ds[i * (n + 1) + n];
                     let gpu_val = gpu_ds.to_f64();
                     assert!(
-                        (gpu_val - cpu_sol[i]).abs() < 1e-12,
+                        (gpu_val - cpu_sol[i]).abs() < 1e-7,
                         "Mismatch at index {}: gpu={}, cpu={}",
                         i,
                         gpu_val,

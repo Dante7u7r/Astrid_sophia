@@ -15,7 +15,13 @@ export function appendLiveTransientSample(
       results.length,
       Math.max(1, Math.min(LIVE_HISTORY_TRIM_CHUNK, Math.ceil(maxSamples * 0.1))),
     );
-    results.splice(0, trimCount);
+    // En lugar de splice(0, trimCount) que es O(N) y desencadena GC re-allocations masivas,
+    // desplazamos los elementos in-place O(1) relativo y truncamos la longitud.
+    const remaining = results.length - trimCount;
+    for (let i = 0; i < remaining; i++) {
+      results[i] = results[i + trimCount]!;
+    }
+    results.length = remaining;
   }
   results.push(sample);
 }

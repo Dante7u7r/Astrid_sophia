@@ -24,12 +24,11 @@ function setupDom(): void {
 }
 
 describe("InstrumentCenterController", () => {
-  it("sincroniza backdrop y foco al abrir/cerrar", async () => {
+  it("sincroniza visibilidad del dock e informa cambios de tamaño al abrir/cerrar", async () => {
     setupDom();
     const dock = document.querySelector<HTMLElement>("#bottom-dock")!;
-    const backdrop = document.querySelector<HTMLElement>("#instrument-center-backdrop")!;
-    const menuButton = document.querySelector<HTMLButtonElement>("#instruments-menu-btn")!;
     const closeButton = document.querySelector<HTMLButtonElement>("#instrument-center-close")!;
+    const onResizeRequested = vi.fn();
     const panelLayoutManager = {
       setPanelCollapsed: vi.fn((_panel: "left" | "right" | "dock", collapsed: boolean) => {
         dock.classList.toggle("collapsed", collapsed);
@@ -40,22 +39,18 @@ describe("InstrumentCenterController", () => {
     createInstrumentCenterController({
       getPanelLayoutManager: () => panelLayoutManager,
       isTypingInFormField: () => false,
-      onResizeRequested: vi.fn(),
+      onResizeRequested,
     }).init();
 
-    menuButton.focus();
     panelLayoutManager.setPanelCollapsed("dock", false);
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(dock.getAttribute("aria-hidden")).toBe("false");
-    expect(backdrop.hasAttribute("hidden")).toBe(false);
-    expect(document.activeElement).toBe(closeButton);
+    expect(onResizeRequested).toHaveBeenCalled();
 
     closeButton.click();
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(panelLayoutManager.setPanelCollapsed).toHaveBeenLastCalledWith("dock", true);
-    expect(backdrop.hasAttribute("hidden")).toBe(true);
-    expect(document.activeElement).toBe(menuButton);
   });
 });

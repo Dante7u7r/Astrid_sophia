@@ -303,4 +303,25 @@ describe("extractElectricalNetlist", () => {
 
     expect(netlist.components[0].mcuClockSpeed).toBe(8e6);
   });
+
+  test("reutiliza la caché topológica al cambiar únicamente el valor numérico de un componente", () => {
+    const components1: ComponentInstance[] = [
+      { id: "GND", type: "ground", value: 0, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 50, y: 0, rotation: 0 },
+    ];
+    const getPins = (c: ComponentInstance) => Array.from({ length: 2 }, (_, i) => ({ componentId: c.id, pinIndex: i, x: 0, y: 0 }));
+
+    const res1 = extractElectricalNetlist(components1, [], getPins);
+    expect(res1.netlist.components.find(c => c.id === "R1")?.value).toBe(1000);
+
+    // Cambiar solo el valor de R1 de 1000 a 5000 sin cambiar topología
+    const components2: ComponentInstance[] = [
+      { id: "GND", type: "ground", value: 0, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 5000, x: 50, y: 0, rotation: 0 },
+    ];
+
+    const res2 = extractElectricalNetlist(components2, [], getPins);
+    expect(res2.netlist.components.find(c => c.id === "R1")?.value).toBe(5000);
+    expect(res2.pinToNodeMap).toEqual(res1.pinToNodeMap);
+  });
 });

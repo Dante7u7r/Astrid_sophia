@@ -47,7 +47,10 @@ export class InstrumentsDock {
     this.tabs.forEach((tab, index) => {
       tab.addEventListener("click", () => {
         const targetTab = tab.getAttribute("data-tab");
-        if (targetTab) this.switchTab(targetTab);
+        if (targetTab) {
+          this.switchTab(targetTab);
+          window.dispatchEvent(new CustomEvent("open-floating-instrument", { detail: { tabId: targetTab } }));
+        }
       });
 
       const targetTab = tab.getAttribute("data-tab");
@@ -80,22 +83,22 @@ export class InstrumentsDock {
     });
 
     // 2. Inicializar los instrumentos virtuales
-    const genContainer = this.container.querySelector("#inst-generator") as HTMLElement;
+    const genContainer = (document.querySelector("#inst-generator") || this.container.querySelector("#inst-generator")) as HTMLElement | null;
     if (genContainer) {
       this.generator = new SignalGeneratorInstrument(genContainer, orchestrator, callbacks);
     }
 
-    const logicContainer = this.container.querySelector("#inst-logic") as HTMLElement;
+    const logicContainer = (document.querySelector("#inst-logic") || this.container.querySelector("#inst-logic")) as HTMLElement | null;
     if (logicContainer) {
       this.logicAnalyzer = new LogicAnalyzerInstrument(logicContainer, orchestrator, callbacks);
     }
 
-    const fftContainer = this.container.querySelector("#inst-fft") as HTMLElement;
+    const fftContainer = (document.querySelector("#inst-fft") || this.container.querySelector("#inst-fft")) as HTMLElement | null;
     if (fftContainer) {
       this.fftAnalyzer = new FftAnalyzerInstrument(fftContainer, callbacks);
     }
 
-    const tracerContainer = this.container.querySelector("#inst-tracer") as HTMLElement;
+    const tracerContainer = (document.querySelector("#inst-tracer") || this.container.querySelector("#inst-tracer")) as HTMLElement | null;
     if (tracerContainer) {
       this.curveTracer = new CurveTracerInstrument(tracerContainer, orchestrator, callbacks);
     }

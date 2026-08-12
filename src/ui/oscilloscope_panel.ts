@@ -355,6 +355,33 @@ export class OscilloscopePanel {
       if (this.triggerEdgeSelect) this.triggerEdge = normalizeTriggerEdge(this.triggerEdgeSelect.value);
       if (this.triggerLevelSlider) this.triggerLevel = parseFloat(this.triggerLevelSlider.value) / 30;
 
+      const formatOffset = (val: number) => `${val > 0 ? '+' : ''}${Math.round(val)} px`;
+      const formatVolts = (val: number) => val >= 1 ? `${val.toFixed(1)} V/div` : `${(val * 1000).toFixed(0)} mV/div`;
+      const formatTime = (val: number) => val >= 0.001 ? `${(val * 1000).toFixed(0)} ms/div` : `${(val * 1000000).toFixed(0)} µs/div`;
+
+      const off1 = document.querySelector("#osc-offset-ch1-val");
+      if (off1) off1.textContent = formatOffset(this.offsetCh1);
+      const off2 = document.querySelector("#osc-offset-ch2-val");
+      if (off2) off2.textContent = formatOffset(this.offsetCh2);
+      const off3 = document.querySelector("#osc-offset-ch3-val");
+      if (off3) off3.textContent = formatOffset(this.offsetCh3);
+      const off4 = document.querySelector("#osc-offset-ch4-val");
+      if (off4) off4.textContent = formatOffset(this.offsetCh4);
+
+      const trigVal = document.querySelector("#osc-trigger-level-val");
+      if (trigVal) trigVal.textContent = `${this.triggerLevel.toFixed(1)} V`;
+
+      const hud1 = document.querySelector("#osc-hud-ch1-val");
+      if (hud1) hud1.textContent = formatVolts(this.voltsPerDivCh1);
+      const hud2 = document.querySelector("#osc-hud-ch2-val");
+      if (hud2) hud2.textContent = formatVolts(this.voltsPerDivCh2);
+      const hud3 = document.querySelector("#osc-hud-ch3-val");
+      if (hud3) hud3.textContent = formatVolts(this.voltsPerDivCh3);
+      const hud4 = document.querySelector("#osc-hud-ch4-val");
+      if (hud4) hud4.textContent = formatVolts(this.voltsPerDivCh4);
+      const hudTime = document.querySelector("#osc-hud-time-val");
+      if (hudTime) hudTime.textContent = formatTime(this.timeDivValue);
+
       this.draw();
     };
 
@@ -421,6 +448,10 @@ export class OscilloscopePanel {
 
   private isCanvasVisible(): boolean {
     if (!this.oscCanvas?.isConnected) return false;
+    const floatingWindow = this.oscCanvas.closest(".floating-instrument-window");
+    if (floatingWindow) {
+      return floatingWindow.clientWidth > 0 && floatingWindow.clientHeight > 0;
+    }
     const dock = this.oscCanvas.closest("#bottom-dock");
     if (dock?.classList.contains("collapsed")) return false;
     return this.oscCanvas.getClientRects().length > 0

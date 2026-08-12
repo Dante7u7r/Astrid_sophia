@@ -18,6 +18,7 @@ import { PropertyEditor } from "./ui/property_editor";
 import { CircuitSnapshotHistory } from "./app/circuit_snapshot_history";
 import { PanelLayoutManager } from "./ui/panel_layout_manager";
 import { InstrumentsDock } from "./ui/instruments_dock";
+import { FloatingInstrumentManager } from "./ui/floating_instrument_manager";
 import { createInstrumentCenterController } from "./ui/instrument_center_controller";
 import { initComponentPaletteController } from "./ui/component_palette_controller";
 import { createSidePanelController, type SidePanelController } from "./ui/side_panel_controller";
@@ -91,6 +92,7 @@ let mcuDebugPanel: McuDebugPanel | null = null;
 
 let panelLayoutManager: PanelLayoutManager | null = null;
 let instrumentsDock: InstrumentsDock | null = null;
+let floatingInstrumentManager: FloatingInstrumentManager | null = null;
 let sidePanelController: SidePanelController | null = null;
 
 
@@ -330,6 +332,7 @@ function initCanvasCAD() {
       getPinNode: (pinKey: string) => circuitState.getPinNode(pinKey),
       log: (text: string, type: "system" | "error" = "system") => addLog(text, type),
     });
+    floatingInstrumentManager = new FloatingInstrumentManager();
   }
 
   attachCanvasInput(canvasElement, orchestrator, {
@@ -468,6 +471,7 @@ window.addEventListener("DOMContentLoaded", () => {
     getOrchestrator: () => orchestrator,
     getPanelLayoutManager: () => panelLayoutManager,
     getInstrumentsDock: () => instrumentsDock,
+    getFloatingInstrumentManager: () => floatingInstrumentManager,
     getSidePanelController: () => sidePanelController,
     getSimulationSettings: () => simSettings,
     setSimulationSettings: (settings) => { simSettings = { ...settings }; },

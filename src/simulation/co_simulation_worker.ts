@@ -51,6 +51,9 @@ self.onmessage = (e: MessageEvent) => {
     const frame = data.frame as SimulationFrame;
     const dt = data.dt as number;
 
+    const gpioUpdates: Array<{ componentId: string; pinIndex: number; state: 0 | 1 | "Z" | "X" }> = [];
+    const mcuTelemetry: Record<string, { pc: number; cycles: number }> = {};
+
     if (interactiveMcuRuntimes) {
       // 1. Inyectar interrupción analógica si el frame trae trigger
       if (frame.triggerEvent) {
@@ -58,14 +61,29 @@ self.onmessage = (e: MessageEvent) => {
       }
 
       // 2. Avanzar el contador temporal del runtime MCU experimental
-      for (const entry of Object.values(interactiveMcuRuntimes)) {
+      for (const [compId, entry] of Object.entries(interactiveMcuRuntimes)) {
         const clockSpeed = entry.runtime.definition.clockSpeed;
         const cyclesToRun = Math.round(dt * clockSpeed);
         runCycles(entry.runtime, Math.min(cyclesToRun, 200_000));
+
+        mcuTelemetry[compId] = {
+          pc: entry.runtime.state.pc,
+          cycles: entry.runtime.state.cycle,
+        };
+
+        // Extraer estado de pines de salida para retroalimentación analógica
+        for (let pinIdx = 0; pinIdx < entry.pins.length; pinIdx++) {
+          const pinVal = entry.runtime.memory.ram[0x80 + pinIdx] ?? 0;
+          gpioUpdates.push({
+            componentId: compId,
+            pinIndex: pinIdx,
+            state: (pinVal & 1) ? 1 : 0,
+          });
+        }
       }
     }
 
-    self.postMessage({ type: "frame_processed", frame });
+    self.postMessage({ type: "frame_processed", frame, gpioUpdates, mcuTelemetry });
 
   } else if (data.type === "stop_interactive") {
     interactiveMcuRuntimes = null;
