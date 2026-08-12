@@ -73,7 +73,6 @@ export interface DesktopControllerRegistryDeps {
   markCurrentTabAsModified(): void;
   onActiveTabChanged(tabId: string): void;
   onCircuitLoaded(): void;
-  setInstrumentDockCollapsed(collapsed: boolean): void;
   setIpcStatus(text: string, color: string): void;
   addLog(text: string, type?: LogType): void;
   logError(message: string): void;
@@ -165,7 +164,6 @@ export function createDesktopControllerRegistry(
     resetPerformanceCaches: deps.resetPerformanceCaches,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
-    setInstrumentDockCollapsed: deps.setInstrumentDockCollapsed,
     setIpcStatus: deps.setIpcStatus,
     addLog: deps.addLog,
     invokeTauri: deps.invokeTauri,

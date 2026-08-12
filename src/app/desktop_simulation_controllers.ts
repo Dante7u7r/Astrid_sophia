@@ -59,7 +59,6 @@ export interface DesktopSimulationControllerDeps {
   resetPerformanceCaches(): void;
   updateCanvasRendering(immediate?: boolean): void;
   updateOscilloscopeRendering(immediate?: boolean): void;
-  setInstrumentDockCollapsed(collapsed: boolean): void;
   setIpcStatus(text: string, color: string): void;
   addLog(text: string, type?: LogType): void;
   invokeTauri: InvokeTauri;
@@ -137,7 +136,6 @@ export function createDesktopSimulationControllers(
     resetPerformanceCaches: deps.resetPerformanceCaches,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
-    setInstrumentDockCollapsed: deps.setInstrumentDockCollapsed,
     setIpcStatus: deps.setIpcStatus,
     addLog: deps.addLog,
   });

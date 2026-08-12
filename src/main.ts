@@ -487,7 +487,6 @@ window.addEventListener("DOMContentLoaded", () => {
     markCurrentTabAsModified,
     onActiveTabChanged: () => circuitHistory.syncActiveState(),
     onCircuitLoaded: () => circuitHistory.syncActiveState(true),
-    setInstrumentDockCollapsed: (collapsed) => panelLayoutManager?.setPanelCollapsed("dock", collapsed),
     setIpcStatus: (text, color) => ipcStatusController.setStatus(text, color),
     addLog,
     logError: (message) => TelemetryPanel.logError(message),

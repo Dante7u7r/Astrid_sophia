@@ -300,6 +300,7 @@ describe("flujo nativo de escritorio", () => {
     const simulated = await qaState();
     expect(simulated.lastSimulationMode).toBe("DC");
     expect(Object.keys(simulated.lastDcNodeVoltages)).not.toHaveLength(0);
+    expect(await $("#bottom-dock").getAttribute("aria-hidden")).toBe("true");
 
     await browser.pause(750);
     const feedbackPage = await browser.tauri.execute(

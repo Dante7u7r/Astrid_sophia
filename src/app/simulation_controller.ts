@@ -49,7 +49,6 @@ export interface SimulationControllerDependencies {
   resetPerformanceCaches(): void;
   updateCanvasRendering(): void;
   updateOscilloscopeRendering(): void;
-  setInstrumentDockCollapsed(collapsed: boolean): void;
   setIpcStatus(text: string, color: string): void;
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
 }
@@ -84,7 +83,6 @@ export class SimulationController {
       `Iniciando simulación física de análisis [${ANALYSIS_LABELS[mode]}]...`,
       "system",
     );
-    this.dependencies.setInstrumentDockCollapsed(false);
 
     if (!orchestrator || orchestrator.components.length === 0) {
       const emptyRun = beginFeedbackRun({
