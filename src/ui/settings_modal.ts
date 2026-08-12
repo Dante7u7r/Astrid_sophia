@@ -1,7 +1,11 @@
+export const DEFAULT_TRANSIENT_DURATION_SECONDS = 10;
+
 export interface SimulationSettings {
   dt: number;
   tolerance: number;
   maxIterations: number;
+  /** Duración física de una corrida TRAN. Opcional para abrir archivos previos. */
+  transientDuration?: number;
 }
 
 export class SettingsModal {
@@ -11,6 +15,7 @@ export class SettingsModal {
   private btnSaveSettings: HTMLButtonElement | null = null;
 
   private dtInput: HTMLInputElement | null = null;
+  private transientDurationInput: HTMLInputElement | null = null;
   private tolInput: HTMLInputElement | null = null;
   private iterInput: HTMLInputElement | null = null;
   private appViewport: HTMLElement | null = null;
@@ -20,7 +25,10 @@ export class SettingsModal {
   private onSaveCallback: (newSettings: SimulationSettings) => void;
 
   constructor(initialSettings: SimulationSettings, onSave: (newSettings: SimulationSettings) => void) {
-    this.settings = { ...initialSettings };
+    this.settings = {
+      ...initialSettings,
+      transientDuration: initialSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS,
+    };
     this.onSaveCallback = onSave;
 
     this.settingsModal = document.querySelector("#settings-modal");
@@ -29,6 +37,7 @@ export class SettingsModal {
     this.btnSaveSettings = document.querySelector("#btn-save-settings");
 
     this.dtInput = document.querySelector("#settings-dt-input");
+    this.transientDurationInput = document.querySelector("#settings-transient-duration-input");
     this.tolInput = document.querySelector("#settings-tol-input");
     this.iterInput = document.querySelector("#settings-iter-input");
     this.appViewport = document.querySelector("#app-viewport");
@@ -76,6 +85,9 @@ export class SettingsModal {
   private open(): void {
     if (!this.settingsModal) return;
     if (this.dtInput) this.dtInput.value = this.settings.dt.toString();
+    if (this.transientDurationInput) {
+      this.transientDurationInput.value = (this.settings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS).toString();
+    }
     if (this.tolInput) this.tolInput.value = this.settings.tolerance.toString();
     if (this.iterInput) this.iterInput.value = this.settings.maxIterations.toString();
 
@@ -99,8 +111,9 @@ export class SettingsModal {
   }
 
   private save(): void {
-    if (this.dtInput && this.tolInput && this.iterInput) {
+    if (this.dtInput && this.transientDurationInput && this.tolInput && this.iterInput) {
       const dt = Number(this.dtInput.value);
+      const transientDuration = Number(this.transientDurationInput.value);
       const tolerance = Number(this.tolInput.value);
       const maxIterations = Number(this.iterInput.value);
 
@@ -108,6 +121,11 @@ export class SettingsModal {
         Number.isFinite(dt) && dt > 0
           ? ""
           : "El paso temporal debe ser un número mayor que cero.",
+      );
+      this.transientDurationInput.setCustomValidity(
+        Number.isFinite(transientDuration) && transientDuration >= 0.001 && transientDuration <= 600
+          ? ""
+          : "La duración transitoria debe estar entre 0.001 y 600 segundos.",
       );
       this.tolInput.setCustomValidity(
         Number.isFinite(tolerance) && tolerance > 0 && tolerance <= 1
@@ -120,7 +138,7 @@ export class SettingsModal {
           : "Las iteraciones deben ser un entero entre 1 y 10 000.",
       );
 
-      const invalidInput = [this.dtInput, this.tolInput, this.iterInput]
+      const invalidInput = [this.dtInput, this.transientDurationInput, this.tolInput, this.iterInput]
         .find(input => !input.checkValidity());
       if (invalidInput) {
         invalidInput.reportValidity();
@@ -129,6 +147,7 @@ export class SettingsModal {
       }
 
       this.settings.dt = dt;
+      this.settings.transientDuration = transientDuration;
       this.settings.tolerance = tolerance;
       this.settings.maxIterations = maxIterations;
       this.onSaveCallback({ ...this.settings });

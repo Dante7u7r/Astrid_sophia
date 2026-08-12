@@ -156,6 +156,24 @@ describe("archivo .astryd 3.0", () => {
       ch3ProbeNode: "3",
       ch4ProbeNode: "4",
     });
+    expect(parsed.data.simSettings.transientDuration).toBe(10);
+  });
+
+  test("conserva y limita la duración transitoria", () => {
+    const snapshot = completeSnapshot();
+    snapshot.simSettings.transientDuration = 12;
+    const parsed = parseCircuitFile(serializeCircuitFile(snapshot));
+
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.data.simSettings.transientDuration).toBe(12);
+
+    const invalid = parseCircuitFile(JSON.stringify({
+      version: "3.0",
+      components: [],
+      wires: [],
+      simSettings: { transientDuration: 601 },
+    }));
+    expect(invalid.ok).toBe(false);
   });
 
   test("rechaza duplicados y referencias rotas", () => {

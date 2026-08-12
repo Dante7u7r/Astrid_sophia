@@ -159,5 +159,6 @@ describe("SimulationController", () => {
     expect(stopInteractiveTransient).toHaveBeenCalledOnce();
     expect(oscilloscopePanel.stop).toHaveBeenCalledOnce();
     expect(deps.resetPerformanceCaches).toHaveBeenCalledOnce();
+    expect(deps.setSimulationRunning).toHaveBeenCalledWith(false);
   });
 });

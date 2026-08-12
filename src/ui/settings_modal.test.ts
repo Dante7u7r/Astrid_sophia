@@ -9,6 +9,7 @@ function installSettingsDom(): void {
     <div id="settings-modal" role="dialog" aria-hidden="true">
       <div id="settings-box">
         <input id="settings-dt-input" />
+        <input id="settings-transient-duration-input" />
         <input id="settings-tol-input" />
         <input id="settings-iter-input" />
         <button id="btn-cancel-settings">Cancelar</button>
@@ -50,11 +51,17 @@ describe("SettingsModal", () => {
     trigger.click();
 
     (document.querySelector("#settings-dt-input") as HTMLInputElement).value = "0.002";
+    (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "8";
     (document.querySelector("#settings-tol-input") as HTMLInputElement).value = "0.0001";
     (document.querySelector("#settings-iter-input") as HTMLInputElement).value = "120";
     (document.querySelector("#btn-save-settings") as HTMLButtonElement).click();
 
-    expect(onSave).toHaveBeenCalledWith({ dt: 0.002, tolerance: 0.0001, maxIterations: 120 });
+    expect(onSave).toHaveBeenCalledWith({
+      dt: 0.002,
+      transientDuration: 8,
+      tolerance: 0.0001,
+      maxIterations: 120,
+    });
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });
 
@@ -66,6 +73,7 @@ describe("SettingsModal", () => {
     trigger.click();
 
     (document.querySelector("#settings-dt-input") as HTMLInputElement).value = "-0.001";
+    (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "0";
     (document.querySelector("#settings-tol-input") as HTMLInputElement).value = "NaN";
     (document.querySelector("#settings-iter-input") as HTMLInputElement).value = "0";
     (document.querySelector("#btn-save-settings") as HTMLButtonElement).click();

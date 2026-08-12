@@ -69,6 +69,7 @@ export class CircuitDocumentController implements CircuitDocumentPort {
         dt: simSettings.dt,
         tolerance: simSettings.tolerance,
         maxIterations: simSettings.maxIterations,
+        transientDuration: simSettings.transientDuration,
       },
       activeAnalysisMode: this.dependencies.getActiveAnalysisMode(),
       probes: {
@@ -148,6 +149,7 @@ export class CircuitDocumentController implements CircuitDocumentPort {
         dt: data.simSettings.dt,
         tolerance: data.simSettings.tolerance,
         maxIterations: data.simSettings.maxIterations,
+        transientDuration: data.simSettings.transientDuration,
       });
 
       this.dependencies.setActiveAnalysisMode(data.activeAnalysisMode);

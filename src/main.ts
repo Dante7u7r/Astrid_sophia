@@ -1,7 +1,7 @@
 import { safeInvoke as invoke } from "./simulation/tauri_mock";
 import { CanvasOrchestrator, ComponentInstance } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
-import { SimulationSettings } from "./ui/settings_modal";
+import { DEFAULT_TRANSIENT_DURATION_SECONDS, SimulationSettings } from "./ui/settings_modal";
 import { OscilloscopePanel, TimeStepResult } from "./ui/oscilloscope_panel";
 import {
   extractElectricalNetlist,
@@ -73,7 +73,8 @@ if (visualAudit.enabled) {
 let simSettings: SimulationSettings = {
   dt: 0.0001,
   tolerance: 0.00001,
-  maxIterations: 100
+  maxIterations: 100,
+  transientDuration: DEFAULT_TRANSIENT_DURATION_SECONDS,
 };
 configureAdvisorRuntime({
   getSettings: () => ({ ...simSettings }),

@@ -84,9 +84,9 @@ describe("createInteractiveSimulationCallbacks", () => {
     expect(addLog).not.toHaveBeenCalled();
   });
 
-  it("reproduce en el lienzo las muestras reales al finalizar", () => {
+  it("finaliza el estado visual al recibir el final del transitorio", () => {
     const circuitState = createCircuitStateManager();
-    const startTransientPlayback = vi.fn(() => true);
+    const setSimulationRunning = vi.fn();
     const ownerTab = {
       id: "tab-1",
       transientResults: [
@@ -107,17 +107,16 @@ describe("createInteractiveSimulationCallbacks", () => {
       getOscilloscopePanel: () => oscilloscopePanel,
       getSimulationRunner: () => null,
       circuitState,
-      setSimulationRunning: vi.fn(),
+      setSimulationRunning,
       updateCanvasRendering: vi.fn(),
       updateOscilloscopeRendering: vi.fn(),
-      startTransientPlayback,
       addLog: vi.fn(),
     });
 
     callbacks.onFrameReceived(createFrame({ isFinal: true }), { runId: 1, ownerTabId: "tab-1" });
     callbacks.onSimulationStateChanged(false, { runId: 1, ownerTabId: "tab-1" });
 
-    expect(startTransientPlayback).toHaveBeenCalledOnce();
     expect(oscilloscopePanel.finish).toHaveBeenCalledOnce();
+    expect(setSimulationRunning).toHaveBeenCalledWith(false);
   });
 });

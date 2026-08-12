@@ -131,7 +131,7 @@ export function createDesktopWorkspaceControllers(
     deps.setSimulationSettings({ ...newSettings });
     const settings = deps.getSimulationSettings();
     deps.addLog(
-      `Ajustes guardados: dt=${settings.dt}, tol=${settings.tolerance}, iterMax=${settings.maxIterations}`,
+      `Ajustes guardados: dt=${settings.dt}, tTRAN=${settings.transientDuration ?? 10} s, tol=${settings.tolerance}, iterMax=${settings.maxIterations}`,
       "system",
     );
   });

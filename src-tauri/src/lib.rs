@@ -155,12 +155,37 @@ pub struct SimulationFrame {
 }
 
 const INTERACTIVE_TRANSIENT_FRAME_BUDGET: f64 = 240.0;
+const INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD: f64 = 1.0 / 30.0;
 
 /// El muestreo del stream debe seguir el tiempo físico, no la velocidad de la
 /// CPU. De otro modo, un circuito pequeño termina antes del primer intervalo
 /// de pared y la interfaz recibe únicamente la muestra final.
 fn interactive_transient_sample_period(t_max: f64, dt: f64) -> f64 {
-    (t_max / INTERACTIVE_TRANSIENT_FRAME_BUDGET).max(dt)
+    if dt >= INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD {
+        return dt;
+    }
+    (t_max / INTERACTIVE_TRANSIENT_FRAME_BUDGET)
+        .clamp(dt, INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD)
+}
+
+/// Espera hasta que el reloj de pared alcance el instante físico calculado.
+/// La espera se divide en tramos cortos para que «Detener» siga respondiendo.
+fn pace_interactive_transient(
+    started_at: std::time::Instant,
+    simulation_time: f64,
+    is_running: &AtomicBool,
+    active_run_id: &AtomicU64,
+    run_id: u64,
+) -> bool {
+    let target_elapsed = std::time::Duration::from_secs_f64(simulation_time.max(0.0));
+    let max_sleep = std::time::Duration::from_millis(5);
+    while let Some(remaining) = target_elapsed.checked_sub(started_at.elapsed()) {
+        if !is_running.load(Ordering::SeqCst) || active_run_id.load(Ordering::SeqCst) != run_id {
+            return false;
+        }
+        std::thread::sleep(remaining.min(max_sleep));
+    }
+    is_running.load(Ordering::SeqCst) && active_run_id.load(Ordering::SeqCst) == run_id
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -417,6 +442,9 @@ async fn start_interactive_transient(
             let mut frame_index = 0u64;
             let sample_period = interactive_transient_sample_period(settings.t_max, settings.dt);
             let mut next_sample_time = sample_period;
+            let started_at = std::time::Instant::now();
+            let final_is_running = is_running_inner.clone();
+            let final_active_run_id = active_run_id_inner.clone();
 
             let result = solver::solve_transient_circuit_inner(
                 &netlist,
@@ -433,6 +461,15 @@ async fn start_interactive_transient(
                         return false;
                     }
                     if step.time >= next_sample_time {
+                        if !pace_interactive_transient(
+                            started_at,
+                            step.time,
+                            &is_running_inner,
+                            &active_run_id_inner,
+                            run_id,
+                        ) {
+                            return false;
+                        }
                         let packet = SimulationFrame {
                             run_id,
                             time: step.time,
@@ -451,9 +488,20 @@ async fn start_interactive_transient(
                 }),
             );
 
-            if active_run_id_inner.load(Ordering::SeqCst) == run_id {
+            if final_is_running.load(Ordering::SeqCst)
+                && final_active_run_id.load(Ordering::SeqCst) == run_id
+            {
                 if let Ok((ref results, _, _)) = result {
                     if let Some(last) = results.last() {
+                        if !pace_interactive_transient(
+                            started_at,
+                            last.time,
+                            &final_is_running,
+                            &final_active_run_id,
+                            run_id,
+                        ) {
+                            return;
+                        }
                         let packet = SimulationFrame {
                             run_id,
                             time: last.time,
@@ -728,6 +776,12 @@ mod interactive_transient_tests {
     #[test]
     fn never_requests_samples_finer_than_the_solver_step() {
         assert_eq!(interactive_transient_sample_period(1e-6, 1e-4), 1e-4);
+    }
+
+    #[test]
+    fn caps_long_interactive_runs_at_a_responsive_frame_rate() {
+        let period = interactive_transient_sample_period(60.0, 1e-4);
+        assert!((period - (1.0 / 30.0)).abs() < 1e-15);
     }
 }
 

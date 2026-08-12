@@ -559,6 +559,17 @@ describe("flujo nativo de escritorio", () => {
 
       const beforeRun = (await qaState()).lastUpdatedAt;
       await $("#run-sim-btn").click();
+      if (demo.mode === "TRAN") {
+        await browser.waitUntil(async () => {
+          const state = await qaState();
+          return (await appSnapshot()).transientSampleCount > 1
+            && state?.simulationRunning === true
+            && await $("#stop-sim-btn").isEnabled();
+        }, {
+          timeout: 30_000,
+          timeoutMsg: `El transitorio de ${demo.file} se desactivó antes de reproducir sus muestras`,
+        });
+      }
       await browser.waitUntil(async () => {
         const state = await qaState();
         return state?.lastUpdatedAt !== beforeRun

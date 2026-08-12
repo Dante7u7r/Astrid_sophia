@@ -95,35 +95,4 @@ describe("RenderController", () => {
     expect(orchestrator.render).toHaveBeenCalledOnce();
   });
 
-  it("reproduce una respuesta transitoria real aun sin osciloscopio visible", () => {
-    const frames: FrameRequestCallback[] = [];
-    const { controller, circuitState, setNow } = createHarness({
-      oscilloscopePanel: {
-        transientResults: [
-          { time: 0, nodeVoltages: { "1": 1 }, branchCurrents: {} },
-          { time: 0.1, nodeVoltages: { "1": 5 }, branchCurrents: {} },
-          { time: 0.2, nodeVoltages: { "1": 9 }, branchCurrents: {} },
-        ],
-        ch1ProbeNode: "1",
-        ch2ProbeNode: "2",
-      },
-      requestAnimationFrame: (callback) => {
-        frames.push(callback);
-        return frames.length;
-      },
-    });
-
-    setNow(0);
-    expect(controller.startTransientPlayback()).toBe(true);
-    frames.shift()?.(0);
-
-    setNow(750);
-    frames.shift()?.(750);
-    expect(circuitState.getNodeVoltage("1")).toBe(5);
-
-    setNow(1_500);
-    while (frames.length > 0) frames.shift()?.(1_500);
-    expect(circuitState.getNodeVoltage("1")).toBe(9);
-    expect(frames).toHaveLength(0);
-  });
 });

@@ -164,7 +164,6 @@ export function createDesktopControllerRegistry(
     resetPerformanceCaches: deps.resetPerformanceCaches,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
-    startTransientPlayback: () => renderController.startTransientPlayback(),
     setIpcStatus: deps.setIpcStatus,
     addLog: deps.addLog,
     invokeTauri: deps.invokeTauri,

@@ -55,7 +55,7 @@ afterEach(() => {
 
 describe("createDesktopWorkspaceControllers", () => {
   it("crea controladores de workspace y conserva callbacks criticos", () => {
-    let settings = { dt: 1, tolerance: 2, maxIterations: 3 };
+    let settings = { dt: 1, transientDuration: 10, tolerance: 2, maxIterations: 3 };
     const setSimulationSettings = vi.fn((nextSettings) => {
       settings = nextSettings as typeof settings;
     });
@@ -117,8 +117,8 @@ describe("createDesktopWorkspaceControllers", () => {
 
     expect((mocks.exporterPanelCallbacks!.getProbeNodes as () => unknown)()).toEqual({ ch1: "1", ch2: "2" });
 
-    mocks.settingsCallback!({ dt: 4, tolerance: 5, maxIterations: 6 });
-    expect(setSimulationSettings).toHaveBeenCalledWith({ dt: 4, tolerance: 5, maxIterations: 6 });
-    expect(addLog).toHaveBeenCalledWith("Ajustes guardados: dt=4, tol=5, iterMax=6", "system");
+    mocks.settingsCallback!({ dt: 4, transientDuration: 7, tolerance: 5, maxIterations: 6 });
+    expect(setSimulationSettings).toHaveBeenCalledWith({ dt: 4, transientDuration: 7, tolerance: 5, maxIterations: 6 });
+    expect(addLog).toHaveBeenCalledWith("Ajustes guardados: dt=4, tTRAN=7 s, tol=5, iterMax=6", "system");
   });
 });

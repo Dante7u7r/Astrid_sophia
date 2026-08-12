@@ -17,7 +17,10 @@ import type {
 import type { AcSweepResult, TimeStepResult } from "../ui/oscilloscope_panel";
 import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
 import type { AnalysisMode, SimulationControlHandlers } from "../ui/simulation_controls";
-import type { SimulationSettings } from "../ui/settings_modal";
+import {
+  DEFAULT_TRANSIENT_DURATION_SECONDS,
+  type SimulationSettings,
+} from "../ui/settings_modal";
 import { parseErcIssues } from "../ui/instrumentation_menu";
 import {
   beginFeedbackRun,
@@ -79,6 +82,8 @@ export class SimulationController {
 
   async runSimulation(mode: AnalysisMode): Promise<void> {
     const orchestrator = this.dependencies.getOrchestrator();
+    const simulationSettings = this.dependencies.getSimulationSettings();
+    const transientDuration = simulationSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS;
     this.dependencies.addLog(
       `Iniciando simulación física de análisis [${ANALYSIS_LABELS[mode]}]...`,
       "system",
@@ -88,7 +93,7 @@ export class SimulationController {
       const emptyRun = beginFeedbackRun({
         analysis: mode,
         workspaceId: this.dependencies.getActiveTabId(),
-        settings: this.dependencies.getSimulationSettings(),
+        settings: simulationSettings,
       });
       failFeedbackRun(emptyRun, "Empty schematic", "preflight", "SCHEMATIC_EMPTY");
       this.dependencies.addLog("Error: El lienzo está vacío. Coloca componentes antes de simular.", "error");
@@ -101,7 +106,7 @@ export class SimulationController {
       const extractionRun = beginFeedbackRun({
         analysis: mode,
         workspaceId: this.dependencies.getActiveTabId(),
-        settings: this.dependencies.getSimulationSettings(),
+        settings: simulationSettings,
       });
       failFeedbackRun(extractionRun, "Netlist extraction failed", "extraction", "NETLIST_EXTRACTION_FAILED");
       this.dependencies.setSimulationRunning(false);
@@ -112,9 +117,9 @@ export class SimulationController {
       analysis: mode,
       workspaceId: this.dependencies.getActiveTabId(),
       netlist,
-      settings: this.dependencies.getSimulationSettings(),
+      settings: simulationSettings,
       ...(mode === "TRAN"
-        ? { requestedPointCount: Math.ceil(0.05 / this.dependencies.getSimulationSettings().dt) + 1 }
+        ? { requestedPointCount: Math.ceil(transientDuration / simulationSettings.dt) + 1 }
         : {}),
     });
     if (feedbackRun) {
@@ -163,8 +168,8 @@ export class SimulationController {
       analysis: mode,
       netlist,
       erc: ercResult,
-      settings: this.dependencies.getSimulationSettings(),
-      transientDuration: 0.05,
+      settings: simulationSettings,
+      transientDuration,
       feedbackRun,
     });
     for (const warn of ercResult.warnings) {
@@ -214,8 +219,8 @@ export class SimulationController {
     }
 
     await dispatchSimulation(netlist, mode, {
-      simSettings: this.dependencies.getSimulationSettings(),
-      transientDuration: 0.05,
+      simSettings: simulationSettings,
+      transientDuration,
       simulationOwnerId,
       simulationRunner: this.dependencies.getSimulationRunner(),
       feedbackRun,
@@ -247,6 +252,7 @@ export class SimulationController {
     // También invalida cualquier reproducción visual de resultados ya
     // calculados; «Detener» debe dejar el lienzo inmediatamente en reposo.
     this.dependencies.resetPerformanceCaches();
+    this.dependencies.setSimulationRunning(false);
   }
 
   setActiveAnalysisMode(mode: AnalysisMode): void {

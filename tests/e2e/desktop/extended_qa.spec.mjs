@@ -378,7 +378,12 @@ describe("QA nativo extendido de escritorio", () => {
     await $("#btn-save-settings").click();
     await browser.waitUntil(async () => (await modal.getAttribute("aria-hidden")) === "true");
     const settings = (await parsedCircuit()).simSettings;
-    expect(settings).toEqual({ dt: 0.00002, tolerance: 0.000002, maxIterations: 180 });
+    expect(settings).toEqual({
+      dt: 0.00002,
+      transientDuration: 10,
+      tolerance: 0.000002,
+      maxIterations: 180,
+    });
     expect(await browser.execute(() => document.activeElement?.id)).toBe("settings-trigger-btn");
 
     await clearConsole();
