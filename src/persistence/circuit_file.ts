@@ -282,6 +282,14 @@ function parseWire(value: unknown, index: number): WireInstance {
     throw new CircuitFileValidationError(`${path} contiene un indice de terminal negativo.`);
   }
 
+  const label = typeof value.label === "string" && value.label.trim().length > 0
+    ? value.label.trim()
+    : undefined;
+  const color = typeof value.color === "string" && value.color.trim().length > 0
+    ? value.color.trim()
+    : undefined;
+  const customPath = typeof value.customPath === "boolean" ? value.customPath : undefined;
+
   return {
     id: value.id,
     from: {
@@ -295,6 +303,9 @@ function parseWire(value: unknown, index: number): WireInstance {
     points: Array.isArray(value.points)
       ? value.points.map((point, pointIndex) => parsePoint(point, `${path}.points[${pointIndex}]`))
       : [],
+    ...(label ? { label } : {}),
+    ...(color ? { color } : {}),
+    ...(customPath ? { customPath } : {}),
   };
 }
 
@@ -319,39 +330,22 @@ function parseOscilloscope(value: unknown): PersistedOscilloscopeState {
   if (!isRecord(value)) {
     throw new CircuitFileValidationError("oscilloscope debe ser un objeto.");
   }
-  const triggerChannel = value.triggerChannel;
-  const triggerEdge = value.triggerEdge;
-  if (triggerChannel !== undefined
-    && triggerChannel !== "ch1"
-    && triggerChannel !== "ch2"
-    && triggerChannel !== "ch3"
-    && triggerChannel !== "ch4") {
-    throw new CircuitFileValidationError("oscilloscope.triggerChannel no es valido.");
-  }
-  if (triggerEdge !== undefined && triggerEdge !== "rising" && triggerEdge !== "falling") {
-    throw new CircuitFileValidationError("oscilloscope.triggerEdge no es valido.");
-  }
-  if (value.isXyMode !== undefined && typeof value.isXyMode !== "boolean") {
-    throw new CircuitFileValidationError("oscilloscope.isXyMode debe ser booleano.");
-  }
-  if (value.isCursorsEnabled !== undefined && typeof value.isCursorsEnabled !== "boolean") {
-    throw new CircuitFileValidationError("oscilloscope.isCursorsEnabled debe ser booleano.");
-  }
-
   return {
     channelsEnabled: parseBooleanTuple(value.channelsEnabled, DEFAULT_OSCILLOSCOPE.channelsEnabled),
     voltsPerDiv: parseNumberTuple(value.voltsPerDiv, "oscilloscope.voltsPerDiv", DEFAULT_OSCILLOSCOPE.voltsPerDiv),
     offsets: parseNumberTuple(value.offsets, "oscilloscope.offsets", DEFAULT_OSCILLOSCOPE.offsets),
     timeDivValue: finiteNumber(value.timeDivValue, "oscilloscope.timeDivValue", DEFAULT_OSCILLOSCOPE.timeDivValue),
-    isXyMode: typeof value.isXyMode === "boolean" ? value.isXyMode : false,
-    isCursorsEnabled: typeof value.isCursorsEnabled === "boolean" ? value.isCursorsEnabled : false,
-    triggerChannel: triggerChannel ?? "ch1",
-    triggerEdge: triggerEdge === "falling" ? "falling" : "rising",
-    triggerLevel: finiteNumber(value.triggerLevel, "oscilloscope.triggerLevel", 0),
-    cursorT1: finiteNumber(value.cursorT1, "oscilloscope.cursorT1", 0.25),
-    cursorT2: finiteNumber(value.cursorT2, "oscilloscope.cursorT2", 0.75),
-    cursorV1: finiteNumber(value.cursorV1, "oscilloscope.cursorV1", 1),
-    cursorV2: finiteNumber(value.cursorV2, "oscilloscope.cursorV2", -1),
+    isXyMode: typeof value.isXyMode === "boolean" ? value.isXyMode : DEFAULT_OSCILLOSCOPE.isXyMode,
+    isCursorsEnabled: typeof value.isCursorsEnabled === "boolean" ? value.isCursorsEnabled : DEFAULT_OSCILLOSCOPE.isCursorsEnabled,
+    triggerChannel: value.triggerChannel === "ch2" || value.triggerChannel === "ch3" || value.triggerChannel === "ch4"
+      ? value.triggerChannel
+      : "ch1",
+    triggerEdge: value.triggerEdge === "falling" ? "falling" : "rising",
+    triggerLevel: finiteNumber(value.triggerLevel, "oscilloscope.triggerLevel", DEFAULT_OSCILLOSCOPE.triggerLevel),
+    cursorT1: finiteNumber(value.cursorT1, "oscilloscope.cursorT1", DEFAULT_OSCILLOSCOPE.cursorT1),
+    cursorT2: finiteNumber(value.cursorT2, "oscilloscope.cursorT2", DEFAULT_OSCILLOSCOPE.cursorT2),
+    cursorV1: finiteNumber(value.cursorV1, "oscilloscope.cursorV1", DEFAULT_OSCILLOSCOPE.cursorV1),
+    cursorV2: finiteNumber(value.cursorV2, "oscilloscope.cursorV2", DEFAULT_OSCILLOSCOPE.cursorV2),
   };
 }
 
@@ -406,6 +400,9 @@ export function cloneCircuitWires(wires: readonly WireInstance[]): WireInstance[
     from: { ...wire.from },
     to: { ...wire.to },
     points: wire.points.map(point => ({ ...point })),
+    ...(wire.label !== undefined ? { label: wire.label } : {}),
+    ...(wire.color !== undefined ? { color: wire.color } : {}),
+    ...(wire.customPath !== undefined ? { customPath: wire.customPath } : {}),
   }));
 }
 

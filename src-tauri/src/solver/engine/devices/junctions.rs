@@ -95,10 +95,24 @@ pub const MOS_MOBILITY_EXPO: f64 = -1.5; // μ(T) = μ₀ * (T/T₀)^(-1.5) (mov
 pub const BJT_BETA_EXPO: f64 = 1.8; // β(T) = β₀ * (T/T₀)^Xti
 
 pub fn pnjlim(v_new: f64, v_old: f64, vt: f64, v_crit: f64) -> f64 {
+    if v_new.is_nan() || v_new.is_infinite() {
+        return v_old;
+    }
     if v_new > v_crit && (v_new - v_old) > 2.0 * vt {
         let delta = v_new - v_old;
-        let val = v_old + vt * (1.0 + delta / vt).ln();
-        val.min(v_new)
+        let arg = 1.0 + delta / vt;
+        if arg > 0.0 {
+            (v_old + vt * arg.ln()).min(v_new)
+        } else {
+            v_crit
+        }
+    } else if v_new < 0.0 && (v_old - v_new) > 2.0 * vt {
+        let arg = 1.0 + (v_old - v_new) / vt;
+        if arg > 0.0 {
+            (v_old - vt * arg.ln()).max(v_new)
+        } else {
+            v_new.max(-10.0)
+        }
     } else {
         v_new
     }

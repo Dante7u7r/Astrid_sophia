@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  clampWiperPosition,
   parseBuzzerActuatorModel,
   parseLampActuatorModel,
   parseRelayActuatorModel,
@@ -38,5 +39,12 @@ describe("modelos de actuadores", () => {
       nominalVoltageVolts: 5,
       resonantFrequencyHz: 2400,
     });
+  });
+
+  test("clampea la posición del limpiador del potenciómetro en rango seguro", () => {
+    expect(clampWiperPosition(0)).toBe(0.001);
+    expect(clampWiperPosition(1.0)).toBe(0.999);
+    expect(clampWiperPosition(0.5)).toBe(0.5);
+    expect(clampWiperPosition(NaN)).toBe(0.5);
   });
 });

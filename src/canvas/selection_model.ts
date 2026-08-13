@@ -1,11 +1,13 @@
 import type { ComponentInstance, Point2D, WireInstance } from "../canvas_orchestrator";
 import { getComponentBounds, hitTestComponentAt } from "./component_geometry";
 import { snapToGrid } from "./viewport_camera";
+import { wirePathIntersects } from "./wiring_model";
 
 export interface SelectionState {
   selectedComponent: ComponentInstance | null;
   selectedComponents: ComponentInstance[];
   selectedWire: WireInstance | null;
+  selectedWires: WireInstance[];
 }
 
 export interface ComponentSelectionResult extends SelectionState {
@@ -40,49 +42,62 @@ export function selectComponentAt(
 
   if (!hitComponent) {
     if (isShift) return { ...state, hitComponent: null };
+    const selectedWires = hoveredWire ? [hoveredWire] : [];
     return {
       hitComponent: null,
       selectedComponent: null,
       selectedComponents: [],
       selectedWire: hoveredWire,
+      selectedWires,
     };
   }
 
   if (isShift) {
-    const selectedComponents = [...state.selectedComponents];
-    const idx = selectedComponents.findIndex((component) => component.id === hitComponent.id);
-    if (idx >= 0) {
-      selectedComponents.splice(idx, 1);
-    } else {
-      selectedComponents.push(hitComponent);
-    }
+    const alreadySelected = state.selectedComponents.some((comp) => comp.id === hitComponent.id);
+    const nextSelectedComponents = alreadySelected
+      ? state.selectedComponents.filter((comp) => comp.id !== hitComponent.id)
+      : [...state.selectedComponents, hitComponent];
+
     return {
       hitComponent,
-      selectedWire: null,
-      selectedComponents,
-      selectedComponent: selectedComponents.length > 0
-        ? selectedComponents[selectedComponents.length - 1]
+      selectedComponents: nextSelectedComponents,
+      selectedComponent: nextSelectedComponents.length > 0
+        ? nextSelectedComponents[nextSelectedComponents.length - 1]
         : null,
+      selectedWire: state.selectedWire,
+      selectedWires: state.selectedWires,
     };
   }
 
-  const selectedComponents = state.selectedComponents.some((component) => component.id === hitComponent.id)
-    ? state.selectedComponents
-    : [hitComponent];
-
   return {
     hitComponent,
-    selectedWire: null,
-    selectedComponents,
     selectedComponent: hitComponent,
+    selectedComponents: [hitComponent],
+    selectedWire: null,
+    selectedWires: [],
   };
 }
 
 export function completeBoxSelection(
   components: readonly ComponentInstance[],
-  selectionStart: Point2D | null,
-  selectionEnd: Point2D | null,
+  arg2: readonly WireInstance[] | Point2D | null,
+  arg3: Point2D | null,
+  arg4?: Point2D | null,
 ): SelectionState | null {
+  let wires: readonly WireInstance[] = [];
+  let selectionStart: Point2D | null = null;
+  let selectionEnd: Point2D | null = null;
+
+  if (Array.isArray(arg2)) {
+    wires = arg2;
+    selectionStart = arg3;
+    selectionEnd = arg4 ?? null;
+  } else {
+    wires = [];
+    selectionStart = arg2 as Point2D | null;
+    selectionEnd = arg3;
+  }
+
   if (!selectionStart || !selectionEnd) return null;
 
   const x = Math.min(selectionStart.x, selectionEnd.x);
@@ -95,8 +110,11 @@ export function completeBoxSelection(
       selectedComponents: [],
       selectedComponent: null,
       selectedWire: null,
+      selectedWires: [],
     };
   }
+
+  const boxBounds = { x, y, width: w, height: h };
 
   const selectedComponents = components.filter((comp) => {
     const bounds = getComponentBounds(comp);
@@ -105,11 +123,18 @@ export function completeBoxSelection(
     return cx >= x && cx <= x + w && cy >= y && cy <= y + h;
   });
 
+  const selectedWires = wires.filter((wire) => {
+    return wire.points && wire.points.length >= 2 && wirePathIntersects(wire.points, boxBounds);
+  });
+
   return {
-    selectedWire: null,
     selectedComponents,
     selectedComponent: selectedComponents.length > 0
       ? selectedComponents[selectedComponents.length - 1]
+      : null,
+    selectedWires,
+    selectedWire: selectedWires.length > 0
+      ? selectedWires[selectedWires.length - 1]
       : null,
   };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CircuitNetlist } from "./netlist_extractor";
 import {
   collectNetlistNodes,
+  evaluateRealtimeErcIssues,
   findIsolatedActiveNodes,
   hasIdealVoltageSourceCycle,
 } from "./erc_graph";
@@ -64,5 +65,30 @@ describe("erc_graph", () => {
       { id: "V1", type: "vsource", value: 1, pins: ["1", "2"] },
       { id: "R1", type: "resistor", value: 1, pins: ["2", "0"] },
     ]))).toBe(false);
+  });
+
+  it("evalúa problemas ERC en tiempo real (pines flotantes, falta de GND y cortocircuitos)", () => {
+    const getPins = (comp: any) => [
+      { componentId: comp.id, pinIndex: 0, x: 0, y: 0 },
+      { componentId: comp.id, pinIndex: 1, x: 10, y: 0 },
+    ];
+
+    // 1. Resistor aislado sin conexiones
+    const res1 = evaluateRealtimeErcIssues(
+      [{ id: "R1", type: "resistor", value: 1000, x: 0, y: 0 }],
+      [],
+      getPins,
+    );
+    expect(res1.some(i => i.componentId === "R1" && i.pinIndex === 0)).toBe(true);
+    expect(res1.some(i => i.componentId === "R1" && i.pinIndex === 1)).toBe(true);
+
+    // 2. Fuente de voltaje en cortocircuito directo y sin GND
+    const res2 = evaluateRealtimeErcIssues(
+      [{ id: "V1", type: "vsource", value: 5, x: 0, y: 0 }],
+      [{ id: "W1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "V1", pinIndex: 1 } }],
+      getPins,
+    );
+    expect(res2.some(i => i.message.includes("sin referencia a Tierra"))).toBe(true);
+    expect(res2.some(i => i.type === "error" && i.message.includes("cortocircuito"))).toBe(true);
   });
 });

@@ -65,6 +65,7 @@ describe("selection_model", () => {
       selectedComponent: null,
       selectedComponents: [],
       selectedWire: null,
+      selectedWires: [],
     });
   });
 

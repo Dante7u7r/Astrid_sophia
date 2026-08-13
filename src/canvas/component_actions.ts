@@ -208,40 +208,39 @@ export function removeSelection(
   selectedWire: WireInstance | null,
   selectedComponents: readonly ComponentInstance[],
   selectedComponent: ComponentInstance | null,
-): SelectionMutation & { components: ComponentInstance[]; selectedWire: WireInstance | null } {
-  if (selectedWire) {
-    return {
-      components: [...components],
-      wires: wires.filter(wire => wire.id !== selectedWire.id),
-      selectedWire: null,
-      selectedComponent,
-      selectedComponents: [...selectedComponents],
-    };
-  }
+  selectedWires: readonly WireInstance[] = [],
+): SelectionMutation & { components: ComponentInstance[]; selectedWire: WireInstance | null; selectedWires: WireInstance[] } {
+  const wireIdsToRemove = new Set(selectedWires.map((w) => w.id));
+  if (selectedWire) wireIdsToRemove.add(selectedWire.id);
 
-  const idsToRemove = new Set<string>();
+  const compIdsToRemove = new Set<string>();
   if (selectedComponents.length > 0) {
-    for (const comp of selectedComponents) idsToRemove.add(comp.id);
+    for (const comp of selectedComponents) compIdsToRemove.add(comp.id);
   } else if (selectedComponent) {
-    idsToRemove.add(selectedComponent.id);
+    compIdsToRemove.add(selectedComponent.id);
   }
 
-  if (idsToRemove.size === 0) {
+  if (wireIdsToRemove.size === 0 && compIdsToRemove.size === 0) {
     return {
       components: [...components],
       wires: [...wires],
       selectedWire: null,
+      selectedWires: [],
       selectedComponent,
       selectedComponents: [...selectedComponents],
     };
   }
 
   return {
-    components: components.filter(component => !idsToRemove.has(component.id)),
+    components: components.filter(component => !compIdsToRemove.has(component.id)),
     wires: wires.filter(
-      wire => !idsToRemove.has(wire.from.componentId) && !idsToRemove.has(wire.to.componentId),
+      wire =>
+        !wireIdsToRemove.has(wire.id) &&
+        !compIdsToRemove.has(wire.from.componentId) &&
+        !compIdsToRemove.has(wire.to.componentId),
     ),
     selectedWire: null,
+    selectedWires: [],
     selectedComponent: null,
     selectedComponents: [],
   };

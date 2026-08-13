@@ -1,6 +1,6 @@
 import type { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
 import { hitTestComponentAt } from "./component_geometry";
-import { findHoveredWire } from "./wiring_model";
+import { findHoveredWire, hitTestWireHandles, type WireHandleHit } from "./wiring_model";
 
 export interface HoverOptions {
   activePinForWire: PinInstance | null;
@@ -13,6 +13,7 @@ export interface HoverState {
   hoveredComponent: ComponentInstance | null;
   hoveredPin: PinInstance | null;
   hoveredWire: WireInstance | null;
+  hoveredWireHandle: WireHandleHit | null;
   cursor: string;
 }
 
@@ -56,6 +57,7 @@ export function resolveHoverState(
       hoveredComponent: null,
       hoveredPin: pinHit.pin,
       hoveredWire: null,
+      hoveredWireHandle: null,
       cursor: options.activePinForWire ? "crosshair" : "pointer",
     };
   }
@@ -76,6 +78,25 @@ export function resolveHoverState(
       hoveredComponent: comp,
       hoveredPin: null,
       hoveredWire: null,
+      hoveredWireHandle: null,
+      cursor,
+    };
+  }
+
+  const wireHandleHit = hitTestWireHandles(wires, worldX, worldY);
+  if (wireHandleHit) {
+    let cursor = "move";
+    if (wireHandleHit.type === "segment") {
+      const p1 = wireHandleHit.wire.points[wireHandleHit.index];
+      const p2 = wireHandleHit.wire.points[wireHandleHit.index + 1];
+      const isHoriz = p1 && p2 && Math.abs(p1.y - p2.y) < 1;
+      cursor = isHoriz ? "ns-resize" : "ew-resize";
+    }
+    return {
+      hoveredComponent: null,
+      hoveredPin: null,
+      hoveredWire: wireHandleHit.wire,
+      hoveredWireHandle: wireHandleHit,
       cursor,
     };
   }
@@ -86,6 +107,7 @@ export function resolveHoverState(
       hoveredComponent: null,
       hoveredPin: null,
       hoveredWire,
+      hoveredWireHandle: null,
       cursor: "pointer",
     };
   }
@@ -94,6 +116,7 @@ export function resolveHoverState(
     hoveredComponent: null,
     hoveredPin: null,
     hoveredWire: null,
+    hoveredWireHandle: null,
     cursor: "default",
   };
 }

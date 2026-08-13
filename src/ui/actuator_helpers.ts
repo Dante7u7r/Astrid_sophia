@@ -299,3 +299,12 @@ export class ActuatorHistoryManager {
 function clamp01(val: number): number {
   return Math.max(0, Math.min(1, val));
 }
+
+/**
+ * Clampea la posición del limpiador del potenciómetro en un rango seguro
+ * [0.001, 0.999] para evitar ramas de 0 ohmios que causen matriz singular en MNA.
+ */
+export function clampWiperPosition(position: number): number {
+  if (isNaN(position) || !isFinite(position)) return 0.5;
+  return Math.max(0.001, Math.min(0.999, position));
+}

@@ -80,6 +80,8 @@ export function attachCanvasInput(
       if (orchestrator.hoveredPin) {
         orchestrator.activePinForWire = orchestrator.hoveredPin;
         orchestrator.tempWireEnd = orchestrator.snapPointToGrid(worldPt);
+      } else if (orchestrator.hoveredWireHandle) {
+        orchestrator.startDraggingWireHandle(orchestrator.hoveredWireHandle, worldPt);
       } else {
         const isShift = e.shiftKey;
         const comp = orchestrator.selectComponentAt(worldPt.x, worldPt.y, isShift);
@@ -93,8 +95,9 @@ export function attachCanvasInput(
           callbacks.onHideMcuDebug();
           callbacks.onSelectionChanged(null);
         } else if (orchestrator.selectedWire) {
+          callbacks.onSelectionChanged(null);
           callbacks.log(
-            `Cable seleccionado: [${orchestrator.selectedWire.id}]. Presiona Delete/Backspace para eliminarlo de forma individual.`,
+            `Cable seleccionado: [${orchestrator.selectedWire.id}]. Edita sus propiedades en el panel lateral o presiona Delete para borrarlo.`,
             "system",
           );
         }
@@ -113,6 +116,10 @@ export function attachCanvasInput(
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
 
     orchestrator.checkHover(worldPt.x, worldPt.y);
+
+    if (orchestrator.isDraggingWireHandle) {
+      orchestrator.handleWireHandleDragging(worldPt);
+    }
 
     if (orchestrator.isDragging) {
       orchestrator.handleDragging(worldPt.x, worldPt.y);
@@ -137,6 +144,11 @@ export function attachCanvasInput(
   };
 
   const completeConnection = (_e: MouseEvent) => {
+    if (orchestrator.isDraggingWireHandle) {
+      orchestrator.stopWireHandleDragging();
+      callbacks.onCanvasModified();
+    }
+
     if (orchestrator.activePinForWire) {
       if (orchestrator.hoveredPin) {
         const from = orchestrator.activePinForWire;
@@ -155,9 +167,9 @@ export function attachCanvasInput(
 
     if (orchestrator.selectionStart) {
       orchestrator.completeBoxSelection();
-      if (orchestrator.selectedComponents.length > 0) {
+      if (orchestrator.selectedComponents.length > 0 || orchestrator.selectedWires.length > 0) {
         callbacks.log(
-          `Selección en lote: ${orchestrator.selectedComponents.length} componentes seleccionados.`,
+          `Selección en lote: ${orchestrator.selectedComponents.length} componentes y ${orchestrator.selectedWires.length} cables seleccionados.`,
           "system",
         );
       }

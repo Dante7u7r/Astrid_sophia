@@ -19,9 +19,10 @@ export function buildDmmRenderCacheKey(
     ])
     .sort()
     .join(",");
-  const voltages = Object.keys(voltageMap)
+  const fullVoltageMap: Record<string, number> = { "0": 0, ...voltageMap };
+  const voltages = Object.keys(fullVoltageMap)
     .sort()
-    .map(node => `${node}:${voltageMap[node]}`)
+    .map(node => `${node}:${fullVoltageMap[node]}`)
     .join(",");
 
   return `${dmmState}::${connectedPins}::${voltages}`;

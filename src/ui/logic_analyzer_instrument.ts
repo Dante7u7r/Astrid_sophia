@@ -4,6 +4,7 @@
 
 import { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { InstrumentCallbacks } from "./instrument_callbacks";
+import { ensureCanvasDpr } from "./canvas_dpr";
 
 export class LogicAnalyzerInstrument {
   private container: HTMLElement;
@@ -27,32 +28,47 @@ export class LogicAnalyzerInstrument {
 
   private render() {
     this.container.innerHTML = `
-      <div style="display: flex; gap: 10px; height: 100%; font-family: var(--font-sans); overflow: hidden;">
-        <!-- Panel Izquierdo: Selectores de Sonda por Canal -->
-        <div style="width: 25%; background: rgba(0,0,0,0.4); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; padding: 6px; overflow-y: auto;">
-          <h4 style="color: var(--cyan); font-size: 0.65rem; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; text-align: center;">Canales Lógicos</h4>
-          ${Array.from({ length: 8 })
-            .map(
-              (_, i) => `
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.68rem; background: rgba(255,255,255,0.02); padding: 4px; border-radius: 4px;">
-              <span style="font-weight: bold; color: hsl(${i * 45}, 80%, 60%);">D${i}</span>
-              <select class="logic-channel-select" data-index="${i}" style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); color: var(--text-bright); font-size: 0.65rem; width: 75%; border-radius: 3px; cursor: pointer; outline: none;">
-                <option value="">-- Sin Sonda --</option>
-              </select>
-            </div>
-          `
-            )
-            .join("")}
+      <div class="logic-analyzer-panel" style="display: flex; flex-direction: column; height: 100%; width: 100%; background: #030508; color: #fff; font-family: var(--font-sans); border-radius: 6px; overflow: hidden; border: 1px solid var(--border-subtle);">
+        <!-- Top Toolbar -->
+        <div style="height: 36px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); background: rgba(255,255,255,0.03);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 700; font-size: 0.8rem; color: #a855f7; display: flex; align-items: center; gap: 4px;">
+              📊 Analizador Lógico (8 CH)
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.7rem; color: var(--text-muted);">Threshold: TTL 2.5V</span>
+          </div>
         </div>
 
-        <!-- Panel Derecho: Gráfico de Diagramas de Tiempo -->
-        <div style="width: 75%; position: relative; display: flex; flex-direction: column; overflow: hidden; background: rgba(2, 3, 8, 0.95);">
-          <div style="height: 24px; padding: 4px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); background: rgba(0,0,0,0.2);">
-            <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Líneas de Tiempo Lógicas (0 / 1)</span>
-            <button id="logic-clear-btn" class="btn-osc-mini" style="font-size: 0.62rem; padding: 2px 8px;">Limpiar</button>
+        <!-- Main Workspace -->
+        <div style="flex-grow: 1; display: flex; overflow: hidden;">
+          <!-- Sidebar Canales -->
+          <div style="width: 140px; border-right: 1px solid var(--border-subtle); background: rgba(0,0,0,0.3); display: flex; flex-direction: column; padding: 4px;">
+            <div style="font-size: 0.65rem; color: var(--text-muted); padding: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 4px; font-weight: 600;">
+              ASIGNACIÓN CANALES
+            </div>
+            <div id="logic-channels-selectors" style="display: flex; flex-direction: column; gap: 4px; overflow-y: auto;">
+              ${Array.from({ length: 8 }).map((_, i) => `
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 0.65rem; font-weight: bold; width: 22px; color: hsl(${i * 45}, 80%, 60%);">D${i}</span>
+                  <select data-index="${i}" class="logic-channel-select" style="flex-grow: 1; font-size: 0.65rem; background: #0c101b; color: #fff; border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 2px;">
+                    <option value="">-- OFF --</option>
+                  </select>
+                </div>
+              `).join("")}
+            </div>
           </div>
-          <div style="flex-grow: 1; position: relative;">
-            <canvas id="logic-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+
+          <!-- Screen Canvas Display -->
+          <div style="flex-grow: 1; display: flex; flex-direction: column;">
+            <div style="height: 24px; padding: 4px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); background: rgba(0,0,0,0.2);">
+              <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Líneas de Tiempo Lógicas (0 / 1)</span>
+              <button id="logic-clear-btn" class="btn-osc-mini" style="font-size: 0.62rem; padding: 2px 8px;">Limpiar</button>
+            </div>
+            <div style="flex-grow: 1; position: relative;">
+              <canvas id="logic-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+            </div>
           </div>
         </div>
       </div>
@@ -64,9 +80,8 @@ export class LogicAnalyzerInstrument {
     if (this.canvas) {
       this.ctx = this.canvas.getContext("2d");
       const resize = () => {
-        if (this.canvas && this.canvas.parentElement) {
-          this.canvas.width = this.canvas.parentElement.clientWidth;
-          this.canvas.height = this.canvas.parentElement.clientHeight;
+        if (this.canvas && this.ctx) {
+          ensureCanvasDpr(this.canvas, this.ctx);
           this.drawWaveforms();
         }
       };
@@ -86,25 +101,26 @@ export class LogicAnalyzerInstrument {
 
     // Actualizar dinámicamente las opciones del selector de nodos disponibles
     const updateSelectors = () => {
-      // Intentar obtener todos los nombres de nodos eléctricos del netlist/simulación
       const selectElements = this.container.querySelectorAll(".logic-channel-select") as NodeListOf<HTMLSelectElement>;
       const existingNodes = Object.keys(this.orchestrator.components.reduce<Record<string, boolean>>((acc, comp) => {
-        // Enlazar pines a nodos reales
         const pins = this.orchestrator.getComponentPins(comp);
         pins.forEach((_, idx) => {
           const key = `${comp.id}:${idx}`;
-          const nodeId = this.callbacks.getPinNode(key);
+          const nodeId = this.callbacks.getPinNode?.(key);
           if (nodeId !== undefined) acc[nodeId] = true;
         });
         return acc;
-      }, { "0": true }));
+      }, Object.keys(this.nodeHistory).reduce<Record<string, boolean>>((acc, n) => {
+        acc[n] = true;
+        return acc;
+      }, { "0": true })));
 
       selectElements.forEach((select) => {
         const index = parseInt(select.getAttribute("data-index") || "0", 10);
         const currentVal = this.channels[index] || "";
         
         // Regenerar opciones
-        let html = `<option value="">-- Sin Sonda --</option>`;
+        let html = `<option value="">-- OFF --</option>`;
         Object.keys(existingNodes).sort().forEach((node) => {
           html += `<option value="${node}" ${node === currentVal ? "selected" : ""}>Nodo ${node}</option>`;
         });
@@ -145,8 +161,7 @@ export class LogicAnalyzerInstrument {
 
   private drawWaveforms() {
     if (!this.canvas || !this.ctx) return;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const { width: w, height: h } = ensureCanvasDpr(this.canvas, this.ctx);
     this.ctx.clearRect(0, 0, w, h);
 
     const channelHeight = h / 8;

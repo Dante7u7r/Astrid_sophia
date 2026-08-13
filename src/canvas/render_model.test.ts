@@ -73,13 +73,13 @@ describe("render_model", () => {
     });
 
     expect(plan).toMatchObject({
-      startX: -20,
-      endX: 60,
-      startY: -20,
-      endY: 60,
+      startX: -140,
+      endX: 180,
+      startY: -140,
+      endY: 180,
       gridStep: 20,
     });
-    expect(plan?.cacheKey).toContain("-20:60:-20:60:20");
+    expect(plan?.cacheKey).toContain("-140:180:-140:180:20");
 
     const densePlan = createGridRenderPlan({
       topLeft: { x: 0, y: 0 },

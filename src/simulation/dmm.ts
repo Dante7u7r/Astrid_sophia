@@ -30,6 +30,7 @@ export function formatDmmReading(mode: DmmMode, voltageDifference: number): stri
   }
 
   const resistance = Math.abs(voltageDifference) / DMM_RESISTANCE_TEST_CURRENT;
+  if (resistance >= 990e6) return DMM_INITIAL_DISPLAY;
   if (resistance >= 1e6) return `${(resistance / 1e6).toFixed(3)} MOhm`;
   if (resistance >= 1e3) return `${(resistance / 1e3).toFixed(3)} kOhm`;
   return `${resistance.toFixed(2)} Ohm`;
@@ -54,8 +55,8 @@ export function updateDmmReadings(
     const pin1Key = `${component.id}:1`;
     const pin0Node = pinToNodeMap[pin0Key];
     const pin1Node = pinToNodeMap[pin1Key];
-    const voltage0 = pin0Node === undefined ? undefined : nodeVoltages[pin0Node];
-    const voltage1 = pin1Node === undefined ? undefined : nodeVoltages[pin1Node];
+    const voltage0 = pin0Node === undefined ? undefined : (nodeVoltages[pin0Node] ?? (pin0Node === "0" ? 0 : undefined));
+    const voltage1 = pin1Node === undefined ? undefined : (nodeVoltages[pin1Node] ?? (pin1Node === "0" ? 0 : undefined));
 
     if (
       !connectedPins.has(pin0Key)

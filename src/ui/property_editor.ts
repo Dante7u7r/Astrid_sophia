@@ -1,4 +1,4 @@
-import { type ComponentInstance, type CanvasOrchestrator } from "../canvas_orchestrator";
+import { type ComponentInstance, type CanvasOrchestrator, type WireInstance } from "../canvas_orchestrator";
 import { type McuDebugPanel } from "./mcu_debug_panel";
 import { type SimulationRunner } from "../simulation/simulation_runner";
 import { parseSpiceValue, formatSpiceValue } from "../simulation/spice_value_parser";
@@ -60,6 +60,7 @@ export class PropertyEditor {
     if (this.propUnitInput) this.propUnitInput.value = "";
 
     for (const id of [
+      "wire-properties-container",
       "wave-properties-container",
       "macro-spice-container",
       "potentiometer-container",
@@ -74,6 +75,47 @@ export class PropertyEditor {
       if (container) container.style.display = "none";
     }
     this.callbacks.getMcuDebugPanel()?.hide();
+  }
+
+  public updateWirePropertiesPanel(wire: WireInstance): void {
+    if (!this.propIdInput) return;
+    this.setFormControlsDisabled(false);
+
+    this.propIdInput.value = wire.id;
+    this.propIdInput.placeholder = "Cable ID";
+    if (this.propValInput) this.propValInput.value = "";
+    if (this.propUnitInput) this.propUnitInput.value = "Conductor EDA";
+
+    const valGroup = document.querySelector("#group-comp-val") as HTMLElement;
+    const unitGroup = document.querySelector("#group-comp-unit") as HTMLElement;
+    if (valGroup) valGroup.style.display = "none";
+    if (unitGroup) unitGroup.style.display = "none";
+
+    for (const id of [
+      "wave-properties-container",
+      "macro-spice-container",
+      "potentiometer-container",
+      "ldr-container",
+      "thermistor-container",
+      "dmm-properties-container",
+      "switch-properties-container",
+      "transformer-properties-container",
+      "opamp-properties-container",
+    ]) {
+      const container = document.getElementById(id);
+      if (container) container.style.display = "none";
+    }
+    this.callbacks.getMcuDebugPanel()?.hide();
+
+    const wireContainer = document.querySelector("#wire-properties-container") as HTMLElement;
+    const wireLabelInput = document.querySelector("#prop-wire-label") as HTMLInputElement;
+    const wireColorInput = document.querySelector("#prop-wire-color") as HTMLInputElement;
+
+    if (wireContainer && wireLabelInput && wireColorInput) {
+      wireContainer.style.display = "flex";
+      wireLabelInput.value = wire.label || "";
+      wireColorInput.value = wire.color || "#66fcf1";
+    }
   }
 
   public toggleWaveFieldsVisibility(waveType: string) {
@@ -293,6 +335,44 @@ export class PropertyEditor {
     if (waveTypeSelect) {
       waveTypeSelect.addEventListener("change", () => {
         this.toggleWaveFieldsVisibility(waveTypeSelect.value);
+      });
+    }
+
+    const wireLabelInput = document.querySelector("#prop-wire-label") as HTMLInputElement;
+    const wireColorInput = document.querySelector("#prop-wire-color") as HTMLInputElement;
+    const btnResetWireColor = document.querySelector("#btn-reset-wire-color") as HTMLButtonElement;
+
+    if (wireLabelInput) {
+      wireLabelInput.addEventListener("input", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedWire) {
+          orchestrator.selectedWire.label = wireLabelInput.value.trim() || undefined;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
+      });
+    }
+
+    if (wireColorInput) {
+      wireColorInput.addEventListener("input", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedWire) {
+          orchestrator.selectedWire.color = wireColorInput.value;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
+      });
+    }
+
+    if (btnResetWireColor) {
+      btnResetWireColor.addEventListener("click", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedWire) {
+          orchestrator.selectedWire.color = undefined;
+          if (wireColorInput) wireColorInput.value = "#66fcf1";
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
       });
     }
     const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;

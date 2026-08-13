@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
 import {
   connectPins,
+  findConnectedWireIds,
   findHoveredWire,
+  findWireJunctionPoints,
   syncWireConnections,
   wireExists,
   wirePathIntersects,
@@ -53,12 +55,30 @@ describe("wiring_model", () => {
       to: { componentId: "R2", pinIndex: 0 },
       points: [],
     }];
-    const getPins = (comp: ComponentInstance): PinInstance[] => [
-      { componentId: comp.id, pinIndex: 0, x: comp.x, y: comp.y },
+
+    const getPins = (c: ComponentInstance): PinInstance[] => [
+      { componentId: c.id, pinIndex: 0, x: c.x, y: c.y, label: "1" },
     ];
 
-    syncWireConnections(components, wires, getPins, (start, end) => [start, end]);
+    syncWireConnections(components, wires, getPins, (start, end) => [{ x: start.x, y: start.y }, { x: end.x, y: end.y }]);
 
-    expect(wires[0].points).toEqual([{ componentId: "R1", pinIndex: 0, x: 0, y: 0 }, { componentId: "R2", pinIndex: 0, x: 100, y: 0 }]);
+    expect(wires[0].points).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+  });
+
+  it("resalta toda la red conectada (Net Highlighting) y detecta empalmes T-Junction", () => {
+    const w1: WireInstance = { id: "W1", from: { componentId: "R1", pinIndex: 0 }, to: { componentId: "R2", pinIndex: 0 }, points: [{ x: 0, y: 0 }, { x: 50, y: 0 }] };
+    const w2: WireInstance = { id: "W2", from: { componentId: "R2", pinIndex: 0 }, to: { componentId: "R3", pinIndex: 0 }, points: [{ x: 50, y: 0 }, { x: 100, y: 0 }] };
+    const w3: WireInstance = { id: "W3", from: { componentId: "C1", pinIndex: 0 }, to: { componentId: "R2", pinIndex: 0 }, points: [{ x: 50, y: 50 }, { x: 50, y: 0 }] };
+
+    const wires = [w1, w2, w3];
+    const connected = findConnectedWireIds(wires, "W1");
+
+    expect(connected.has("W1")).toBe(true);
+    expect(connected.has("W2")).toBe(true);
+    expect(connected.has("W3")).toBe(true);
+
+    const junctions = findWireJunctionPoints(wires);
+    expect(junctions).toHaveLength(1);
+    expect(junctions[0]).toEqual({ x: 50, y: 0 });
   });
 });

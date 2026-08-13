@@ -85,7 +85,34 @@ export function formatComponentValue(comp: ComponentInstance): string {
     const numericVal = Number(comp.value);
     formattedVal = numericVal < 1e-3 ? `${numericVal * 1e6} uH` : `${numericVal * 1e3} mH`;
   } else if (comp.type === "vsource") {
-    formattedVal = `${comp.value} V`;
+    if (comp.waveType && comp.waveType !== "dc") {
+      const modeStr = comp.waveType.toUpperCase();
+      const amp = comp.amplitude ?? comp.value;
+      const freq = comp.frequency ?? 1000;
+      formattedVal = `${modeStr} ${amp}V ${freq}Hz`;
+    } else {
+      formattedVal = `${comp.value} V`;
+    }
+  } else if (comp.type === "isource") {
+    if (comp.waveType && comp.waveType !== "dc") {
+      const modeStr = comp.waveType.toUpperCase();
+      const amp = comp.amplitude ?? comp.value;
+      const freq = comp.frequency ?? 1000;
+      formattedVal = `${modeStr} ${amp}A ${freq}Hz`;
+    } else {
+      formattedVal = `${comp.value} A`;
+    }
+  } else if (comp.type === "potentiometer") {
+    const totalR = Number(comp.value);
+    const formattedR = totalR >= 1000 ? `${totalR / 1000} kOhm` : `${totalR} Ohm`;
+    const wPos = Math.round((comp.wiperPosition ?? 0.5) * 100);
+    formattedVal = `${formattedR} (${wPos}%)`;
+  } else if (comp.type === "ldr") {
+    formattedVal = `${comp.lux ?? 100} Lx`;
+  } else if (comp.type === "thermistor") {
+    formattedVal = `${comp.temperatureCelsius ?? 25} \u00BA C`;
+  } else if (comp.type === "npn" || comp.type === "pnp") {
+    formattedVal = `\u03B2=${comp.value || 100}`;
   } else if (comp.type === "lamp" || comp.type === "relay" || comp.type === "buzzer") {
     formattedVal = comp.value.toString().split(";")[0].trim();
   } else if (
@@ -105,8 +132,6 @@ export function formatComponentValue(comp: ComponentInstance): string {
     else if (mode === 2) formattedVal = `Modo integrado: Umbral · ${supply}`;
     else if (mode === 3) formattedVal = `Modo integrado: PWM · ${supply}`;
     else formattedVal = `Modo integrado: Seguidor · ${supply}`;
-  } else if (comp.type === "isource") {
-    formattedVal = `${comp.value} A`;
   } else if (comp.type === "led") {
     formattedVal = "LED";
   } else if (comp.type === "switch") {

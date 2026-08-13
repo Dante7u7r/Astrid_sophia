@@ -23,6 +23,7 @@ import {
   hitTestOscilloscopeCursor,
   type OscilloscopeCursor,
 } from "./oscilloscope_cursor_model";
+import { ensureCanvasDpr } from "./canvas_dpr";
 
 export interface PvtRunResult {
   readonly config: PvtConfig;
@@ -495,14 +496,8 @@ export class OscilloscopePanel {
       return;
     }
 
-    const width = this.oscCanvas.clientWidth;
-    const height = this.oscCanvas.clientHeight;
+    const { width, height } = ensureCanvasDpr(this.oscCanvas, this.oscCtx);
     if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return;
-    
-    if (this.oscCanvas.width !== width || this.oscCanvas.height !== height) {
-      this.oscCanvas.width = width;
-      this.oscCanvas.height = height;
-    }
 
     // Phosphor dark green fade
     if (this.isSimulating && this.activeAnalysisMode !== 'AC') {
@@ -575,12 +570,6 @@ export class OscilloscopePanel {
       const drawChannelTY = (nodeId: string, color: string, voltsPerDiv: number, offsetPixels: number, isActive: boolean) => {
         if (!isActive || !nodeId || triggerStartIdx >= this.transientResults.length) return;
 
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.0;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 4;
-        ctx.beginPath();
-
         const tracePoints = buildTyTracePoints(
           this.transientResults,
           nodeId,
@@ -588,6 +577,13 @@ export class OscilloscopePanel {
           { voltsPerDiv, offsetPixels, timeDivValue: this.timeDivValue },
           triggerStartIdx,
         );
+        if (tracePoints.length === 0) return;
+
+        // Glow pass (wider stroke)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3.5;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
         let headPoint: { x: number; y: number } | null = null;
         for (let i = 0; i < tracePoints.length; i++) {
           const point = tracePoints[i];
@@ -597,16 +593,17 @@ export class OscilloscopePanel {
           headPoint = point;
         }
         ctx.stroke();
-        ctx.shadowBlur = 0;
+
+        // Sharp core pass
+        ctx.lineWidth = 1.8;
+        ctx.globalAlpha = 1.0;
+        ctx.stroke();
 
         if (this.isSimulating && !this.isOscPaused && headPoint) {
           ctx.fillStyle = "#ffffff";
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 10;
           ctx.beginPath();
           ctx.arc(headPoint.x, headPoint.y, 3.5, 0, Math.PI * 2);
           ctx.fill();
-          ctx.shadowBlur = 0;
         }
       };
 
@@ -618,13 +615,10 @@ export class OscilloscopePanel {
       if (this.isSimulating && !this.isOscPaused) {
         ctx.strokeStyle = "rgba(102, 252, 241, 0.45)";
         ctx.lineWidth = 1.5;
-        ctx.shadowColor = "#66fcf1";
-        ctx.shadowBlur = 6;
         ctx.beginPath();
         ctx.moveTo(sweepX, 0);
         ctx.lineTo(sweepX, height);
         ctx.stroke();
-        ctx.shadowBlur = 0;
       }
 
       this.updateMeasurementsIfNeeded(

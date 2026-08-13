@@ -377,10 +377,21 @@ fn inject_live_mutation(
             "La mutacion interactiva requiere un ID de componente valido.".to_string(),
         ));
     }
-    if mutation.field != "value" || !mutation.value.is_finite() {
+    let valid_fields = [
+        "value",
+        "amplitude",
+        "frequency",
+        "offset",
+        "duty_cycle",
+        "switch_state",
+        "switch_ron",
+        "switch_roff",
+        "switch_vth",
+        "switch_vh",
+    ];
+    if !valid_fields.contains(&mutation.field.as_str()) || !mutation.value.is_finite() {
         return Err(SimulationError::from(
-            "La mutacion interactiva solo admite el campo 'value' con un numero finito."
-                .to_string(),
+            "La mutacion interactiva requiere un campo y valor valido.".to_string(),
         ));
     }
     mutation.run_id = state.active_run_id.load(Ordering::SeqCst);

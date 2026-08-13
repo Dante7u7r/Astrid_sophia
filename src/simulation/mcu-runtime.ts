@@ -67,9 +67,9 @@ export function createMcuRuntime(config: McuConfig): McuRuntime {
       registers: new Map(),
       memory: new Map(),
       stepCount: 0,
-      maxSteps: config.maxCycles ?? 1e6
+      maxSteps: config.maxCycles ?? Infinity
     },
-    cycleLimit: config.maxCycles ?? 1e6,
+    cycleLimit: config.maxCycles ?? Infinity,
     halted: false,
     haltReason: null,
     firmware,

@@ -48,4 +48,30 @@ describe("multimetro digital", () => {
 
     expect(dmm.dmmValue).toBe(DMM_INITIAL_DISPLAY);
   });
+
+  test("formatea correctamente abierto en resistencia y calcula medicion sobre nodo 0 de masa", () => {
+    const dmm: ComponentInstance = {
+      id: "DMM1",
+      type: "dmm",
+      value: "V",
+      dmmValue: "OPEN",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    const wires: WireInstance[] = [
+      { id: "W1", from: { componentId: "DMM1", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 }, points: [] },
+      { id: "W2", from: { componentId: "DMM1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 }, points: [] },
+    ];
+
+    updateDmmReadings(
+      [dmm],
+      wires,
+      { "DMM1:0": "1", "DMM1:1": "0" },
+      { "1": 10.5 },
+    );
+
+    expect(dmm.dmmValue).toBe("10.500 V");
+    expect(formatDmmReading("R", 10000)).toBe("OPEN");
+  });
 });

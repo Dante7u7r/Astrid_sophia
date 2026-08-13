@@ -473,6 +473,8 @@ where
                 is_fixed,
                 steps_completed,
                 integration_method,
+                Some(numerical_settings.tolerance),
+                None,
             );
             let lte_max = lte.maximum;
             let integrator_order = lte.integrator_order;

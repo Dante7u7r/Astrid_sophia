@@ -68,6 +68,6 @@ describe("hover_model", () => {
     });
 
     expect(hover.hoveredWire).toBe(wire);
-    expect(hover.cursor).toBe("pointer");
+    expect(hover.cursor).toBe("ns-resize");
   });
 });

@@ -325,7 +325,7 @@ function initCanvasCAD() {
     instrumentsDock = new InstrumentsDock(bottomDock, orchestrator, {
       onCanvasModified: () => {
         markCurrentTabAsModified();
-        if (orchestrator) orchestrator.ercIssues = [];
+        if (orchestrator) orchestrator.updateRealtimeErc();
       },
       onNetlistSync: () => extractNetlist(),
       requestRender: (immediate: boolean) => updateCanvasRendering(immediate),
@@ -339,6 +339,7 @@ function initCanvasCAD() {
     requestRender: (immediate) => updateCanvasRendering(immediate),
     onWireConnected: () => {
       extractNetlist();
+      if (orchestrator) orchestrator.updateRealtimeErc();
       addLog(
         `Cable conectado entre terminales del lienzo.`,
         "system",
@@ -347,7 +348,7 @@ function initCanvasCAD() {
     onCanvasModified: () => {
       markCurrentTabAsModified();
       if (orchestrator) {
-        orchestrator.ercIssues = [];
+        orchestrator.updateRealtimeErc();
       }
     },
     onNetlistSync: () => extractNetlist(),
@@ -361,7 +362,17 @@ function initCanvasCAD() {
           panelLayoutManager.setPanelCollapsed("right", false);
           sidePanelController?.syncDrawerState();
         }
+      } else if (orchestrator?.selectedWire) {
+        propertyEditor?.updateWirePropertiesPanel(orchestrator.selectedWire);
+        if (panelLayoutManager) {
+          if (sidePanelController?.isCompactDrawerViewport()) {
+            panelLayoutManager.setPanelCollapsed("left", true);
+          }
+          panelLayoutManager.setPanelCollapsed("right", false);
+          sidePanelController?.syncDrawerState();
+        }
       } else {
+        propertyEditor?.clearPropertiesPanel();
         if (panelLayoutManager) {
           panelLayoutManager.setPanelCollapsed("right", true);
           sidePanelController?.syncDrawerState();

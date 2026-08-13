@@ -20,7 +20,6 @@ import {
 import {
   DisjointSetUnion,
   assignRootNode,
-  mapPinKeysToNodes,
   pinKey,
 } from "./netlist_node_model";
 import { allowsFloatingPins } from "./component_pin_rules";
@@ -221,16 +220,11 @@ export function extractElectricalNetlist(
     compPinMapping = { ...topologicalCache.compPinMapping };
   }
 
-  const dsu = new DisjointSetUnion();
+  const dsu = isCacheHit ? null : new DisjointSetUnion();
   const rootToNodeIdMap: Record<string, string> = {};
   const nextNodeId = { value: 1 };
 
-  if (isCacheHit) {
-    for (const [pk, nodeId] of Object.entries(pinToNodeMap)) {
-      rootToNodeIdMap[pk] = nodeId;
-      dsu.find(pk);
-    }
-  } else {
+  if (!isCacheHit) {
     // 1. Declarar cada pin de cada componente en el DSU
     const allPinKeys: string[] = [];
     compPinMapping = {};
@@ -260,7 +254,7 @@ export function extractElectricalNetlist(
     for (const wire of wires) {
       const keyFrom = pinKey(wire.from.componentId, wire.from.pinIndex);
       const keyTo = pinKey(wire.to.componentId, wire.to.pinIndex);
-      dsu.union(keyFrom, keyTo);
+      dsu!.union(keyFrom, keyTo);
     }
 
     // 3. Identificar el grupo de Tierra (GND) y asignarle el ID de nodo "0"
@@ -268,7 +262,7 @@ export function extractElectricalNetlist(
     for (const comp of components) {
       if (comp.type === 'ground') {
         const gndPinKey = `${comp.id}:0`;
-        gndRoot = dsu.find(gndPinKey);
+        gndRoot = dsu!.find(gndPinKey);
         break;
       }
     }
@@ -278,6 +272,21 @@ export function extractElectricalNetlist(
     }
   }
 
+  // Helper puro para resolución de nodo (Cache Hit ➔ lectura directa O(1); Cache Miss ➔ DSU lookup)
+  const resolveNode = (pk: string): string => {
+    if (isCacheHit) {
+      return pinToNodeMap[pk] || "0";
+    }
+    const root = dsu!.find(pk);
+    const nodeId = assignRootNode(rootToNodeIdMap, root, nextNodeId);
+    pinToNodeMap[pk] = nodeId;
+    return nodeId;
+  };
+
+  const getComponentNodes = (pinsKeys: readonly string[]): string[] => {
+    return pinsKeys.map(resolveNode);
+  };
+
   const extractedComponents: ExtractedComponent[] = [];
   let netlistMutualInductances: MutualInductance[] = [];
 
@@ -285,7 +294,7 @@ export function extractElectricalNetlist(
     const pinsKeys = compPinMapping[comp.id] || [];
 
     if (comp.type === 'potentiometer') {
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -311,7 +320,7 @@ export function extractElectricalNetlist(
         pins: [pin1Node, pin2Node],
       });
     } else if (comp.type === 'ldr') {
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -326,7 +335,7 @@ export function extractElectricalNetlist(
         pins: [pin0Node, pin1Node],
       });
     } else if (comp.type === 'dmm') {
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -356,7 +365,7 @@ export function extractElectricalNetlist(
         });
       }
     } else if (comp.type === 'thermistor') {
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0";
       const pin1Node = pinsMapped[1] || "0";
@@ -376,7 +385,7 @@ export function extractElectricalNetlist(
       });
     } else if (comp.type === 'lamp') {
       const model = parseLampActuatorModel(comp.value?.toString() ?? "");
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       extractedComponents.push({
         id: comp.id,
@@ -386,7 +395,7 @@ export function extractElectricalNetlist(
       });
     } else if (comp.type === 'buzzer') {
       const model = parseBuzzerActuatorModel(comp.value?.toString() ?? "");
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       extractedComponents.push({
         id: comp.id,
@@ -396,22 +405,11 @@ export function extractElectricalNetlist(
       });
     } else if (comp.type === 'relay') {
       const model = parseRelayActuatorModel(comp.value?.toString() ?? "");
-      const pin0Root = dsu.find(`${comp.id}:0`);
-      const pin1Root = dsu.find(`${comp.id}:1`);
-      const pin2Root = dsu.find(`${comp.id}:2`);
-      const pin3Root = dsu.find(`${comp.id}:3`);
-      const internalRoot = dsu.find(`${comp.id}:internal`);
-
-      const roots = [pin0Root, pin1Root, pin2Root, pin3Root, internalRoot];
-      roots.forEach(r => {
-        assignRootNode(rootToNodeIdMap, r, nextNodeId);
-      });
-
-      const pin0Node = rootToNodeIdMap[pin0Root];
-      const pin1Node = rootToNodeIdMap[pin1Root];
-      const pin2Node = rootToNodeIdMap[pin2Root];
-      const pin3Node = rootToNodeIdMap[pin3Root];
-      const pinInternalNode = rootToNodeIdMap[internalRoot];
+      const pin0Node = resolveNode(`${comp.id}:0`);
+      const pin1Node = resolveNode(`${comp.id}:1`);
+      const pin2Node = resolveNode(`${comp.id}:2`);
+      const pin3Node = resolveNode(`${comp.id}:3`);
+      const pinInternalNode = resolveNode(`${comp.id}:internal`);
 
       extractedComponents.push({
         id: `${comp.id}__coil_res`,
@@ -436,20 +434,10 @@ export function extractElectricalNetlist(
         pins: [pin2Node, pin3Node],
       });
     } else if (comp.type === 'transformer') {
-      const pin0Root = dsu.find(`${comp.id}:0`);
-      const pin1Root = dsu.find(`${comp.id}:1`);
-      const pin2Root = dsu.find(`${comp.id}:2`);
-      const pin3Root = dsu.find(`${comp.id}:3`);
-
-      const roots = [pin0Root, pin1Root, pin2Root, pin3Root];
-      roots.forEach(r => {
-        assignRootNode(rootToNodeIdMap, r, nextNodeId);
-      });
-
-      const priNode1 = rootToNodeIdMap[pin0Root];
-      const priNode2 = rootToNodeIdMap[pin1Root];
-      const secNode1 = rootToNodeIdMap[pin2Root];
-      const secNode2 = rootToNodeIdMap[pin3Root];
+      const priNode1 = resolveNode(`${comp.id}:0`);
+      const priNode2 = resolveNode(`${comp.id}:1`);
+      const secNode1 = resolveNode(`${comp.id}:2`);
+      const secNode2 = resolveNode(`${comp.id}:3`);
 
       const L1 = comp.primaryInductance ?? 1e-3;
       const L2 = comp.secondaryInductance ?? 1e-3;
@@ -479,7 +467,7 @@ export function extractElectricalNetlist(
         k_coeff: k,
       });
     } else if (comp.type === 'opamp') {
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       const pin0Node = pinsMapped[0] || "0"; // In+
       const pin1Node = pinsMapped[1] || "0"; // In-
@@ -487,9 +475,7 @@ export function extractElectricalNetlist(
       const pin3Node = pinsMapped[3] || "0"; // V-
       const pin4Node = pinsMapped[4] || "0"; // Out
 
-      // Crear nodo interno para insertar la tensión offset en serie
-      const internalOffsetNode = `${comp.id}__offset_node`;
-      const offsetNodeId = assignRootNode(rootToNodeIdMap, internalOffsetNode, nextNodeId);
+      const offsetNodeId = resolveNode(`${comp.id}__offset_node`);
 
       const vos = comp.offsetVoltage !== undefined ? Number(comp.offsetVoltage) : 0.002;
       const aol = comp.openLoopGain !== undefined ? Number(comp.openLoopGain) : 100000.0;
@@ -511,7 +497,7 @@ export function extractElectricalNetlist(
         pins: [offsetNodeId, pin1Node, pin2Node, pin3Node, pin4Node],
       });
     } else {
-      const pinsMapped = mapPinKeysToNodes(dsu, rootToNodeIdMap, nextNodeId, pinsKeys);
+      const pinsMapped = getComponentNodes(pinsKeys);
 
       let subcircuitName: string | undefined;
       if (comp.type === 'x' && comp.spiceMacro) {
@@ -549,26 +535,15 @@ export function extractElectricalNetlist(
 
   // Mapear wires a IDs de nodos eléctricos
   const extractedWires = wires.map(w => {
-    const fromKey = `${w.from.componentId}:${w.from.pinIndex}`;
-    const toKey = `${w.to.componentId}:${w.to.pinIndex}`;
-    const nodeFrom = rootToNodeIdMap[dsu.find(fromKey)] || "0";
-    const nodeTo = rootToNodeIdMap[dsu.find(toKey)] || "0";
+    const fromKey = pinKey(w.from.componentId, w.from.pinIndex);
+    const toKey = pinKey(w.to.componentId, w.to.pinIndex);
+    const nodeFrom = resolveNode(fromKey);
+    const nodeTo = resolveNode(toKey);
     return {
       id: w.id,
       nodes: [nodeFrom, nodeTo],
     };
   });
-
-  // Poblar mapa de terminales a nodos eléctricos
-  pinToNodeMap = {};
-  for (const comp of components) {
-    const pinsKeys = compPinMapping[comp.id] || [];
-    for (const pk of pinsKeys) {
-      const root = dsu.find(pk);
-      const nodeId = rootToNodeIdMap[root] || "0";
-      pinToNodeMap[pk] = nodeId;
-    }
-  }
 
   // Concatenar todos los bloques spiceMacro de los Subcircuitos Genéricos (tipo 'x')
   const macroBlocks: string[] = [];
@@ -588,54 +563,59 @@ export function extractElectricalNetlist(
 
   // Pre-flight ERC
   let ercError: string | undefined;
-  const node0Exists = Object.values(pinToNodeMap).includes("0");
 
-  if (!node0Exists) {
-    ercError = "Referencia a Tierra (GND / Nodo 0) no encontrada. Agrega un componente de Tierra.";
+  if (isCacheHit) {
+    ercError = topologicalCache?.error;
   } else {
-    const nodeCounts: Record<string, number> = {};
-    for (const comp of extractedComponents) {
-      for (const pinNode of comp.pins) {
-        nodeCounts[pinNode] = (nodeCounts[pinNode] || 0) + 1;
-      }
-    }
+    const node0Exists = Object.values(pinToNodeMap).includes("0");
 
-    const connectedPinKeys = new Set<string>();
-    for (const wire of wires) {
-      connectedPinKeys.add(pinKey(wire.from.componentId, wire.from.pinIndex));
-      connectedPinKeys.add(pinKey(wire.to.componentId, wire.to.pinIndex));
-    }
-
-    const allowedFloatingNodes = new Set<string>();
-    for (const comp of components) {
-      if (!allowsFloatingPins(comp.type)) continue;
-      for (const pin of getPins(comp)) {
-        const key = pinKey(comp.id, pin.pinIndex);
-        if (!connectedPinKeys.has(key)) {
-          allowedFloatingNodes.add(pinToNodeMap[key]);
+    if (!node0Exists) {
+      ercError = "Referencia a Tierra (GND / Nodo 0) no encontrada. Agrega un componente de Tierra.";
+    } else {
+      const nodeCounts: Record<string, number> = {};
+      for (const comp of extractedComponents) {
+        for (const pinNode of comp.pins) {
+          nodeCounts[pinNode] = (nodeCounts[pinNode] || 0) + 1;
         }
       }
-    }
 
-    const lowDegreeNodes: string[] = [];
-    for (const [nodeId, count] of Object.entries(nodeCounts)) {
-      if (nodeId !== "0" && count < 2 && !allowedFloatingNodes.has(nodeId)) {
-        lowDegreeNodes.push(nodeId);
+      const connectedPinKeys = new Set<string>();
+      for (const wire of wires) {
+        connectedPinKeys.add(pinKey(wire.from.componentId, wire.from.pinIndex));
+        connectedPinKeys.add(pinKey(wire.to.componentId, wire.to.pinIndex));
+      }
+
+      const allowedFloatingNodes = new Set<string>();
+      for (const comp of components) {
+        if (!allowsFloatingPins(comp.type)) continue;
+        for (const pin of getPins(comp)) {
+          const key = pinKey(comp.id, pin.pinIndex);
+          if (!connectedPinKeys.has(key)) {
+            allowedFloatingNodes.add(pinToNodeMap[key]);
+          }
+        }
+      }
+
+      const lowDegreeNodes: string[] = [];
+      for (const [nodeId, count] of Object.entries(nodeCounts)) {
+        if (nodeId !== "0" && count < 2 && !allowedFloatingNodes.has(nodeId)) {
+          lowDegreeNodes.push(nodeId);
+        }
+      }
+
+      if (lowDegreeNodes.length > 0) {
+        ercError = `Pre-flight ERC fallido: Nodo huérfano detectado (Nodo ${lowDegreeNodes.join(", ")} tiene grado de conexión < 2). Verifica que no haya cables flotantes o componentes desconectados.`;
       }
     }
 
-    if (lowDegreeNodes.length > 0) {
-      ercError = `Pre-flight ERC fallido: Nodo huérfano detectado (Nodo ${lowDegreeNodes.join(", ")} tiene grado de conexión < 2). Verifica que no haya cables flotantes o componentes desconectados.`;
-    }
+    topologicalCache = {
+      signature: currentSignature,
+      pinToNodeMap: { ...pinToNodeMap },
+      compPinMapping,
+      subcircuitDefinitions,
+      error: ercError,
+    };
   }
-
-  topologicalCache = {
-    signature: currentSignature,
-    pinToNodeMap: { ...pinToNodeMap },
-    compPinMapping,
-    subcircuitDefinitions,
-    error: ercError,
-  };
 
   return { netlist, pinToNodeMap, error: ercError };
 }

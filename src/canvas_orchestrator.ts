@@ -2,10 +2,10 @@ import { type McuRuntime } from "./simulation/mcu-runtime";
 import { type McuSpiceBridge } from "./simulation/mcu-spice-bridge";
 import { getComponentPins as resolveComponentPins } from "./canvas/component_pins";
 import { CanvasSceneRenderer } from "./canvas/canvas_scene_renderer";
+import { evaluateRealtimeErcIssues } from "./simulation/erc_graph";
 import {
   clampCameraOffsets,
   fitBoundsToViewport,
-  generateOrthogonalPath,
   getCircuitBounds,
   getCircuitGeometricCenter,
   isVisible,
@@ -15,6 +15,7 @@ import {
   worldToScreen,
   zoomAt,
 } from "./canvas/viewport_camera";
+import { generateSmartOrthogonalPath } from "./canvas/smart_wire_router";
 import {
   applyDrag,
   completeBoxSelection,
@@ -23,7 +24,10 @@ import {
 } from "./canvas/selection_model";
 import {
   connectPins as connectWirePins,
+  dragWireSegment,
+  dragWireVertex,
   syncWireConnections as syncWireModelConnections,
+  type WireHandleHit,
 } from "./canvas/wiring_model";
 import {
   createComponent,
@@ -193,6 +197,17 @@ export interface WireInstance {
   from: WireEndpoint;
   to: WireEndpoint;
   points: Point2D[]; // Path points for rendering
+  label?: string;
+  color?: string;
+  customPath?: boolean;
+}
+
+export interface WireDragState {
+  wire: WireInstance;
+  handleType: 'vertex' | 'segment';
+  handleIndex: number;
+  initialPoints: Point2D[];
+  dragStartWorld: Point2D;
 }
 
 export class CanvasOrchestrator {
@@ -218,16 +233,20 @@ export class CanvasOrchestrator {
   public hoveredComponent: ComponentInstance | null = null;
   public hoveredPin: PinInstance | null = null;
   public hoveredWire: WireInstance | null = null;
+  public hoveredWireHandle: WireHandleHit | null = null;
   
   public selectedComponent: ComponentInstance | null = null; // Mantenido para compatibilidad e indicador principal
   public selectedComponents: ComponentInstance[] = [];
   public selectedWire: WireInstance | null = null;
+  public selectedWires: WireInstance[] = [];
   
   public activePinForWire: PinInstance | null = null;
   public tempWireEnd: Point2D | null = null;
   public ercIssues: { componentId: string; type: "error" | "warning"; message: string; pinIndex?: number }[] = [];
   
   public isDragging: boolean = false;
+  public isDraggingWireHandle: boolean = false;
+  public activeWireDrag: WireDragState | null = null;
   private dragStartOffset: Point2D = { x: 0, y: 0 };
   private dragStartOffsets: Record<string, Point2D> = {};
 
@@ -240,6 +259,18 @@ export class CanvasOrchestrator {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not acquire 2D rendering context");
     this.sceneRenderer = new CanvasSceneRenderer(canvas, context, this);
+  }
+
+  public updateRealtimeErc(): void {
+    if (this.components.length === 0) {
+      this.ercIssues = [];
+      return;
+    }
+    this.ercIssues = evaluateRealtimeErcIssues(
+      this.components,
+      this.wires,
+      comp => this.getComponentPins(comp),
+    );
   }
 
   // --- COORDINATE TRANSLATIONS ---
@@ -264,8 +295,30 @@ export class CanvasOrchestrator {
     return this.snapPointToGrid(this.screenToWorld(screenX, screenY));
   }
 
-  public generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[] {
-    return generateOrthogonalPath(start, end, this.gridSize);
+  public generateOrthogonalPath(start: Point2D, end: Point2D, fromCompId?: string, toCompId?: string): Point2D[] {
+    const obstacles: BoundingBox[] = this.components
+      .filter((c) => c.id !== fromCompId && c.id !== toCompId)
+      .map((comp) => {
+        const pins = this.getComponentPins(comp);
+        let minX = comp.x;
+        let maxX = comp.x;
+        let minY = comp.y;
+        let maxY = comp.y;
+        for (const p of pins) {
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
+        }
+        return {
+          x: minX - 10,
+          y: minY - 10,
+          width: Math.max(30, maxX - minX + 20),
+          height: Math.max(30, maxY - minY + 20),
+        };
+      });
+
+    return generateSmartOrthogonalPath(start, end, this.gridSize, obstacles);
   }
 
   public getComponentPins(comp: ComponentInstance): PinInstance[] {
@@ -318,8 +371,8 @@ export class CanvasOrchestrator {
 
   // --- DRAWING / RENDERING ---
 
-  public render(voltageMap: Record<string, number> = {}, probes: ProbeBadges = {}, nodeMap: Record<string, string> = {}, sparMarkers?: SParameterMarker[]): void {
-    this.sceneRenderer.render(voltageMap, probes, nodeMap, sparMarkers);
+  public render(voltageMap: Record<string, number> = {}, probes: ProbeBadges = {}, nodeMap: Record<string, string> = {}, sparMarkers?: SParameterMarker[], branchCurrents: Record<string, number> = {}): void {
+    this.sceneRenderer.render(voltageMap, probes, nodeMap, sparMarkers, branchCurrents);
   }
 
   /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel. */
@@ -385,7 +438,7 @@ export class CanvasOrchestrator {
       worldY,
       {
         activePinForWire: this.activePinForWire,
-        isDragging: this.isDragging,
+        isDragging: this.isDragging || this.isDraggingWireHandle,
         simulationActive: this.simulationActive,
         pinThreshold: this.getPinHitThreshold(),
       },
@@ -393,7 +446,51 @@ export class CanvasOrchestrator {
     this.hoveredComponent = hover.hoveredComponent;
     this.hoveredPin = hover.hoveredPin;
     this.hoveredWire = hover.hoveredWire;
+    this.hoveredWireHandle = hover.hoveredWireHandle;
     this.canvas.style.cursor = hover.cursor;
+  }
+
+  public startDraggingWireHandle(hit: WireHandleHit, worldPt: Point2D): void {
+    this.isDraggingWireHandle = true;
+    this.canvas.style.cursor = hit.type === 'vertex' ? 'move' : 'ns-resize';
+    this.activeWireDrag = {
+      wire: hit.wire,
+      handleType: hit.type,
+      handleIndex: hit.index,
+      initialPoints: hit.wire.points.map(p => ({ ...p })),
+      dragStartWorld: { ...worldPt },
+    };
+  }
+
+  public handleWireHandleDragging(worldPt: Point2D): void {
+    if (!this.activeWireDrag) return;
+    const deltaX = worldPt.x - this.activeWireDrag.dragStartWorld.x;
+    const deltaY = worldPt.y - this.activeWireDrag.dragStartWorld.y;
+
+    if (this.activeWireDrag.handleType === 'vertex') {
+      const snapped = this.snapPointToGrid(worldPt);
+      this.activeWireDrag.wire.points = dragWireVertex(
+        this.activeWireDrag.initialPoints,
+        this.activeWireDrag.handleIndex,
+        snapped,
+      );
+    } else {
+      const snappedX = Math.round(deltaX / this.gridSize) * this.gridSize;
+      const snappedY = Math.round(deltaY / this.gridSize) * this.gridSize;
+      this.activeWireDrag.wire.points = dragWireSegment(
+        this.activeWireDrag.initialPoints,
+        this.activeWireDrag.handleIndex,
+        snappedX,
+        snappedY,
+      );
+    }
+    this.activeWireDrag.wire.customPath = true;
+  }
+
+  public stopWireHandleDragging(): void {
+    this.isDraggingWireHandle = false;
+    this.activeWireDrag = null;
+    this.canvas.style.cursor = 'default';
   }
 
   public selectComponentAt(worldX: number, worldY: number, isShift: boolean = false): ComponentInstance | null {
@@ -403,6 +500,7 @@ export class CanvasOrchestrator {
         selectedComponent: this.selectedComponent,
         selectedComponents: this.selectedComponents,
         selectedWire: this.selectedWire,
+        selectedWires: this.selectedWires,
       },
       this.hoveredWire,
       worldX,
@@ -412,14 +510,16 @@ export class CanvasOrchestrator {
     this.selectedComponent = result.selectedComponent;
     this.selectedComponents = result.selectedComponents;
     this.selectedWire = result.selectedWire;
+    this.selectedWires = result.selectedWires;
     return result.hitComponent;
   }
   public completeBoxSelection(): void {
-    const result = completeBoxSelection(this.components, this.selectionStart, this.selectionEnd);
+    const result = completeBoxSelection(this.components, this.wires, this.selectionStart, this.selectionEnd);
     if (result) {
       this.selectedComponent = result.selectedComponent;
       this.selectedComponents = result.selectedComponents;
       this.selectedWire = result.selectedWire;
+      this.selectedWires = result.selectedWires;
     }
     this.selectionStart = null;
     this.selectionEnd = null;
@@ -458,7 +558,7 @@ export class CanvasOrchestrator {
       this.components,
       this.wires,
       (component) => this.getComponentPins(component),
-      (start, end) => this.generateOrthogonalPath(start, end),
+      (start, end, fromId, toId) => this.generateOrthogonalPath(start, end, fromId, toId),
     );
   }
 
@@ -500,10 +600,12 @@ export class CanvasOrchestrator {
       this.selectedWire,
       this.selectedComponents,
       this.selectedComponent,
+      this.selectedWires,
     );
     this.components = result.components;
     this.wires = result.wires;
     this.selectedWire = result.selectedWire;
+    this.selectedWires = result.selectedWires;
     this.selectedComponent = result.selectedComponent;
     this.selectedComponents = result.selectedComponents;
   }

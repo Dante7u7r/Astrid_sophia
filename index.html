@@ -888,6 +888,21 @@
                 <input id="prop-unit-input" class="prop-input" type="text" value="Ohms (Ω)" readonly />
               </div>
 
+              <!-- Contenedor de Propiedades de Cable -->
+              <div id="wire-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label">Etiqueta de Red (Net Label)</label>
+                  <input id="prop-wire-label" class="prop-input" type="text" placeholder="Ej. VCC, GND, CLK, BUS_0" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label">Color Personalizado</label>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <input id="prop-wire-color" type="color" value="#66fcf1" style="width: 44px; height: 32px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; background: rgba(0,0,0,0.4);" />
+                    <button id="btn-reset-wire-color" type="button" class="btn-secondary" style="font-size: 11px; padding: 4px 8px; height: 32px;">Restablecer Color</button>
+                  </div>
+                </div>
+              </div>
+
               <!-- Contenedor de Propiedades de Onda para Fuentes -->
               <div id="wave-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px;">
                 <div class="property-group">

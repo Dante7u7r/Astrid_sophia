@@ -166,3 +166,96 @@ export function hasIdealVoltageSourceCycle(netlist: CircuitNetlist): boolean {
   }
   return false;
 }
+
+// ==========================================================================
+// ERC EN TIEMPO REAL (VALIDACIÓN INCREMENTAL EN EL LIENZO)
+// ==========================================================================
+
+import type { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
+import { allowsFloatingPins } from "./component_pin_rules";
+
+export interface ErcIssue {
+  componentId: string;
+  type: "error" | "warning";
+  message: string;
+  pinIndex?: number;
+}
+
+export function evaluateRealtimeErcIssues(
+  components: readonly ComponentInstance[],
+  wires: readonly WireInstance[],
+  getPins: (comp: ComponentInstance) => readonly PinInstance[],
+): ErcIssue[] {
+  const issues: ErcIssue[] = [];
+  if (components.length === 0) return issues;
+
+  // 1. Verificación de presencia de Tierra (GND) en el esquema
+  const hasGnd = components.some(c => c.type === "ground");
+  if (!hasGnd) {
+    for (const comp of components) {
+      if (comp.type === "vsource" || comp.type === "isource") {
+        issues.push({
+          componentId: comp.id,
+          type: "warning",
+          message: "Circuito sin referencia a Tierra (GND / Nodo 0). Agrega una Tierra.",
+          pinIndex: 0,
+        });
+      }
+    }
+  }
+
+  // 2. Mapa de terminales conectadas a cables
+  const connectedPinKeys = new Set<string>();
+  for (const wire of wires) {
+    connectedPinKeys.add(`${wire.from.componentId}:${wire.from.pinIndex}`);
+    connectedPinKeys.add(`${wire.to.componentId}:${wire.to.pinIndex}`);
+  }
+
+  // 3. Verificación de pines flotantes en componentes que requieren conexión
+  for (const comp of components) {
+    if (allowsFloatingPins(comp.type) || comp.type === "ground") continue;
+    const pins = getPins(comp);
+    for (const pin of pins) {
+      const key = `${comp.id}:${pin.pinIndex}`;
+      if (!connectedPinKeys.has(key)) {
+        issues.push({
+          componentId: comp.id,
+          type: "warning",
+          message: `Terminal ${pin.pinIndex + 1} de ${comp.id} está flotante (sin conexión).`,
+          pinIndex: pin.pinIndex,
+        });
+      }
+    }
+  }
+
+  // 4. Verificación de fuentes de voltaje en cortocircuito directo
+  for (const comp of components) {
+    if (comp.type === "vsource") {
+      const pin0Key = `${comp.id}:0`;
+      const pin1Key = `${comp.id}:1`;
+      if (connectedPinKeys.has(pin0Key) && connectedPinKeys.has(pin1Key)) {
+        const directWire = wires.find(
+          w =>
+            (w.from.componentId === comp.id && w.from.pinIndex === 0 && w.to.componentId === comp.id && w.to.pinIndex === 1) ||
+            (w.from.componentId === comp.id && w.from.pinIndex === 1 && w.to.componentId === comp.id && w.to.pinIndex === 0)
+        );
+        if (directWire) {
+          issues.push({
+            componentId: comp.id,
+            type: "error",
+            message: `Fuente de voltaje ${comp.id} en cortocircuito directo.`,
+            pinIndex: 0,
+          });
+          issues.push({
+            componentId: comp.id,
+            type: "error",
+            message: `Fuente de voltaje ${comp.id} en cortocircuito directo.`,
+            pinIndex: 1,
+          });
+        }
+      }
+    }
+  }
+
+  return issues;
+}

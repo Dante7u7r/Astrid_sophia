@@ -17,7 +17,15 @@ import {
   type SParameterMarker,
 } from "./render_overlays";
 import { getVisibleWorldBounds, screenToWorld } from "./viewport_camera";
-import { wirePathIntersects } from "./wiring_model";
+import {
+  calculateWireMidpoint,
+  findConnectedWireIds,
+  findWireCrossings,
+  findWireJunctionPoints,
+  wirePathIntersects,
+} from "./wiring_model";
+import { CurrentAnimationRenderer } from "./current_animation_renderer";
+import { ThermalHeatmapRenderer } from "./thermal_heatmap_renderer";
 import type {
   BoundingBox,
   ComponentInstance,
@@ -43,6 +51,7 @@ export interface CanvasRenderHost {
   selectedComponents: ComponentInstance[];
   selectedComponent: ComponentInstance | null;
   selectedWire: WireInstance | null;
+  selectedWires: readonly WireInstance[];
   hoveredComponent: ComponentInstance | null;
   hoveredWire: WireInstance | null;
   hoveredPin: PinInstance | null;
@@ -58,6 +67,8 @@ export interface CanvasRenderHost {
 
 export class CanvasSceneRenderer {
   private gridPathCache: GridPathCache | null = null;
+  private currentAnimationRenderer = new CurrentAnimationRenderer();
+  private thermalHeatmapRenderer = new ThermalHeatmapRenderer();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -65,7 +76,13 @@ export class CanvasSceneRenderer {
     private readonly host: CanvasRenderHost,
   ) {}
 
-  public render(_voltageMap: Record<string, number> = {}, probes: ProbeBadges = {}, nodeMap: Record<string, string> = {}, sparMarkers?: SParameterMarker[]): void {
+  public render(
+    _voltageMap: Record<string, number> = {},
+    probes: ProbeBadges = {},
+    nodeMap: Record<string, string> = {},
+    sparMarkers?: SParameterMarker[],
+    branchCurrents: Record<string, number> = {},
+  ): void {
     const dpr = window.devicePixelRatio || 1;
     ensureCanvasBuffer(this.canvas, dpr);
 
@@ -84,7 +101,7 @@ export class CanvasSceneRenderer {
       this.host.offsetY * dpr,
     );
 
-    // 4. Draw Background Grid
+    // 1. Draw World Grid
     this.drawWorldGrid(dpr);
 
     const componentById = createComponentLookup(this.host.components);
@@ -94,7 +111,27 @@ export class CanvasSceneRenderer {
     const selectedIds = createSelectedComponentIds(this.host.selectedComponents);
 
     // 3. Draw Wires
-    this.drawWires(componentById, pinCache, visibleWorldBounds);
+    this.drawWires(componentById, pinCache, visibleWorldBounds, nodeMap);
+
+    // 3b. Draw Current Flow Animation (Zero-GC)
+    this.currentAnimationRenderer.renderCurrentFlow(
+      this.ctx,
+      this.host.wires,
+      branchCurrents,
+      _voltageMap,
+      visibleWorldBounds,
+      performance.now(),
+    );
+
+    // 3c. Draw Electro-Thermal Live Heatmap
+    this.thermalHeatmapRenderer.renderThermalHeatmap(
+      this.ctx,
+      visibleComponents,
+      _voltageMap,
+      branchCurrents,
+      visibleWorldBounds,
+      this.host.zoom,
+    );
 
     const renderDetail = resolveRenderDetail(this.host.zoom, visibleComponents.length);
 
@@ -189,8 +226,19 @@ export class CanvasSceneRenderer {
     componentById: ReadonlyMap<string, ComponentInstance>,
     pinCache: RenderPinCache,
     visibleWorldBounds: BoundingBox,
+    nodeMap?: Record<string, string>,
   ): void {
     this.ctx.save();
+
+    const activeWireId = this.host.selectedWire?.id || this.host.hoveredWire?.id || "";
+    const netWireIds = activeWireId
+      ? findConnectedWireIds(this.host.wires, activeWireId, nodeMap)
+      : new Set<string>();
+
+    const selectedWireIds = new Set(this.host.selectedWires.map((w) => w.id));
+    if (this.host.selectedWire) selectedWireIds.add(this.host.selectedWire.id);
+
+    const crossingsByWire = findWireCrossings(this.host.wires, nodeMap);
 
     for (const wire of this.host.wires) {
       // Find endpoints
@@ -224,39 +272,108 @@ export class CanvasSceneRenderer {
       }
       this.ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
 
-      // Estilo interactivo del cable
-      const isSelected = this.host.selectedWire?.id === wire.id;
+      // Estilo interactivo del cable y Net Highlight
+      const isSelected = selectedWireIds.has(wire.id);
       const isHovered = this.host.hoveredWire?.id === wire.id;
+      const isNetHighlighted = netWireIds.has(wire.id);
 
+      let strokeColor = "rgba(255, 255, 255, 0.45)";
       if (isSelected) {
-        this.ctx.strokeStyle = "hsl(270, 89%, 65%)"; // Selected violet neón
+        strokeColor = "hsl(270, 89%, 65%)";
+        this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = 3;
-        this.ctx.shadowColor = "hsl(270, 89%, 65%)";
-        this.ctx.shadowBlur = 8;
       } else if (isHovered) {
-        this.ctx.strokeStyle = "hsl(210, 100%, 56%)"; // Hovered azul neón
+        strokeColor = "hsl(210, 100%, 56%)";
+        this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = 2.5;
-        this.ctx.shadowColor = "hsl(210, 100%, 56%)";
-        this.ctx.shadowBlur = 6;
-      } else {
-        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.45)"; // Cable estándar semitransparente
+      } else if (isNetHighlighted) {
+        strokeColor = "#66fcf1";
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = 2.5;
+      } else if (wire.color) {
+        strokeColor = wire.color;
+        this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = 2;
-        this.ctx.shadowBlur = 0;
+      } else {
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = 2;
       }
 
       this.ctx.stroke();
-      this.ctx.shadowBlur = 0; // Reset shadow
+
+      // Dibujar arcos de cruce (Jumper Arcs) sobre la ruta si existen
+      const jumperPoints = crossingsByWire.get(wire.id);
+      if (jumperPoints && jumperPoints.length > 0) {
+        for (const jPt of jumperPoints) {
+          this.ctx.fillStyle = "rgba(8, 12, 22, 0.9)";
+          this.ctx.beginPath();
+          this.ctx.arc(jPt.x, jPt.y, 6, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.strokeStyle = strokeColor;
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.arc(jPt.x, jPt.y, 6, Math.PI, 0, false);
+          this.ctx.stroke();
+        }
+      }
 
       // Highlight conexiones/pins
       this.ctx.fillStyle = isSelected
         ? "hsl(270, 89%, 65%)"
-        : isHovered
-          ? "hsl(210, 100%, 56%)"
+        : (isHovered || isNetHighlighted)
+          ? "hsl(174, 97%, 69%)"
           : "rgba(102, 252, 241, 0.3)";
       this.ctx.beginPath();
       this.ctx.arc(startPt.x, startPt.y, 4, 0, Math.PI * 2);
       this.ctx.arc(endPt.x, endPt.y, 4, 0, Math.PI * 2);
       this.ctx.fill();
+
+      // Renderizar Net Label si está definida
+      if (wire.label) {
+        const mid = calculateWireMidpoint(wire.points);
+        if (mid) {
+          this.drawWireLabelBadge(this.ctx, mid, wire.label, strokeColor);
+        }
+      }
+
+      // Renderizar manijas de interacción (handles) si el cable está seleccionado o en hover
+      if (isSelected || isHovered) {
+        for (let i = 1; i < pts.length - 1; i++) {
+          const pt = pts[i];
+          this.ctx.fillStyle = isSelected ? "hsl(270, 89%, 65%)" : "#66fcf1";
+          this.ctx.strokeStyle = "#030508";
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+        }
+
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p1 = pts[i];
+          const p2 = pts[i + 1];
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          this.ctx.fillStyle = "rgba(102, 252, 241, 0.4)";
+          this.ctx.strokeStyle = isSelected ? "hsl(270, 89%, 65%)" : "#66fcf1";
+          this.ctx.lineWidth = 1;
+          this.ctx.fillRect(midX - 3, midY - 3, 6, 6);
+          this.ctx.strokeRect(midX - 3, midY - 3, 6, 6);
+        }
+      }
+    }
+
+    // Dibujar Nodos de Unión en T (T-Junction Dots)
+    const junctions = findWireJunctionPoints(this.host.wires);
+    for (const jPt of junctions) {
+      this.ctx.fillStyle = "#66fcf1";
+      this.ctx.strokeStyle = "#030508";
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.arc(jPt.x, jPt.y, 4, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.stroke();
     }
 
     this.ctx.restore();
@@ -264,6 +381,39 @@ export class CanvasSceneRenderer {
 
   private wirePathIntersects(points: readonly Point2D[], bounds: BoundingBox): boolean {
     return wirePathIntersects(points, bounds);
+  }
+
+  private drawWireLabelBadge(
+    ctx: CanvasRenderingContext2D,
+    center: Point2D,
+    label: string,
+    accentColor?: string,
+  ): void {
+    ctx.save();
+    ctx.font = "bold 10px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const metrics = ctx.measureText(label);
+    const paddingX = 6;
+    const badgeWidth = metrics.width + paddingX * 2;
+    const badgeHeight = 14;
+
+    const x = center.x - badgeWidth / 2;
+    const y = center.y - badgeHeight / 2;
+
+    ctx.fillStyle = "rgba(8, 12, 22, 0.92)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, badgeWidth, badgeHeight, 3);
+    ctx.fill();
+
+    ctx.strokeStyle = accentColor ?? "rgba(102, 252, 241, 0.7)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(label, center.x, center.y + 0.5);
+    ctx.restore();
   }
 
   private drawPins(

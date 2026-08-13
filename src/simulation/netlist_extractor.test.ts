@@ -324,4 +324,29 @@ describe("extractElectricalNetlist", () => {
     expect(res2.netlist.components.find(c => c.id === "R1")?.value).toBe(5000);
     expect(res2.pinToNodeMap).toEqual(res1.pinToNodeMap);
   });
+
+  test("invalida la caché topológica cuando se conecta un nuevo cable", () => {
+    const components: ComponentInstance[] = [
+      { id: "GND1", type: "ground", value: 0, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 50, y: 0, rotation: 0 },
+      { id: "V1", type: "vsource", value: 5, x: 100, y: 0, rotation: 0 },
+    ];
+    const getPins = (c: ComponentInstance) => Array.from({ length: 2 }, (_, i) => ({ componentId: c.id, pinIndex: i, x: 0, y: 0 }));
+
+    // Sin cables
+    const resWithoutWire = extractElectricalNetlist(components, [], getPins);
+    expect(resWithoutWire.netlist.wires).toHaveLength(0);
+
+    // Conectar cable entre GND y R1:0
+    const wire: WireInstance = {
+      id: "W1",
+      from: { componentId: "GND1", pinIndex: 0 },
+      to: { componentId: "R1", pinIndex: 0 },
+    };
+
+    const resWithWire = extractElectricalNetlist(components, [wire], getPins);
+    expect(resWithWire.netlist.wires).toHaveLength(1);
+    expect(resWithWire.pinToNodeMap["R1:0"]).toBe(resWithWire.pinToNodeMap["GND1:0"]);
+    expect(resWithWire.pinToNodeMap["R1:0"]).toBe("0");
+  });
 });

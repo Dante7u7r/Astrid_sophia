@@ -9,7 +9,7 @@
   "wires": [
     { "id": "w1", "from": { "componentId": "V1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
     { "id": "w2", "from": { "componentId": "V1", "pinIndex": 0 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [] },
-    { "id": "w3", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "C1", "pinIndex": 0 }, "points": [] },
+    { "id": "w3", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "C1", "pinIndex": 0 }, "points": [], "label": "V_OUT", "color": "#66fcf1" },
     { "id": "w4", "from": { "componentId": "C1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] }
   ],
   "viewport": { "zoom": 1.2, "offsetX": 405, "offsetY": 160 },

@@ -4,6 +4,7 @@
 
 import { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { InstrumentCallbacks } from "./instrument_callbacks";
+import { ensureCanvasDpr } from "./canvas_dpr";
 
 export class CurveTracerInstrument {
   private container: HTMLElement;
@@ -15,7 +16,7 @@ export class CurveTracerInstrument {
   // Selected semiconductor for tracing
   private selectedCompId: string | null = null;
 
-  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks) {
+  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks = {} as any) {
     this.container = container;
     this.orchestrator = orchestrator;
     this.callbacks = callbacks;
@@ -27,24 +28,24 @@ export class CurveTracerInstrument {
   private render() {
     this.container.innerHTML = `
       <div style="display: flex; gap: 10px; height: 100%; font-family: var(--font-sans); overflow: hidden;">
-        <!-- Panel Izquierdo: Controles -->
-        <div style="width: 28%; background: rgba(0,0,0,0.4); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto;">
-          <h4 style="color: var(--cyan); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Trazador I-V</h4>
+        <!-- Panel Izquierdo: Configuración del Trazado -->
+        <div style="width: 28%; background: rgba(0,0,0,0.4); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto;">
+          <h4 style="color: var(--cyan); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Trazador de Curvas I-V</h4>
           
-          <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 0.68rem; line-height: 1.4;">
-            <strong>Componente:</strong> <span id="tracer-comp-name" style="color: var(--cyan);">Ninguno</span><br/>
-            <strong>Tipo:</strong> <span id="tracer-comp-type" style="color: var(--text-muted);">--</span>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); padding: 8px; border-radius: 4px;">
+            <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Dispositivo Objetivo</div>
+            <div id="tracer-comp-name" style="font-weight: bold; color: var(--text-bright); font-size: 0.85rem;">[Selecciona un componente]</div>
+            <div id="tracer-comp-type" style="font-size: 0.68rem; color: var(--cyan);">Semiconductor (Diodo, BJT, MOS)</div>
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <button id="tracer-run-btn" class="btn-run" style="width: 100%; height: 32px; justify-content: center; display: flex; align-items: center; gap: 4px; font-size: 0.7rem;" type="button">
-              <span>⚡ Trazar Curva</span>
-            </button>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 0.65rem; color: var(--text-muted);">V-Sweep Max (V):</label>
+            <input type="number" id="tracer-vmax" value="5" min="0.1" max="50" step="0.5" style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); color: #fff; padding: 4px; border-radius: 3px; font-size: 0.75rem;">
           </div>
 
-          <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 6px; padding: 8px; font-size: 0.65rem; color: var(--text-muted); line-height: 1.45;">
-            <strong>Nota:</strong> Selecciona un diodo o transistor en el lienzo y pulsa "Trazar" para medir su curva de respuesta física.
-          </div>
+          <button id="tracer-run-btn" class="btn-osc-primary" style="margin-top: auto; padding: 8px; font-weight: bold;">
+            🚀 Ejecutar Trazado I-V
+          </button>
         </div>
 
         <!-- Panel Derecho: Gráfico XY -->
@@ -66,9 +67,8 @@ export class CurveTracerInstrument {
     if (this.canvas) {
       this.ctx = this.canvas.getContext("2d");
       const resize = () => {
-        if (this.canvas && this.canvas.parentElement) {
-          this.canvas.width = this.canvas.parentElement.clientWidth;
-          this.canvas.height = this.canvas.parentElement.clientHeight;
+        if (this.canvas && this.ctx) {
+          ensureCanvasDpr(this.canvas, this.ctx);
           this.drawStaticGrid();
         }
       };
@@ -109,8 +109,7 @@ export class CurveTracerInstrument {
 
   private drawStaticGrid() {
     if (!this.canvas || !this.ctx) return;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const { width: w, height: h } = ensureCanvasDpr(this.canvas, this.ctx);
     this.ctx.clearRect(0, 0, w, h);
 
     // Ejes cartesianos
@@ -125,15 +124,29 @@ export class CurveTracerInstrument {
     this.ctx.lineTo(w - 20, h - 30);
     this.ctx.stroke();
 
-    this.ctx.fillStyle = "var(--text-muted)";
-    this.ctx.font = "8px var(--font-mono)";
-    this.ctx.fillText("0", 42, h - 22);
-    this.ctx.fillText("V", w - 15, h - 20);
-    this.ctx.fillText("I", 38, 15);
+    // Rejilla tenue
+    this.ctx.strokeStyle = "rgba(255,255,255,0.03)";
+    const chartW = w - 70;
+    const chartH = h - 40;
+    for (let i = 1; i <= 5; i++) {
+      const x = 50 + (chartW / 5) * i;
+      const y = (h - 30) - (chartH / 5) * i;
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, 10);
+      this.ctx.lineTo(x, h - 30);
+      this.ctx.stroke();
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(50, y);
+      this.ctx.lineTo(w - 20, y);
+      this.ctx.stroke();
+    }
   }
 
   private runTrace() {
     if (!this.canvas || !this.ctx) return;
+    const { width: w, height: h } = ensureCanvasDpr(this.canvas, this.ctx);
     this.drawStaticGrid();
 
     const comp = this.orchestrator.components.find((c) => c.id === this.selectedCompId);
@@ -142,8 +155,6 @@ export class CurveTracerInstrument {
       return;
     }
 
-    const w = this.canvas.width;
-    const h = this.canvas.height;
     const chartW = w - 70;
     const chartH = h - 40;
 

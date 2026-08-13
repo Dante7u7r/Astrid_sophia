@@ -89,15 +89,16 @@ export function createGridRenderPlan(options: {
   const { topLeft, bottomRight, gridSize, zoom } = options;
   if (gridSize <= 0 || zoom <= 0 || !Number.isFinite(zoom)) return null;
 
-  const startX = Math.floor(topLeft.x / gridSize) * gridSize;
-  const endX = Math.ceil(bottomRight.x / gridSize) * gridSize;
-  const startY = Math.floor(topLeft.y / gridSize) * gridSize;
-  const endY = Math.ceil(bottomRight.y / gridSize) * gridSize;
+  const pad = gridSize * 6;
+  const startX = Math.floor((topLeft.x - pad) / gridSize) * gridSize;
+  const endX = Math.ceil((bottomRight.x + pad) / gridSize) * gridSize;
+  const startY = Math.floor((topLeft.y - pad) / gridSize) * gridSize;
+  const endY = Math.ceil((bottomRight.y + pad) / gridSize) * gridSize;
   if (![startX, endX, startY, endY].every(Number.isFinite)) return null;
 
   const columns = Math.max(0, Math.floor((endX - startX) / gridSize) + 1);
   const rows = Math.max(0, Math.floor((endY - startY) / gridSize) + 1);
-  const maxGridDots = options.maxGridDots ?? 8000;
+  const maxGridDots = options.maxGridDots ?? 12000;
   const densityStep = columns * rows > maxGridDots
     ? Math.ceil(Math.sqrt((columns * rows) / maxGridDots))
     : 1;

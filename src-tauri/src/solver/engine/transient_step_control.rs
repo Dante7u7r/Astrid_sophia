@@ -19,6 +19,8 @@ pub(crate) fn estimate_local_truncation_error(
     is_fixed: bool,
     steps_completed: usize,
     integration_method: &str,
+    reltol_opt: Option<f64>,
+    vntol_opt: Option<f64>,
 ) -> LteEstimate {
     if is_fixed || steps_completed < 2 {
         return LteEstimate {
@@ -26,6 +28,9 @@ pub(crate) fn estimate_local_truncation_error(
             integrator_order: 1.0,
         };
     }
+
+    let reltol = reltol_opt.unwrap_or(1e-3);
+    let vntol = vntol_opt.unwrap_or(1e-6);
 
     let third_order =
         steps_completed >= 3 && (integration_method == "trap" || integration_method == "gear2");
@@ -37,9 +42,10 @@ pub(crate) fn estimate_local_truncation_error(
         };
         let mut maximum: f64 = 0.0;
         for i in 0..node_count {
-            let d3 =
-                (step_solution[i] - 3.0 * sol_n[i] + 3.0 * sol_n1[i] - sol_n2[i]) / (dt * dt * dt);
-            maximum = maximum.max(coefficient * dt * dt * dt * d3.abs());
+            let abs_err = (step_solution[i] - 3.0 * sol_n[i] + 3.0 * sol_n1[i] - sol_n2[i]).abs();
+            let lte_raw = coefficient * abs_err;
+            let norm_scale = reltol * step_solution[i].abs() + vntol;
+            maximum = maximum.max(lte_raw / norm_scale);
         }
         return LteEstimate {
             maximum,
@@ -52,7 +58,9 @@ pub(crate) fn estimate_local_truncation_error(
         let d1 = (step_solution[i] - sol_n[i]) / dt;
         let d2 = (sol_n[i] - sol_n1[i]) / previous_dt;
         let second_derivative = 2.0 * (d1 - d2) / (dt + previous_dt);
-        maximum = maximum.max(0.5 * dt * dt * second_derivative.abs());
+        let lte_raw = 0.5 * dt * dt * second_derivative.abs();
+        let norm_scale = reltol * step_solution[i].abs() + vntol;
+        maximum = maximum.max(lte_raw / norm_scale);
     }
     LteEstimate {
         maximum,
@@ -118,7 +126,7 @@ mod tests {
     fn fixed_step_has_no_lte_rejection_signal() {
         let sample = DVector::from_vec(vec![1.0]);
         let estimate = estimate_local_truncation_error(
-            &sample, &sample, &sample, &sample, 1, 1e-3, 1e-3, true, 4, "trap",
+            &sample, &sample, &sample, &sample, 1, 1e-3, 1e-3, true, 4, "trap", None, None,
         );
         assert_eq!(estimate.maximum, 0.0);
         assert_eq!(estimate.integrator_order, 1.0);
@@ -137,6 +145,8 @@ mod tests {
             false,
             2,
             "euler",
+            None,
+            None,
         );
         assert_eq!(estimate.maximum, 0.0);
     }
