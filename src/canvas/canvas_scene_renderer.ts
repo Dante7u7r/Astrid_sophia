@@ -593,7 +593,7 @@ export class CanvasSceneRenderer {
         this.ctx.fill();
 
         this.ctx.fillStyle = "white";
-        this.ctx.font = "bold 8px var(--font-sans)";
+        this.ctx.font = "bold 8px 'Inter', sans-serif";
         this.ctx.textAlign = "center";
         this.ctx.fillText("!", comp.x, badgeY + 2);
         this.ctx.restore();

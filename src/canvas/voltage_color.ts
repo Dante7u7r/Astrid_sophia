@@ -39,9 +39,9 @@ export function colorForNet(
   frame: Record<string, number> | null,
   range: { min: number; max: number }
 ): string {
-  if (!frame) return "var(--component-neutral, #666)";
+  if (!frame) return "#5B9FD6";
   const voltage = frame[netId];
-  if (voltage === undefined) return "var(--component-neutral, #666)";
+  if (voltage === undefined) return "#5B9FD6";
   return voltageToColor(voltage, range);
 }
 

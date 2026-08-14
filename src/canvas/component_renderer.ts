@@ -98,7 +98,7 @@ export function drawComponentSymbol(
       // Text value on LCD
       ctx.save();
       ctx.fillStyle = "#39ff14"; // Neon green digital color
-      ctx.font = "bold 8px var(--font-mono)";
+      ctx.font = "bold 8px 'JetBrains Mono', monospace";
       ctx.textAlign = "center";
 
       const mode = normalizeDmmMode(comp.value);
@@ -106,7 +106,7 @@ export function drawComponentSymbol(
       ctx.fillText(valStr, 0, -18);
 
       ctx.fillStyle = "rgba(57, 255, 20, 0.4)";
-      ctx.font = "bold 6px var(--font-mono)";
+      ctx.font = "bold 6px 'JetBrains Mono', monospace";
       ctx.fillText(mode, 13, -14);
       ctx.restore();
 
@@ -123,7 +123,7 @@ export function drawComponentSymbol(
 
       // Terminal indicators +/-
       ctx.fillStyle = "rgba(255,255,255,0.4)";
-      ctx.font = "bold 8px var(--font-sans)";
+      ctx.font = "bold 8px 'Inter', sans-serif";
       ctx.fillText("+", -12, 6);
       ctx.fillText("-", 12, 6);
 
@@ -235,7 +235,7 @@ export function drawComponentSymbol(
 
       // 3. Small "-t°" label beside it
       ctx.fillStyle = "currentColor";
-      ctx.font = "bold 10px var(--font-sans)";
+      ctx.font = "bold 10px 'Inter', sans-serif";
       ctx.fillText("-t°", 15, -13);
       break;
 
@@ -634,7 +634,7 @@ export function drawComponentSymbol(
         const pos = Math.floor(i / 2);
         const yLabel = -halfH + 20 + pos * 40;
         ctx.fillStyle = "hsl(210, 17%, 60%)";
-        ctx.font = "8px var(--font-mono)";
+        ctx.font = "8px 'JetBrains Mono', monospace";
         ctx.textAlign = i % 2 === 0 ? "left" : "right";
         ctx.fillText(`${i + 1}`, i % 2 === 0 ? -34 : 34, yLabel + 3);
       }
@@ -653,13 +653,13 @@ export function drawComponentSymbol(
   const { idY, valueY } = getComponentLabelLayout(comp);
 
   ctx.fillStyle = isSelected ? "hsl(270, 89%, 80%)" : "hsl(210, 17%, 85%)";
-  ctx.font = "bold 11px var(--font-sans)";
+  ctx.font = "bold 11px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(comp.id, 0, idY);
 
   if (shouldDrawValueLabel(comp.type)) {
-    ctx.fillStyle = "var(--text-muted)";
-    ctx.font = "9px var(--font-mono)";
+    ctx.fillStyle = "#94A3B8";
+    ctx.font = "9px 'JetBrains Mono', monospace";
     ctx.fillText(formatComponentValue(comp), 0, valueY);
   }
   ctx.restore();

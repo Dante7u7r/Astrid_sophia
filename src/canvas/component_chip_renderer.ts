@@ -36,11 +36,11 @@ export function drawMcu8051(
   ctx.stroke();
 
   ctx.fillStyle = color;
-  ctx.font = "bold 13px var(--font-sans)";
+  ctx.font = "bold 13px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("Intel 8051", 0, -40);
-  ctx.font = "8px var(--font-mono)";
-  ctx.fillStyle = "var(--text-muted)";
+  ctx.font = "8px 'JetBrains Mono', monospace";
+  ctx.fillStyle = "#94A3B8";
   ctx.fillText("MCS-51 ARCH", 0, -25);
 
   const states = comp.mcuPinStates || {};
@@ -58,8 +58,8 @@ export function drawMcu8051(
 
     drawPinStateDot(ctx, states[i], xTip, y);
 
-    ctx.font = "7px var(--font-mono)";
-    ctx.fillStyle = "var(--text-muted)";
+    ctx.font = "7px 'JetBrains Mono', monospace";
+    ctx.fillStyle = "#94A3B8";
     if (isLeft) {
       ctx.textAlign = "left";
       ctx.fillText(label, -44, y + 2.5);
@@ -88,11 +88,11 @@ export function drawMcuAvr(
   ctx.stroke();
 
   ctx.fillStyle = color;
-  ctx.font = "bold 12px var(--font-sans)";
+  ctx.font = "bold 12px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("ATmega328P", 0, -30);
-  ctx.font = "8px var(--font-mono)";
-  ctx.fillStyle = "var(--text-muted)";
+  ctx.font = "8px 'JetBrains Mono', monospace";
+  ctx.fillStyle = "#94A3B8";
   ctx.fillText("AVR 8-BIT MCU", 0, -15);
 
   const states = comp.mcuPinStates || {};
@@ -110,8 +110,8 @@ export function drawMcuAvr(
 
     drawPinStateDot(ctx, states[i], xTip, y);
 
-    ctx.font = "7px var(--font-mono)";
-    ctx.fillStyle = "var(--text-muted)";
+    ctx.font = "7px 'JetBrains Mono', monospace";
+    ctx.fillStyle = "#94A3B8";
     if (isLeft) {
       ctx.textAlign = "left";
       ctx.fillText(label, -44, y + 2.5);
@@ -143,10 +143,10 @@ export function drawDevelopmentBoard(
   ctx.restore();
 
   ctx.fillStyle = "white";
-  ctx.font = "bold 8px var(--font-sans)";
+  ctx.font = "bold 8px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(boardInfo.title, 0, -25);
-  ctx.font = "6px var(--font-mono)";
+  ctx.font = "6px 'JetBrains Mono', monospace";
   ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
   ctx.fillText("MIXED SIGNAL", 0, -15);
 
@@ -178,7 +178,7 @@ export function drawDevelopmentBoard(
 
     drawPinStateDot(ctx, states[i], xTip, y);
 
-    ctx.font = "6px var(--font-mono)";
+    ctx.font = "6px 'JetBrains Mono', monospace";
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
     if (c.isLeft) {
       ctx.textAlign = "left";

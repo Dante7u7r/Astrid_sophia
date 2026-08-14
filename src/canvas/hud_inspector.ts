@@ -52,9 +52,9 @@ export function renderPinTelemetryHud(
   const currText = `I: ${formatEngineeringValue(current, "A")}`;
 
   const lines = [
-    { text: nodeTitle, color: "#38BDF8", font: "bold 9px var(--font-sans)" },
-    { text: voltText, color: "#E6EAF0", font: "600 9px var(--font-mono)" },
-    { text: currText, color: "#F2C94C", font: "600 9px var(--font-mono)" },
+    { text: nodeTitle, color: "#38BDF8", font: "bold 9px 'Inter', sans-serif" },
+    { text: voltText, color: "#E6EAF0", font: "600 9px 'JetBrains Mono', monospace" },
+    { text: currText, color: "#F2C94C", font: "600 9px 'JetBrains Mono', monospace" },
   ];
 
   renderHudBox(ctx, pin.x, pin.y - 12, lines, "bottom");
@@ -80,9 +80,9 @@ export function renderWireTelemetryHud(
   const currText = `I: ${formatEngineeringValue(Math.abs(current ?? 0), "A")}${arrow}`;
 
   const lines = [
-    { text: wire.label ? `Red: ${wire.label}` : "Pista Conductora", color: "#38BDF8", font: "bold 9px var(--font-sans)" },
-    { text: voltText, color: "#E6EAF0", font: "600 9px var(--font-mono)" },
-    { text: currText, color: "#F2C94C", font: "600 9px var(--font-mono)" },
+    { text: wire.label ? `Red: ${wire.label}` : "Pista Conductora", color: "#38BDF8", font: "bold 9px 'Inter', sans-serif" },
+    { text: voltText, color: "#E6EAF0", font: "600 9px 'JetBrains Mono', monospace" },
+    { text: currText, color: "#F2C94C", font: "600 9px 'JetBrains Mono', monospace" },
   ];
 
   renderHudBox(ctx, mid.x, mid.y - 10, lines, "bottom");

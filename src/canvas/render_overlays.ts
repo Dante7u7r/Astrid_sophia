@@ -64,7 +64,7 @@ export function drawProbeBadges(
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = "#030508";
-    ctx.font = "bold 9px var(--font-sans)";
+    ctx.font = "bold 9px 'Inter', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(badge.label, point.x, point.y - 11);
   }
@@ -86,7 +86,7 @@ export function drawSParameterMarkers(
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#030508";
-    ctx.font = "bold 10px var(--font-sans)";
+    ctx.font = "bold 10px 'Inter', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(`P${marker.index}`, marker.x, marker.y - 11);
   }
