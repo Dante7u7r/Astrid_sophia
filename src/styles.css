@@ -814,22 +814,34 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 0 14px;
   background: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .panel-header h2,
 .panel-header h3 {
-  font-size: var(--font-md);
+  margin: 0;
+  font-size: var(--font-sm);
   font-weight: 700;
-  letter-spacing: 1.8px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: var(--text-sub);
   background: linear-gradient(90deg, var(--text-bright) 0%, var(--text-sub) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.panel-header .btn-text-only {
+  flex-shrink: 0;
 }
 
 .panel-body {
