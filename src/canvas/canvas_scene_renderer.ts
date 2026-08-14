@@ -226,7 +226,7 @@ export class CanvasSceneRenderer {
       this.host.offsetX * dpr,
       this.host.offsetY * dpr,
     );
-    this.ctx.fillStyle = "#2D3742";
+    this.ctx.fillStyle = "rgba(148, 163, 184, 0.28)";
 
     let path = this.gridPathCache?.key === gridPlan.cacheKey ? this.gridPathCache.path : null;
     if (!path) {

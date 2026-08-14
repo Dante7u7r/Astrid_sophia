@@ -103,7 +103,7 @@ export function createGridRenderPlan(options: {
     ? Math.ceil(Math.sqrt((columns * rows) / maxGridDots))
     : 1;
   const gridStep = gridSize * densityStep;
-  const dotSize = Math.max(0.7, 1.5 / zoom);
+  const dotSize = Math.max(1.0, 1.8 / zoom);
   const cacheKey = [
     startX,
     endX,
