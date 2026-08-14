@@ -93,12 +93,14 @@ body {
   overflow: hidden;
 }
 
-/* ══ GRID GENERAL DASHBOARD ══════════════════════ */
+/* ══ LAYOUT GENERAL DASHBOARD (FLEXBOX DINÁMICO) ══════════════════ */
 .dashboard {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto auto;
+  display: flex;
+  flex-direction: row;
   height: 100%;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   position: relative;
 }
@@ -115,6 +117,7 @@ body {
 
 .resize-handle-col {
   width: 6px;
+  flex: 0 0 6px;
   cursor: col-resize;
   margin: 12px 0;
 }
@@ -180,6 +183,7 @@ body {
 
 .sidebar-left {
   width: var(--left-panel-width);
+  flex: 0 0 var(--left-panel-width);
   margin-right: 0;
   border-radius: 16px;
   min-width: 180px;
@@ -187,6 +191,7 @@ body {
 
 .sidebar-right {
   width: var(--right-panel-width);
+  flex: 0 0 var(--right-panel-width);
   margin-left: 0;
   border-radius: 16px;
   min-width: 200px;
@@ -211,6 +216,7 @@ body {
 
 /* ══ WORKSPACE CENTRAL ════════════════════════════ */
 .workspace-center {
+  flex: 1 1 0%;
   display: grid;
   grid-template-rows: var(--tabs-h) 1fr auto;
   height: calc(100% - 24px);
@@ -543,7 +549,7 @@ body {
   }
 
   .dashboard {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   body.mobile-drawer-open {
