@@ -65,6 +65,14 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showSliderControls: true,
     };
   }
+  if (type === "ground") {
+    return {
+      showValueGroup: false,
+      showUnitGroup: false,
+      valueLabel: "Referencia 0 V",
+      showSliderControls: false,
+    };
+  }
   if (DEDICATED_VALUE_EDITORS.has(type)) {
     return {
       showValueGroup: false,
@@ -105,6 +113,8 @@ export function getUnitDisplayConfig(type: ComponentInstance["type"]): UnitDispl
       return { label: "Amperios (A)", min: "-5", max: "5" };
     case "transformer":
       return { label: "Inductancia Mutua (H)", min: "0.000001", max: "1" };
+    case "ground":
+      return { label: "Referencia 0 V", min: "0", max: "0" };
     default:
       return { label: "Valor Nominal", min: "0", max: "100" };
   }

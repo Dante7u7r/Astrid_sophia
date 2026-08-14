@@ -35,10 +35,15 @@ describe("property_model", () => {
       max: "10000",
     });
     expect(getUnitDisplayConfig("nmos").min).toBe("-3");
-    expect(getUnitDisplayConfig("ground").label).toBe("Valor Nominal");
+    expect(getUnitDisplayConfig("ground").label).toBe("Referencia 0 V");
   });
 
   it("describe que controles de valor debe mostrar cada tipo", () => {
+    expect(getValueEditorPresentation("ground")).toMatchObject({
+      showValueGroup: false,
+      showUnitGroup: false,
+      showSliderControls: false,
+    });
     expect(getValueEditorPresentation("lamp")).toMatchObject({
       showValueGroup: true,
       showUnitGroup: false,

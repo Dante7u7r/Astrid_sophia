@@ -42,8 +42,8 @@ describe('Pruebas de UX/UI - PanelLayoutManager', () => {
 
     // Comprobar que se inyectaron las variables CSS en el elemento raíz
     const rootEl = document.documentElement;
-    expect(rootEl.style.getPropertyValue('--left-panel-width')).toBe('200px');
-    expect(rootEl.style.getPropertyValue('--right-panel-width')).toBe('220px');
+    expect(rootEl.style.getPropertyValue('--left-panel-width')).toBe('236px');
+    expect(rootEl.style.getPropertyValue('--right-panel-width')).toBe('240px');
     expect(rootEl.style.getPropertyValue('--osc-panel-height')).toBe('210px');
   });
 

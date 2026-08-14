@@ -13,8 +13,8 @@ export interface PanelLayout {
 export const LAYOUT_VERSION = 4;
 
 export const DEFAULT_LAYOUT: PanelLayout = {
-  leftWidth: 200,
-  rightWidth: 220,
+  leftWidth: 236,
+  rightWidth: 240,
   dockHeight: 210,
   leftCollapsed: false,
   rightCollapsed: false,

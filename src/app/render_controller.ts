@@ -142,6 +142,11 @@ export class RenderController {
     const orchestrator = this.dependencies.getOrchestrator();
     if (!orchestrator) return;
 
+    const helpTip = typeof document !== "undefined" ? document.getElementById("canvas-help-tip") : null;
+    if (helpTip) {
+      helpTip.style.display = orchestrator.components.length > 0 ? "none" : "block";
+    }
+
     const pinVoltageMap = this.dependencies.circuitState.buildPinVoltageMap();
     const voltageMap = this.dependencies.circuitState.getVoltageMap();
     const pinToNodeMap = this.dependencies.circuitState.getPinToNodeMap();

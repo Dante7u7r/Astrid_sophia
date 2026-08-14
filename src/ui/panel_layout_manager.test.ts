@@ -28,14 +28,14 @@ describe("PanelLayoutManager accesible", () => {
     expect(left.getAttribute("role")).toBe("separator");
     expect(left.getAttribute("aria-orientation")).toBe("vertical");
     expect(left.tabIndex).toBe(0);
-    expect(left.getAttribute("aria-valuenow")).toBe("200");
+    expect(left.getAttribute("aria-valuenow")).toBe("236");
 
     left.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    expect(left.getAttribute("aria-valuenow")).toBe("210");
-    expect(document.documentElement.style.getPropertyValue("--left-panel-width")).toBe("210px");
+    expect(left.getAttribute("aria-valuenow")).toBe("246");
+    expect(document.documentElement.style.getPropertyValue("--left-panel-width")).toBe("246px");
     expect(onResize).toHaveBeenCalled();
 
     left.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
-    expect(left.getAttribute("aria-valuenow")).toBe("200");
+    expect(left.getAttribute("aria-valuenow")).toBe("236");
   });
 });
