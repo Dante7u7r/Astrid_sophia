@@ -18,16 +18,20 @@ function component(
 describe("component_render_model", () => {
   it("resuelve color, grosor y brillo por estado visual", () => {
     expect(getComponentVisualState(false, false)).toEqual({
-      color: "#66fcf1",
+      color: "#E6EAF0",
       lineWidth: 2,
-      shadowBlur: 4,
+      shadowBlur: 0,
     });
     expect(getComponentVisualState(true, false)).toMatchObject({
-      color: "#a855f7",
-      lineWidth: 3,
-      shadowBlur: 14,
+      color: "#38BDF8",
+      lineWidth: 2.6,
+      shadowBlur: 6,
     });
-    expect(getComponentVisualState(false, true).shadowBlur).toBe(8);
+    expect(getComponentVisualState(false, true)).toMatchObject({
+      color: "#5B9FD6",
+      lineWidth: 2.2,
+      shadowBlur: 3,
+    });
   });
 
   it("identifica componentes con leads estandar y labels de valor", () => {

@@ -5,30 +5,32 @@
    ═══════════════════════════════════════════════════ */
 
 :root {
-  /* ── Paleta Cyber Glass ── */
-  --bg-void:     #080c14;
-  --bg-deep:     #0b0f19;
-  --bg-primary:  #0e1420;
-  --bg-elevated: #141c2c;
-  --bg-glass:    rgba(14, 20, 32, 0.68);
-  --bg-card:     rgba(18, 26, 42, 0.60);
+  /* ── Paleta Engineering Soft Dark ── */
+  --bg-void:     #151A20;
+  --bg-deep:     #182028;
+  --bg-primary:  #1D242C;
+  --bg-elevated: #252E38;
+  --bg-glass:    rgba(29, 36, 44, 0.85);
+  --bg-card:     rgba(37, 46, 56, 0.75);
+  --canvas-bg:   #20262D;
 
-  /* ── Bordes ── */
-  --border-subtle:  rgba(102, 252, 241, 0.08);
-  --border-color:   rgba(102, 252, 241, 0.15);
-  --border-mid:     rgba(102, 252, 241, 0.25);
-  --border-glow:    rgba(102, 252, 241, 0.45);
+  /* ── Bordes y Separadores ── */
+  --border-subtle:  #2D3742;
+  --border-color:   #38434F;
+  --border-mid:     #4A5968;
+  --border-glow:    rgba(56, 189, 248, 0.35);
 
-  /* ── Acentos Neón ── */
-  --cyan:        #66fcf1;
-  --cyan-dim:    #45a29e;
-  --cyan-glow:   rgba(102, 252, 241, 0.25);
-  --blue:        #3b82f6;
-  --purple:      #a855f7;
-  --purple-glow: rgba(168, 85, 247, 0.25);
-  --green:       #22c55e;
-  --red:         #ef4444;
-  --amber:       #f97316;
+  /* ── Acentos Técnicos CAD ── */
+  --cyan:        #38BDF8;
+  --cyan-dim:    #0284C7;
+  --cyan-glow:   rgba(56, 189, 248, 0.20);
+  --blue:        #5B9FD6;
+  --purple:      #A855F7;
+  --purple-glow: rgba(168, 85, 247, 0.20);
+  --green:       #10B981;
+  --red:         #EF4444;
+  --amber:       #F59E0B;
+  --node-gold:   #F2C94C;
 
   /* Aliases legados */
   --accent-cyan:   var(--cyan);
@@ -39,12 +41,12 @@
   --warning:       var(--amber);
 
   /* ── Tipografía ── */
-  --text-bright: #ffffff;
-  --text-main:   #c5cbe3;
-  --text-sub:    #8b95b5;
-  --text-muted:  #5a6585;
+  --text-bright: #F8FAFC;
+  --text-main:   #E6EAF0;
+  --text-sub:    #94A3B8;
+  --text-muted:  #64748B;
 
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
 
   /* ── Dimensiones de Layout ── */
@@ -56,11 +58,11 @@
   --tabs-h:            36px;
 
   /* ── Efectos ── */
-  --glass-blur:       blur(16px) saturate(160%);
-  --shadow-depth:     0 8px 32px 0 rgba(0, 0, 0, 0.55), 0 0 15px 0 rgba(102, 252, 241, 0.05);
-  --shadow-glow-cyan: 0 0 20px rgba(102, 252, 241, 0.25), 0 0 40px rgba(102, 252, 241, 0.1);
-  --transition:       all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  --transition-fast:  all 0.15s ease-out;
+  --glass-blur:       blur(16px) saturate(140%);
+  --shadow-depth:     0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 1px 0 rgba(56, 189, 248, 0.08);
+  --shadow-glow-cyan: 0 0 16px rgba(56, 189, 248, 0.20);
+  --transition:       all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-fast:  all 0.12s ease-out;
 }
 
 /* ══ RESET BASE ══════════════════════════════════ */

@@ -226,7 +226,7 @@ export class CanvasSceneRenderer {
       this.host.offsetX * dpr,
       this.host.offsetY * dpr,
     );
-    this.ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    this.ctx.fillStyle = "#2D3742";
 
     let path = this.gridPathCache?.key === gridPlan.cacheKey ? this.gridPathCache.path : null;
     if (!path) {
@@ -321,22 +321,24 @@ export class CanvasSceneRenderer {
       const isHovered = this.host.hoveredWire?.id === wire.id;
       const isNetHighlighted = netWireIds.has(wire.id);
 
-      let strokeColor = "rgba(255, 255, 255, 0.45)";
+      let strokeColor = "#5B9FD6";
       this.ctx.shadowBlur = 0;
       if (isSelected) {
-        strokeColor = "hsl(270, 89%, 65%)";
-        this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 3;
-      } else if (isHovered) {
-        strokeColor = "hsl(210, 100%, 56%)";
+        strokeColor = "#38BDF8";
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = 2.8;
-      } else if (isNetHighlighted) {
-        strokeColor = "#66fcf1";
-        this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2.8;
-        this.ctx.shadowColor = "rgba(102, 252, 241, 0.45)";
+        this.ctx.shadowColor = "rgba(56, 189, 248, 0.4)";
         this.ctx.shadowBlur = 6;
+      } else if (isHovered) {
+        strokeColor = "#78C8F0";
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = 2.4;
+      } else if (isNetHighlighted) {
+        strokeColor = "#38BDF8";
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = 2.4;
+        this.ctx.shadowColor = "rgba(56, 189, 248, 0.35)";
+        this.ctx.shadowBlur = 5;
       } else if (wire.color) {
         strokeColor = wire.color;
         this.ctx.strokeStyle = strokeColor;
@@ -353,7 +355,7 @@ export class CanvasSceneRenderer {
       const jumperPoints = crossingsByWire.get(wire.id);
       if (jumperPoints && jumperPoints.length > 0) {
         for (const jPt of jumperPoints) {
-          this.ctx.fillStyle = "rgba(8, 12, 22, 0.9)";
+          this.ctx.fillStyle = "rgba(29, 36, 44, 0.95)";
           this.ctx.beginPath();
           this.ctx.arc(jPt.x, jPt.y, 6, 0, Math.PI * 2);
           this.ctx.fill();
@@ -368,13 +370,13 @@ export class CanvasSceneRenderer {
 
       // Highlight conexiones/pins
       this.ctx.fillStyle = isSelected
-        ? "hsl(270, 89%, 65%)"
+        ? "#38BDF8"
         : (isHovered || isNetHighlighted)
-          ? "hsl(174, 97%, 69%)"
-          : "rgba(102, 252, 241, 0.3)";
+          ? "#78C8F0"
+          : "rgba(91, 159, 214, 0.5)";
       this.ctx.beginPath();
-      this.ctx.arc(startPt.x, startPt.y, 4, 0, Math.PI * 2);
-      this.ctx.arc(endPt.x, endPt.y, 4, 0, Math.PI * 2);
+      this.ctx.arc(startPt.x, startPt.y, 3.5, 0, Math.PI * 2);
+      this.ctx.arc(endPt.x, endPt.y, 3.5, 0, Math.PI * 2);
       this.ctx.fill();
 
       // Renderizar Net Label si está definida y las etiquetas están activas (o si el cable está seleccionado)
@@ -389,8 +391,8 @@ export class CanvasSceneRenderer {
       if (isSelected || isHovered) {
         for (let i = 1; i < pts.length - 1; i++) {
           const pt = pts[i];
-          this.ctx.fillStyle = isSelected ? "hsl(270, 89%, 65%)" : "#66fcf1";
-          this.ctx.strokeStyle = "#030508";
+          this.ctx.fillStyle = isSelected ? "#38BDF8" : "#5B9FD6";
+          this.ctx.strokeStyle = "#151A20";
           this.ctx.lineWidth = 1.5;
           this.ctx.beginPath();
           this.ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
@@ -403,8 +405,8 @@ export class CanvasSceneRenderer {
           const p2 = pts[i + 1];
           const midX = (p1.x + p2.x) / 2;
           const midY = (p1.y + p2.y) / 2;
-          this.ctx.fillStyle = "rgba(102, 252, 241, 0.4)";
-          this.ctx.strokeStyle = isSelected ? "hsl(270, 89%, 65%)" : "#66fcf1";
+          this.ctx.fillStyle = "rgba(91, 159, 214, 0.4)";
+          this.ctx.strokeStyle = isSelected ? "#38BDF8" : "#5B9FD6";
           this.ctx.lineWidth = 1;
           this.ctx.fillRect(midX - 3, midY - 3, 6, 6);
           this.ctx.strokeRect(midX - 3, midY - 3, 6, 6);
@@ -424,8 +426,8 @@ export class CanvasSceneRenderer {
     // Dibujar Nodos de Unión en T (T-Junction Dots)
     const junctions = findWireJunctionPoints(this.host.wires);
     for (const jPt of junctions) {
-      this.ctx.fillStyle = "#66fcf1";
-      this.ctx.strokeStyle = "#030508";
+      this.ctx.fillStyle = "#F2C94C";
+      this.ctx.strokeStyle = "#151A20";
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
       this.ctx.arc(jPt.x, jPt.y, 4, 0, Math.PI * 2);
@@ -501,11 +503,11 @@ export class CanvasSceneRenderer {
         if (renderDetail === "compact" && !isHovered && !isActive && !isNetHighlighted) continue;
 
         if (isHovered || isActive) {
-          this.ctx.fillStyle = "hsl(174, 97%, 69%)";
-          this.ctx.shadowColor = "hsl(174, 97%, 69%)";
+          this.ctx.fillStyle = "#38BDF8";
+          this.ctx.shadowColor = "#38BDF8";
           this.ctx.shadowBlur = 6;
           this.ctx.beginPath();
-          this.ctx.arc(pin.x, pin.y, 6, 0, Math.PI * 2);
+          this.ctx.arc(pin.x, pin.y, 5.5, 0, Math.PI * 2);
           this.ctx.fill();
           this.ctx.shadowBlur = 0;
 
@@ -517,7 +519,7 @@ export class CanvasSceneRenderer {
             renderPinTelemetryHud(this.ctx, pin, nodeId, volt, current);
           }
         } else {
-          this.ctx.fillStyle = "rgba(102, 252, 241, 0.5)";
+          this.ctx.fillStyle = "rgba(242, 201, 76, 0.75)";
           this.ctx.beginPath();
           this.ctx.arc(pin.x, pin.y, 3, 0, Math.PI * 2);
           this.ctx.fill();

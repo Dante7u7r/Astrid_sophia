@@ -52,9 +52,9 @@ export function renderPinTelemetryHud(
   const currText = `I: ${formatEngineeringValue(current, "A")}`;
 
   const lines = [
-    { text: nodeTitle, color: "hsl(174, 97%, 69%)", font: "bold 9px var(--font-sans)" },
-    { text: voltText, color: "#ffffff", font: "600 9px var(--font-mono)" },
-    { text: currText, color: "#fff275", font: "600 9px var(--font-mono)" },
+    { text: nodeTitle, color: "#38BDF8", font: "bold 9px var(--font-sans)" },
+    { text: voltText, color: "#E6EAF0", font: "600 9px var(--font-mono)" },
+    { text: currText, color: "#F2C94C", font: "600 9px var(--font-mono)" },
   ];
 
   renderHudBox(ctx, pin.x, pin.y - 12, lines, "bottom");
@@ -80,9 +80,9 @@ export function renderWireTelemetryHud(
   const currText = `I: ${formatEngineeringValue(Math.abs(current ?? 0), "A")}${arrow}`;
 
   const lines = [
-    { text: wire.label ? `Red: ${wire.label}` : "Pista Conductora", color: "hsl(174, 97%, 69%)", font: "bold 9px var(--font-sans)" },
-    { text: voltText, color: "#ffffff", font: "600 9px var(--font-mono)" },
-    { text: currText, color: "#fff275", font: "600 9px var(--font-mono)" },
+    { text: wire.label ? `Red: ${wire.label}` : "Pista Conductora", color: "#38BDF8", font: "bold 9px var(--font-sans)" },
+    { text: voltText, color: "#E6EAF0", font: "600 9px var(--font-mono)" },
+    { text: currText, color: "#F2C94C", font: "600 9px var(--font-mono)" },
   ];
 
   renderHudBox(ctx, mid.x, mid.y - 10, lines, "bottom");
@@ -113,11 +113,11 @@ function renderHudBox(
   const boxX = anchorX - boxW / 2;
   const boxY = placement === "bottom" ? anchorY - boxH : anchorY;
 
-  // Fondo glassmorphism oscuro
-  ctx.fillStyle = "rgba(8, 12, 22, 0.94)";
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.4)";
+  // Fondo glassmorphism oscuro CAD
+  ctx.fillStyle = "rgba(29, 36, 44, 0.96)";
+  ctx.strokeStyle = "#38434F";
   ctx.lineWidth = 1;
-  ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
   ctx.shadowBlur = 8;
 
   ctx.beginPath();

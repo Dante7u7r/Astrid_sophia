@@ -88,8 +88,8 @@ export class CurrentAnimationRenderer {
       // 1. Capa de brillo / halo exterior
       ctx.setLineDash([dashLength, gapLength]);
       ctx.lineDashOffset = offset;
-      ctx.lineWidth = 3.2;
-      ctx.strokeStyle = current > 0 ? "rgba(255, 215, 0, 0.45)" : "rgba(102, 252, 241, 0.45)";
+      ctx.lineWidth = 3.0;
+      ctx.strokeStyle = current > 0 ? "rgba(245, 158, 11, 0.40)" : "rgba(56, 189, 248, 0.40)";
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) {
@@ -99,7 +99,7 @@ export class CurrentAnimationRenderer {
 
       // 2. Núcleo incandescente de portador de carga
       ctx.lineWidth = 1.8;
-      ctx.strokeStyle = current > 0 ? "#fff275" : "#ffffff";
+      ctx.strokeStyle = current > 0 ? "#F2C94C" : "#F8FAFC";
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) {

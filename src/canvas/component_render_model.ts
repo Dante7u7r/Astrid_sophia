@@ -32,17 +32,24 @@ export function getComponentVisualState(
   isSelected: boolean,
   isHovered: boolean,
 ): ComponentVisualState {
-  let color = "#66fcf1";
+  let color = "#E6EAF0";
+  let lineWidth = 2;
+  let shadowBlur = 0;
+
   if (isSelected) {
-    color = "#a855f7";
+    color = "#38BDF8";
+    lineWidth = 2.6;
+    shadowBlur = 6;
   } else if (isHovered) {
-    color = "#3b82f6";
+    color = "#5B9FD6";
+    lineWidth = 2.2;
+    shadowBlur = 3;
   }
 
   return {
     color,
-    lineWidth: isSelected ? 3 : 2,
-    shadowBlur: isSelected ? 14 : isHovered ? 8 : 4,
+    lineWidth,
+    shadowBlur,
   };
 }
 
