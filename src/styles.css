@@ -49,6 +49,15 @@
   --font-sans: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
 
+  /* ── Escala Tipográfica Fluida y Adaptativa (clamp) ── */
+  --font-2xs:  clamp(0.58rem, 0.54rem + 0.12vw, 0.65rem); /* Badges, micro-etiquetas, status */
+  --font-xs:   clamp(0.66rem, 0.61rem + 0.16vw, 0.74rem); /* Labels de inputs, telemetría */
+  --font-sm:   clamp(0.74rem, 0.68rem + 0.20vw, 0.82rem); /* Botones, pestañas, listas */
+  --font-base: clamp(0.80rem, 0.74rem + 0.24vw, 0.90rem); /* Inputs, texto general */
+  --font-md:   clamp(0.88rem, 0.82rem + 0.28vw, 1.00rem); /* Subtítulos, headers */
+  --font-lg:   clamp(1.05rem, 0.95rem + 0.35vw, 1.22rem); /* Títulos de paneles, branding */
+  --font-xl:   clamp(1.25rem, 1.12rem + 0.45vw, 1.45rem); /* Títulos de modales */
+
   /* ── Dimensiones de Layout ── */
   --header-h:          52px;
   --footer-h:          26px;
@@ -377,7 +386,7 @@ body {
 }
 
 .floating-window-title {
-  font-size: 0.72rem;
+  font-size: var(--font-sm);
   font-weight: 700;
   color: var(--cyan);
   text-transform: uppercase;
@@ -397,7 +406,7 @@ body {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 3px;
@@ -439,19 +448,19 @@ body {
 
 .instrument-center-mark {
   color: var(--cyan);
-  font-size: 1rem;
+  font-size: var(--font-md);
 }
 
 .instrument-center-heading h2 {
   color: var(--text-bright);
-  font-size: 0.86rem;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
 .instrument-center-heading span {
   display: block;
   color: var(--text-muted);
-  font-size: 0.66rem;
+  font-size: var(--font-2xs);
 }
 
 .instrument-center-close {
@@ -813,7 +822,7 @@ body {
 
 .panel-header h2,
 .panel-header h3 {
-  font-size: 0.72rem;
+  font-size: var(--font-md);
   font-weight: 700;
   letter-spacing: 1.8px;
   text-transform: uppercase;
@@ -865,7 +874,7 @@ body {
   border: none;
   color: var(--text-main);
   font-family: var(--font-sans);
-  font-size: 0.72rem;
+  font-size: var(--font-sm);
   padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
@@ -934,7 +943,7 @@ body {
   border-radius: 10px;
   color: var(--text-bright);
   font-family: var(--font-sans);
-  font-size: 0.82rem;
+  font-size: var(--font-base);
   transition: var(--transition);
 }
 
@@ -967,7 +976,7 @@ body {
   padding: 8px 10px;
   cursor: pointer;
   user-select: none;
-  font-size: 0.68rem;
+  font-size: var(--font-xs);
   font-weight: 700;
   letter-spacing: 1.4px;
   text-transform: uppercase;
@@ -982,7 +991,7 @@ body {
 }
 
 .category-header .category-arrow {
-  font-size: 0.6rem;
+  font-size: var(--font-2xs);
   transition: transform 0.25s ease;
   transform: rotate(-90deg);
   opacity: 0.6;
@@ -1047,7 +1056,7 @@ body {
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: var(--font-xs);
   letter-spacing: 0.5px;
   cursor: pointer;
   display: flex;
@@ -1111,7 +1120,7 @@ body {
   background: transparent;
   border-right: 1px solid var(--border-subtle);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-muted);
   transition: var(--transition-fast);
@@ -1148,7 +1157,7 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text-muted);
   background: transparent;
   border: none;
@@ -1179,7 +1188,7 @@ body {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 1.2rem;
+  font-size: var(--font-lg);
   font-weight: 300;
   cursor: pointer;
   transition: var(--transition-fast);
