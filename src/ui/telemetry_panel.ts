@@ -168,7 +168,7 @@ export class TelemetryPanel {
     const snapshot = this.getPerformanceSnapshot();
     const fps = Math.round(snapshot.fpsEstimate);
     if (this.telemetryFpsText) {
-      this.telemetryFpsText.textContent = fps > 0 ? `${fps} FPS` : "Reposo";
+      this.telemetryFpsText.textContent = `${Math.max(0, fps)} FPS`;
     }
     return snapshot;
   }

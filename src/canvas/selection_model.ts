@@ -171,19 +171,20 @@ export function applyDrag(
   dragStartOffset: Point2D,
   worldPoint: Point2D,
   gridSize: number,
+  alignmentAdjustment: Point2D = { x: 0, y: 0 },
 ): void {
   if (selectedComponents.length > 0) {
     for (const comp of selectedComponents) {
       const offset = dragStartOffsets[comp.id];
       if (!offset) continue;
-      comp.x = snapToGrid(worldPoint.x - offset.x, gridSize);
-      comp.y = snapToGrid(worldPoint.y - offset.y, gridSize);
+      comp.x = snapToGrid(worldPoint.x - offset.x, gridSize) + alignmentAdjustment.x;
+      comp.y = snapToGrid(worldPoint.y - offset.y, gridSize) + alignmentAdjustment.y;
     }
     return;
   }
 
   if (selectedComponent) {
-    selectedComponent.x = snapToGrid(worldPoint.x - dragStartOffset.x, gridSize);
-    selectedComponent.y = snapToGrid(worldPoint.y - dragStartOffset.y, gridSize);
+    selectedComponent.x = snapToGrid(worldPoint.x - dragStartOffset.x, gridSize) + alignmentAdjustment.x;
+    selectedComponent.y = snapToGrid(worldPoint.y - dragStartOffset.y, gridSize) + alignmentAdjustment.y;
   }
 }

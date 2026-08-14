@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ingeniería con evidencia"
+  short_description: "Evita cambios y afirmaciones sin prueba en Astryd Sophia"
+  default_prompt: "Usa $evidence-first-engineering para investigar esta petición con evidencia, cambios mínimos y pruebas reales."

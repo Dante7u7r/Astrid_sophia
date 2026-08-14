@@ -1,6 +1,13 @@
 import type { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
 import { hitTestComponentAt } from "./component_geometry";
-import { findHoveredWire, hitTestWireHandles, type WireHandleHit } from "./wiring_model";
+import {
+  findHoveredWire,
+  findWireJunctionPoints,
+  findWireSegmentIntersection,
+  hitTestWireHandles,
+  type WireHandleHit,
+  type WireSegmentIntersection,
+} from "./wiring_model";
 
 export interface HoverOptions {
   activePinForWire: PinInstance | null;
@@ -14,6 +21,7 @@ export interface HoverState {
   hoveredPin: PinInstance | null;
   hoveredWire: WireInstance | null;
   hoveredWireHandle: WireHandleHit | null;
+  hoveredWireSnapPoint: WireSegmentIntersection | null;
   cursor: string;
 }
 
@@ -23,6 +31,7 @@ export function hitTestPin(
   worldX: number,
   worldY: number,
   threshold: number,
+  wires?: readonly WireInstance[],
 ): { pin: PinInstance; comp: ComponentInstance } | null {
   for (const comp of components) {
     const pins = getPins(comp);
@@ -34,6 +43,36 @@ export function hitTestPin(
       }
     }
   }
+
+  if (wires && wires.length > 0) {
+    const junctions = findWireJunctionPoints(wires);
+    for (const jPt of junctions) {
+      const dx = worldX - jPt.x;
+      const dy = worldY - jPt.y;
+      if (dx * dx + dy * dy <= threshold * threshold) {
+        const jX = Math.round(jPt.x);
+        const jY = Math.round(jPt.y);
+        const pin: PinInstance = {
+          componentId: `junction_${jX}_${jY}`,
+          pinIndex: 0,
+          x: jPt.x,
+          y: jPt.y,
+          isJunction: true,
+          junctionPos: { x: jPt.x, y: jPt.y },
+        };
+        const comp: ComponentInstance = {
+          id: `junction_${jX}_${jY}`,
+          type: "ground",
+          x: jPt.x,
+          y: jPt.y,
+          rotation: 0,
+          value: 0,
+        };
+        return { pin, comp };
+      }
+    }
+  }
+
   return null;
 }
 
@@ -51,6 +90,7 @@ export function resolveHoverState(
     worldX,
     worldY,
     options.pinThreshold,
+    wires,
   );
   if (pinHit) {
     return {
@@ -58,8 +98,24 @@ export function resolveHoverState(
       hoveredPin: pinHit.pin,
       hoveredWire: null,
       hoveredWireHandle: null,
+      hoveredWireSnapPoint: null,
       cursor: options.activePinForWire ? "crosshair" : "pointer",
     };
+  }
+
+  // Si se está tirando un cable, permitir empalme directo sobre cables existentes (T-Junction tap)
+  if (options.activePinForWire) {
+    const wireSegmentHit = findWireSegmentIntersection(wires, { x: worldX, y: worldY }, 12);
+    if (wireSegmentHit) {
+      return {
+        hoveredComponent: null,
+        hoveredPin: null,
+        hoveredWire: wireSegmentHit.wire,
+        hoveredWireHandle: null,
+        hoveredWireSnapPoint: wireSegmentHit,
+        cursor: "crosshair",
+      };
+    }
   }
 
   for (const comp of components) {
@@ -79,6 +135,7 @@ export function resolveHoverState(
       hoveredPin: null,
       hoveredWire: null,
       hoveredWireHandle: null,
+      hoveredWireSnapPoint: null,
       cursor,
     };
   }
@@ -97,6 +154,7 @@ export function resolveHoverState(
       hoveredPin: null,
       hoveredWire: wireHandleHit.wire,
       hoveredWireHandle: wireHandleHit,
+      hoveredWireSnapPoint: null,
       cursor,
     };
   }
@@ -108,6 +166,7 @@ export function resolveHoverState(
       hoveredPin: null,
       hoveredWire,
       hoveredWireHandle: null,
+      hoveredWireSnapPoint: null,
       cursor: "pointer",
     };
   }
@@ -117,6 +176,7 @@ export function resolveHoverState(
     hoveredPin: null,
     hoveredWire: null,
     hoveredWireHandle: null,
+    hoveredWireSnapPoint: null,
     cursor: "default",
   };
 }

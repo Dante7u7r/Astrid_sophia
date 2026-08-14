@@ -1,5 +1,6 @@
 import type { BoundingBox, ComponentInstance, PinInstance, Point2D, WireEndpoint, WireInstance } from "../canvas_orchestrator";
-import { createWireId } from "./wire_identity";
+import { createWireId, wireEndpointKey } from "./wire_identity";
+import { simplifyOrthogonalWirePath } from "./wire_cleanup";
 
 export function wirePathIntersects(points: readonly Point2D[], bounds: BoundingBox): boolean {
   let minX = Infinity;
@@ -58,12 +59,17 @@ export function wireExists(
   from: WireEndpoint,
   to: WireEndpoint,
 ): boolean {
-  return wires.some((wire) => (
-    (wire.from.componentId === from.componentId && wire.from.pinIndex === from.pinIndex &&
-      wire.to.componentId === to.componentId && wire.to.pinIndex === to.pinIndex) ||
-    (wire.from.componentId === to.componentId && wire.from.pinIndex === to.pinIndex &&
-      wire.to.componentId === from.componentId && wire.to.pinIndex === from.pinIndex)
-  ));
+  const fromKey = wireEndpointKey(from);
+  const toKey = wireEndpointKey(to);
+
+  return wires.some((wire) => {
+    const wFromKey = wireEndpointKey(wire.from);
+    const wToKey = wireEndpointKey(wire.to);
+    return (
+      (wFromKey === fromKey && wToKey === toKey) ||
+      (wFromKey === toKey && wToKey === fromKey)
+    );
+  });
 }
 
 export function connectPins(
@@ -71,13 +77,16 @@ export function connectPins(
   from: WireEndpoint,
   to: WireEndpoint,
 ): boolean {
-  if (from.componentId === to.componentId) return false;
+  if (from.componentId === to.componentId && !from.isJunction && !to.isJunction) return false;
+  const fromKey = wireEndpointKey(from);
+  const toKey = wireEndpointKey(to);
+  if (fromKey === toKey) return false;
   if (wireExists(wires, from, to)) return false;
 
   wires.push({
     id: createWireId(from, to),
-    from: { componentId: from.componentId, pinIndex: from.pinIndex },
-    to: { componentId: to.componentId, pinIndex: to.pinIndex },
+    from: { ...from },
+    to: { ...to },
     points: [],
   });
   return true;
@@ -90,20 +99,219 @@ export function syncWireConnections(
   generatePath: (start: Point2D, end: Point2D, fromCompId?: string, toCompId?: string) => Point2D[],
 ): void {
   for (const wire of wires) {
-    const fromComp = components.find((component) => component.id === wire.from.componentId);
-    const toComp = components.find((component) => component.id === wire.to.componentId);
-    if (!fromComp || !toComp) continue;
+    let startPt: Point2D | undefined;
+    if (wire.from.isJunction && wire.from.junctionPos) {
+      startPt = { ...wire.from.junctionPos };
+    } else {
+      const fromComp = components.find((component) => component.id === wire.from.componentId);
+      if (fromComp) {
+        startPt = getPins(fromComp).find((pin) => pin.pinIndex === wire.from.pinIndex);
+      }
+    }
 
-    const startPt = getPins(fromComp).find((pin) => pin.pinIndex === wire.from.pinIndex);
-    const endPt = getPins(toComp).find((pin) => pin.pinIndex === wire.to.pinIndex);
+    let endPt: Point2D | undefined;
+    if (wire.to.isJunction && wire.to.junctionPos) {
+      endPt = { ...wire.to.junctionPos };
+    } else {
+      const toComp = components.find((component) => component.id === wire.to.componentId);
+      if (toComp) {
+        endPt = getPins(toComp).find((pin) => pin.pinIndex === wire.to.pinIndex);
+      }
+    }
+
     if (!startPt || !endPt) continue;
 
-    if (wire.customPath && wire.points && wire.points.length >= 2) {
-      wire.points[0] = { x: startPt.x, y: startPt.y };
-      wire.points[wire.points.length - 1] = { x: endPt.x, y: endPt.y };
-    } else {
-      wire.points = generatePath(startPt, endPt, fromComp.id, toComp.id);
+    // Regenerar la ruta ortogonal inteligente para conectar siempre los terminales de forma elástica y limpia
+    const path = generatePath(startPt, endPt, wire.from.componentId, wire.to.componentId);
+    wire.points = simplifyOrthogonalWirePath(path);
+  }
+}
+
+export interface WireSegmentIntersection {
+  wire: WireInstance;
+  segmentIndex: number;
+  snapPoint: Point2D;
+}
+
+export function findWireSegmentIntersection(
+  wires: readonly WireInstance[],
+  point: Point2D,
+  tolerance = 8,
+): WireSegmentIntersection | null {
+  for (const wire of wires) {
+    if (!wire.points || wire.points.length < 2) continue;
+    for (let i = 0; i < wire.points.length - 1; i++) {
+      const p1 = wire.points[i];
+      const p2 = wire.points[i + 1];
+
+      const isHoriz = Math.abs(p1.y - p2.y) < 0.5;
+      const isVert = Math.abs(p1.x - p2.x) < 0.5;
+
+      if (isHoriz) {
+        const minX = Math.min(p1.x, p2.x);
+        const maxX = Math.max(p1.x, p2.x);
+        if (point.x >= minX + 2 && point.x <= maxX - 2 && Math.abs(point.y - p1.y) <= tolerance) {
+          return {
+            wire,
+            segmentIndex: i,
+            snapPoint: { x: point.x, y: p1.y },
+          };
+        }
+      } else if (isVert) {
+        const minY = Math.min(p1.y, p2.y);
+        const maxY = Math.max(p1.y, p2.y);
+        if (point.y >= minY + 2 && point.y <= maxY - 2 && Math.abs(point.x - p1.x) <= tolerance) {
+          return {
+            wire,
+            segmentIndex: i,
+            snapPoint: { x: p1.x, y: point.y },
+          };
+        }
+      }
     }
+  }
+  return null;
+}
+
+export function splitWireAtPoint(
+  wire: WireInstance,
+  splitPoint: Point2D,
+): [WireInstance, WireInstance] {
+  const junctionPos: Point2D = {
+    x: Math.round(splitPoint.x),
+    y: Math.round(splitPoint.y),
+  };
+  const junctionEp: WireEndpoint = {
+    componentId: `junction_${junctionPos.x}_${junctionPos.y}`,
+    pinIndex: 0,
+    isJunction: true,
+    junctionPos,
+  };
+
+  const pts = wire.points && wire.points.length >= 2 ? wire.points : [];
+  let splitIndex = 0;
+  let minDistance = Infinity;
+
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const isHoriz = Math.abs(p1.y - p2.y) < 1;
+    const dist = isHoriz ? Math.abs(junctionPos.y - p1.y) : Math.abs(junctionPos.x - p1.x);
+    if (dist < minDistance) {
+      minDistance = dist;
+      splitIndex = i;
+    }
+  }
+
+  const pointsA: Point2D[] = pts.slice(0, splitIndex + 1);
+  pointsA.push({ ...junctionPos });
+
+  const pointsB: Point2D[] = [{ ...junctionPos }];
+  pointsB.push(...pts.slice(splitIndex + 1));
+
+  const wireA: WireInstance = {
+    id: createWireId(wire.from, junctionEp),
+    from: { ...wire.from },
+    to: { ...junctionEp },
+    points: pointsA.length >= 2 ? pointsA : [],
+    ...(wire.label ? { label: wire.label } : {}),
+    ...(wire.color ? { color: wire.color } : {}),
+    ...(wire.customPath ? { customPath: true } : {}),
+  };
+
+  const wireB: WireInstance = {
+    id: createWireId(junctionEp, wire.to),
+    from: { ...junctionEp },
+    to: { ...wire.to },
+    points: pointsB.length >= 2 ? pointsB : [],
+    ...(wire.label ? { label: wire.label } : {}),
+    ...(wire.color ? { color: wire.color } : {}),
+    ...(wire.customPath ? { customPath: true } : {}),
+  };
+
+  return [wireA, wireB];
+}
+
+export function connectPinToWire(
+  wires: WireInstance[],
+  from: WireEndpoint,
+  targetWire: WireInstance,
+  splitPoint: Point2D,
+): boolean {
+  const [wireA, wireB] = splitWireAtPoint(targetWire, splitPoint);
+  const junctionEp = wireA.to;
+
+  if (wireExists([wireA, wireB], from, junctionEp)) {
+    return false;
+  }
+
+  const wireC: WireInstance = {
+    id: createWireId(from, junctionEp),
+    from: { ...from },
+    to: { ...junctionEp },
+    points: [],
+  };
+
+  const targetIdx = wires.findIndex((w) => w.id === targetWire.id);
+  if (targetIdx >= 0) {
+    wires.splice(targetIdx, 1, wireA, wireB, wireC);
+  } else {
+    wires.push(wireA, wireB, wireC);
+  }
+
+  return true;
+}
+
+export function mergeCollinearWiresAtJunction(
+  wires: WireInstance[],
+  junctionKey: string,
+): boolean {
+  const connected = wires.filter(
+    (w) =>
+      (w.from.isJunction && wireEndpointKey(w.from) === junctionKey) ||
+      (w.to.isJunction && wireEndpointKey(w.to) === junctionKey),
+  );
+
+  if (connected.length !== 2) return false;
+
+  const [w1, w2] = connected;
+  const otherEnd1 = (w1.from.isJunction && wireEndpointKey(w1.from) === junctionKey) ? w1.to : w1.from;
+  const otherEnd2 = (w2.from.isJunction && wireEndpointKey(w2.from) === junctionKey) ? w2.to : w2.from;
+
+  const mergedWire: WireInstance = {
+    id: createWireId(otherEnd1, otherEnd2),
+    from: { ...otherEnd1 },
+    to: { ...otherEnd2 },
+    points: [],
+  };
+
+  const idx1 = wires.findIndex((w) => w.id === w1.id);
+  const idx2 = wires.findIndex((w) => w.id === w2.id);
+
+  if (idx1 >= 0 && idx2 >= 0) {
+    const higherIdx = Math.max(idx1, idx2);
+    const lowerIdx = Math.min(idx1, idx2);
+    wires.splice(higherIdx, 1);
+    wires.splice(lowerIdx, 1, mergedWire);
+    return true;
+  }
+
+  return false;
+}
+
+export function autoHealJunctions(wires: WireInstance[]): void {
+  const junctionKeys = new Set<string>();
+  for (const wire of wires) {
+    if (wire.from.isJunction && wire.from.junctionPos) {
+      junctionKeys.add(wireEndpointKey(wire.from));
+    }
+    if (wire.to.isJunction && wire.to.junctionPos) {
+      junctionKeys.add(wireEndpointKey(wire.to));
+    }
+  }
+
+  for (const key of junctionKeys) {
+    mergeCollinearWiresAtJunction(wires, key);
   }
 }
 
@@ -121,12 +329,12 @@ export function findConnectedWireIds(
   result.add(targetWire.id);
 
   if (nodeMap) {
-    const fromKey = `${targetWire.from.componentId}:${targetWire.from.pinIndex}`;
+    const fromKey = wireEndpointKey(targetWire.from);
     const targetNode = nodeMap[fromKey];
     if (targetNode) {
       for (const wire of wires) {
-        const k1 = `${wire.from.componentId}:${wire.from.pinIndex}`;
-        const k2 = `${wire.to.componentId}:${wire.to.pinIndex}`;
+        const k1 = wireEndpointKey(wire.from);
+        const k2 = wireEndpointKey(wire.to);
         if (nodeMap[k1] === targetNode || nodeMap[k2] === targetNode) {
           result.add(wire.id);
         }
@@ -135,7 +343,6 @@ export function findConnectedWireIds(
     }
   }
 
-  // Fallback a propagación de vecinos si no hay nodeMap
   let added = true;
   while (added) {
     added = false;
@@ -144,11 +351,15 @@ export function findConnectedWireIds(
       const isConnected = Array.from(result).some((rId) => {
         const rWire = wires.find((w) => w.id === rId);
         if (!rWire) return false;
+        const wFromKey = wireEndpointKey(wire.from);
+        const wToKey = wireEndpointKey(wire.to);
+        const rFromKey = wireEndpointKey(rWire.from);
+        const rToKey = wireEndpointKey(rWire.to);
         return (
-          (wire.from.componentId === rWire.from.componentId && wire.from.pinIndex === rWire.from.pinIndex) ||
-          (wire.from.componentId === rWire.to.componentId && wire.from.pinIndex === rWire.to.pinIndex) ||
-          (wire.to.componentId === rWire.from.componentId && wire.to.pinIndex === rWire.from.pinIndex) ||
-          (wire.to.componentId === rWire.to.componentId && wire.to.pinIndex === rWire.to.pinIndex)
+          wFromKey === rFromKey ||
+          wFromKey === rToKey ||
+          wToKey === rFromKey ||
+          wToKey === rToKey
         );
       });
       if (isConnected) {
@@ -161,25 +372,29 @@ export function findConnectedWireIds(
 }
 
 export function findWireJunctionPoints(wires: readonly WireInstance[]): Point2D[] {
-  const pointCounts = new Map<string, { pt: Point2D; count: number }>();
+  const pointCounts = new Map<string, { pt: Point2D; count: number; isExplicitJunction: boolean }>();
 
   for (const wire of wires) {
     if (!wire.points || wire.points.length === 0) continue;
-    const endpoints = [wire.points[0], wire.points[wire.points.length - 1]];
-    for (const pt of endpoints) {
-      const key = `${Math.round(pt.x)},${Math.round(pt.y)}`;
+    const endpoints = [
+      { pt: wire.points[0], isJunction: wire.from.isJunction },
+      { pt: wire.points[wire.points.length - 1], isJunction: wire.to.isJunction },
+    ];
+    for (const ep of endpoints) {
+      const key = `${Math.round(ep.pt.x)},${Math.round(ep.pt.y)}`;
       const entry = pointCounts.get(key);
       if (entry) {
         entry.count++;
+        if (ep.isJunction) entry.isExplicitJunction = true;
       } else {
-        pointCounts.set(key, { pt: { x: pt.x, y: pt.y }, count: 1 });
+        pointCounts.set(key, { pt: { x: ep.pt.x, y: ep.pt.y }, count: 1, isExplicitJunction: !!ep.isJunction });
       }
     }
   }
 
   const junctions: Point2D[] = [];
   for (const entry of pointCounts.values()) {
-    if (entry.count >= 3) {
+    if (entry.count >= 3 || entry.isExplicitJunction) {
       junctions.push(entry.pt);
     }
   }
@@ -313,7 +528,7 @@ export function calculateWireMidpoint(points: readonly Point2D[]): Point2D | nul
   return { ...points[Math.floor(points.length / 2)] };
 }
 
-export type WireHandleType = 'vertex' | 'segment';
+export type WireHandleType = 'vertex' | 'segment' | 'junction';
 
 export interface WireHandleHit {
   wire: WireInstance;
@@ -329,6 +544,21 @@ export function hitTestWireHandles(
   vertexThreshold = 8,
   segmentThreshold = 6,
 ): WireHandleHit | null {
+  // 0. Probar uniones en T
+  const junctions = findWireJunctionPoints(wires);
+  for (const jPt of junctions) {
+    if (Math.hypot(jPt.x - worldX, jPt.y - worldY) <= vertexThreshold) {
+      const matchingWire = wires.find(
+        (w) =>
+          (w.points && w.points.length > 0 && Math.hypot(w.points[0].x - jPt.x, w.points[0].y - jPt.y) < 2) ||
+          (w.points && w.points.length > 0 && Math.hypot(w.points[w.points.length - 1].x - jPt.x, w.points[w.points.length - 1].y - jPt.y) < 2),
+      );
+      if (matchingWire) {
+        return { wire: matchingWire, type: 'junction', index: 0, point: { ...jPt } };
+      }
+    }
+  }
+
   for (let w = wires.length - 1; w >= 0; w--) {
     const wire = wires[w];
     if (!wire.points || wire.points.length < 2) continue;
@@ -367,33 +597,87 @@ export function hitTestWireHandles(
   return null;
 }
 
+export function dragJunctionNode(
+  wires: WireInstance[],
+  oldJunctionPos: Point2D,
+  newJunctionPos: Point2D,
+): void {
+  const targetX = Math.round(newJunctionPos.x);
+  const targetY = Math.round(newJunctionPos.y);
+  const newJunctionId = `junction_${targetX}_${targetY}`;
+
+  for (const wire of wires) {
+    if (wire.from.isJunction && wire.from.junctionPos) {
+      if (Math.hypot(wire.from.junctionPos.x - oldJunctionPos.x, wire.from.junctionPos.y - oldJunctionPos.y) < 2) {
+        wire.from.junctionPos = { x: targetX, y: targetY };
+        wire.from.componentId = newJunctionId;
+        wire.id = createWireId(wire.from, wire.to);
+        if (wire.points && wire.points.length > 0) {
+          wire.points[0] = { x: targetX, y: targetY };
+        }
+      }
+    }
+
+    if (wire.to.isJunction && wire.to.junctionPos) {
+      if (Math.hypot(wire.to.junctionPos.x - oldJunctionPos.x, wire.to.junctionPos.y - oldJunctionPos.y) < 2) {
+        wire.to.junctionPos = { x: targetX, y: targetY };
+        wire.to.componentId = newJunctionId;
+        wire.id = createWireId(wire.from, wire.to);
+        if (wire.points && wire.points.length > 0) {
+          wire.points[wire.points.length - 1] = { x: targetX, y: targetY };
+        }
+      }
+    }
+  }
+}
+
 export function dragWireVertex(
   pts: readonly Point2D[],
   index: number,
   targetPoint: Point2D,
 ): Point2D[] {
-  const result = pts.map((p) => ({ ...p }));
-  if (index <= 0 || index >= result.length - 1) return result;
+  if (!pts || pts.length < 3 || index <= 0 || index >= pts.length - 1) {
+    return pts ? pts.map((p) => ({ ...p })) : [];
+  }
 
+  const result = pts.map((p) => ({ ...p }));
   result[index] = { ...targetPoint };
 
   // Ajustar vecino anterior
   const prev = result[index - 1];
-  if (Math.abs(prev.x - pts[index].x) < 1) {
-    prev.x = targetPoint.x;
-  } else if (Math.abs(prev.y - pts[index].y) < 1) {
-    prev.y = targetPoint.y;
+  if (index - 1 > 0) {
+    if (Math.abs(prev.x - pts[index].x) < 1) {
+      prev.x = targetPoint.x;
+    } else if (Math.abs(prev.y - pts[index].y) < 1) {
+      prev.y = targetPoint.y;
+    }
+  } else {
+    // Si index - 1 es el pin de origen, ajustar la coordenada perpendicular de index para conservar el anclaje
+    if (Math.abs(prev.x - pts[index].x) < 1) {
+      result[index].x = prev.x;
+    } else if (Math.abs(prev.y - pts[index].y) < 1) {
+      result[index].y = prev.y;
+    }
   }
 
   // Ajustar vecino posterior
   const next = result[index + 1];
-  if (Math.abs(next.x - pts[index].x) < 1) {
-    next.x = targetPoint.x;
-  } else if (Math.abs(next.y - pts[index].y) < 1) {
-    next.y = targetPoint.y;
+  if (index + 1 < result.length - 1) {
+    if (Math.abs(next.x - pts[index].x) < 1) {
+      next.x = targetPoint.x;
+    } else if (Math.abs(next.y - pts[index].y) < 1) {
+      next.y = targetPoint.y;
+    }
+  } else {
+    // Si index + 1 es el pin de destino, ajustar la coordenada perpendicular de index para conservar el anclaje
+    if (Math.abs(next.x - pts[index].x) < 1) {
+      result[index].x = next.x;
+    } else if (Math.abs(next.y - pts[index].y) < 1) {
+      result[index].y = next.y;
+    }
   }
 
-  return result;
+  return simplifyOrthogonalWirePath(result);
 }
 
 export function dragWireSegment(
@@ -402,20 +686,97 @@ export function dragWireSegment(
   deltaX: number,
   deltaY: number,
 ): Point2D[] {
-  const result = pts.map((p) => ({ ...p }));
-  if (segmentIndex < 0 || segmentIndex >= result.length - 1) return result;
-
-  const p1 = result[segmentIndex];
-  const p2 = result[segmentIndex + 1];
-  const isHoriz = Math.abs(p1.y - p2.y) < 1;
-
-  if (isHoriz) {
-    p1.y += deltaY;
-    p2.y += deltaY;
-  } else {
-    p1.x += deltaX;
-    p2.x += deltaX;
+  if (!pts || pts.length < 2 || segmentIndex < 0 || segmentIndex >= pts.length - 1) {
+    return pts ? pts.map((p) => ({ ...p })) : [];
   }
 
-  return result;
+  const p1 = pts[segmentIndex];
+  const p2 = pts[segmentIndex + 1];
+  const isHoriz = Math.abs(p1.y - p2.y) < 1;
+
+  // Caso 1: Cable de 2 puntos (un solo segmento recto entre dos pines)
+  if (pts.length === 2) {
+    const start = { ...pts[0] };
+    const end = { ...pts[1] };
+    if (isHoriz) {
+      if (Math.abs(deltaY) < 1) return [start, end];
+      const newY = start.y + deltaY;
+      return [
+        start,
+        { x: start.x, y: newY },
+        { x: end.x, y: newY },
+        end,
+      ];
+    } else {
+      if (Math.abs(deltaX) < 1) return [start, end];
+      const newX = start.x + deltaX;
+      return [
+        start,
+        { x: newX, y: start.y },
+        { x: newX, y: end.y },
+        end,
+      ];
+    }
+  }
+
+  // Caso 2: Primer segmento (índice 0) de un cable multi-segmento conectado a pin
+  if (segmentIndex === 0) {
+    const start = { ...pts[0] };
+    const nextPts = pts.map((p) => ({ ...p }));
+    if (isHoriz) {
+      if (Math.abs(deltaY) < 1) return nextPts;
+      const newY = start.y + deltaY;
+      nextPts[1].y = newY;
+      return simplifyOrthogonalWirePath([
+        start,
+        { x: start.x, y: newY },
+        ...nextPts.slice(1),
+      ]);
+    } else {
+      if (Math.abs(deltaX) < 1) return nextPts;
+      const newX = start.x + deltaX;
+      nextPts[1].x = newX;
+      return simplifyOrthogonalWirePath([
+        start,
+        { x: newX, y: start.y },
+        ...nextPts.slice(1),
+      ]);
+    }
+  }
+
+  // Caso 3: Último segmento (índice pts.length - 2) de un cable multi-segmento conectado a pin
+  if (segmentIndex === pts.length - 2) {
+    const end = { ...pts[pts.length - 1] };
+    const prevPts = pts.map((p) => ({ ...p }));
+    if (isHoriz) {
+      if (Math.abs(deltaY) < 1) return prevPts;
+      const newY = end.y + deltaY;
+      prevPts[segmentIndex].y = newY;
+      return simplifyOrthogonalWirePath([
+        ...prevPts.slice(0, segmentIndex + 1),
+        { x: end.x, y: newY },
+        end,
+      ]);
+    } else {
+      if (Math.abs(deltaX) < 1) return prevPts;
+      const newX = end.x + deltaX;
+      prevPts[segmentIndex].x = newX;
+      return simplifyOrthogonalWirePath([
+        ...prevPts.slice(0, segmentIndex + 1),
+        { x: newX, y: end.y },
+        end,
+      ]);
+    }
+  }
+
+  // Caso 4: Segmento interior intermedio (entre dos esquinas internas)
+  const result = pts.map((p) => ({ ...p }));
+  if (isHoriz) {
+    result[segmentIndex].y += deltaY;
+    result[segmentIndex + 1].y += deltaY;
+  } else {
+    result[segmentIndex].x += deltaX;
+    result[segmentIndex + 1].x += deltaX;
+  }
+  return simplifyOrthogonalWirePath(result);
 }

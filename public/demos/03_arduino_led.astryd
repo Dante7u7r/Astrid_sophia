@@ -8,12 +8,12 @@
   ],
   "wires": [
     { "id": "w1", "from": { "componentId": "U1", "pinIndex": 5 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
-    { "id": "w2", "from": { "componentId": "U1", "pinIndex": 1 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [] },
-    { "id": "w3", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "LED1", "pinIndex": 0 }, "points": [] },
+    { "id": "w2", "from": { "componentId": "U1", "pinIndex": 1 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [], "label": "PIN_13", "color": "#22c55e" },
+    { "id": "w3", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "LED1", "pinIndex": 0 }, "points": [], "label": "V_LED", "color": "#66fcf1" },
     { "id": "w4", "from": { "componentId": "LED1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] }
   ],
   "viewport": { "zoom": 0.95, "offsetX": 340, "offsetY": 200 },
   "simSettings": { "dt": 0.00001, "tolerance": 0.00001, "maxIterations": 100 },
   "activeAnalysisMode": "TRAN",
-  "probes": { "ch1ProbeNode": "6", "ch2ProbeNode": "0" }
+  "probes": { "ch1ProbeNode": "1", "ch2ProbeNode": "2" }
 }

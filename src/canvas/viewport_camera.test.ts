@@ -79,7 +79,7 @@ describe("viewport_camera", () => {
     );
 
     expect(next.zoom).toBe(2);
-    expect(next.offsetX).toBeCloseTo(0);
-    expect(next.offsetY).toBeCloseTo(0);
+    expect(next.offsetX).toBeCloseTo(-100);
+    expect(next.offsetY).toBeCloseTo(-50);
   });
 });

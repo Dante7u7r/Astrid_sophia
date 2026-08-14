@@ -123,7 +123,7 @@ export class RenderController {
         const closestIdx = this.findClosestPlaybackIndex(results, sweepTime);
         const closest = results[closestIdx];
         if (closest) {
-          this.dependencies.circuitState.setVoltagesFromSnapshot(closest.nodeVoltages);
+          this.dependencies.circuitState.setVoltagesFromSnapshot(closest.nodeVoltages, closest.branchCurrents);
           this.syncMcuPlaybackState(orchestrator, sweepTime);
           this.feedPlaybackInstruments(closest, results);
           this.applyActuatorPlaybackState(orchestrator, closestIdx);
@@ -165,6 +165,7 @@ export class RenderController {
     }
 
     const { probeMarkers, sparMarkers } = this.resolveMarkers(orchestrator);
+    const branchCurrents = this.dependencies.circuitState.getCurrentMap();
 
     if (!this.dependencies.isVisualAuditStep("skip-canvas-render")) {
       orchestrator.render(
@@ -172,6 +173,7 @@ export class RenderController {
         probeMarkers,
         pinToNodeMap,
         sparMarkers.length > 0 ? sparMarkers : undefined,
+        branchCurrents,
       );
       this.dependencies.performanceMonitor.recordCanvasFrame();
     }

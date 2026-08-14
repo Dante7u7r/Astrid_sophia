@@ -192,18 +192,19 @@ body {
 
 .sidebar-left.collapsed,
 .sidebar-right.collapsed {
-  width: 0;
-  min-width: 0;
-  margin: 12px 0;
-  border-width: 0;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
   opacity: 0;
   pointer-events: none;
+  display: none !important;
 }
 
 .resize-handle.panel-collapsed {
-  width: 0;
-  margin-inline: 0;
-  pointer-events: none;
+  display: none !important;
 }
 
 /* ══ WORKSPACE CENTRAL ════════════════════════════ */
@@ -211,7 +212,7 @@ body {
   display: grid;
   grid-template-rows: var(--tabs-h) 1fr auto;
   height: calc(100% - 24px);
-  margin: 12px 6px;
+  margin: 12px 8px;
   border-radius: 16px;
   border: 1px solid var(--border-color);
   background: var(--bg-void);
@@ -220,7 +221,7 @@ body {
   min-width: 0;
 }
 
-/* ══ LIENZO DE CIRCUITO ══════════════════════════ */
+/* ══ LIENZO DE CIRCUITO (CAD INFINITO) ═══════════ */
 .canvas-viewport {
   position: relative;
   width: 100%;
@@ -228,25 +229,8 @@ body {
   min-width: 0;
   min-height: 0;
   display: block;
-  /* Cuadrícula sutil de puntos */
-  background-image:
-    radial-gradient(circle, rgba(91, 243, 228, 0.12) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-color: hsl(225, 28%, 6%);
+  background-color: var(--bg-void);
   overflow: hidden;
-}
-
-/* Líneas de eje central sutiles */
-.canvas-viewport::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(91, 243, 228, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 243, 228, 0.04) 1px, transparent 1px);
-  background-size: 120px 120px;
-  pointer-events: none;
-  z-index: 0;
 }
 
 #circuit-canvas {

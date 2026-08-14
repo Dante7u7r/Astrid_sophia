@@ -14,7 +14,9 @@ function setupDom(): HTMLCanvasElement {
     <button id="btn-clear-canvas"></button>
     <button id="btn-zoom-in"></button>
     <button id="btn-zoom-out"></button>
+    <button id="btn-zoom-fit"></button>
     <button id="btn-snap-grid" class="btn-active"></button>
+    <button id="btn-toggle-labels" aria-pressed="false"></button>
     <canvas id="canvas"></canvas>
   `;
 
@@ -94,5 +96,81 @@ describe("CanvasToolbarController", () => {
     expect(orchestrator.zoomAt).toHaveBeenNthCalledWith(1, 1.15, 200, 100);
     expect(orchestrator.zoomAt).toHaveBeenNthCalledWith(2, 0.85, 200, 100);
     expect(orchestrator.gridSize).toBe(1);
+  });
+
+  it("ajusta y centra el esquema con btn-zoom-fit", () => {
+    const canvas = setupDom();
+    const fitToScreen = vi.fn().mockReturnValue(true);
+    const render = vi.fn();
+    const addLog = vi.fn();
+    const orchestrator = {
+      components: [],
+      wires: [],
+      selectedComponent: null,
+      gridSize: 20,
+      zoomAt: vi.fn(),
+      fitToScreen,
+    };
+
+    initCanvasToolbarController({
+      canvasElement: canvas,
+      getOrchestrator: () => orchestrator,
+      getOscilloscopePanel: () => null,
+      clearVoltages: vi.fn(),
+      resetPerformanceCaches: vi.fn(),
+      updateCanvasRendering: render,
+      markCurrentTabAsModified: vi.fn(),
+      addLog,
+    });
+
+    document.querySelector<HTMLButtonElement>("#btn-zoom-fit")!.click();
+
+    expect(fitToScreen).toHaveBeenCalledOnce();
+    expect(render).toHaveBeenCalledOnce();
+    expect(addLog).toHaveBeenCalledWith("Esquema centrado y ajustado al lienzo.", "system");
+  });
+
+  it("alterna visibilidad de etiquetas de cables con btn-toggle-labels", () => {
+    const canvas = setupDom();
+    const render = vi.fn();
+    const addLog = vi.fn();
+    const orchestrator = {
+      components: [],
+      wires: [],
+      selectedComponent: null,
+      gridSize: 20,
+      showWireLabels: false,
+      zoomAt: vi.fn(),
+    };
+
+    initCanvasToolbarController({
+      canvasElement: canvas,
+      getOrchestrator: () => orchestrator,
+      getOscilloscopePanel: () => null,
+      clearVoltages: vi.fn(),
+      resetPerformanceCaches: vi.fn(),
+      updateCanvasRendering: render,
+      markCurrentTabAsModified: vi.fn(),
+      addLog,
+    });
+
+    const btn = document.querySelector<HTMLButtonElement>("#btn-toggle-labels")!;
+    expect(orchestrator.showWireLabels).toBe(false);
+
+    // Activar
+    btn.click();
+    expect(orchestrator.showWireLabels).toBe(true);
+    expect(btn.classList.contains("btn-active")).toBe(true);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(addLog).toHaveBeenCalledWith("Etiquetas de cables visibles.", "system");
+
+    // Desactivar
+    btn.click();
+    expect(orchestrator.showWireLabels).toBe(false);
+    expect(btn.classList.contains("btn-active")).toBe(false);
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(addLog).toHaveBeenCalledWith("Etiquetas de cables ocultas.", "system");
   });
 });

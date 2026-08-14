@@ -29,6 +29,9 @@ import {
 
 export interface ComponentRenderOptions {
   readonly detail?: "full" | "compact";
+  readonly voltageMap?: Record<string, number>;
+  readonly branchCurrents?: Record<string, number>;
+  readonly showReactiveFields?: boolean;
 }
 
 export function drawComponentSymbol(
@@ -236,16 +239,32 @@ export function drawComponentSymbol(
       ctx.fillText("-t°", 15, -13);
       break;
 
-    case 'capacitor':
+    case 'capacitor': {
       // Parallel plates
       ctx.moveTo(-6, -14);
       ctx.lineTo(-6, 14);
       ctx.moveTo(6, -14);
       ctx.lineTo(6, 14);
       ctx.stroke();
-      break;
 
-    case 'inductor':
+      // Campo electrostático dieléctrico entre placas
+      const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+      const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+      const vDiff = v0 - v1;
+      const absV = Math.abs(vDiff);
+      if (options.showReactiveFields !== false && absV > 0.05) {
+        const intensity = Math.min(1.0, absV / 10.0);
+        ctx.save();
+        ctx.fillStyle = vDiff > 0
+          ? `rgba(102, 252, 241, ${0.15 + intensity * 0.35})`
+          : `rgba(168, 85, 247, ${0.15 + intensity * 0.35})`;
+        ctx.fillRect(-5, -13, 10, 26);
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'inductor': {
       // Curved coils
       ctx.moveTo(-20, 0);
       for (let i = 0; i < 4; i++) {
@@ -253,7 +272,25 @@ export function drawComponentSymbol(
         ctx.arc(startX + 5, 0, 5, Math.PI, 0, false);
       }
       ctx.stroke();
+
+      // Resplandor de flujo magnético en los devanados
+      const iBranch = Math.abs(options.branchCurrents?.[`${comp.id}:I`] ?? options.branchCurrents?.[`${comp.id}:0`] ?? 0);
+      if (options.showReactiveFields !== false && iBranch > 0.0001) {
+        const intensity = Math.min(1.0, Math.sqrt(iBranch / 0.1));
+        ctx.save();
+        ctx.strokeStyle = `rgba(56, 189, 248, ${0.25 + intensity * 0.45})`;
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(-20, 0);
+        for (let i = 0; i < 4; i++) {
+          const startX = -20 + i * 10;
+          ctx.arc(startX + 5, 0, 6.5, Math.PI, 0, false);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
       break;
+    }
 
     case 'diode':
       // Triangle + bar

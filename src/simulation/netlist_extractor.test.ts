@@ -349,4 +349,82 @@ describe("extractElectricalNetlist", () => {
     expect(resWithWire.pinToNodeMap["R1:0"]).toBe(resWithWire.pinToNodeMap["GND1:0"]);
     expect(resWithWire.pinToNodeMap["R1:0"]).toBe("0");
   });
+
+  test("extrae correctamente nodos unificados a traves de empalmes en T (T-Junctions)", () => {
+    const components: ComponentInstance[] = [
+      { id: "GND1", type: "ground", value: 0, x: 0, y: -50, rotation: 0 },
+      { id: "V1", type: "vsource", value: 12, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 50, y: 0, rotation: 0 },
+      { id: "R2", type: "resistor", value: 2000, x: 100, y: 0, rotation: 0 },
+    ];
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      const count = c.type === "ground" ? 1 : 2;
+      return Array.from({ length: count }, (_, i) => ({
+        componentId: c.id,
+        pinIndex: i,
+        x: c.x + i * 20,
+        y: c.y,
+        label: `${i}`,
+      }));
+    };
+
+    const junctionPos = { x: 50, y: 0 };
+    const junctionEp = { componentId: "junction_50_0", pinIndex: 0, isJunction: true, junctionPos };
+
+    // V1:0 conectado a la unión J1
+    const wireA: WireInstance = {
+      id: "wire_V1_p0_to_j_50_0",
+      from: { componentId: "V1", pinIndex: 0 },
+      to: { ...junctionEp },
+      points: [{ x: 0, y: 0 }, { x: 50, y: 0 }],
+    };
+    // R1:0 conectado a la unión J1
+    const wireB: WireInstance = {
+      id: "wire_j_50_0_to_R1_p0",
+      from: { ...junctionEp },
+      to: { componentId: "R1", pinIndex: 0 },
+      points: [{ x: 50, y: 0 }, { x: 50, y: 0 }],
+    };
+    // R2:0 derivado a la unión J1 (tercera rama)
+    const wireC: WireInstance = {
+      id: "wire_R2_p0_to_j_50_0",
+      from: { componentId: "R2", pinIndex: 0 },
+      to: { ...junctionEp },
+      points: [{ x: 100, y: 0 }, { x: 50, y: 0 }],
+    };
+
+    // Conectar terminales de retorno a GND para satisfacer ERC
+    const wireGnd1: WireInstance = {
+      id: "wire_V1_p1_to_GND",
+      from: { componentId: "V1", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+    const wireGnd2: WireInstance = {
+      id: "wire_R1_p1_to_GND",
+      from: { componentId: "R1", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+    const wireGnd3: WireInstance = {
+      id: "wire_R2_p1_to_GND",
+      from: { componentId: "R2", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+
+    const res = extractElectricalNetlist(
+      components,
+      [wireA, wireB, wireC, wireGnd1, wireGnd2, wireGnd3],
+      getPins,
+    );
+    expect(res.error).toBeUndefined();
+    expect(res.netlist.wires).toHaveLength(6);
+
+    // Todos los terminales conectados a la T-Junction deben compartir el MISMO nodo eléctrico
+    const nodeV1_0 = res.pinToNodeMap["V1:0"];
+    const nodeR1_0 = res.pinToNodeMap["R1:0"];
+    const nodeR2_0 = res.pinToNodeMap["R2:0"];
+
+    expect(nodeV1_0).toBeDefined();
+    expect(nodeV1_0).toBe(nodeR1_0);
+    expect(nodeV1_0).toBe(nodeR2_0);
+  });
 });

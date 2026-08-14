@@ -4,7 +4,9 @@ description: Use when writing Rust numerical code, sparse/dense matrix solvers, 
 ---
 
 # Skill: Rust Math Performance
-**Revision:** 2.0 — PhD-Grade Reference
+**Revision:** 2.0 — Reference patterns
+
+> **Project binding.** Measure before optimizing and verify the real solver interfaces and tests. SIMD, rayon, sparse storage and allocation patterns below are options, not a license to change numerical order, determinism, cancellation or public results without a regression oracle.
 
 ---
 

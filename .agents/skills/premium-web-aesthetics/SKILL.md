@@ -4,7 +4,9 @@ description: Use when styling UI with CSS, implementing glassmorphism, dark-mode
 ---
 
 # Skill: Premium Web Aesthetics
-**Revision:** 2.0 — PhD-Grade Reference
+**Revision:** 2.0 — Reference patterns
+
+> **Project binding.** Use the existing CSS tokens, Canvas renderer, UI models and tests as the contract. Do not introduce a framework, a component library or visual motion that claims to show physical simulation data unless the source data is real and labeled accurately.
 
 ---
 

@@ -106,30 +106,43 @@ Astrid_sophia/
 
 ---
 
-## 🔌 Comandos IPC Registrados (Tauri)
+## 🔌 Comandos IPC Registrados (Tauri — 33 Endpoints)
 
-| # | Comando | Fase | Descripción |
-|---|---------|------|-------------|
-| 1 | `ping` | 1 | Health check |
-| 2 | `run_dc_simulation` | 2 | Punto de operación DC |
-| 3 | `run_transient_simulation` | 4 | Transitorio adaptativo |
-| 4 | `run_ac_sweep` | 6 | Diagrama de Bode |
-| 5 | `run_dc_sweep` | 14 | Curva I-V paramétrica |
-| 6 | `parse_spice_netlist` | 15 | Parser SPICE jerárquico |
-| 7 | `run_monte_carlo_transient` | 16 | Monte Carlo estadístico |
-| 8 | `run_fft_analysis` | 17 | FFT + THD |
-| 9 | `run_imd_analysis` | 36 | Intermodulación IMD/IP3 |
-| 10 | `run_noise_sweep` | 22 | Ruido espectral |
-| 11 | `evaluate_measures` | 23 | Mediciones automáticas |
-| 12 | `expand_transmission_line` | 24 | Expansión de línea RLCG |
-| 13 | `solve_dc_thermal` | 25 | DC con temperatura |
-| 14 | `run_sensitivity_analysis` | 26 | Sensibilidad paramétrica |
-| 15 | `run_pss_simulation` | 27 | PSS shooting method |
-| 16 | `run_stability_analysis` | 29 | Polos y ceros de modelo reducido; sin márgenes |
-| 17 | `get_performance_telemetry` | 20 | Métricas del sistema |
-| 18 | `save_circuit_file` | 21 | Guardar esquemático (diálogo) |
-| 19 | `save_circuit_to_path` | 21 | Guardar esquemático (ruta directa) |
-| 20 | `open_circuit_file` | 21 | Abrir esquemático (diálogo) |
+| # | Comando | Fase / Módulo | Descripción |
+|---|---------|---------------|-------------|
+| 1 | `ping` | 1 | Health check de conexión IPC |
+| 2 | `run_dc_simulation` | 2 | Punto de operación DC (MNA + Newton-Raphson) |
+| 3 | `run_transient_simulation` | 4 | Transitorio adaptativo (BE / TRAP + LTE) |
+| 4 | `run_ac_sweep` | 6 | Diagrama de Bode (amplitud + fase) |
+| 5 | `run_dc_sweep` | 14 | Curva I-V paramétrica de fuentes |
+| 6 | `parse_spice_netlist` | 15 | Parser SPICE jerárquico (.subckt, .model, expressions) |
+| 7 | `run_monte_carlo_transient` | 16 | Simulación Monte Carlo de tolerancias estadísticas |
+| 8 | `run_fft_analysis` | 17 | FFT Cooley-Tukey + distorsión armónica total THD |
+| 9 | `run_imd_analysis` | 36 | Análisis de intermodulación IMD2/IM3 y punto IP3 |
+| 10 | `run_noise_sweep` | 22 | Densidad espectral de ruido (térmico, shot, 1/f) |
+| 11 | `evaluate_measures` | 23 | Evaluación automática de directivas .measure |
+| 12 | `expand_transmission_line` | 24 | Expansión de línea RLCG a cascade Pi segmentada |
+| 13 | `solve_dc_thermal` | 25 | DC con deriva térmica de semiconductores |
+| 14 | `run_sensitivity_analysis` | 26 | Sensibilidad paramétrica DC (∂V/∂param) |
+| 15 | `run_pss_simulation` | 27 | Periodic Steady State (Shooting Method) |
+| 16 | `run_stability_analysis` | 29 | Polos y ceros de modelo reducido (Arnoldi) |
+| 17 | `get_performance_telemetry` | 20 | Métricas de rendimiento del sistema (CPU, RAM) |
+| 18 | `save_circuit_file` | 21 | Guardar esquemático interactivo (diálogo nativo OS) |
+| 19 | `save_circuit_to_path` | 21 | Guardar esquemático a ruta autorizada |
+| 20 | `open_circuit_file` | 21 | Abrir esquemático (diálogo nativo OS) |
+| 21 | `start_interactive_transient` | Streaming | Transitorio en tiempo real con emisión de eventos `sim-frame-update` |
+| 22 | `stop_interactive_transient` | Streaming | Detener hilo de simulación transitoria interactiva |
+| 23 | `inject_live_mutation` | Streaming | Mutación en caliente de parámetros (potenciómetros/switches) |
+| 24 | `advanced_ipc::run_pvt_matrix_analysis` | PVT | Simulación paralela de esquinas PVT (Process/Voltage/Temp) |
+| 25 | `advanced_ipc::extract_sparameter` | RF / S-Param | Extracción multi-puerto de parámetros S (S11, S21, S12, S22) |
+| 26 | `advanced_ipc::export_touchstone_file` | RF / S-Param | Exportación a formato estándar Touchstone (.s2p / .snp) |
+| 27 | `feedback::store::ingest_feedback_batch` | Telemetría | Ingesta de lote de eventos de diagnóstico en SQLite local |
+| 28 | `feedback::store::set_feedback_consent` | Telemetría | Configuración de consentimiento de telemetría del usuario |
+| 29 | `feedback::store::get_feedback_status` | Telemetría | Estado del subsistema de almacenamiento de feedback |
+| 30 | `feedback::store::query_feedback_events` | Telemetría | Consulta paginada/filtrada de eventos en base SQLite |
+| 31 | `feedback::store::export_feedback_events` | Telemetría | Exportación de base de datos de eventos a JSON |
+| 32 | `feedback::store::delete_feedback_data` | Telemetría | Purga y reseteo de base SQLite de telemetría |
+| 33 | `feedback::store::flush_feedback_store` | Telemetría | Sincronización forzada de buffer en memoria a disco |
 
 ---
 

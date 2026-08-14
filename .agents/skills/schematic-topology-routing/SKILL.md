@@ -1,4 +1,11 @@
+---
+name: schematic-topology-routing
+description: Use when changing schematic topology, wiring, grid routing, junction detection, DSU net extraction or ERC in Astryd Sophia. Treat the examples as algorithms to validate against the current Canvas and netlist code, not as existing APIs.
+---
+
 # Skill: schematic-topology-routing
+
+> **Project binding.** Read the actual canvas, netlist extractor and ERC tests before changing behavior. The source of truth is the code and its contracts; this skill supplies possible algorithms only.
 
 ## Descripción
 Lógica de grafos topológicos para circuitos eléctricos. Implementación de enrutamiento ortogonal (Manhattan Routing) sobre rejilla rígida, gestión interactiva de conexiones entre pines, y extracción reactiva de Netlists mediante Estructuras de Conjuntos Disjuntos (DSU - Disjoint Set Union).

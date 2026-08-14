@@ -5,6 +5,8 @@ import {
   hasCanvasSelection,
   isPointInsideRect,
   parsePaletteComponentData,
+  resolveTouchPanStep,
+  resolveTouchPinchStep,
   resolveWheelZoomStep,
   shouldStartPaletteDrag,
 } from "./canvas_input_model";
@@ -59,5 +61,24 @@ describe("canvas_input_model", () => {
     expect(isPointInsideRect({ left: 0, right: 100, top: 0, bottom: 50 }, { clientX: 101, clientY: 25 })).toBe(false);
     expect(shouldStartPaletteDrag({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(false);
     expect(shouldStartPaletteDrag({ x: 0, y: 0 }, { x: 6, y: 0 })).toBe(true);
+  });
+
+  it("calcula zoom suave para pinch-to-zoom en trackpad", () => {
+    const pinchOut = resolveWheelZoomStep(-10, 1.0, { minZoom: 0.3, maxZoom: 3.0 }, true);
+    expect(pinchOut.clampedZoom).toBeGreaterThan(1.0);
+
+    const pinchIn = resolveWheelZoomStep(10, 1.0, { minZoom: 0.3, maxZoom: 3.0 }, true);
+    expect(pinchIn.clampedZoom).toBeLessThan(1.0);
+  });
+
+  it("calcula escala de pinch táctil con 2 dedos", () => {
+    const { zoomFactor, clampedZoom } = resolveTouchPinchStep(100, 150, 1.0, { minZoom: 0.3, maxZoom: 3.0 });
+    expect(zoomFactor).toBeCloseTo(1.5);
+    expect(clampedZoom).toBeCloseTo(1.5);
+  });
+
+  it("calcula paneo táctil con 2 dedos", () => {
+    const pan = resolveTouchPanStep({ x: 100, y: 200 }, { x: 125, y: 190 });
+    expect(pan).toEqual({ x: 25, y: -10 });
   });
 });

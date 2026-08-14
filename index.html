@@ -25,8 +25,8 @@
             <option value="AC">📈 Barrido CA</option>
             <option value="TRAN">⏱️ Transitorio</option>
             <option value="SENS">🔍 Sensibilidad</option>
-            <option value="PSS">🔄 PSS (experimental)</option>
-            <option value="STB">⚖️ Polos/ceros (experimental)</option>
+            <option value="PSS">⚠️ PSS (Shooting — Experimental)</option>
+            <option value="STB">⚠️ Polos/Ceros (Reducido — Experimental)</option>
             <option value="PVT">🔬 PVT</option>
             <option value="SPAR">📡 S-Param</option>
           </select>
@@ -54,6 +54,10 @@
             <option value="02_puente_rectificador.astryd">Puente rectificador</option>
             <option value="03_arduino_led.astryd">Arduino + LED</option>
             <option value="04_amp_bjt_bode.astryd">Amp BJT (Bode)</option>
+            <option value="05_amplificador_opamp.astryd">Amp Op-Amp Inversor</option>
+            <option value="06_inversor_cmos.astryd">Inversor Digital CMOS</option>
+            <option value="07_rlc_resonante.astryd">Circuito RLC Resonante</option>
+            <option value="08_control_rele_interactivo.astryd">Control con Relé Interactivo</option>
           </select>
           <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
             <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
@@ -590,7 +594,9 @@
               <button id="btn-floater-instruments" class="btn-floating" data-tooltip="Abrir centro de instrumentos" aria-label="Abrir centro de instrumentos" type="button">🛠️</button>
               <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" aria-label="Aumentar zoom" type="button">+</button>
               <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" aria-label="Disminuir zoom" type="button">-</button>
+              <button id="btn-zoom-fit" class="btn-floating" data-tooltip="Ajustar y Centrar Esquema" aria-label="Ajustar y centrar esquema al lienzo" type="button">⛶</button>
               <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" aria-label="Desactivar ajuste a rejilla" aria-pressed="true" type="button">🌐</button>
+              <button id="btn-toggle-labels" class="btn-floating" data-tooltip="Mostrar/Ocultar Etiquetas de Cables" aria-label="Mostrar etiquetas de cables" aria-pressed="false" type="button">🏷️</button>
               <button id="btn-clear-canvas" class="btn-floating" data-tooltip="Limpiar Todo" aria-label="Limpiar esquema" style="color: var(--danger);" type="button">🗑️</button>
             </div>
             
@@ -1093,6 +1099,42 @@
             <div class="property-group">
               <label class="property-label" for="settings-iter-input">Iteraciones DC/TRAN/PSS</label>
               <input id="settings-iter-input" class="prop-input" type="number" min="1" max="10000" step="1" value="100" />
+            </div>
+            <div class="property-group">
+              <label class="property-label" for="settings-flow-mode-input">Flujo de Corriente Visual</label>
+              <select id="settings-flow-mode-input" class="prop-input">
+                <option value="conventional" selected>Flujo Convencional (+ a -)</option>
+                <option value="electron">Flujo Electrónico (- a +)</option>
+              </select>
+            </div>
+            <div class="property-group">
+              <label class="property-label" for="settings-flow-speed-input">Velocidad de Animación</label>
+              <select id="settings-flow-speed-input" class="prop-input">
+                <option value="0.5">0.5x (Cámara lenta)</option>
+                <option value="1.0" selected>1.0x (Normal)</option>
+                <option value="2.0">2.0x (Rápido)</option>
+              </select>
+            </div>
+            <div class="property-group">
+              <label class="property-label">Efectos y Capas Visuales</label>
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; color: var(--text-color);">
+                  <input type="checkbox" id="settings-show-current-anim" checked />
+                  Animación de corriente en cables
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; color: var(--text-color);">
+                  <input type="checkbox" id="settings-show-thermal-heatmap" checked />
+                  Resplandor térmico de potencia disipada
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; color: var(--text-color);">
+                  <input type="checkbox" id="settings-show-reactive-fields" checked />
+                  Campos en condensadores y bobinas
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; color: var(--text-color);">
+                  <input type="checkbox" id="settings-show-telemetry-hud" checked />
+                  HUD de telemetría al pasar el ratón
+                </label>
+              </div>
             </div>
             <div class="property-group">
               <label class="property-label" for="feedback-consent-mode">Datos de mejora y diagnóstico</label>

@@ -39,13 +39,46 @@ export function resolveWheelZoomStep(
   deltaY: number,
   currentZoom: number,
   limits: ZoomLimits,
+  isPinch = false,
 ): ZoomStep {
-  const requestedFactor = deltaY < 0 ? 1.1 : 0.9;
+  const requestedFactor = isPinch
+    ? Math.exp(-deltaY * 0.01)
+    : deltaY < 0
+    ? 1.1
+    : 0.9;
   const requestedZoom = currentZoom * requestedFactor;
   const clampedZoom = Math.min(Math.max(requestedZoom, limits.minZoom), limits.maxZoom);
   return {
     zoomFactor: clampedZoom / currentZoom,
     clampedZoom,
+  };
+}
+
+export function resolveTouchPinchStep(
+  prevDistance: number,
+  currDistance: number,
+  currentZoom: number,
+  limits: ZoomLimits,
+): ZoomStep {
+  if (prevDistance <= 0 || currDistance <= 0) {
+    return { zoomFactor: 1, clampedZoom: currentZoom };
+  }
+  const ratio = currDistance / prevDistance;
+  const requestedZoom = currentZoom * ratio;
+  const clampedZoom = Math.min(Math.max(requestedZoom, limits.minZoom), limits.maxZoom);
+  return {
+    zoomFactor: clampedZoom / currentZoom,
+    clampedZoom,
+  };
+}
+
+export function resolveTouchPanStep(
+  prevMidpoint: Point2D,
+  currMidpoint: Point2D,
+): Point2D {
+  return {
+    x: currMidpoint.x - prevMidpoint.x,
+    y: currMidpoint.y - prevMidpoint.y,
   };
 }
 

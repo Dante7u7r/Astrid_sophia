@@ -10,6 +10,7 @@ import {
   normalizeComponentId,
 } from "./component_identity";
 import { createWireId } from "./wire_identity";
+import { autoHealJunctions } from "./wiring_model";
 
 export interface SelectionMutation {
   selectedComponent: ComponentInstance | null;
@@ -111,9 +112,11 @@ export function removeComponentFromCircuit(
   wires: WireInstance[];
   selectedComponents: ComponentInstance[];
 } {
+  const remainingWires = wires.filter(wire => wire.from.componentId !== id && wire.to.componentId !== id);
+  autoHealJunctions(remainingWires);
   return {
     components: components.filter(component => component.id !== id),
-    wires: wires.filter(wire => wire.from.componentId !== id && wire.to.componentId !== id),
+    wires: remainingWires,
     selectedComponents: selectedComponents.filter(component => component.id !== id),
   };
 }
@@ -231,14 +234,17 @@ export function removeSelection(
     };
   }
 
+  const remainingWires = wires.filter(
+    wire =>
+      !wireIdsToRemove.has(wire.id) &&
+      !compIdsToRemove.has(wire.from.componentId) &&
+      !compIdsToRemove.has(wire.to.componentId),
+  );
+  autoHealJunctions(remainingWires);
+
   return {
     components: components.filter(component => !compIdsToRemove.has(component.id)),
-    wires: wires.filter(
-      wire =>
-        !wireIdsToRemove.has(wire.id) &&
-        !compIdsToRemove.has(wire.from.componentId) &&
-        !compIdsToRemove.has(wire.to.componentId),
-    ),
+    wires: remainingWires,
     selectedWire: null,
     selectedWires: [],
     selectedComponent: null,

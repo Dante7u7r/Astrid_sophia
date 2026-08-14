@@ -73,9 +73,13 @@ export function generateOrthogonalPath(start: Point2D, end: Point2D, gridSize: n
   return pts;
 }
 
-export function getVisibleWorldBounds(camera: CameraState, viewport: ViewportSize): BoundingBox {
-  const topLeft = screenToWorld(0, 0, camera);
-  const bottomRight = screenToWorld(viewport.width, viewport.height, camera);
+export function getVisibleWorldBounds(
+  camera: CameraState,
+  viewport: ViewportSize,
+  margin = 120,
+): BoundingBox {
+  const topLeft = screenToWorld(-margin, -margin, camera);
+  const bottomRight = screenToWorld(viewport.width + margin, viewport.height + margin, camera);
   return {
     x: topLeft.x,
     y: topLeft.y,
@@ -118,20 +122,26 @@ export function getCircuitGeometricCenter(components: readonly ComponentInstance
   };
 }
 
+/**
+ * Mantiene los offsets dentro de un rango numérico seguro en un plano CAD libre e infinito.
+ */
 export function clampCameraOffsets(
   camera: CameraState,
-  center: Point2D,
-  viewport: ViewportSize,
+  _center?: Point2D,
+  _viewport?: ViewportSize,
 ): CameraState {
-  const minOffsetX = -center.x * camera.zoom;
-  const maxOffsetX = viewport.width - center.x * camera.zoom;
-  const minOffsetY = -center.y * camera.zoom;
-  const maxOffsetY = viewport.height - center.y * camera.zoom;
+  const MAX_OFFSET = 500000;
+  const offsetX = Number.isFinite(camera.offsetX)
+    ? Math.min(Math.max(camera.offsetX, -MAX_OFFSET), MAX_OFFSET)
+    : 0;
+  const offsetY = Number.isFinite(camera.offsetY)
+    ? Math.min(Math.max(camera.offsetY, -MAX_OFFSET), MAX_OFFSET)
+    : 0;
 
   return {
     zoom: camera.zoom,
-    offsetX: Math.min(Math.max(camera.offsetX, minOffsetX), maxOffsetX),
-    offsetY: Math.min(Math.max(camera.offsetY, minOffsetY), maxOffsetY),
+    offsetX,
+    offsetY,
   };
 }
 

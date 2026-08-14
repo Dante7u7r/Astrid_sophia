@@ -5,7 +5,9 @@ interface CanvasToolbarOrchestrator {
   wires: unknown[];
   selectedComponent: unknown | null;
   gridSize: number;
+  showWireLabels?: boolean;
   zoomAt(factor: number, x: number, y: number): void;
+  fitToScreen?(margin?: number): boolean;
 }
 
 export interface CanvasToolbarControllerDeps {
@@ -54,6 +56,43 @@ export function initCanvasToolbarController(deps: CanvasToolbarControllerDeps): 
     deps.getOrchestrator()?.zoomAt(0.85, deps.canvasElement.clientWidth / 2, deps.canvasElement.clientHeight / 2);
     deps.updateCanvasRendering();
   });
+
+  const btnZoomFit = document.querySelector("#btn-zoom-fit");
+  btnZoomFit?.addEventListener("click", () => {
+    const fitted = deps.getOrchestrator()?.fitToScreen?.();
+    if (fitted) {
+      deps.updateCanvasRendering();
+      deps.addLog("Esquema centrado y ajustado al lienzo.", "system");
+    }
+  });
+
+  const btnToggleLabels = document.querySelector<HTMLButtonElement>("#btn-toggle-labels");
+  if (btnToggleLabels) {
+    let labelsEnabled = deps.getOrchestrator()?.showWireLabels ?? false;
+    btnToggleLabels.classList.toggle("btn-active", labelsEnabled);
+    btnToggleLabels.setAttribute("aria-pressed", String(labelsEnabled));
+    btnToggleLabels.setAttribute(
+      "aria-label",
+      labelsEnabled ? "Ocultar etiquetas de cables" : "Mostrar etiquetas de cables",
+    );
+    btnToggleLabels.addEventListener("click", () => {
+      const orch = deps.getOrchestrator();
+      if (!orch) return;
+      labelsEnabled = !labelsEnabled;
+      orch.showWireLabels = labelsEnabled;
+      btnToggleLabels.classList.toggle("btn-active", labelsEnabled);
+      btnToggleLabels.setAttribute("aria-pressed", String(labelsEnabled));
+      btnToggleLabels.setAttribute(
+        "aria-label",
+        labelsEnabled ? "Ocultar etiquetas de cables" : "Mostrar etiquetas de cables",
+      );
+      deps.updateCanvasRendering();
+      deps.addLog(
+        labelsEnabled ? "Etiquetas de cables visibles." : "Etiquetas de cables ocultas.",
+        "system",
+      );
+    });
+  }
 
   const btnSnapGrid = document.querySelector<HTMLButtonElement>("#btn-snap-grid");
   if (!btnSnapGrid || !deps.getOrchestrator()) return;

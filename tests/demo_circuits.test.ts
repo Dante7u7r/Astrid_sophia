@@ -12,6 +12,10 @@ const DEMO_FILES = [
   "02_puente_rectificador.astryd",
   "03_arduino_led.astryd",
   "04_amp_bjt_bode.astryd",
+  "05_amplificador_opamp.astryd",
+  "06_inversor_cmos.astryd",
+  "07_rlc_resonante.astryd",
+  "08_control_rele_interactivo.astryd",
 ] as const;
 
 function loadDemo(filename: (typeof DEMO_FILES)[number]): CircuitFileData {
@@ -130,5 +134,92 @@ describe("circuitos de demostracion", () => {
     expectSameNode(nodes, "Q1:2", "RE:0");
     expectSameNode(nodes, "VCC:1", "Vin:1", "RB2:1", "RE:1", "GND1:0");
     expectDifferentNodes(nodes, "VCC:0", "VCC:1");
+  });
+
+  test("el amplificador Op-Amp tiene lazo de realimentacion negativa y alimentacion bipolar", () => {
+    const demo = loadDemo("05_amplificador_opamp.astryd");
+    const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
+    expectSameNode(nodes, "Vin:0", "Rin:0");
+    expectSameNode(nodes, "Rin:1", "U1:1", "Rf:0");
+    expectSameNode(nodes, "U1:4", "Rf:1", "RL:0");
+    expectSameNode(nodes, "Vpos:0", "U1:2");
+    expectSameNode(nodes, "Vneg:0", "U1:3");
+    expectSameNode(nodes, "Vin:1", "Vpos:1", "Vneg:1", "U1:0", "RL:1", "GND1:0");
+    expectDifferentNodes(nodes, "Vin:0", "U1:4");
+  });
+
+  test("el inversor CMOS conecta compuertas comunes, drenadores comunes y rieles Vdd/GND", () => {
+    const demo = loadDemo("06_inversor_cmos.astryd");
+    const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
+    expectSameNode(nodes, "Vin:0", "Mn1:0", "Mp1:0");
+    expectSameNode(nodes, "Mp1:1", "Mn1:1", "Cload:0");
+    expectSameNode(nodes, "Vdd:0", "Mp1:2");
+    expectSameNode(nodes, "Vin:1", "Vdd:1", "Mn1:2", "Cload:1", "GND1:0");
+    expectDifferentNodes(nodes, "Vin:0", "Mp1:1");
+    expectDifferentNodes(nodes, "Vdd:0", "GND1:0");
+  });
+
+  test("el circuito RLC conecta resistencia, inductor y condensador en serie resonante", () => {
+    const demo = loadDemo("07_rlc_resonante.astryd");
+    const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
+    expectSameNode(nodes, "Vin:0", "R1:0");
+    expectSameNode(nodes, "R1:1", "L1:0");
+    expectSameNode(nodes, "L1:1", "C1:0");
+    expectSameNode(nodes, "Vin:1", "C1:1", "GND1:0");
+    expectDifferentNodes(nodes, "Vin:0", "L1:1");
+    expectDifferentNodes(nodes, "Vin:0", "GND1:0");
+  });
+
+  test("el control de rele conecta alimentacion, switch, diodo flyback, bobina y lampara", () => {
+    const demo = loadDemo("08_control_rele_interactivo.astryd");
+    const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
+    expectSameNode(nodes, "V12:0", "SW1:0", "K1:2");
+    expectSameNode(nodes, "SW1:1", "K1:0", "Dfly:1");
+    expectSameNode(nodes, "Dfly:0", "K1:1", "V12:1", "LAMP1:1", "GND1:0");
+    expectSameNode(nodes, "K1:3", "LAMP1:0");
+    expectDifferentNodes(nodes, "V12:0", "SW1:1");
+    expectDifferentNodes(nodes, "V12:0", "K1:3");
+  });
+
+  test("todos los demos tienen probes activos y modos de analisis validos", () => {
+    const rc = loadDemo("01_filtro_rc.astryd");
+    expect(rc.activeAnalysisMode).toBe("TRAN");
+    expect(rc.probes?.ch1ProbeNode).toBe("1");
+    expect(rc.probes?.ch2ProbeNode).toBe("2");
+
+    const puente = loadDemo("02_puente_rectificador.astryd");
+    expect(puente.activeAnalysisMode).toBe("TRAN");
+    expect(puente.probes?.ch1ProbeNode).toBe("1");
+    expect(puente.probes?.ch2ProbeNode).toBe("3");
+
+    const arduino = loadDemo("03_arduino_led.astryd");
+    expect(arduino.activeAnalysisMode).toBe("TRAN");
+    expect(arduino.probes?.ch1ProbeNode).toBe("1");
+    expect(arduino.probes?.ch2ProbeNode).toBe("2");
+
+    const bjt = loadDemo("04_amp_bjt_bode.astryd");
+    expect(bjt.activeAnalysisMode).toBe("AC");
+    expect(bjt.probes?.ch1ProbeNode).toBe("1");
+    expect(bjt.probes?.ch2ProbeNode).toBe("3");
+
+    const opamp = loadDemo("05_amplificador_opamp.astryd");
+    expect(opamp.activeAnalysisMode).toBe("TRAN");
+    expect(opamp.probes?.ch1ProbeNode).toBe("1");
+    expect(opamp.probes?.ch2ProbeNode).toBe("6");
+
+    const cmos = loadDemo("06_inversor_cmos.astryd");
+    expect(cmos.activeAnalysisMode).toBe("TRAN");
+    expect(cmos.probes?.ch1ProbeNode).toBe("1");
+    expect(cmos.probes?.ch2ProbeNode).toBe("3");
+
+    const rlc = loadDemo("07_rlc_resonante.astryd");
+    expect(rlc.activeAnalysisMode).toBe("TRAN");
+    expect(rlc.probes?.ch1ProbeNode).toBe("1");
+    expect(rlc.probes?.ch2ProbeNode).toBe("3");
+
+    const rele = loadDemo("08_control_rele_interactivo.astryd");
+    expect(rele.activeAnalysisMode).toBe("TRAN");
+    expect(rele.probes?.ch1ProbeNode).toBe("2");
+    expect(rele.probes?.ch2ProbeNode).toBe("3");
   });
 });

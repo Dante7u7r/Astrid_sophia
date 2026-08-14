@@ -9,6 +9,8 @@ import {
   hasCanvasSelection,
   isPointInsideRect,
   parsePaletteComponentData,
+  resolveTouchPanStep,
+  resolveTouchPinchStep,
   resolveWheelZoomStep,
   shouldStartPaletteDrag,
 } from "./canvas_input_model";
@@ -130,7 +132,11 @@ export function attachCanvasInput(
     }
 
     if (orchestrator.activePinForWire) {
-      orchestrator.tempWireEnd = orchestrator.snapPointToGrid(worldPt);
+      if (orchestrator.hoveredWireSnapPoint) {
+        orchestrator.tempWireEnd = orchestrator.hoveredWireSnapPoint.snapPoint;
+      } else {
+        orchestrator.tempWireEnd = orchestrator.snapPointToGrid(worldPt);
+      }
     }
 
     if (isRightClickPanning) {
@@ -160,6 +166,18 @@ export function attachCanvasInput(
         );
         callbacks.onWireConnected();
         callbacks.onCanvasModified();
+      } else if (orchestrator.hoveredWireSnapPoint) {
+        const from = orchestrator.activePinForWire;
+        const { wire: targetWire, snapPoint } = orchestrator.hoveredWireSnapPoint;
+        const success = orchestrator.connectPinToWire(from, targetWire, snapPoint);
+        if (success) {
+          callbacks.log(
+            `Empalme en T creado: [${from.componentId}] terminal ${from.pinIndex} conectado a cable existente en (${Math.round(snapPoint.x)}, ${Math.round(snapPoint.y)})`,
+            "system",
+          );
+          callbacks.onWireConnected();
+          callbacks.onCanvasModified();
+        }
       }
       orchestrator.activePinForWire = null;
       orchestrator.tempWireEnd = null;
@@ -213,16 +231,109 @@ export function attachCanvasInput(
       return;
     }
 
+    const isPinch = e.ctrlKey;
+
+    if (!isPinch && !e.shiftKey && e.deltaMode === 0 && (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) > 0) && (Math.abs(e.deltaX) > 1 || Math.abs(e.deltaY) < 30)) {
+      orchestrator.pan(-e.deltaX, -e.deltaY);
+      callbacks.requestRender(true);
+      e.preventDefault();
+      return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const { screenX, screenY } = clientToCanvasPoint(rect, e);
-    const { zoomFactor } = resolveWheelZoomStep(e.deltaY, orchestrator.zoom, {
-      minZoom: orchestrator.minZoom,
-      maxZoom: orchestrator.maxZoom,
-    });
+    const { zoomFactor } = resolveWheelZoomStep(
+      e.deltaY,
+      orchestrator.zoom,
+      {
+        minZoom: orchestrator.minZoom,
+        maxZoom: orchestrator.maxZoom,
+      },
+      isPinch,
+    );
     orchestrator.zoomAt(zoomFactor, screenX, screenY);
     
     callbacks.requestRender(true);
     e.preventDefault();
+  };
+
+  let touchStartDistance = 0;
+  let touchStartMidpoint = { x: 0, y: 0 };
+  let isMultiTouch = false;
+
+  const onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 2) {
+      isMultiTouch = true;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      touchStartDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchStartMidpoint = {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      isMultiTouch = false;
+      const t = e.touches[0];
+      onMouseDown(
+        new MouseEvent("mousedown", {
+          clientX: t.clientX,
+          clientY: t.clientY,
+          button: 0,
+        }),
+      );
+    }
+  };
+
+  const onTouchMove = (e: TouchEvent) => {
+    if (e.touches.length === 2 && isMultiTouch) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const currDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const currMid = {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+
+      const rect = canvas.getBoundingClientRect();
+      const { screenX, screenY } = clientToCanvasPoint(rect, { clientX: currMid.x, clientY: currMid.y });
+      const { zoomFactor } = resolveTouchPinchStep(
+        touchStartDistance,
+        currDist,
+        orchestrator.zoom,
+        { minZoom: orchestrator.minZoom, maxZoom: orchestrator.maxZoom },
+      );
+      if (Math.abs(zoomFactor - 1.0) > 0.001) {
+        orchestrator.zoomAt(zoomFactor, screenX, screenY);
+      }
+
+      const panStep = resolveTouchPanStep(touchStartMidpoint, currMid);
+      orchestrator.pan(panStep.x, panStep.y);
+
+      touchStartDistance = currDist;
+      touchStartMidpoint = currMid;
+      callbacks.requestRender(true);
+      e.preventDefault();
+    } else if (e.touches.length === 1 && !isMultiTouch) {
+      const t = e.touches[0];
+      onMouseMove(
+        new MouseEvent("mousemove", {
+          clientX: t.clientX,
+          clientY: t.clientY,
+        }),
+      );
+      e.preventDefault();
+    }
+  };
+
+  const onTouchEnd = (e: TouchEvent) => {
+    if (isMultiTouch && e.touches.length < 2) {
+      isMultiTouch = false;
+      touchStartDistance = 0;
+    } else if (!isMultiTouch) {
+      completeConnection(new MouseEvent("mouseup", {}));
+    }
+    callbacks.requestRender(true);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -302,6 +413,31 @@ export function attachCanvasInput(
       return;
     }
 
+    if (e.key === "f" || e.key === "F" || e.key === "0") {
+      e.preventDefault();
+      if (orchestrator.fitToScreen()) {
+        callbacks.requestRender(true);
+        callbacks.log("Esquema centrado y ajustado al lienzo.", "system");
+      }
+      return;
+    }
+
+    if (e.key === "l" || e.key === "L") {
+      e.preventDefault();
+      orchestrator.showWireLabels = !orchestrator.showWireLabels;
+      const btnToggle = document.querySelector<HTMLButtonElement>("#btn-toggle-labels");
+      if (btnToggle) {
+        btnToggle.classList.toggle("btn-active", orchestrator.showWireLabels);
+        btnToggle.setAttribute("aria-pressed", String(orchestrator.showWireLabels));
+      }
+      callbacks.requestRender(true);
+      callbacks.log(
+        orchestrator.showWireLabels ? "Etiquetas de cables visibles." : "Etiquetas de cables ocultas.",
+        "system",
+      );
+      return;
+    }
+
     // --- Selection-required shortcuts ---
     const hasSelection = hasCanvasSelection(orchestrator);
 
@@ -350,6 +486,10 @@ export function attachCanvasInput(
   canvas.addEventListener("dblclick", onDblClick);
   canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("contextmenu", onContextMenu);
+  canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+  canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+  canvas.addEventListener("touchend", onTouchEnd);
+  canvas.addEventListener("touchcancel", onTouchEnd);
   window.addEventListener("keydown", onKeyDown);
 
   return () => {
@@ -360,6 +500,10 @@ export function attachCanvasInput(
     canvas.removeEventListener("dblclick", onDblClick);
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("contextmenu", onContextMenu);
+    canvas.removeEventListener("touchstart", onTouchStart);
+    canvas.removeEventListener("touchmove", onTouchMove);
+    canvas.removeEventListener("touchend", onTouchEnd);
+    canvas.removeEventListener("touchcancel", onTouchEnd);
     window.removeEventListener("keydown", onKeyDown);
   };
 }

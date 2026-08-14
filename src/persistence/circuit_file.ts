@@ -282,6 +282,12 @@ function parseWire(value: unknown, index: number): WireInstance {
     throw new CircuitFileValidationError(`${path} contiene un indice de terminal negativo.`);
   }
 
+  const fromIsJunction = typeof value.from.isJunction === "boolean" ? value.from.isJunction : undefined;
+  const fromJunctionPos = value.from.junctionPos ? parsePoint(value.from.junctionPos, `${path}.from.junctionPos`) : undefined;
+
+  const toIsJunction = typeof value.to.isJunction === "boolean" ? value.to.isJunction : undefined;
+  const toJunctionPos = value.to.junctionPos ? parsePoint(value.to.junctionPos, `${path}.to.junctionPos`) : undefined;
+
   const label = typeof value.label === "string" && value.label.trim().length > 0
     ? value.label.trim()
     : undefined;
@@ -295,10 +301,14 @@ function parseWire(value: unknown, index: number): WireInstance {
     from: {
       componentId: value.from.componentId,
       pinIndex: fromPinIndex,
+      ...(fromIsJunction ? { isJunction: true } : {}),
+      ...(fromJunctionPos ? { junctionPos: fromJunctionPos } : {}),
     },
     to: {
       componentId: value.to.componentId,
       pinIndex: toPinIndex,
+      ...(toIsJunction ? { isJunction: true } : {}),
+      ...(toJunctionPos ? { junctionPos: toJunctionPos } : {}),
     },
     points: Array.isArray(value.points)
       ? value.points.map((point, pointIndex) => parsePoint(point, `${path}.points[${pointIndex}]`))

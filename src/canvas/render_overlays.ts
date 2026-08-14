@@ -116,3 +116,37 @@ export function drawSelectionBox(
   ctx.stroke();
   ctx.restore();
 }
+
+export function drawAlignmentGuides(
+  ctx: CanvasRenderingContext2D,
+  guides: readonly import("./alignment_guidelines").AlignmentGuide[],
+): void {
+  if (!guides || guides.length === 0) return;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+  ctx.fillStyle = "#38bdf8";
+  ctx.lineWidth = 1.0;
+  ctx.setLineDash([4, 4]);
+
+  for (const guide of guides) {
+    ctx.beginPath();
+    if (guide.axis === "x") {
+      ctx.moveTo(guide.coord, guide.start);
+      ctx.lineTo(guide.coord, guide.end);
+    } else {
+      ctx.moveTo(guide.start, guide.coord);
+      ctx.lineTo(guide.end, guide.coord);
+    }
+    ctx.stroke();
+
+    // Marcadores discretos en los puntos ancla alineados
+    ctx.beginPath();
+    ctx.arc(guide.sourcePoint.x, guide.sourcePoint.y, 2.5, 0, Math.PI * 2);
+    ctx.arc(guide.targetPoint.x, guide.targetPoint.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+

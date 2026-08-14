@@ -4,7 +4,9 @@ description: Use when working with Tauri IPC, TypeScript-Rust communication, eve
 ---
 
 # Skill: Tauri IPC Bridge
-**Revision:** 2.0 — PhD-Grade Reference
+**Revision:** 2.0 — Reference patterns
+
+> **Project binding.** Confirm the current invoke sites, Rust commands, payload types and error paths before adapting an example. Never add an event, command, thread or cancellation mechanism merely because it appears below; each needs ownership, lifecycle and test coverage in this repository.
 
 ---
 

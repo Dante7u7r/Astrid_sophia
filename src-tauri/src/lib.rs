@@ -1,3 +1,9 @@
+// Numerical simulation & MNA matrix engines require specific Clippy allowances:
+// - `needless_range_loop`: Matrix algorithms (LU, CSC, Markowitz) index multiple coordinate arrays (r_count, c_count, col_max, rows) simultaneously.
+// - `too_many_arguments`: Numerical solvers (Transient, Newton-Raphson, PSS) pass extensive circuit state contexts.
+// - `float_cmp`: Zero/epsilon thresholding in sparse matrix storage and SPICE companion models.
+// - `type_complexity`: Workspaces and higher-order automatic differentiation structures (AdValue/Dual3).
+// - `approx_constant`: Explicit physical constants (KB, Q, VT) defined with full scientific precision.
 #![allow(
     clippy::needless_range_loop,
     clippy::too_many_arguments,

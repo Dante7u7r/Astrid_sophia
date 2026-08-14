@@ -15,7 +15,7 @@
     { "id": "w1", "from": { "componentId": "VCC", "pinIndex": 0 }, "to": { "componentId": "RB1", "pinIndex": 0 }, "points": [] },
     { "id": "w2", "from": { "componentId": "VCC", "pinIndex": 0 }, "to": { "componentId": "RC", "pinIndex": 0 }, "points": [] },
     { "id": "w3", "from": { "componentId": "VCC", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
-    { "id": "w4", "from": { "componentId": "Vin", "pinIndex": 0 }, "to": { "componentId": "Cin", "pinIndex": 0 }, "points": [], "label": "V_IN" },
+    { "id": "w4", "from": { "componentId": "Vin", "pinIndex": 0 }, "to": { "componentId": "Cin", "pinIndex": 0 }, "points": [], "label": "V_IN", "color": "#3b82f6" },
     { "id": "w5", "from": { "componentId": "Vin", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
     { "id": "w6", "from": { "componentId": "Cin", "pinIndex": 1 }, "to": { "componentId": "Q1", "pinIndex": 0 }, "points": [] },
     { "id": "w7", "from": { "componentId": "RB1", "pinIndex": 1 }, "to": { "componentId": "Q1", "pinIndex": 0 }, "points": [] },
@@ -28,5 +28,5 @@
   "viewport": { "zoom": 0.9, "offsetX": 480, "offsetY": 260 },
   "simSettings": { "dt": 0.00001, "tolerance": 0.00001, "maxIterations": 150 },
   "activeAnalysisMode": "AC",
-  "probes": { "ch1ProbeNode": "4", "ch2ProbeNode": "0" }
+  "probes": { "ch1ProbeNode": "1", "ch2ProbeNode": "3" }
 }

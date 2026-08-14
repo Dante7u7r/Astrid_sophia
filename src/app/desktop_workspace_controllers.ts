@@ -130,8 +130,21 @@ export function createDesktopWorkspaceControllers(
   new SettingsModal(deps.getSimulationSettings(), (newSettings) => {
     deps.setSimulationSettings({ ...newSettings });
     const settings = deps.getSimulationSettings();
+    const orch = deps.getOrchestrator();
+    if (orch) {
+      if (settings.currentFlowMode) orch.currentFlowMode = settings.currentFlowMode;
+      if (settings.currentAnimationSpeed) orch.currentAnimationSpeed = settings.currentAnimationSpeed;
+      if (settings.showCurrentAnimation !== undefined) orch.showCurrentAnimation = settings.showCurrentAnimation;
+      if (settings.showThermalHeatmap !== undefined) orch.showThermalHeatmap = settings.showThermalHeatmap;
+      if (settings.showReactiveFields !== undefined) orch.showReactiveFields = settings.showReactiveFields;
+      if (settings.showTelemetryHud !== undefined) orch.showTelemetryHud = settings.showTelemetryHud;
+    }
+    deps.updateCanvasRendering();
+    const extra = (settings.currentFlowMode || settings.currentAnimationSpeed)
+      ? `, flujo=${settings.currentFlowMode ?? "convencional"}, vel=${settings.currentAnimationSpeed ?? 1.0}x`
+      : "";
     deps.addLog(
-      `Ajustes guardados: dt=${settings.dt}, tTRAN=${settings.transientDuration ?? 10} s, tol=${settings.tolerance}, iterMax=${settings.maxIterations}`,
+      `Ajustes guardados: dt=${settings.dt}, tTRAN=${settings.transientDuration ?? 10} s, tol=${settings.tolerance}, iterMax=${settings.maxIterations}${extra}`,
       "system",
     );
   });

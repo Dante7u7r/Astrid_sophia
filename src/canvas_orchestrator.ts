@@ -17,6 +17,11 @@ import {
 } from "./canvas/viewport_camera";
 import { generateSmartOrthogonalPath } from "./canvas/smart_wire_router";
 import {
+  computeSmartAlignment,
+  type AlignmentGuide,
+} from "./canvas/alignment_guidelines";
+import { simplifyOrthogonalWirePath } from "./canvas/wire_cleanup";
+import {
   applyDrag,
   completeBoxSelection,
   createDragOffsets,
@@ -24,10 +29,14 @@ import {
 } from "./canvas/selection_model";
 import {
   connectPins as connectWirePins,
+  connectPinToWire as connectWirePinToWire,
+  dragJunctionNode,
   dragWireSegment,
   dragWireVertex,
   syncWireConnections as syncWireModelConnections,
   type WireHandleHit,
+  type WireHandleType,
+  type WireSegmentIntersection,
 } from "./canvas/wiring_model";
 import {
   createComponent,
@@ -84,10 +93,13 @@ export {
 } from "./canvas/selection_model";
 export {
   connectPins as connectWirePins,
+  connectPinToWire as connectWirePinToWire,
   findHoveredWire,
+  findWireSegmentIntersection,
   syncWireConnections as syncWireModelConnections,
   wirePathIntersects,
   wireExists,
+  type WireSegmentIntersection,
 } from "./canvas/wiring_model";
 export {
   createComponent,
@@ -185,11 +197,15 @@ export interface PinInstance {
   pinIndex: number;
   x: number; // World X
   y: number; // World Y
+  isJunction?: boolean;
+  junctionPos?: Point2D;
 }
 
 export interface WireEndpoint {
   componentId: string;
   pinIndex: number;
+  isJunction?: boolean;
+  junctionPos?: Point2D;
 }
 
 export interface WireInstance {
@@ -204,7 +220,7 @@ export interface WireInstance {
 
 export interface WireDragState {
   wire: WireInstance;
-  handleType: 'vertex' | 'segment';
+  handleType: WireHandleType;
   handleIndex: number;
   initialPoints: Point2D[];
   dragStartWorld: Point2D;
@@ -234,6 +250,7 @@ export class CanvasOrchestrator {
   public hoveredPin: PinInstance | null = null;
   public hoveredWire: WireInstance | null = null;
   public hoveredWireHandle: WireHandleHit | null = null;
+  public hoveredWireSnapPoint: WireSegmentIntersection | null = null;
   
   public selectedComponent: ComponentInstance | null = null; // Mantenido para compatibilidad e indicador principal
   public selectedComponents: ComponentInstance[] = [];
@@ -253,6 +270,14 @@ export class CanvasOrchestrator {
   // Caja de Selección CAD
   public selectionStart: Point2D | null = null;
   public selectionEnd: Point2D | null = null;
+  public activeAlignmentGuides: AlignmentGuide[] = [];
+  public showWireLabels: boolean = false;
+  public currentFlowMode: "conventional" | "electron" = "conventional";
+  public currentAnimationSpeed: number = 1.0;
+  public showCurrentAnimation: boolean = true;
+  public showThermalHeatmap: boolean = true;
+  public showReactiveFields: boolean = true;
+  public showTelemetryHud: boolean = true;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -369,6 +394,28 @@ export class CanvasOrchestrator {
     this.clampCameraOffsets();
   }
 
+  /**
+   * Ajusta y centra automáticamente todos los componentes y cables del esquema
+   * dentro del área visible del canvas respetando los límites de zoom.
+   */
+  public fitToScreen(margin = 40): boolean {
+    const bounds = getCircuitBounds(this.components, this.wires, margin);
+    if (!bounds) return false;
+    const viewport = {
+      width: this.canvas.clientWidth || this.canvas.width || 800,
+      height: this.canvas.clientHeight || this.canvas.height || 600,
+    };
+    const nextCamera = fitBoundsToViewport(bounds, viewport, {
+      minZoom: this.minZoom,
+      maxZoom: 1.2,
+    });
+    if (!nextCamera) return false;
+    this.zoom = nextCamera.zoom;
+    this.offsetX = nextCamera.offsetX;
+    this.offsetY = nextCamera.offsetY;
+    return true;
+  }
+
   // --- DRAWING / RENDERING ---
 
   public render(voltageMap: Record<string, number> = {}, probes: ProbeBadges = {}, nodeMap: Record<string, string> = {}, sparMarkers?: SParameterMarker[], branchCurrents: Record<string, number> = {}): void {
@@ -388,6 +435,7 @@ export class CanvasOrchestrator {
       worldX,
       worldY,
       t,
+      this.wires,
     );
   }
 
@@ -447,12 +495,13 @@ export class CanvasOrchestrator {
     this.hoveredPin = hover.hoveredPin;
     this.hoveredWire = hover.hoveredWire;
     this.hoveredWireHandle = hover.hoveredWireHandle;
+    this.hoveredWireSnapPoint = hover.hoveredWireSnapPoint;
     this.canvas.style.cursor = hover.cursor;
   }
 
   public startDraggingWireHandle(hit: WireHandleHit, worldPt: Point2D): void {
     this.isDraggingWireHandle = true;
-    this.canvas.style.cursor = hit.type === 'vertex' ? 'move' : 'ns-resize';
+    this.canvas.style.cursor = hit.type === 'segment' ? 'ns-resize' : 'move';
     this.activeWireDrag = {
       wire: hit.wire,
       handleType: hit.type,
@@ -467,13 +516,19 @@ export class CanvasOrchestrator {
     const deltaX = worldPt.x - this.activeWireDrag.dragStartWorld.x;
     const deltaY = worldPt.y - this.activeWireDrag.dragStartWorld.y;
 
-    if (this.activeWireDrag.handleType === 'vertex') {
+    if (this.activeWireDrag.handleType === 'junction') {
+      const snapped = this.snapPointToGrid(worldPt);
+      dragJunctionNode(this.wires, this.activeWireDrag.dragStartWorld, snapped);
+      this.activeWireDrag.dragStartWorld = { ...snapped };
+      this.syncWireConnections();
+    } else if (this.activeWireDrag.handleType === 'vertex') {
       const snapped = this.snapPointToGrid(worldPt);
       this.activeWireDrag.wire.points = dragWireVertex(
         this.activeWireDrag.initialPoints,
         this.activeWireDrag.handleIndex,
         snapped,
       );
+      this.activeWireDrag.wire.customPath = true;
     } else {
       const snappedX = Math.round(deltaX / this.gridSize) * this.gridSize;
       const snappedY = Math.round(deltaY / this.gridSize) * this.gridSize;
@@ -483,11 +538,14 @@ export class CanvasOrchestrator {
         snappedX,
         snappedY,
       );
+      this.activeWireDrag.wire.customPath = true;
     }
-    this.activeWireDrag.wire.customPath = true;
   }
 
   public stopWireHandleDragging(): void {
+    if (this.activeWireDrag && this.activeWireDrag.wire.points) {
+      this.activeWireDrag.wire.points = simplifyOrthogonalWirePath(this.activeWireDrag.wire.points);
+    }
     this.isDraggingWireHandle = false;
     this.activeWireDrag = null;
     this.canvas.style.cursor = 'default';
@@ -538,6 +596,32 @@ export class CanvasOrchestrator {
   public handleDragging(worldX: number, worldY: number): void {
     if (!this.isDragging) return;
 
+    const dragging = this.selectedComponents.length > 0
+      ? this.selectedComponents
+      : (this.selectedComponent ? [this.selectedComponent] : []);
+
+    let alignmentAdjustment: Point2D = { x: 0, y: 0 };
+    if (dragging.length > 0) {
+      const primary = dragging[0];
+      const offset = this.dragStartOffsets[primary.id] ?? this.dragStartOffset;
+      const rawTentativeX = this.snapToGrid(worldX - offset.x);
+      const rawTentativeY = this.snapToGrid(worldY - offset.y);
+
+      const alignment = computeSmartAlignment(
+        dragging,
+        this.components,
+        { x: rawTentativeX, y: rawTentativeY },
+        {
+          threshold: 8,
+          resolvePins: (comp) => this.getComponentPins(comp),
+        },
+      );
+      this.activeAlignmentGuides = alignment.guides;
+      alignmentAdjustment = alignment.adjustedOffset;
+    } else {
+      this.activeAlignmentGuides = [];
+    }
+
     applyDrag(
       this.selectedComponents,
       this.selectedComponent,
@@ -545,11 +629,13 @@ export class CanvasOrchestrator {
       this.dragStartOffset,
       { x: worldX, y: worldY },
       this.gridSize,
+      alignmentAdjustment,
     );
     this.syncWireConnections();
   }
   public stopDragging(): void {
     this.isDragging = false;
+    this.activeAlignmentGuides = [];
     this.canvas.style.cursor = 'default';
   }
 
@@ -566,6 +652,14 @@ export class CanvasOrchestrator {
     if (connectWirePins(this.wires, from, to)) {
       this.syncWireConnections();
     }
+  }
+
+  public connectPinToWire(from: PinInstance, targetWire: WireInstance, splitPoint: Point2D): boolean {
+    const success = connectWirePinToWire(this.wires, from, targetWire, splitPoint);
+    if (success) {
+      this.syncWireConnections();
+    }
+    return success;
   }
 
   public rotateSelectedComponent(): void {

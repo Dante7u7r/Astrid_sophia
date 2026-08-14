@@ -6,6 +6,12 @@ export interface SimulationSettings {
   maxIterations: number;
   /** Duración física de una corrida TRAN. Opcional para abrir archivos previos. */
   transientDuration?: number;
+  currentFlowMode?: "conventional" | "electron";
+  currentAnimationSpeed?: number;
+  showCurrentAnimation?: boolean;
+  showThermalHeatmap?: boolean;
+  showReactiveFields?: boolean;
+  showTelemetryHud?: boolean;
 }
 
 export class SettingsModal {
@@ -18,6 +24,12 @@ export class SettingsModal {
   private transientDurationInput: HTMLInputElement | null = null;
   private tolInput: HTMLInputElement | null = null;
   private iterInput: HTMLInputElement | null = null;
+  private flowModeInput: HTMLSelectElement | null = null;
+  private flowSpeedInput: HTMLSelectElement | null = null;
+  private showCurrentAnimInput: HTMLInputElement | null = null;
+  private showThermalHeatmapInput: HTMLInputElement | null = null;
+  private showReactiveFieldsInput: HTMLInputElement | null = null;
+  private showTelemetryHudInput: HTMLInputElement | null = null;
   private appViewport: HTMLElement | null = null;
   private returnFocus: HTMLElement | null = null;
 
@@ -28,6 +40,12 @@ export class SettingsModal {
     this.settings = {
       ...initialSettings,
       transientDuration: initialSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS,
+      currentFlowMode: initialSettings.currentFlowMode ?? "conventional",
+      currentAnimationSpeed: initialSettings.currentAnimationSpeed ?? 1.0,
+      showCurrentAnimation: initialSettings.showCurrentAnimation ?? true,
+      showThermalHeatmap: initialSettings.showThermalHeatmap ?? true,
+      showReactiveFields: initialSettings.showReactiveFields ?? true,
+      showTelemetryHud: initialSettings.showTelemetryHud ?? true,
     };
     this.onSaveCallback = onSave;
 
@@ -40,6 +58,12 @@ export class SettingsModal {
     this.transientDurationInput = document.querySelector("#settings-transient-duration-input");
     this.tolInput = document.querySelector("#settings-tol-input");
     this.iterInput = document.querySelector("#settings-iter-input");
+    this.flowModeInput = document.querySelector("#settings-flow-mode-input");
+    this.flowSpeedInput = document.querySelector("#settings-flow-speed-input");
+    this.showCurrentAnimInput = document.querySelector("#settings-show-current-anim");
+    this.showThermalHeatmapInput = document.querySelector("#settings-show-thermal-heatmap");
+    this.showReactiveFieldsInput = document.querySelector("#settings-show-reactive-fields");
+    this.showTelemetryHudInput = document.querySelector("#settings-show-telemetry-hud");
     this.appViewport = document.querySelector("#app-viewport");
 
     this.initEvents();
@@ -90,6 +114,12 @@ export class SettingsModal {
     }
     if (this.tolInput) this.tolInput.value = this.settings.tolerance.toString();
     if (this.iterInput) this.iterInput.value = this.settings.maxIterations.toString();
+    if (this.flowModeInput) this.flowModeInput.value = this.settings.currentFlowMode ?? "conventional";
+    if (this.flowSpeedInput) this.flowSpeedInput.value = (this.settings.currentAnimationSpeed ?? 1.0).toString();
+    if (this.showCurrentAnimInput) this.showCurrentAnimInput.checked = this.settings.showCurrentAnimation !== false;
+    if (this.showThermalHeatmapInput) this.showThermalHeatmapInput.checked = this.settings.showThermalHeatmap !== false;
+    if (this.showReactiveFieldsInput) this.showReactiveFieldsInput.checked = this.settings.showReactiveFields !== false;
+    if (this.showTelemetryHudInput) this.showTelemetryHudInput.checked = this.settings.showTelemetryHud !== false;
 
     this.returnFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -150,6 +180,27 @@ export class SettingsModal {
       this.settings.transientDuration = transientDuration;
       this.settings.tolerance = tolerance;
       this.settings.maxIterations = maxIterations;
+      if (this.flowModeInput) {
+        this.settings.currentFlowMode = this.flowModeInput.value === "electron" ? "electron" : "conventional";
+      }
+      if (this.flowSpeedInput) {
+        const speed = parseFloat(this.flowSpeedInput.value);
+        if (Number.isFinite(speed) && speed > 0) {
+          this.settings.currentAnimationSpeed = speed;
+        }
+      }
+      if (this.showCurrentAnimInput) {
+        this.settings.showCurrentAnimation = this.showCurrentAnimInput.checked;
+      }
+      if (this.showThermalHeatmapInput) {
+        this.settings.showThermalHeatmap = this.showThermalHeatmapInput.checked;
+      }
+      if (this.showReactiveFieldsInput) {
+        this.settings.showReactiveFields = this.showReactiveFieldsInput.checked;
+      }
+      if (this.showTelemetryHudInput) {
+        this.settings.showTelemetryHud = this.showTelemetryHudInput.checked;
+      }
       this.onSaveCallback({ ...this.settings });
     }
     this.close();

@@ -54,14 +54,19 @@ impl SparseLU {
         let mut q: Vec<usize> = (0..size).collect();
         let mut l = vec![BTreeMap::new(); size];
 
+        let mut r_count = vec![0usize; size];
+        let mut c_count = vec![0usize; size];
+        let mut col_max = vec![0.0f64; size];
+        let mut row_i_elements: Vec<(usize, f64)> = Vec::with_capacity(size);
+
         for i in 0..size {
             // 1. Calcular conteos activos R_r y C_c
-            let mut r_count: Vec<usize> = vec![0; size];
+            r_count.fill(0);
             for r in i..size {
                 r_count[r] = matrix.rows[r].keys().filter(|&&c| c >= i).count();
             }
 
-            let mut c_count: Vec<usize> = vec![0; size];
+            c_count.fill(0);
             for c in i..size {
                 let mut count = 0;
                 for r in i..size {
@@ -73,7 +78,7 @@ impl SparseLU {
             }
 
             // 2. Encontrar el valor máximo absoluto en cada columna activa c >= i
-            let mut col_max = vec![0.0; size];
+            col_max.fill(0.0);
             for c in i..size {
                 let mut max_val = 0.0;
                 for r in i..size {
@@ -176,11 +181,13 @@ impl SparseLU {
                 .ok_or_else(|| "Fallo interno en pivot de LU".to_string())?;
 
             // 6. Eliminar entradas debajo del pivote en columna i
-            let row_i_elements: Vec<(usize, f64)> = matrix.rows[i]
-                .iter()
-                .filter(|(&c, _)| c >= i)
-                .map(|(&c, &v)| (c, v))
-                .collect();
+            row_i_elements.clear();
+            row_i_elements.extend(
+                matrix.rows[i]
+                    .iter()
+                    .filter(|(&c, _)| c >= i)
+                    .map(|(&c, &v)| (c, v)),
+            );
 
             for r in (i + 1)..size {
                 if let Some(&val_r_i) = matrix.rows[r].get(&i) {
@@ -304,14 +311,19 @@ impl ComplexSparseLU {
         let mut q: Vec<usize> = (0..size).collect();
         let mut l = vec![BTreeMap::new(); size];
 
+        let mut r_count = vec![0usize; size];
+        let mut c_count = vec![0usize; size];
+        let mut col_max = vec![0.0f64; size];
+        let mut row_i_elements: Vec<(usize, Complex<f64>)> = Vec::with_capacity(size);
+
         for i in 0..size {
             // 1. Calcular conteos activos R_r y C_c
-            let mut r_count: Vec<usize> = vec![0; size];
+            r_count.fill(0);
             for r in i..size {
                 r_count[r] = matrix.rows[r].keys().filter(|&&c| c >= i).count();
             }
 
-            let mut c_count: Vec<usize> = vec![0; size];
+            c_count.fill(0);
             for c in i..size {
                 let mut count = 0;
                 for r in i..size {
@@ -323,7 +335,7 @@ impl ComplexSparseLU {
             }
 
             // 2. Encontrar el valor máximo absoluto (norma) en cada columna activa c >= i
-            let mut col_max = vec![0.0; size];
+            col_max.fill(0.0);
             for c in i..size {
                 let mut max_val = 0.0;
                 for r in i..size {
@@ -426,11 +438,13 @@ impl ComplexSparseLU {
                 .ok_or_else(|| "Fallo interno en pivot de LU compleja".to_string())?;
 
             // 6. Eliminar entradas debajo del pivote en columna i
-            let row_i_elements: Vec<(usize, Complex<f64>)> = matrix.rows[i]
-                .iter()
-                .filter(|(&c, _)| c >= i)
-                .map(|(&c, &v)| (c, v))
-                .collect();
+            row_i_elements.clear();
+            row_i_elements.extend(
+                matrix.rows[i]
+                    .iter()
+                    .filter(|(&c, _)| c >= i)
+                    .map(|(&c, &v)| (c, v)),
+            );
 
             for r in (i + 1)..size {
                 if let Some(&val_r_i) = matrix.rows[r].get(&i) {
@@ -503,7 +517,12 @@ impl ComplexSparseLU {
     }
 }
 
+pub const MAX_DENSE_NODES_FALLBACK: usize = 500;
+
 pub fn solve_sparse(matrix: &DMatrix<f64>, b: &DVector<f64>) -> Option<DVector<f64>> {
+    if matrix.nrows() > MAX_DENSE_NODES_FALLBACK {
+        return None;
+    }
     let sparse = SparseMatrix::from_dense(matrix);
     let lu = SparseLU::factorize(sparse).ok()?;
     lu.solve(b)
@@ -514,6 +533,9 @@ pub fn solve_complex_sparse(
     matrix: &DMatrix<Complex<f64>>,
     b: &DVector<Complex<f64>>,
 ) -> Option<DVector<Complex<f64>>> {
+    if matrix.nrows() > MAX_DENSE_NODES_FALLBACK {
+        return None;
+    }
     let sparse = ComplexSparseMatrix::from_dense(matrix);
     let lu = ComplexSparseLU::factorize(sparse).ok()?;
     lu.solve(b)

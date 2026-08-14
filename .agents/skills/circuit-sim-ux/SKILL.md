@@ -1,9 +1,11 @@
 ---
 name: circuit-sim-ux
-description: Diseño e implementación de UX de nivel profesional para simuladores de circuitos electrónicos (schematic capture + simulation), con LTspice, KiCad y Multisim como benchmark duro. Cubre cuatro dominios — interacción de canvas/esquemático (pan, zoom, snap-to-grid, wiring y net detection), feedback visual de simulación (probes, color-coding de voltaje/corriente, animación de flujo de corriente), inspector de propiedades de componentes, y selección con undo/redo y atajos de teclado estilo EDA. Usar SIEMPRE que el usuario trabaje en UI/UX de un simulador de circuitos, editor esquemático, EDA tool, o pida mejorar la "sensación" de interacción de una app de electrónica — incluso sin mencionar "UX" explícitamente, p. ej. "el wiring se siente raro", "snap to grid", "quiero que se vea como LTspice", "cómo muestro la corriente fluyendo". Incluye implementaciones de referencia completas en React + TypeScript (compatibles con Tauri/Electron) listas para adaptar, no solo heurísticas.
+description: Use when changing circuit-simulator UX, schematic interaction, probes, properties, selection, undo/redo or visual simulation feedback in Astryd Sophia. Benchmark ideas against current Vanilla TypeScript and tests; do not copy the React reference examples as project APIs.
 ---
 
 # Circuit Simulator UX
+
+> **Project binding.** Astryd Sophia uses Vanilla TypeScript and Canvas 2D. The React examples in this skill are interaction references only. Validate the existing model, controller, accessibility contract and visible simulation state before adapting them; never visualize invented current, voltage or solver samples as measurements.
 
 Skill para construir UX de simulador de circuitos a la altura de las herramientas EDA establecidas (LTspice, KiCad, Multisim) — no una aproximación genérica de "drag and drop nodes app", sino los patrones de interacción específicos que un ingeniero electrónico espera de software de captura esquemática y simulación.
 
@@ -51,4 +53,3 @@ Los 9 archivos en `assets/components/` están escritos específicamente para Ast
 | `spice-value-parser.ts` | Component Inspector | Sin dependencias externas. Incluye `runSpiceParserSelfTests()` — moverla a tu suite de tests real (vitest/jest) antes de modificar el parser. La lógica M-vs-Meg es el caso crítico. |
 | `command-history.ts` | Selection & Undo/Redo | Sin dependencias externas. `ComponentStore` es un adaptador genérico — implementarlo como delgado wrapper sobre tu estado real de `canvas_orchestrator.ts`. |
 | `INTEGRATION-EXAMPLE.tsx` | Todos | Ejemplo que conecta los 8 módulos anteriores con la arquitectura real de Astryd Sophia: streaming transitorio, `Result<T,String>`, naming de NetId/WireId. No copiar como componente de producción — leer como referencia de cómo los módulos se conectan entre sí. |
-

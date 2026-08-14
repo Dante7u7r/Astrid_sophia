@@ -4,7 +4,9 @@ description: Use when working with Canvas 2D rendering, vector graphics, viewpor
 ---
 
 # Skill: Canvas Vector Render
-**Revision:** 2.0 — PhD-Grade Reference
+**Revision:** 2.0 — Reference patterns
+
+> **Project binding.** Inspect the current Canvas model, controller, renderer and tests before applying an example. Names, classes and React-style patterns in this skill are not APIs of Astryd Sophia; adapt only a verified invariant or algorithm.
 
 ---
 

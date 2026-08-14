@@ -4,7 +4,9 @@ description: Use when solving circuit equations, MNA formulation, Newton-Raphson
 ---
 
 # Skill: Electronic Simulation Physics
-**Revision:** 2.0 — PhD-Grade Reference
+**Revision:** 2.0 — Reference patterns
+
+> **Project binding.** Derivations and stamps here are candidates to verify, not proof of supported models or implemented numerical methods. Locate the corresponding Rust/TypeScript solver and tests, then state units, tolerance and range of validity before changing numerical behavior.
 
 ---
 

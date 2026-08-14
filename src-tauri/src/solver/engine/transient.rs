@@ -24,7 +24,8 @@ use super::transient_mixed_signal::{
 use super::transient_setup::{
     apply_static_live_overrides, drain_live_overrides, has_transient_nonlinearity,
     initialize_device_junction_temperatures, initialize_energy_storage_states,
-    initialize_mcu_transient_state, ComponentOverrideMap, EnergyStorageState, McuTransientState,
+    initialize_mcu_transient_state, is_uic_active, ComponentOverrideMap, EnergyStorageState,
+    McuTransientState,
 };
 use super::transient_sources::stamp_dynamic_transient_sources;
 use super::transient_state_updates::{
@@ -162,6 +163,13 @@ where
         vsource_map.insert(vs.id.clone(), idx);
     }
 
+    let uic = is_uic_active(netlist, &cap_init, &ind_init);
+    let dc_op_result = if !uic {
+        solve_dc_circuit_with_numerical_settings(netlist, numerical_settings).ok()
+    } else {
+        None
+    };
+
     let EnergyStorageState {
         mut cap_states,
         mut ind_states,
@@ -170,7 +178,7 @@ where
         mut cap_currents,
         mut ind_voltages,
         mut switch_states,
-    } = initialize_energy_storage_states(netlist, &cap_init, &ind_init);
+    } = initialize_energy_storage_states(netlist, &cap_init, &ind_init, dc_op_result.as_ref());
 
     let has_nonlinear = has_transient_nonlinearity(netlist);
 
@@ -203,10 +211,22 @@ where
     let mut t = 0.0;
     let t_max = settings.t_max;
 
+    let mut current_solution = DVector::<f64>::zeros(size);
+    if let Some(ref dc_result) = dc_op_result {
+        for i in 1..=n {
+            current_solution[i - 1] =
+                *dc_result.node_voltages.get(&i.to_string()).unwrap_or(&0.0);
+        }
+        for (source_id, source_index) in &vsource_map {
+            current_solution[n + source_index] =
+                *dc_result.branch_currents.get(source_id).unwrap_or(&0.0);
+        }
+    }
+
     // Histórico de soluciones para cálculo de la segunda derivada (Euler/Gear2) y tercera derivada (TRAP) del LTE
-    let mut sol_n = DVector::<f64>::zeros(size); // Solución actual (n)
-    let mut sol_n1 = DVector::<f64>::zeros(size); // Solución en n-1
-    let mut sol_n2 = DVector::<f64>::zeros(size); // Solución en n-2
+    let mut sol_n = current_solution.clone(); // Solución actual (n)
+    let mut sol_n1 = current_solution.clone(); // Solución en n-1
+    let mut sol_n2 = current_solution.clone(); // Solución en n-2
     let mut steps_completed = 0;
 
     // Tolerancia LTE y límites de paso
@@ -216,24 +236,6 @@ where
     let dt_max = settings.dt * 2.5;
 
     let mut results = Vec::new();
-    let mut current_solution = DVector::<f64>::zeros(size);
-    if netlist.components.iter().any(|comp| {
-        matches!(
-            comp.comp_type.as_str(),
-            "arduino_uno" | "esp32" | "raspberry_pi_pico"
-        )
-    }) {
-        if let Ok(dc_result) = solve_dc_circuit(netlist) {
-            for i in 1..=n {
-                current_solution[i - 1] =
-                    *dc_result.node_voltages.get(&i.to_string()).unwrap_or(&0.0);
-            }
-            for (source_id, source_index) in &vsource_map {
-                current_solution[n + source_index] =
-                    *dc_result.branch_currents.get(source_id).unwrap_or(&0.0);
-            }
-        }
-    }
     let mut local_overrides = ComponentOverrideMap::new();
 
     // `t` representa siempre el último tiempo aceptado. No se publica un falso

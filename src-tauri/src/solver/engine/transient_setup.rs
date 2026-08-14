@@ -1,4 +1,4 @@
-use crate::solver::types::{CircuitNetlist, ComponentData};
+use crate::solver::types::{CircuitNetlist, ComponentData, SimulationResult};
 use nalgebra::{DMatrix, DVector};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -86,6 +86,7 @@ pub(crate) fn initialize_energy_storage_states(
     netlist: &CircuitNetlist,
     cap_init: &HashMap<String, f64>,
     ind_init: &HashMap<String, f64>,
+    dc_result: Option<&SimulationResult>,
 ) -> EnergyStorageState {
     let mut cap_states = HashMap::new();
     let mut ind_states = HashMap::new();
@@ -102,14 +103,36 @@ pub(crate) fn initialize_energy_storage_states(
         if comp.comp_type == "capacitor" {
             let val = if has_ic {
                 capacitor_initial_voltage(comp, &ic_map)
+            } else if let Some(&explicit_val) = cap_init.get(&comp.id) {
+                explicit_val
+            } else if let Some(dc) = dc_result {
+                let pin_a = &comp.pins[0];
+                let pin_b = &comp.pins[1];
+                let v_a = if pin_a == "0" {
+                    0.0
+                } else {
+                    *dc.node_voltages.get(pin_a).unwrap_or(&0.0)
+                };
+                let v_b = if pin_b == "0" {
+                    0.0
+                } else {
+                    *dc.node_voltages.get(pin_b).unwrap_or(&0.0)
+                };
+                v_a - v_b
             } else {
-                *cap_init.get(&comp.id).unwrap_or(&0.0)
+                0.0
             };
             cap_states.insert(comp.id.clone(), val);
             cap_states_prev.insert(comp.id.clone(), val);
             cap_currents.insert(comp.id.clone(), 0.0);
         } else if comp.comp_type == "inductor" {
-            let val = *ind_init.get(&comp.id).unwrap_or(&0.0);
+            let val = if let Some(&explicit_val) = ind_init.get(&comp.id) {
+                explicit_val
+            } else if let Some(dc) = dc_result {
+                *dc.branch_currents.get(&comp.id).unwrap_or(&0.0)
+            } else {
+                0.0
+            };
             ind_states.insert(comp.id.clone(), val);
             ind_states_prev.insert(comp.id.clone(), val);
             ind_voltages.insert(comp.id.clone(), 0.0);
@@ -189,7 +212,19 @@ pub(crate) fn initialize_device_junction_temperatures(
     device_tjunc
 }
 
-fn initial_condition_map(netlist: &CircuitNetlist) -> HashMap<String, f64> {
+pub(crate) fn is_uic_active(
+    netlist: &CircuitNetlist,
+    cap_init: &HashMap<String, f64>,
+    ind_init: &HashMap<String, f64>,
+) -> bool {
+    let has_ic_directive = netlist
+        .components
+        .iter()
+        .any(|c| c.comp_type == "ic_directive");
+    has_ic_directive || !cap_init.is_empty() || !ind_init.is_empty()
+}
+
+pub(crate) fn initial_condition_map(netlist: &CircuitNetlist) -> HashMap<String, f64> {
     let mut ic_map = HashMap::new();
     for comp in &netlist.components {
         if comp.comp_type == "ic_directive" {

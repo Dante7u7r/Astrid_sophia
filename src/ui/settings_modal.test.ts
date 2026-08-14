@@ -12,6 +12,19 @@ function installSettingsDom(): void {
         <input id="settings-transient-duration-input" />
         <input id="settings-tol-input" />
         <input id="settings-iter-input" />
+        <select id="settings-flow-mode-input">
+          <option value="conventional">Convencional</option>
+          <option value="electron">Electrónico</option>
+        </select>
+        <select id="settings-flow-speed-input">
+          <option value="0.5">0.5</option>
+          <option value="1.0">1.0</option>
+          <option value="2.0">2.0</option>
+        </select>
+        <input type="checkbox" id="settings-show-current-anim" checked />
+        <input type="checkbox" id="settings-show-thermal-heatmap" checked />
+        <input type="checkbox" id="settings-show-reactive-fields" checked />
+        <input type="checkbox" id="settings-show-telemetry-hud" checked />
         <button id="btn-cancel-settings">Cancelar</button>
         <button id="btn-save-settings">Guardar</button>
       </div>
@@ -43,7 +56,7 @@ describe("SettingsModal", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  test("guarda una copia validada de los ajustes y cierra", () => {
+  test("guarda una copia validada de los ajustes incluyendo capas visuales y cierra", () => {
     const onSave = vi.fn();
     const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement;
     const modal = document.querySelector("#settings-modal") as HTMLElement;
@@ -54,6 +67,12 @@ describe("SettingsModal", () => {
     (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "8";
     (document.querySelector("#settings-tol-input") as HTMLInputElement).value = "0.0001";
     (document.querySelector("#settings-iter-input") as HTMLInputElement).value = "120";
+    (document.querySelector("#settings-flow-mode-input") as HTMLSelectElement).value = "electron";
+    (document.querySelector("#settings-flow-speed-input") as HTMLSelectElement).value = "2.0";
+    (document.querySelector("#settings-show-current-anim") as HTMLInputElement).checked = true;
+    (document.querySelector("#settings-show-thermal-heatmap") as HTMLInputElement).checked = false;
+    (document.querySelector("#settings-show-reactive-fields") as HTMLInputElement).checked = false;
+    (document.querySelector("#settings-show-telemetry-hud") as HTMLInputElement).checked = true;
     (document.querySelector("#btn-save-settings") as HTMLButtonElement).click();
 
     expect(onSave).toHaveBeenCalledWith({
@@ -61,6 +80,12 @@ describe("SettingsModal", () => {
       transientDuration: 8,
       tolerance: 0.0001,
       maxIterations: 120,
+      currentFlowMode: "electron",
+      currentAnimationSpeed: 2.0,
+      showCurrentAnimation: true,
+      showThermalHeatmap: false,
+      showReactiveFields: false,
+      showTelemetryHud: true,
     });
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });

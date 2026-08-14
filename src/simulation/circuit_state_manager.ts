@@ -84,6 +84,7 @@ export class CircuitStateManager {
 
   // --- Estado encapsulado (privado, mutado solo a través de métodos) ---
   private _liveVoltages: Record<string, number> = {};
+  private _liveCurrents: Record<string, number> = {};
   private _pinToNodeMap: Record<string, string> = {};
 
   constructor() {
@@ -98,6 +99,11 @@ export class CircuitStateManager {
   /** Mapa nodo → voltaje DC actual */
   getVoltageMap(): Readonly<Record<string, number>> {
     return this._liveVoltages;
+  }
+
+  /** Mapa rama → corriente actual */
+  getCurrentMap(): Readonly<Record<string, number>> {
+    return this._liveCurrents;
   }
 
   /** Voltaje de un nodo específico, o undefined si no existe */
@@ -119,16 +125,18 @@ export class CircuitStateManager {
   // MUTADORES — Transiciones de estado controladas
   // ========================================================================
 
-  /** Reemplaza el mapa de voltajes a partir de un frame de simulación */
+  /** Reemplaza el mapa de voltajes y corrientes a partir de un frame de simulación */
   setVoltagesFromFrame(frame: SimulationFrame): void {
     // Spread para garantizar un nuevo objeto — evita retener referencias
     // al frame subyacente que puede ser reutilizado por el runner.
     this._liveVoltages = { ...frame.nodeVoltages };
+    this._liveCurrents = { ...frame.branchCurrents };
   }
 
-  /** Reemplaza el mapa de voltajes desde un snapshot plano */
-  setVoltagesFromSnapshot(nodeVoltages: Record<string, number>): void {
+  /** Reemplaza el mapa de voltajes y corrientes desde un snapshot plano */
+  setVoltagesFromSnapshot(nodeVoltages: Record<string, number>, branchCurrents: Record<string, number> = {}): void {
     this._liveVoltages = { ...nodeVoltages };
+    this._liveCurrents = { ...branchCurrents };
   }
 
   /** Reemplaza el mapa pin→nodo (se produce en cada extracción de netlist) */
@@ -136,14 +144,16 @@ export class CircuitStateManager {
     this._pinToNodeMap = { ...map };
   }
 
-  /** Limpia solo el mapa de voltajes (p. ej. al vaciar el lienzo) */
+  /** Limpia el mapa de voltajes y corrientes (p. ej. al vaciar el lienzo) */
   clearVoltages(): void {
     this._liveVoltages = {};
+    this._liveCurrents = {};
   }
 
-  /** Reset completo: voltajes, mapa de pines, historial de actuadores y audio */
+  /** Reset completo: voltajes, corrientes, mapa de pines, historial de actuadores y audio */
   resetAll(): void {
     this._liveVoltages = {};
+    this._liveCurrents = {};
     this._pinToNodeMap = {};
     this.actuatorHistory.clear();
     this.audioOrchestrator.stopAll();

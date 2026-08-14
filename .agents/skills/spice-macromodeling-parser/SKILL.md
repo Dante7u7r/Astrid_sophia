@@ -1,4 +1,11 @@
+---
+name: spice-macromodeling-parser
+description: Use when parsing, validating or expanding SPICE netlists, .model files, .subckt hierarchies, parameters or macromodels in Astryd Sophia. Verify supported grammar and output contracts in the Rust parser and tests before extending them.
+---
+
 # Skill: spice-macromodeling-parser
+
+> **Project binding.** The grammar and Rust snippets below are reference designs, not evidence that Astryd Sophia already supports them. Locate the parser, public command and tests first; report unsupported syntax explicitly instead of accepting or silently approximating it.
 
 ## Descripción
 Análisis léxico y sintáctico (Parsing) de archivos de modelos estándar SPICE (`.model` y `.subckt`). Expansión estructural de macro-modelos comerciales y aplanamiento de subcircuitos jerárquicos en estampas primitivas MNA dentro del motor de simulación en Rust.

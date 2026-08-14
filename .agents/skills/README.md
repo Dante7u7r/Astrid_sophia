@@ -1,5 +1,5 @@
 # Astryd Sophia Skills — v2.2
-**PhD-Grade Reference Package**
+**Engineering reference package**
 
 Nine domain-specific skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
 
@@ -106,7 +106,7 @@ Astryd_Sophia_Skills/
 
 ## How to use these skills
 
-Each `SKILL.md` begins with a `description:` front-matter field. The agent reads the description to decide which skill to load before generating code or answering questions in that domain. The examples in `examples/` serve as authoritative reference implementations — copy and adapt them rather than starting from scratch.
+Each `SKILL.md` begins with a `description:` front-matter field. The agent reads the description to decide which skill to load before generating code or answering questions in that domain. Examples in `examples/` are design references only: do not copy them or treat them as an API contract before checking the current Astryd Sophia source, types, tests and `AGENTS.md`.
 
 ---
 
@@ -116,5 +116,5 @@ Each `SKILL.md` begins with a `description:` front-matter field. The agent reads
 |---|---|---|
 | Simulation engine | Rust 1.78+ | Tokio async, rayon thread pool |
 | Desktop bridge | Tauri v2 | WebView2 (Windows) / WebKit (macOS, Linux) |
-| UI renderer | TypeScript 5.x | Vite + React 18 (or Svelte) |
+| UI renderer | TypeScript 5.x | Vite + Vanilla TypeScript + Canvas 2D |
 | Styling | CSS3 | Modern browsers (Chrome 120+, Safari 17+, Firefox 124+) |

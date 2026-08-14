@@ -27,12 +27,15 @@ fn test_rc_transient_circuit() {
                 pins: vec!["2".to_string(), "0".to_string()],
                 ..Default::default()
             },
+            ComponentData {
+                id: "ic1".to_string(),
+                comp_type: "ic_directive".to_string(),
+                pins: vec!["2".to_string()],
+                value: 0.0,
+                ..Default::default()
+            },
         ],
-        wires: vec![],
-        temperature: None,
-        fixed_step: None,
-        subcircuit_definitions: None,
-        triggers: None,
+        ..Default::default()
     };
 
     let settings = TransientSettings {
@@ -163,6 +166,13 @@ fn test_rc_step_parametric_against_closed_form() {
                     pins: vec!["2".to_string(), "0".to_string()],
                     ..Default::default()
                 },
+                ComponentData {
+                    id: "ic1".to_string(),
+                    comp_type: "ic_directive".to_string(),
+                    pins: vec!["2".to_string()],
+                    value: 0.0,
+                    ..Default::default()
+                },
             ],
             fixed_step: Some(true),
             ..Default::default()
@@ -224,6 +234,13 @@ fn test_transient_reactive_companions_are_not_polluted_by_dc_stamps() {
                 comp_type: "inductor".to_string(),
                 value: 0.1,
                 pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "ic1".to_string(),
+                comp_type: "ic_directive".to_string(),
+                pins: vec!["2".to_string()],
+                value: 0.0,
                 ..Default::default()
             },
         ],
@@ -340,5 +357,53 @@ fn test_transient_time_axis_uses_accepted_steps_and_exact_tmax() {
                 step.node_voltages["1"]
             );
         }
+    }
+}
+
+#[test]
+fn test_transient_dc_operating_point_steady_state() {
+    let netlist = CircuitNetlist {
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 12.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10_000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 10e-6,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    // Sin UIC: el circuito debe arrancar en estado estacionario a 12V desde t = dt
+    let settings_no_uic = TransientSettings {
+        dt: 1e-3,
+        t_max: 10e-3,
+        fixed_step: Some(true),
+        integration_method: Some("BE".to_string()),
+    };
+
+    let results = solve_transient_circuit(&netlist, &settings_no_uic).unwrap();
+    assert!(!results.is_empty());
+    for step in &results {
+        let v2 = step.node_voltages["2"];
+        assert!(
+            (v2 - 12.0).abs() < 1e-3,
+            "En estado estacionario sin UIC, V(2) debe permanecer en 12.0V, obtenido: {v2}"
+        );
     }
 }

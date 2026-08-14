@@ -87,8 +87,8 @@ export function validateSchematicIntegrity(
 
   const componentIds = new Set(components.map(component => component.id));
   const danglingWires = wires.filter(wire =>
-    !componentIds.has(wire.from.componentId)
-    || !componentIds.has(wire.to.componentId),
+    (!wire.from.isJunction && !componentIds.has(wire.from.componentId))
+    || (!wire.to.isJunction && !componentIds.has(wire.to.componentId)),
   );
   if (danglingWires.length > 0) {
     return `Cables con referencias a componentes inexistentes: ${danglingWires.map(wire => `[${wire.id}]`).join(", ")}.`;
@@ -96,13 +96,19 @@ export function validateSchematicIntegrity(
 
   const componentById = new Map(components.map(component => [component.id, component]));
   const wiresWithInvalidPins = wires.filter(wire => {
-    const fromComponent = componentById.get(wire.from.componentId);
-    const toComponent = componentById.get(wire.to.componentId);
-    if (!fromComponent || !toComponent) return false;
-
-    const fromPinExists = getPins(fromComponent).some(pin => pin.pinIndex === wire.from.pinIndex);
-    const toPinExists = getPins(toComponent).some(pin => pin.pinIndex === wire.to.pinIndex);
-    return !fromPinExists || !toPinExists;
+    if (!wire.from.isJunction) {
+      const fromComponent = componentById.get(wire.from.componentId);
+      if (!fromComponent) return false;
+      const fromPinExists = getPins(fromComponent).some(pin => pin.pinIndex === wire.from.pinIndex);
+      if (!fromPinExists) return true;
+    }
+    if (!wire.to.isJunction) {
+      const toComponent = componentById.get(wire.to.componentId);
+      if (!toComponent) return false;
+      const toPinExists = getPins(toComponent).some(pin => pin.pinIndex === wire.to.pinIndex);
+      if (!toPinExists) return true;
+    }
+    return false;
   });
   if (wiresWithInvalidPins.length > 0) {
     return `Cables conectados a terminales inexistentes: ${wiresWithInvalidPins.map(wire => `[${wire.id}]`).join(", ")}.`;
@@ -187,7 +193,15 @@ export function computeTopologySignature(
     .join("|");
 
   const wiresSig = wires
-    .map(w => `${w.id}:${w.from.componentId}:${w.from.pinIndex}->${w.to.componentId}:${w.to.pinIndex}`)
+    .map(w => {
+      const fromKey = w.from.isJunction && w.from.junctionPos
+        ? `j_${Math.round(w.from.junctionPos.x)}_${Math.round(w.from.junctionPos.y)}`
+        : `${w.from.componentId}:${w.from.pinIndex}`;
+      const toKey = w.to.isJunction && w.to.junctionPos
+        ? `j_${Math.round(w.to.junctionPos.x)}_${Math.round(w.to.junctionPos.y)}`
+        : `${w.to.componentId}:${w.to.pinIndex}`;
+      return `${w.id}:${fromKey}->${toKey}`;
+    })
     .sort()
     .join("|");
 
@@ -250,10 +264,14 @@ export function extractElectricalNetlist(
       }
     }
 
-    // 2. Unir los pins que están conectados por cables (wires)
+    // 2. Unir los pins y uniones que están conectados por cables (wires)
     for (const wire of wires) {
-      const keyFrom = pinKey(wire.from.componentId, wire.from.pinIndex);
-      const keyTo = pinKey(wire.to.componentId, wire.to.pinIndex);
+      const keyFrom = wire.from.isJunction && wire.from.junctionPos
+        ? `junction:${Math.round(wire.from.junctionPos.x)}_${Math.round(wire.from.junctionPos.y)}`
+        : pinKey(wire.from.componentId, wire.from.pinIndex);
+      const keyTo = wire.to.isJunction && wire.to.junctionPos
+        ? `junction:${Math.round(wire.to.junctionPos.x)}_${Math.round(wire.to.junctionPos.y)}`
+        : pinKey(wire.to.componentId, wire.to.pinIndex);
       dsu!.union(keyFrom, keyTo);
     }
 
@@ -535,8 +553,12 @@ export function extractElectricalNetlist(
 
   // Mapear wires a IDs de nodos eléctricos
   const extractedWires = wires.map(w => {
-    const fromKey = pinKey(w.from.componentId, w.from.pinIndex);
-    const toKey = pinKey(w.to.componentId, w.to.pinIndex);
+    const fromKey = w.from.isJunction && w.from.junctionPos
+      ? `junction:${Math.round(w.from.junctionPos.x)}_${Math.round(w.from.junctionPos.y)}`
+      : pinKey(w.from.componentId, w.from.pinIndex);
+    const toKey = w.to.isJunction && w.to.junctionPos
+      ? `junction:${Math.round(w.to.junctionPos.x)}_${Math.round(w.to.junctionPos.y)}`
+      : pinKey(w.to.componentId, w.to.pinIndex);
     const nodeFrom = resolveNode(fromKey);
     const nodeTo = resolveNode(toKey);
     return {

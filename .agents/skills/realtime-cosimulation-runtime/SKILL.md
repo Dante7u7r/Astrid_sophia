@@ -1,4 +1,11 @@
+---
+name: realtime-cosimulation-runtime
+description: Use when changing transient execution, playback, cancellation, pacing, live telemetry, co-simulation or MCU/analog synchronization in Astryd Sophia. Verify the current TypeScript and Rust implementation before proposing threads, event loops, IPC or timing behavior.
+---
+
 # Skill: realtime-cosimulation-runtime
+
+> **Project binding.** This document contains general patterns, not an implementation promise. Before editing, inspect `src/simulation/simulation_runner.ts`, `src/app/interactive_simulation_callbacks.ts`, `src/app/simulation_controller.ts`, their adjacent tests, and the relevant Rust command in `src-tauri/src/lib.rs`. The evidence-first skill and current code override every example below.
 
 ## Descripción
 Coordinación asíncrona no bloqueante para simulación interactiva en tiempo real. Gestión de hilos de ejecución dedicados en Rust para el transitorio analógico, emisión de telemetría controlada por presupuesto de fotogramas (Frame Budget / 16ms), e interrupción por eventos de usuario en sincronía de paso de bloqueo (Lock-Step) con emuladores de microcontroladores.
@@ -39,7 +46,7 @@ El hilo principal de Tauri gestiona la ventana, el IPC y los eventos del sistema
 | Duración del trabajo             | Indefinida (loop)      | Indeterminada pero finita |
 | Cancelación                      | Canal AtomicBool       | Token de cancelación      |
 
-**Recomendación para Astryd Sophia**: usar `thread::spawn` con un `Arc<AtomicBool>` para control de cancelación, ya que el bucle transitorio nunca termina por sí solo.
+**Recomendación condicionada**: elegir `thread::spawn`, `spawn_blocking` o una ejecución por lotes solo después de medir el contrato actual. No asumas que el transitorio es infinito: una duración configurada debe terminar y comunicar el resultado terminado sin hacerse pasar por simulación continua.
 
 ```rust
 // Lanzamiento desde un comando Tauri
@@ -72,7 +79,7 @@ VARIABLES:
   Δt_lock   : granularidad de sincronización (ej. 1µs)
 
 BUCLE PRINCIPAL:
-  loop:
+  while !finished:
     // 1. Avanzar analógico hasta el próximo punto de sync
     while t_analog < t_digital + Δt_lock:
         step_analog(solver, Δt_internal)
@@ -90,8 +97,8 @@ BUCLE PRINCIPAL:
     let digital_outputs = mcu_emulator.read_gpio()
     solver.update_controlled_sources(digital_outputs)
 
-    // 5. Verificar señal de cancelación
-    if cancel_flag.load(Ordering::Relaxed) { break }
+    // 5. Verificar señal de cancelación, error y límite de duración
+    if cancel_flag.load(Ordering::Relaxed) || reached_t_max || solver_failed { break }
 ```
 
 ### Paso de Integración Adaptativo
@@ -123,6 +130,8 @@ El canal `watch` (último valor siempre disponible) es preferible a `mpsc` porqu
 ---
 
 ## 3. Telemetría de Alta Velocidad (60 FPS / Budget 16ms)
+
+**Regla de fidelidad.** Limitar la frecuencia de dibujo o emitir snapshots no modifica el tiempo físico calculado. Cada mensaje debe incluir una identidad de ejecución y tiempo simulado; la UI descarta mensajes de ejecuciones canceladas o reemplazadas. Nunca interpolar o repetir trazas y presentarlas como pasos de solver.
 
 ### Presupuesto de Fotograma
 
