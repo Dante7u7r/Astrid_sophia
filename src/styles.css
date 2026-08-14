@@ -270,29 +270,32 @@ body {
 .bottom-dock {
   position: relative;
   z-index: 10;
-  height: 48px !important;
-  min-height: 48px !important;
-  max-height: 48px !important;
+  height: auto !important;
+  min-height: 44px;
+  max-height: none !important;
   margin: 0;
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
-  overflow: hidden;
+  padding: 6px 12px;
+  gap: 8px;
+  overflow: visible;
   min-width: 0;
-  background: rgba(11, 15, 25, 0.95);
+  background: rgba(29, 36, 44, 0.95);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid rgba(102, 252, 241, 0.22);
+  border-top: 1px solid var(--border-color);
   box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.5);
   opacity: 1;
   visibility: visible;
-  transition: height 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
 .bottom-dock.collapsed {
   height: 0 !important;
   min-height: 0 !important;
+  padding: 0 !important;
   margin: 0;
   opacity: 0;
   visibility: hidden;
@@ -495,19 +498,80 @@ body {
 }
 
 #bottom-dock .instruments-tabs-bar {
-  height: 48px !important;
-  min-height: 48px;
-  padding: 0 12px !important;
-  gap: 6px !important;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  height: auto !important;
+  min-height: 36px;
+  padding: 2px 0 !important;
+  gap: 6px 8px !important;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  flex-grow: 1;
+  min-width: 0;
+  overflow: visible;
+}
+
+#bottom-dock .instruments-bar-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-right: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 #bottom-dock .inst-tab {
-  min-height: 36px;
-  padding: 7px 10px !important;
-  border-radius: 5px !important;
+  min-height: 32px;
+  padding: 6px 12px !important;
+  border-radius: 6px !important;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+#bottom-dock .inst-tab:hover {
+  background: #2D3742;
+  color: var(--text-main);
+  border-color: var(--cyan);
+}
+
+#bottom-dock .inst-tab.active {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+#bottom-dock .instrument-center-close {
+  margin-left: auto;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  line-height: 1;
+  align-self: center;
+  transition: all var(--transition-fast);
+}
+
+#bottom-dock .instrument-center-close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-main);
+  border-color: var(--border-color);
 }
 
 #bottom-dock .instruments-content-area,

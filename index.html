@@ -841,14 +841,14 @@
             aria-hidden="true"
             aria-labelledby="instrument-center-title"
           >
-            <div class="instruments-tabs-bar" style="display: flex; background: none; border: none; height: 100%; align-items: center; padding: 0 10px; gap: 8px; flex-grow: 1;">
-              <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-right: 8px;">🛠️ Instrumentos:</span>
-              <button class="inst-tab active" data-tab="oscilloscope" data-short-label="OSC" style="background: rgba(102,252,241,0.08); border: 1px solid rgba(102,252,241,0.25); color: var(--cyan); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">📊 Osciloscopio</button>
-              <button class="inst-tab" data-tab="generator" data-short-label="GEN" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">⚡ Generador</button>
-              <button class="inst-tab" data-tab="logic" data-short-label="LOG" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">⌗ Lógico</button>
-              <button class="inst-tab" data-tab="fft" data-short-label="FFT" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">📈 Espectro (FFT)</button>
-              <button class="inst-tab" data-tab="tracer" data-short-label="I-V" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">🔬 Trazador I-V</button>
-              <button class="inst-tab" data-tab="intelligence" data-short-label="IA" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 14px; cursor: pointer; border-radius: 6px; transition: var(--transition-fast);">◈ Inteligencia</button>
+            <div class="instruments-tabs-bar">
+              <span class="instruments-bar-label">🛠️ Instrumentos:</span>
+              <button class="inst-tab active" data-tab="oscilloscope" data-short-label="OSC">📊 Osciloscopio</button>
+              <button class="inst-tab" data-tab="generator" data-short-label="GEN">⚡ Generador</button>
+              <button class="inst-tab" data-tab="logic" data-short-label="LOG">⌗ Lógico</button>
+              <button class="inst-tab" data-tab="fft" data-short-label="FFT">📈 Espectro (FFT)</button>
+              <button class="inst-tab" data-tab="tracer" data-short-label="I-V">🔬 Trazador I-V</button>
+              <button class="inst-tab" data-tab="intelligence" data-short-label="IA">◈ Inteligencia</button>
             </div>
             <button
               id="instrument-center-close"
@@ -857,7 +857,6 @@
               tabindex="0"
               aria-label="Cerrar centro de instrumentos"
               data-tooltip="Ocultar barra de instrumentos"
-              style="margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 4px 10px;"
             >×</button>
           </section>
 
