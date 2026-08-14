@@ -177,6 +177,35 @@ export class RenderController {
       );
       this.dependencies.performanceMonitor.recordCanvasFrame();
     }
+
+    if (this.shouldContinueCanvasAnimation(orchestrator, branchCurrents)) {
+      this.scheduleNextCanvasFrame();
+    }
+  }
+
+  private shouldContinueCanvasAnimation(
+    orchestrator: CanvasOrchestrator,
+    branchCurrents: Readonly<Record<string, number>>,
+  ): boolean {
+    if (orchestrator.simulationActive) return true;
+    if (this.dependencies.getOscilloscopePanel()?.isSimulating) return true;
+
+    if (orchestrator.showCurrentAnimation !== false) {
+      for (const key in branchCurrents) {
+        if (Math.abs(branchCurrents[key]) > 1e-9) return true;
+      }
+    }
+
+    return false;
+  }
+
+  private scheduleNextCanvasFrame(): void {
+    if (this.renderFramePending) return;
+    this.renderFramePending = true;
+    this.dependencies.requestAnimationFrame(() => {
+      this.renderFramePending = false;
+      this.doCanvasRender();
+    });
   }
 
   private doOscilloscopeRender(): void {

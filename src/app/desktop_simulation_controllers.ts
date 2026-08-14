@@ -74,7 +74,12 @@ export function createDesktopSimulationControllers(
 
   const setSimulationRunning = (running: boolean): void => {
     simulationControls?.setSimulationRunning(running);
+    const orch = deps.getOrchestrator();
+    if (orch) {
+      orch.simulationActive = running;
+    }
     updateQaState({ simulationRunning: running });
+    deps.updateCanvasRendering();
   };
 
   const setActiveAnalysisMode = (mode: AnalysisMode): void => {
