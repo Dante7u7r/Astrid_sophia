@@ -34,15 +34,21 @@ export function ensureCanvasBuffer(
   canvas: HTMLCanvasElement,
   dpr: number,
 ): CanvasBufferSize {
-  const cssWidth = canvas.clientWidth;
-  const cssHeight = canvas.clientHeight;
+  const container = canvas.parentElement;
+  const cssWidth = (container && container.clientWidth > 0) ? container.clientWidth : canvas.clientWidth;
+  const cssHeight = (container && container.clientHeight > 0) ? container.clientHeight : canvas.clientHeight;
   const size = getCanvasBufferSize(cssWidth, cssHeight, dpr);
 
   if (canvas.width !== size.bufferWidth || canvas.height !== size.bufferHeight) {
     canvas.width = size.bufferWidth;
     canvas.height = size.bufferHeight;
-    canvas.style.width = `${cssWidth}px`;
-    canvas.style.height = `${cssHeight}px`;
+  }
+
+  if (canvas.style.width !== "100%") {
+    canvas.style.width = "100%";
+  }
+  if (canvas.style.height !== "100%") {
+    canvas.style.height = "100%";
   }
 
   return size;

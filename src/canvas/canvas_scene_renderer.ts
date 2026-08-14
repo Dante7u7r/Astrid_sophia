@@ -197,15 +197,19 @@ export class CanvasSceneRenderer {
   }
 
   private getVisibleWorldBounds(): BoundingBox {
+    const parent = this.canvas.parentElement;
+    const width = parent && parent.clientWidth > 0 ? parent.clientWidth : this.canvas.clientWidth;
+    const height = parent && parent.clientHeight > 0 ? parent.clientHeight : this.canvas.clientHeight;
     return getVisibleWorldBounds(this.host, {
-      width: this.canvas.clientWidth,
-      height: this.canvas.clientHeight,
+      width,
+      height,
     });
   }
 
   private drawWorldGrid(dpr: number = 1): void {
-    const cssW = this.canvas.clientWidth;
-    const cssH = this.canvas.clientHeight;
+    const parent = this.canvas.parentElement;
+    const cssW = parent && parent.clientWidth > 0 ? parent.clientWidth : this.canvas.clientWidth;
+    const cssH = parent && parent.clientHeight > 0 ? parent.clientHeight : this.canvas.clientHeight;
     if (cssW <= 0 || cssH <= 0 || !Number.isFinite(this.host.zoom) || this.host.zoom <= 0) return;
 
     const topLeft = screenToWorld(0, 0, this.host);

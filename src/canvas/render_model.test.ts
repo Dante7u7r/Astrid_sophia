@@ -37,8 +37,8 @@ describe("render_model", () => {
     });
     expect(canvas.width).toBe(400);
     expect(canvas.height).toBe(200);
-    expect(canvas.style.width).toBe("200px");
-    expect(canvas.style.height).toBe("100px");
+    expect(canvas.style.width).toBe("100%");
+    expect(canvas.style.height).toBe("100%");
   });
 
   it("calcula lookup, seleccion y componentes visibles", () => {
