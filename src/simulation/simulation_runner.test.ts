@@ -134,4 +134,24 @@ describe("SimulationRunner streaming", () => {
       [false, "tab-nueva"],
     ]);
   });
+
+  it("despacha mutaciones en caliente (hot-patching) durante la simulacion activa", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+    await runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05 },
+      "tab-hot-patch",
+    );
+    expect(runner.getActiveRunId()).toBeGreaterThan(0);
+
+    // Aplicar mutaciones en vivo
+    await runner.mutateComponent("V1", "value", 12.0);
+    await runner.mutateComponent("SW1", "switch_state", 1.0);
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    const recentFrames = harness.frames.filter(({ frame }) => frame.nodeVoltages["1"] === 12.0);
+    expect(recentFrames.length).toBeGreaterThan(0);
+  });
 });

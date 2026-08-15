@@ -9,6 +9,7 @@ import {
   hasCanvasSelection,
   isPointInsideRect,
   parsePaletteComponentData,
+  type PaletteComponentData,
   resolveTouchPanStep,
   resolveTouchPinchStep,
   resolveWheelZoomStep,
@@ -46,12 +47,22 @@ export function attachCanvasInput(
   callbacks: CanvasInputCallbacks,
 ): () => void {
   let isRightClickPanning = false;
+  let isSpacePressed = false;
   let lastMousePos = { x: 0, y: 0 };
 
   const onMouseDown = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     const { screenX, screenY } = clientToCanvasPoint(rect, e);
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
+
+    if (isSpacePressed || e.button === 1 || e.button === 2) {
+      isRightClickPanning = true;
+      lastMousePos = { x: e.clientX, y: e.clientY };
+      if (isSpacePressed) canvas.style.cursor = "grabbing";
+      e.preventDefault();
+      callbacks.requestRender(true);
+      return;
+    }
 
     if (e.button === 0) {
       const probeMode = callbacks.getProbePlacementMode();
@@ -200,6 +211,11 @@ export function attachCanvasInput(
     orchestrator.stopDragging();
     callbacks.onNetlistSync();
     isRightClickPanning = false;
+    if (isSpacePressed) {
+      canvas.style.cursor = "grab";
+    } else {
+      canvas.style.cursor = "";
+    }
     callbacks.requestRender(true);
   };
 
@@ -231,29 +247,38 @@ export function attachCanvasInput(
       return;
     }
 
-    const isPinch = e.ctrlKey;
-
-    if (!isPinch && !e.shiftKey && e.deltaMode === 0 && (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) > 0) && (Math.abs(e.deltaX) > 1 || Math.abs(e.deltaY) < 30)) {
-      orchestrator.pan(-e.deltaX, -e.deltaY);
-      callbacks.requestRender(true);
+    // 1. Pinch-to-zoom en Touchpad (o Ctrl + Rueda)
+    const isPinch = e.ctrlKey || e.metaKey;
+    if (isPinch) {
+      const rect = canvas.getBoundingClientRect();
+      const { screenX, screenY } = clientToCanvasPoint(rect, e);
+      const { zoomFactor } = resolveWheelZoomStep(
+        e.deltaY,
+        orchestrator.zoom,
+        {
+          minZoom: orchestrator.minZoom,
+          maxZoom: orchestrator.maxZoom,
+        },
+        true,
+      );
+      orchestrator.zoomAt(zoomFactor, screenX, screenY);
+      callbacks.requestRender();
       e.preventDefault();
       return;
     }
 
-    const rect = canvas.getBoundingClientRect();
-    const { screenX, screenY } = clientToCanvasPoint(rect, e);
-    const { zoomFactor } = resolveWheelZoomStep(
-      e.deltaY,
-      orchestrator.zoom,
-      {
-        minZoom: orchestrator.minZoom,
-        maxZoom: orchestrator.maxZoom,
-      },
-      isPinch,
-    );
-    orchestrator.zoomAt(zoomFactor, screenX, screenY);
-    
-    callbacks.requestRender(true);
+    // 2. Shift + Scroll (Pan horizontal estándar en Trackpad / Ratón)
+    if (e.shiftKey) {
+      const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      orchestrator.pan(-delta, 0);
+      callbacks.requestRender();
+      e.preventDefault();
+      return;
+    }
+
+    // 3. Desplazamiento 2D continuo y natural en Touchpad (2-finger scroll)
+    orchestrator.pan(-e.deltaX, -e.deltaY);
+    callbacks.requestRender();
     e.preventDefault();
   };
 
@@ -312,7 +337,7 @@ export function attachCanvasInput(
 
       touchStartDistance = currDist;
       touchStartMidpoint = currMid;
-      callbacks.requestRender(true);
+      callbacks.requestRender();
       e.preventDefault();
     } else if (e.touches.length === 1 && !isMultiTouch) {
       const t = e.touches[0];
@@ -342,6 +367,15 @@ export function attachCanvasInput(
     const ctrl = e.ctrlKey || e.metaKey;
 
     // --- Global shortcuts (no selection required) ---
+    if ((e.code === "Space" || e.key === " ") && !isSpacePressed) {
+      isSpacePressed = true;
+      if (!isRightClickPanning) {
+        canvas.style.cursor = "grab";
+      }
+      e.preventDefault();
+      return;
+    }
+
     if (ctrl && e.key === "z" && !e.shiftKey) {
       e.preventDefault();
       callbacks.onUndo();
@@ -476,6 +510,21 @@ export function attachCanvasInput(
     }
   };
 
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (e.code === "Space" || e.key === " ") {
+      isSpacePressed = false;
+      if (!isRightClickPanning) {
+        canvas.style.cursor = "";
+      }
+    }
+  };
+
+  const onWindowBlur = () => {
+    isSpacePressed = false;
+    isRightClickPanning = false;
+    canvas.style.cursor = "";
+  };
+
   const onContextMenu = (e: MouseEvent) => {
     showCanvasContextMenu(e, canvas, orchestrator, callbacks);
   };
@@ -491,6 +540,8 @@ export function attachCanvasInput(
   canvas.addEventListener("touchend", onTouchEnd);
   canvas.addEventListener("touchcancel", onTouchEnd);
   window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onWindowBlur);
 
   return () => {
     canvas.removeEventListener("mousedown", onMouseDown);
@@ -505,6 +556,8 @@ export function attachCanvasInput(
     canvas.removeEventListener("touchend", onTouchEnd);
     canvas.removeEventListener("touchcancel", onTouchEnd);
     window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("keyup", onKeyUp);
+    window.removeEventListener("blur", onWindowBlur);
   };
 }
 
@@ -522,6 +575,12 @@ export function attachCanvasDrop(
     value: ComponentInstance["value"],
     clientX: number,
     clientY: number,
+    extraProps?: {
+      modelName?: string;
+      pinCount?: number;
+      pinLabels?: Record<number, string>;
+      spiceNetlist?: string;
+    },
   ): boolean => {
     try {
       const rect = canvas.getBoundingClientRect();
@@ -529,6 +588,12 @@ export function attachCanvasDrop(
       const worldPt = orchestrator.screenToWorld(screenX, screenY);
       const snapped = orchestrator.snapPointToGrid(worldPt);
       const newComp = orchestrator.addComponent(type, snapped.x, snapped.y, value);
+      if (extraProps) {
+        if (extraProps.modelName) newComp.modelName = extraProps.modelName;
+        if (extraProps.pinCount) newComp.pinCount = extraProps.pinCount;
+        if (extraProps.pinLabels) newComp.pinLabels = extraProps.pinLabels;
+        if (extraProps.spiceNetlist) newComp.spiceNetlist = extraProps.spiceNetlist;
+      }
       callbacks.onNetlistSync();
       callbacks.log(`Componente colocado: [${newComp.id}] en (X:${newComp.x}, Y:${newComp.y})`, "system");
       orchestrator.selectedComponent = newComp;
@@ -581,10 +646,7 @@ export function attachCanvasDrop(
     let dragging = false;
     let ghost: HTMLElement | null = null;
 
-    const getComponentData = (): {
-      type: ComponentInstance["type"];
-      value: ComponentInstance["value"];
-    } => parsePaletteComponentData(card.dataset);
+    const getComponentData = (): PaletteComponentData => parsePaletteComponentData(card.dataset);
 
     const isInsideViewport = (clientX: number, clientY: number): boolean => {
       const rect = canvasViewport.getBoundingClientRect();
@@ -653,8 +715,13 @@ export function attachCanvasDrop(
     const onPointerUp = (event: PointerEvent): void => {
       if (event.pointerId !== pointerId) return;
       if (dragging && isInsideViewport(event.clientX, event.clientY)) {
-        const { type, value } = getComponentData();
-        placeComponent(type, value, event.clientX, event.clientY);
+        const data = getComponentData();
+        placeComponent(data.type, data.value, event.clientX, event.clientY, {
+          modelName: data.modelName,
+          pinCount: data.pinCount,
+          pinLabels: data.pinLabels,
+          spiceNetlist: data.spiceNetlist,
+        });
       }
       resetDrag();
     };
@@ -667,15 +734,34 @@ export function attachCanvasDrop(
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       const rect = canvasViewport.getBoundingClientRect();
-      const { type, value } = getComponentData();
-      placeComponent(type, value, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      const data = getComponentData();
+      placeComponent(data.type, data.value, rect.left + rect.width / 2, rect.top + rect.height / 2, {
+        modelName: data.modelName,
+        pinCount: data.pinCount,
+        pinLabels: data.pinLabels,
+        spiceNetlist: data.spiceNetlist,
+      });
+    };
+
+    const onClick = (): void => {
+      if (dragging) return;
+      const rect = canvasViewport.getBoundingClientRect();
+      const data = getComponentData();
+      placeComponent(data.type, data.value, rect.left + rect.width / 2, rect.top + rect.height / 2, {
+        modelName: data.modelName,
+        pinCount: data.pinCount,
+        pinLabels: data.pinLabels,
+        spiceNetlist: data.spiceNetlist,
+      });
     };
 
     card.addEventListener("pointerdown", onPointerDown);
+    card.addEventListener("click", onClick);
     card.addEventListener("keydown", onKeyDown);
 
     paletteCleanups.push(() => {
       card.removeEventListener("pointerdown", onPointerDown);
+      card.removeEventListener("click", onClick);
       card.removeEventListener("keydown", onKeyDown);
       resetDrag();
     });

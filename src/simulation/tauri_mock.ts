@@ -36,6 +36,18 @@ function emitWebEvent<T>(eventName: string, payload: T, id: number): void {
   handlers.forEach((handler) => handler(event as Event<unknown>));
 }
 
+const webActiveMutations = new Map<string, number>();
+
+export function getWebActiveMutations(): ReadonlyMap<string, number> {
+  return webActiveMutations;
+}
+
+function mutateWebTransient(mutation?: { componentId?: string; field?: string; value?: number; runId?: number }): void {
+  if (!mutation?.componentId || !mutation.field || typeof mutation.value !== "number") return;
+  const key = `${mutation.componentId}:${mutation.field}`;
+  webActiveMutations.set(key, mutation.value);
+}
+
 function stopWebTransient(expectedRunId?: number): void {
   if (
     expectedRunId !== undefined
@@ -52,6 +64,7 @@ function stopWebTransient(expectedRunId?: number): void {
 
 function startWebTransient(args?: Record<string, unknown>): void {
   stopWebTransient();
+  webActiveMutations.clear();
   const cancellationId = webTransientRunId;
   const runId = typeof args?.runId === "number" ? args.runId : cancellationId;
   webActiveExternalRunId = runId;
@@ -65,16 +78,23 @@ function startWebTransient(args?: Record<string, unknown>): void {
 
       const time = tMax * (index / (frameCount - 1));
       const isFinal = index === frameCount - 1;
+
+      // Consultar mutaciones activas en caliente
+      const vSourceVal = webActiveMutations.get("V1:value") ?? 5.0;
+      const swState = webActiveMutations.get("SW1:switch_state") ?? 1.0;
+      const v2 = swState > 0 ? vSourceVal * (1 - Math.exp(-time / 0.001)) : 0.0;
+      const iV1 = swState > 0 ? -(vSourceVal / 1000) * Math.exp(-time / 0.001) : 0.0;
+
       emitWebEvent("sim-frame-update", {
         runId,
         time,
         nodeVoltages: {
           "0": 0,
-          "1": 5,
-          "2": 5 * (1 - Math.exp(-time / 0.001)),
+          "1": vSourceVal,
+          "2": v2,
         },
         branchCurrents: {
-          V1: -0.005 * Math.exp(-time / 0.001),
+          V1: iV1,
         },
         frameIndex: index,
         isFinal,
@@ -231,8 +251,12 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
       stopWebTransient(typeof args?.runId === "number" ? args.runId : undefined);
       return undefined as T;
 
-    case "inject_live_mutation":
+    case "mutate_interactive_component":
+    case "inject_live_mutation": {
+      const mutation = (args as { mutation?: { componentId?: string; field?: string; value?: number; runId?: number } })?.mutation;
+      mutateWebTransient(mutation);
       return undefined as T;
+    }
 
     default:
       throw new Error(`No existe un mock web explícito para el comando Tauri '${cmd}'.`);

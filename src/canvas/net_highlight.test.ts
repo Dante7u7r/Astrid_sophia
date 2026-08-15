@@ -99,4 +99,29 @@ describe("Net Highlighting (getActiveNetHighlight)", () => {
     expect(result.netWireIds.has("w3")).toBe(false);
     expect(result.netPinKeys).toEqual(new Set(["R1:1", "R2:0", "C1:0"]));
   });
+
+  it("resalta redes virtuales separadas que comparten el mismo wire.label", () => {
+    const wireA: WireInstance = {
+      id: "wA",
+      from: { componentId: "R1", pinIndex: 0 },
+      to: { componentId: "R1", pinIndex: 0 },
+      label: "CLK_BUS",
+    };
+    const wireB: WireInstance = {
+      id: "wB",
+      from: { componentId: "R2", pinIndex: 0 },
+      to: { componentId: "R2", pinIndex: 0 },
+      label: "CLK_BUS",
+    };
+
+    const result = getActiveNetHighlight({
+      wires: [wireA, wireB],
+      hoveredWire: wireA,
+      hoveredPin: null,
+      selectedWire: null,
+    });
+
+    expect(result.netWireIds.has("wA")).toBe(true);
+    expect(result.netWireIds.has("wB")).toBe(true);
+  });
 });

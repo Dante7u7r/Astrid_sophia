@@ -1,6 +1,10 @@
 export class DisjointSetUnion {
   private parent: Record<string, string> = {};
 
+  has(i: string): boolean {
+    return Object.prototype.hasOwnProperty.call(this.parent, i);
+  }
+
   find(i: string): string {
     if (!this.parent[i]) {
       this.parent[i] = i;

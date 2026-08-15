@@ -80,6 +80,25 @@ export interface SimulationRunnerCallbacks {
   onSimulationStateChanged: (active: boolean, context: SimulationRunContext) => void;
 }
 
+export type InteractiveMutationField =
+  | "value"
+  | "amplitude"
+  | "frequency"
+  | "offset"
+  | "duty_cycle"
+  | "switch_state"
+  | "switch_ron"
+  | "switch_roff"
+  | "switch_vth"
+  | "switch_vh";
+
+export interface ComponentMutationPayload {
+  readonly componentId: string;
+  readonly field: InteractiveMutationField;
+  readonly value: number;
+  readonly runId?: number;
+}
+
 /** Interfaz pública del runner. */
 export interface SimulationRunner {
   /** Inicia la simulación transitoria interactiva con el netlist dado.
@@ -96,6 +115,15 @@ export interface SimulationRunner {
     ownerTabId: string,
     feedbackRun?: FeedbackRunHandle,
   ): Promise<void>;
+  /** Aplica una mutación de parámetro en caliente (hot-patching) sobre
+   *  un componente durante la simulación activa sin reiniciar el análisis. */
+  mutateComponent(
+    componentId: string,
+    field: InteractiveMutationField,
+    value: number,
+  ): Promise<void>;
+  /** Retorna el identificador de corrida activo o null si está inactivo. */
+  getActiveRunId(): number | null;
   /** Detiene la simulación, desregistra el stream IPC, limpia los
    *  runtimes MCU y notifica el cambio de estado. */
   stopInteractiveTransient(): Promise<void>;
@@ -319,6 +347,31 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         // ENMIENDA 3: Limpiar runtimes y desregistrar streams
         releaseLocalResources();
       }
+    },
+
+    async mutateComponent(
+      componentId: string,
+      field: InteractiveMutationField,
+      value: number,
+    ): Promise<void> {
+      if (!activeContext) return;
+      try {
+        await invoke("mutate_interactive_component", {
+          mutation: {
+            componentId,
+            field,
+            value,
+            runId: activeContext.runId,
+          },
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(`[Hot-Patching] Error al mutar ${componentId}.${field}: ${errorMsg}`);
+      }
+    },
+
+    getActiveRunId(): number | null {
+      return activeContext ? activeContext.runId : null;
     },
 
     isSimulationActive(): boolean {

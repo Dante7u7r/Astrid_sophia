@@ -37,6 +37,7 @@ type VisualAuditRenderStep = "skip-render" | "skip-canvas-render" | "skip-osc-re
 export class RenderController {
   private renderFramePending = false;
   private oscilloscopeFramePending = false;
+  private baseSceneDirty = true;
   private dmmRenderCacheKey = "";
   private playbackFrameIndex = 0;
   private playbackLastCanvasRenderAt = 0;
@@ -45,6 +46,7 @@ export class RenderController {
   constructor(private readonly dependencies: RenderControllerDependencies) {}
 
   updateCanvasRendering(immediate = false): void {
+    this.baseSceneDirty = true;
     if (immediate) {
       this.renderFramePending = false;
       this.doCanvasRender();
@@ -132,7 +134,7 @@ export class RenderController {
     }
 
     if (this.shouldRenderPlaybackCanvas()) {
-      this.updateCanvasRendering();
+      this.updateCanvasRendering(true);
     }
   }
 
@@ -146,6 +148,11 @@ export class RenderController {
     if (helpTip) {
       helpTip.style.display = orchestrator.components.length > 0 ? "none" : "block";
     }
+
+    this.dependencies.circuitState.syncComponentCurrentsAndActuators(
+      orchestrator.components,
+      orchestrator.wires,
+    );
 
     const pinVoltageMap = this.dependencies.circuitState.buildPinVoltageMap();
     const voltageMap = this.dependencies.circuitState.getVoltageMap();
@@ -173,18 +180,35 @@ export class RenderController {
     const branchCurrents = this.dependencies.circuitState.getCurrentMap();
 
     if (!this.dependencies.isVisualAuditStep("skip-canvas-render")) {
-      orchestrator.render(
-        pinVoltageMap,
-        probeMarkers,
-        pinToNodeMap,
-        sparMarkers.length > 0 ? sparMarkers : undefined,
-        branchCurrents,
-      );
+      const isLayered = typeof orchestrator.hasLayeredRendering === "function" && orchestrator.hasLayeredRendering();
+      if (isLayered) {
+        if (this.baseSceneDirty) {
+          orchestrator.renderBase(
+            pinVoltageMap,
+            probeMarkers,
+            pinToNodeMap,
+            sparMarkers.length > 0 ? sparMarkers : undefined,
+            branchCurrents,
+          );
+          this.baseSceneDirty = false;
+        }
+        orchestrator.renderOverlay(pinVoltageMap, branchCurrents, this.dependencies.now());
+      } else {
+        orchestrator.render(
+          pinVoltageMap,
+          probeMarkers,
+          pinToNodeMap,
+          sparMarkers.length > 0 ? sparMarkers : undefined,
+          branchCurrents,
+        );
+      }
       this.dependencies.performanceMonitor.recordCanvasFrame();
     }
 
     if (this.shouldContinueCanvasAnimation(orchestrator, branchCurrents)) {
       this.scheduleNextCanvasFrame();
+    } else if (typeof orchestrator.clearOverlay === "function") {
+      orchestrator.clearOverlay();
     }
   }
 

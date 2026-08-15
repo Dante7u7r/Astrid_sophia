@@ -73,6 +73,22 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showSliderControls: false,
     };
   }
+  if (type === "net_label") {
+    return {
+      showValueGroup: true,
+      showUnitGroup: false,
+      valueLabel: "Nombre de Red",
+      showSliderControls: false,
+    };
+  }
+  if (type === "text_note") {
+    return {
+      showValueGroup: true,
+      showUnitGroup: false,
+      valueLabel: "Contenido de la Nota",
+      showSliderControls: false,
+    };
+  }
   if (DEDICATED_VALUE_EDITORS.has(type)) {
     return {
       showValueGroup: false,
@@ -115,13 +131,42 @@ export function getUnitDisplayConfig(type: ComponentInstance["type"]): UnitDispl
       return { label: "Inductancia Mutua (H)", min: "0.000001", max: "1" };
     case "ground":
       return { label: "Referencia 0 V", min: "0", max: "0" };
+    case "and_gate":
+    case "or_gate":
+    case "not_gate":
+    case "nand_gate":
+    case "nor_gate":
+    case "xor_gate":
+      return { label: "Nivel Lógico VOH (V)", min: "1.8", max: "15" };
+    case "opto":
+      return { label: "CTR Ganancia Óptica", min: "0.1", max: "10" };
+    case "njf":
+      return { label: "Tensión Estrangulamiento Vp (V)", min: "-10", max: "-0.5" };
+    case "pjf":
+      return { label: "Tensión Estrangulamiento Vp (V)", min: "0.5", max: "10" };
+    case "net_label":
+      return { label: "Identificador de Red", min: "0", max: "0" };
+    case "text_note":
+      return { label: "Texto de Documentación", min: "0", max: "0" };
     default:
       return { label: "Valor Nominal", min: "0", max: "100" };
   }
 }
 
 export function supportsLiveMutation(type: ComponentInstance["type"]): boolean {
-  return ["resistor", "vsource", "isource", "switch", "opamp"].includes(type);
+  return [
+    "resistor",
+    "vsource",
+    "isource",
+    "switch",
+    "opamp",
+    "and_gate",
+    "or_gate",
+    "not_gate",
+    "nand_gate",
+    "nor_gate",
+    "xor_gate",
+  ].includes(type);
 }
 
 export function clampSwitchProperties(component: ComponentInstance, values: {

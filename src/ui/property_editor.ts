@@ -16,6 +16,11 @@ import {
   getValueEditorPresentation,
   supportsLiveMutation,
 } from "./property_model";
+import {
+  COMMERCIAL_BJTS,
+  COMMERCIAL_DIODES,
+  COMMERCIAL_MOSFETS,
+} from "../simulation/commercial_models_catalog";
 
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
@@ -61,6 +66,7 @@ export class PropertyEditor {
 
     for (const id of [
       "wire-properties-container",
+      "text-note-properties-container",
       "wave-properties-container",
       "macro-spice-container",
       "potentiometer-container",
@@ -70,6 +76,8 @@ export class PropertyEditor {
       "switch-properties-container",
       "transformer-properties-container",
       "opamp-properties-container",
+      "semiconductor-properties-container",
+      "logic-properties-container",
     ]) {
       const container = document.getElementById(id);
       if (container) container.style.display = "none";
@@ -77,9 +85,33 @@ export class PropertyEditor {
     this.callbacks.getMcuDebugPanel()?.hide();
   }
 
+  public populateNetLabelSuggestions(): void {
+    const datalist = document.querySelector("#existing-net-labels");
+    if (!datalist) return;
+    const orchestrator = this.callbacks.getOrchestrator();
+    if (!orchestrator) return;
+
+    const netNames = new Set<string>();
+    for (const wire of orchestrator.wires) {
+      if (wire.label && wire.label.trim()) netNames.add(wire.label.trim().toUpperCase());
+    }
+    for (const comp of orchestrator.components) {
+      if (comp.type === "net_label") {
+        const n = String(comp.label || comp.value || comp.id).trim().toUpperCase();
+        if (n) netNames.add(n);
+      }
+    }
+
+    datalist.innerHTML = Array.from(netNames)
+      .sort()
+      .map(n => `<option value="${n}">${n}</option>`)
+      .join("");
+  }
+
   public updateWirePropertiesPanel(wire: WireInstance): void {
     if (!this.propIdInput) return;
     this.setFormControlsDisabled(false);
+    this.populateNetLabelSuggestions();
 
     this.propIdInput.value = wire.id;
     this.propIdInput.placeholder = "Cable ID";
@@ -92,6 +124,7 @@ export class PropertyEditor {
     if (unitGroup) unitGroup.style.display = "none";
 
     for (const id of [
+      "text-note-properties-container",
       "wave-properties-container",
       "macro-spice-container",
       "potentiometer-container",
@@ -101,6 +134,8 @@ export class PropertyEditor {
       "switch-properties-container",
       "transformer-properties-container",
       "opamp-properties-container",
+      "semiconductor-properties-container",
+      "logic-properties-container",
     ]) {
       const container = document.getElementById(id);
       if (container) container.style.display = "none";
@@ -316,6 +351,79 @@ export class PropertyEditor {
         opampContainer.style.display = "none";
       }
     }
+
+    const semiContainer = document.querySelector("#semiconductor-properties-container") as HTMLElement;
+    const semiModelSelect = document.querySelector("#prop-semi-model") as HTMLSelectElement;
+    const semiDesc = document.querySelector("#prop-semi-desc") as HTMLElement;
+    if (semiContainer && semiModelSelect && semiDesc) {
+      const isSemiconductor = ["diode", "npn", "pnp", "nmos", "pmos"].includes(comp.type);
+      if (isSemiconductor) {
+        semiContainer.style.display = "flex";
+        semiModelSelect.innerHTML = `<option value="custom">-- Modelo Genérico / Personalizado --</option>`;
+        
+        let models: Record<string, { description: string }> = {};
+        if (comp.type === "diode") models = COMMERCIAL_DIODES;
+        else if (comp.type === "npn") models = Object.fromEntries(Object.entries(COMMERCIAL_BJTS).filter(([, m]) => m.polarity === "npn"));
+        else if (comp.type === "pnp") models = Object.fromEntries(Object.entries(COMMERCIAL_BJTS).filter(([, m]) => m.polarity === "pnp"));
+        else if (comp.type === "nmos") models = Object.fromEntries(Object.entries(COMMERCIAL_MOSFETS).filter(([, m]) => m.polarity === "nmos"));
+        else if (comp.type === "pmos") models = Object.fromEntries(Object.entries(COMMERCIAL_MOSFETS).filter(([, m]) => m.polarity === "pmos"));
+
+        for (const [modelKey, modelData] of Object.entries(models)) {
+          const opt = document.createElement("option");
+          opt.value = modelKey;
+          opt.textContent = `${modelKey} - ${modelData.description}`;
+          semiModelSelect.appendChild(opt);
+        }
+
+        const currentModel = comp.modelName || "custom";
+        semiModelSelect.value = currentModel;
+        if (currentModel !== "custom" && models[currentModel]) {
+          semiDesc.textContent = models[currentModel].description;
+          semiDesc.style.display = "block";
+        } else {
+          semiDesc.style.display = "none";
+        }
+      } else {
+        semiContainer.style.display = "none";
+      }
+    }
+
+    const logicContainer = document.querySelector("#logic-properties-container") as HTMLElement;
+    const logicVohSelect = document.querySelector("#prop-logic-voh") as HTMLSelectElement;
+    const logicVthInput = document.querySelector("#prop-logic-vth") as HTMLInputElement;
+    if (logicContainer && logicVohSelect && logicVthInput) {
+      const isLogicGate = ["and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate"].includes(comp.type);
+      if (isLogicGate) {
+        logicContainer.style.display = "flex";
+        logicVohSelect.value = (comp.value || 5.0).toString();
+        logicVthInput.value = (comp.offset !== undefined ? comp.offset : 2.5).toString();
+      } else {
+        logicContainer.style.display = "none";
+      }
+    }
+
+    const textNoteContainer = document.querySelector("#text-note-properties-container") as HTMLElement;
+    const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement;
+    const noteFontInput = document.querySelector("#prop-note-fontsize") as HTMLInputElement;
+    const noteThemeSelect = document.querySelector("#prop-note-theme") as HTMLSelectElement;
+    if (textNoteContainer && noteTextInput && noteFontInput && noteThemeSelect) {
+      if (comp.type === 'text_note') {
+        textNoteContainer.style.display = "flex";
+        noteTextInput.value = String(comp.label || comp.value || "");
+        noteFontInput.value = (comp.fontSize || 12).toString();
+        noteThemeSelect.value = comp.noteTheme || "card";
+      } else {
+        textNoteContainer.style.display = "none";
+      }
+    }
+
+    if (comp.type === "net_label") {
+      this.propValInput.setAttribute("list", "existing-net-labels");
+    } else {
+      this.propValInput.removeAttribute("list");
+    }
+
+    this.populateNetLabelSuggestions();
 
     const unitConfig = getUnitDisplayConfig(comp.type);
     this.propUnitInput.value = unitConfig.label;
@@ -601,6 +709,26 @@ export class PropertyEditor {
             }
           }
 
+          if (["diode", "npn", "pnp", "nmos", "pmos"].includes(selected.type)) {
+            const semiModelSelect = document.querySelector("#prop-semi-model") as HTMLSelectElement;
+            if (semiModelSelect && semiModelSelect.value !== "custom") {
+              selected.modelName = semiModelSelect.value;
+            } else if (semiModelSelect) {
+              delete selected.modelName;
+            }
+          }
+
+          if (["and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate"].includes(selected.type)) {
+            const logicVohSelect = document.querySelector("#prop-logic-voh") as HTMLSelectElement;
+            const logicVthInput = document.querySelector("#prop-logic-vth") as HTMLInputElement;
+            if (logicVohSelect) {
+              selected.value = parseFloat(logicVohSelect.value) || 5.0;
+            }
+            if (logicVthInput) {
+              selected.offset = parseFloat(logicVthInput.value) || 2.5;
+            }
+          }
+
           if (selected.type === "switch") {
             const state = document.querySelector("#prop-switch-state") as HTMLInputElement;
             const ron = document.querySelector("#prop-switch-ron") as HTMLInputElement;
@@ -627,15 +755,44 @@ export class PropertyEditor {
             });
           }
 
+          if (selected.type === "text_note") {
+            const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement;
+            const noteFontInput = document.querySelector("#prop-note-fontsize") as HTMLInputElement;
+            const noteThemeSelect = document.querySelector("#prop-note-theme") as HTMLSelectElement;
+            if (noteTextInput) {
+              selected.label = noteTextInput.value;
+              selected.value = noteTextInput.value;
+            }
+            if (noteFontInput) {
+              selected.fontSize = Number(noteFontInput.value) || 12;
+            }
+            if (noteThemeSelect) {
+              selected.noteTheme = (noteThemeSelect.value as any) || "card";
+            }
+          }
+
+          if (selected.type === "net_label") {
+            const rawVal = String(newVal || selected.id).trim().toUpperCase();
+            selected.value = rawVal || "NET";
+            selected.label = selected.value as string;
+          }
+
           const simulationRunner = this.callbacks.getSimulationRunner();
-          if ((simulationRunner?.isSimulationActive() ?? false) && supportsLiveMutation(selected.type)) {
+          if (simulationRunner && simulationRunner.isSimulationActive() && supportsLiveMutation(selected.type)) {
+            const runner = simulationRunner;
             const mutations = buildLiveMutations(selected, newVal);
             for (const m of mutations) {
-              this.callbacks.invokeTauri('inject_live_mutation', { mutation: m }).catch((err: unknown) => {
-                this.callbacks.addLog(`Error en mutación en caliente: ${err}`, 'error');
-              });
+              void runner.mutateComponent(
+                m.componentId,
+                m.field as unknown as import("../simulation/simulation_runner").InteractiveMutationField,
+                m.value,
+              );
             }
-            this.callbacks.addLog(`Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`, "send");          } else if (simulationRunner?.isSimulationActive() ?? false) {
+            this.callbacks.addLog(
+              `Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`,
+              "send",
+            );
+          } else if (simulationRunner?.isSimulationActive() ?? false) {
             this.callbacks.addLog(
               `Los cambios de [${selected.id}] se aplicarán en la próxima simulación.`,
               "system",

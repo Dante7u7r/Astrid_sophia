@@ -75,4 +75,38 @@ describe("CurrentAnimationRenderer", () => {
 
     expect(ctx.stroke).toHaveBeenCalled();
   });
+
+  it("renderiza con adaptación suave a diferentes niveles de zoom", () => {
+    const renderer = new CurrentAnimationRenderer();
+    const ctx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      setLineDash: vi.fn(),
+      lineDashOffset: 0,
+      lineWidth: 1,
+      strokeStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+
+    const wire: WireInstance = {
+      id: "W1",
+      from: { componentId: "V1", pinIndex: 0 },
+      to: { componentId: "R1", pinIndex: 0 },
+      points: [{ x: 10, y: 10 }, { x: 50, y: 10 }],
+    };
+
+    const visibleBounds = { x: 0, y: 0, width: 1000, height: 1000 };
+
+    // Zoom bajo (0.5x)
+    renderer.renderCurrentFlow(ctx, [wire], { "W1:I": 0.02 }, {}, visibleBounds, 1000, 0.5);
+    renderer.renderCurrentFlow(ctx, [wire], { "W1:I": 0.02 }, {}, visibleBounds, 1016, 0.5);
+    expect(ctx.stroke).toHaveBeenCalled();
+
+    // Zoom alto (2.5x)
+    renderer.renderCurrentFlow(ctx, [wire], { "W1:I": 0.02 }, {}, visibleBounds, 1032, 2.5);
+    expect(ctx.stroke).toHaveBeenCalled();
+  });
 });

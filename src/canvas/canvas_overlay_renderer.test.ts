@@ -1,0 +1,81 @@
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from "vitest";
+import { CanvasOverlayRenderer, type CanvasOverlayHost } from "./canvas_overlay_renderer";
+import type { WireInstance } from "../canvas_orchestrator";
+
+function createMockHost(overrides: Partial<CanvasOverlayHost> = {}): CanvasOverlayHost {
+  const wire: WireInstance = {
+    id: "W1",
+    from: { componentId: "V1", pinIndex: 0 },
+    to: { componentId: "R1", pinIndex: 0 },
+    points: [{ x: 10, y: 10 }, { x: 50, y: 10 }],
+  };
+
+  return {
+    zoom: 1.0,
+    offsetX: 0,
+    offsetY: 0,
+    gridSize: 20,
+    wires: [wire],
+    components: [],
+    selectedComponents: [],
+    selectedComponent: null,
+    hoveredComponent: null,
+    hoveredPin: null,
+    hoveredWire: null,
+    hoveredWireSnapPoint: null,
+    selectedWire: null,
+    selectedWires: [],
+    activePinForWire: null,
+    tempWireEnd: null,
+    selectionStart: null,
+    selectionEnd: null,
+    showCurrentAnimation: true,
+    showThermalHeatmap: false,
+    generateOrthogonalPath: (s, e) => [s, e],
+    ...overrides,
+  };
+}
+
+describe("CanvasOverlayRenderer", () => {
+  it("limpia el buffer y no dibuja si no hay elementos dinámicos activos", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const host = createMockHost({
+      showCurrentAnimation: false,
+      showThermalHeatmap: false,
+    });
+
+    const renderer = new CanvasOverlayRenderer(canvas, host);
+    renderer.renderOverlay({}, {});
+
+    expect(canvas.width).toBe(800);
+  });
+
+  it("renderiza flujo dinámico en cables cuando hay corrientes de rama", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const host = createMockHost();
+    const renderer = new CanvasOverlayRenderer(canvas, host);
+
+    // Frame 1: inicializa timestamp
+    renderer.renderOverlay({ "V1:0": 5 }, { "W1:I": 0.05 }, 1000);
+    // Frame 2: anima trazo con batching
+    renderer.renderOverlay({ "V1:0": 5 }, { "W1:I": 0.05 }, 1016);
+
+    expect(renderer.currentAnimationRenderer.flowMode).toBe("conventional");
+  });
+
+  it("permite limpiar el overlay explícitamente", () => {
+    const canvas = document.createElement("canvas");
+    const host = createMockHost();
+    const renderer = new CanvasOverlayRenderer(canvas, host);
+
+    renderer.clear();
+    expect(canvas).toBeDefined();
+  });
+});

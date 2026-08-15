@@ -1,7 +1,9 @@
 import { type McuRuntime } from "./simulation/mcu-runtime";
 import { type McuSpiceBridge } from "./simulation/mcu-spice-bridge";
+import { globalComponentRegistry } from "./components";
 import { getComponentPins as resolveComponentPins } from "./canvas/component_pins";
 import { CanvasSceneRenderer } from "./canvas/canvas_scene_renderer";
+import { CanvasOverlayRenderer } from "./canvas/canvas_overlay_renderer";
 import { evaluateRealtimeErcIssues } from "./simulation/erc_graph";
 import {
   clampCameraOffsets,
@@ -144,7 +146,7 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer' | 'ldr' | 'thermistor' | 'dmm';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer' | 'ldr' | 'thermistor' | 'dmm' | 'and_gate' | 'or_gate' | 'not_gate' | 'nand_gate' | 'nor_gate' | 'xor_gate' | 'opto' | 'njf' | 'pjf' | 'net_label' | 'text_note';
   value: number | string;
   dmmValue?: string;
   wiperPosition?: number; // Cursor del potenciómetro (0.01 - 0.99)
@@ -165,6 +167,10 @@ export interface ComponentInstance {
   glowLevel?: number;
   relayClosed?: boolean;
   buzzerLevel?: number;
+  label?: string; // Etiqueta de texto o nombre de red
+  fontSize?: number; // Tamaño de fuente para notas
+  textColor?: string; // Color personalizado de texto
+  noteTheme?: "card" | "plain" | "warning" | "outline"; // Estilo visual de la nota
   
   // MCU properties
   firmwareHex?: string; // HEX content
@@ -188,6 +194,11 @@ export interface ComponentInstance {
 
   // Macromodelo SPICE (subcircuito definido por el usuario)
   spiceMacro?: string;
+  spiceNetlist?: string;
+  // Nombre del modelo comercial o subcircuito
+  modelName?: string;
+  // Etiquetas personalizadas de pines
+  pinLabels?: Record<number, string>;
   // Número dinámico de pines para subcircuito genérico (defecto 4)
   pinCount?: number;
 }
@@ -229,7 +240,9 @@ export interface WireDragState {
 export class CanvasOrchestrator {
   private canvas: HTMLCanvasElement;
   public simulationActive: boolean = false;
+  public transientResults?: readonly { time?: number; nodeVoltages?: Record<string, number>; branchCurrents?: Record<string, number> }[];
   private readonly sceneRenderer: CanvasSceneRenderer;
+  private overlayRenderer: CanvasOverlayRenderer | null = null;
 
   // Viewport State
   public zoom: number = 1.0;
@@ -279,11 +292,23 @@ export class CanvasOrchestrator {
   public showReactiveFields: boolean = true;
   public showTelemetryHud: boolean = true;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, overlayCanvas?: HTMLCanvasElement | null) {
     this.canvas = canvas;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not acquire 2D rendering context");
     this.sceneRenderer = new CanvasSceneRenderer(canvas, context, this);
+    if (overlayCanvas) {
+      this.attachOverlayCanvas(overlayCanvas);
+    }
+  }
+
+  public attachOverlayCanvas(overlayCanvas: HTMLCanvasElement): void {
+    this.overlayRenderer = new CanvasOverlayRenderer(overlayCanvas, this);
+    this.sceneRenderer.hasOverlayRenderer = true;
+  }
+
+  public hasLayeredRendering(): boolean {
+    return this.overlayRenderer !== null;
   }
 
   public updateRealtimeErc(): void {
@@ -323,25 +348,7 @@ export class CanvasOrchestrator {
   public generateOrthogonalPath(start: Point2D, end: Point2D, fromCompId?: string, toCompId?: string): Point2D[] {
     const obstacles: BoundingBox[] = this.components
       .filter((c) => c.id !== fromCompId && c.id !== toCompId)
-      .map((comp) => {
-        const pins = this.getComponentPins(comp);
-        let minX = comp.x;
-        let maxX = comp.x;
-        let minY = comp.y;
-        let maxY = comp.y;
-        for (const p of pins) {
-          minX = Math.min(minX, p.x);
-          maxX = Math.max(maxX, p.x);
-          minY = Math.min(minY, p.y);
-          maxY = Math.max(maxY, p.y);
-        }
-        return {
-          x: minX - 10,
-          y: minY - 10,
-          width: Math.max(30, maxX - minX + 20),
-          height: Math.max(30, maxY - minY + 20),
-        };
-      });
+      .map((comp) => globalComponentRegistry.getBounds(comp));
 
     return generateSmartOrthogonalPath(start, end, this.gridSize, obstacles);
   }
@@ -418,8 +425,39 @@ export class CanvasOrchestrator {
 
   // --- DRAWING / RENDERING ---
 
-  public render(voltageMap: Record<string, number> = {}, probes: ProbeBadges = {}, nodeMap: Record<string, string> = {}, sparMarkers?: SParameterMarker[], branchCurrents: Record<string, number> = {}): void {
+  public renderBase(
+    voltageMap: Record<string, number> = {},
+    probes: ProbeBadges = {},
+    nodeMap: Record<string, string> = {},
+    sparMarkers?: SParameterMarker[],
+    branchCurrents: Record<string, number> = {},
+  ): void {
     this.sceneRenderer.render(voltageMap, probes, nodeMap, sparMarkers, branchCurrents);
+  }
+
+  public renderOverlay(
+    voltageMap: Record<string, number> = {},
+    branchCurrents: Record<string, number> = {},
+    now?: number,
+  ): void {
+    this.overlayRenderer?.renderOverlay(voltageMap, branchCurrents, now);
+  }
+
+  public clearOverlay(): void {
+    this.overlayRenderer?.clear();
+  }
+
+  public render(
+    voltageMap: Record<string, number> = {},
+    probes: ProbeBadges = {},
+    nodeMap: Record<string, string> = {},
+    sparMarkers?: SParameterMarker[],
+    branchCurrents: Record<string, number> = {},
+  ): void {
+    this.renderBase(voltageMap, probes, nodeMap, sparMarkers, branchCurrents);
+    if (this.overlayRenderer) {
+      this.renderOverlay(voltageMap, branchCurrents);
+    }
   }
 
   /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel. */

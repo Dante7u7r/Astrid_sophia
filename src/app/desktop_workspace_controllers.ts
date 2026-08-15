@@ -125,6 +125,9 @@ export function createDesktopWorkspaceControllers(
     },
     getVoltageMap: () => deps.circuitState.getVoltageMap(),
     addLog: deps.addLog,
+    getComponents: () => deps.getOrchestrator()?.components ?? [],
+    getWires: () => deps.getOrchestrator()?.wires ?? [],
+    getCircuitTitle: () => tabManager.getActiveTab()?.name ?? "Circuito Astryd Sophia",
   });
 
   new SettingsModal(deps.getSimulationSettings(), (newSettings) => {

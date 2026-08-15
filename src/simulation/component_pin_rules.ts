@@ -1,13 +1,16 @@
-import type { ComponentInstance } from "../canvas_orchestrator";
+// ==========================================================================
+// COMPONENT PIN RULES — Reglas de validación ERC de pines flotantes
+// ==========================================================================
 
-const OPTIONAL_FLOATING_PIN_TYPES = new Set<ComponentInstance["type"]>([
-  "mcu_8051",
-  "mcu_avr",
-  "arduino_uno",
-  "esp32",
-  "raspberry_pi_pico",
-]);
+import type { ComponentInstance } from "../canvas_orchestrator";
+import { globalComponentRegistry } from "../components/registry";
 
 export function allowsFloatingPins(type: ComponentInstance["type"]): boolean {
-  return OPTIONAL_FLOATING_PIN_TYPES.has(type);
+  const def = globalComponentRegistry.get(type);
+  if (!def) return false;
+  return (
+    def.category === "digitales-mcus" ||
+    def.isDocumentOnly === true ||
+    def.type === "net_label"
+  );
 }

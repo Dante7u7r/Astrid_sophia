@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AcSweepResult, TimeStepResult } from "./oscilloscope_panel";
 import {
   type ExportSnapshot,
+  buildBomExport,
   buildCsvExport,
   buildSvgExport,
   buildTouchstoneExport,
@@ -81,5 +82,25 @@ describe("exporter_model", () => {
     expect(result?.filename).toBe("reporte_s2p.s2p");
     expect(result?.content).toContain("# Hz S DB R 50");
     expect(result?.content).toContain("10.0000 -3.250000 45.000000 -20.000000 -10.000000");
+  });
+
+  it("construye lista de materiales (BOM) agrupada por componente y valor nominal", () => {
+    const components = [
+      { id: "R1", type: "resistor", value: 1000 },
+      { id: "R2", type: "resistor", value: 1000 },
+      { id: "R3", type: "resistor", value: 4700 },
+      { id: "C1", type: "capacitor", value: 1e-6 },
+      { id: "D1", type: "diode", value: 0, modelName: "1N4148" },
+      { id: "GND1", type: "ground", value: 0 },
+    ];
+
+    const bom = buildBomExport(components, "Filtro Pasa Bajos");
+
+    expect(bom.filename).toContain("lista_de_materiales_filtro_pasa_bajos.csv");
+    expect(bom.content).toContain("Item,Designadores,Cantidad,Tipo de Componente,Valor Nominal / Modelo");
+    expect(bom.content).toContain('"R1 R2",2,"RESISTOR","1000"');
+    expect(bom.content).toContain('"R3",1,"RESISTOR","4700"');
+    expect(bom.content).toContain('"D1",1,"DIODE","1N4148 (0)"');
+    expect(bom.content).not.toContain("GND1"); // Excluye tierra de la lista de compra
   });
 });

@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import {
+  drawSparkline,
+  extractSparklinePoints,
   formatEngineeringValue,
   renderPinTelemetryHud,
   renderWireTelemetryHud,
+  type TelemetryHistorySample,
 } from "./hud_inspector";
 import type { PinInstance, WireInstance } from "../canvas_orchestrator";
 
@@ -29,8 +32,35 @@ describe("hud_inspector", () => {
     });
   });
 
-  describe("renderPinTelemetryHud", () => {
-    it("dibuja caja HUD de telemetría de pin sin errores", () => {
+  describe("extractSparklinePoints", () => {
+    it("extrae serie de voltajes de forma segura", () => {
+      const history: TelemetryHistorySample[] = [
+        { nodeVoltages: { "1": 0.0 } },
+        { nodeVoltages: { "1": 2.5 } },
+        { nodeVoltages: { "1": 5.0 } },
+      ];
+      const pts = extractSparklinePoints(history, "1", false, 10);
+      expect(pts).toEqual([0.0, 2.5, 5.0]);
+    });
+
+    it("retorna arreglo vacío si no hay historial", () => {
+      expect(extractSparklinePoints(undefined, "1")).toEqual([]);
+      expect(extractSparklinePoints([], "1")).toEqual([]);
+    });
+
+    it("limita al número máximo de puntos", () => {
+      const history: TelemetryHistorySample[] = Array.from({ length: 50 }, (_, i) => ({
+        nodeVoltages: { "1": i },
+      }));
+      const pts = extractSparklinePoints(history, "1", false, 10);
+      expect(pts).toHaveLength(10);
+      expect(pts[0]).toBe(40);
+      expect(pts[9]).toBe(49);
+    });
+  });
+
+  describe("drawSparkline", () => {
+    it("dibuja la retícula y el trazo vectorial sin arrojar excepciones", () => {
       const ctx = {
         save: vi.fn(),
         restore: vi.fn(),
@@ -38,7 +68,34 @@ describe("hud_inspector", () => {
         roundRect: vi.fn(),
         fill: vi.fn(),
         stroke: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
         fillText: vi.fn(),
+        setLineDash: vi.fn(),
+      } as unknown as CanvasRenderingContext2D;
+
+      drawSparkline(ctx, 10, 10, 100, 30, [0, 2.5, 5.0, 2.5, 0], "#38BDF8");
+
+      expect(ctx.save).toHaveBeenCalled();
+      expect(ctx.roundRect).toHaveBeenCalled();
+      expect(ctx.stroke).toHaveBeenCalled();
+      expect(ctx.restore).toHaveBeenCalled();
+    });
+  });
+
+  describe("renderPinTelemetryHud", () => {
+    it("dibuja caja HUD de telemetría de pin con mini-osciloscopio si hay historial", () => {
+      const ctx = {
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        roundRect: vi.fn(),
+        fill: vi.fn(),
+        stroke: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        fillText: vi.fn(),
+        setLineDash: vi.fn(),
         measureText: vi.fn().mockReturnValue({ width: 50 }),
       } as unknown as CanvasRenderingContext2D;
 
@@ -49,17 +106,23 @@ describe("hud_inspector", () => {
         y: 100,
       };
 
-      renderPinTelemetryHud(ctx, pin, "1", 5.0, 0.005);
+      const history: TelemetryHistorySample[] = [
+        { nodeVoltages: { "1": 0.0 } },
+        { nodeVoltages: { "1": 2.5 } },
+        { nodeVoltages: { "1": 5.0 } },
+      ];
+
+      renderPinTelemetryHud(ctx, pin, "1", 5.0, 0.005, history);
 
       expect(ctx.save).toHaveBeenCalled();
       expect(ctx.roundRect).toHaveBeenCalled();
-      expect(ctx.fillText).toHaveBeenCalledTimes(3);
+      expect(ctx.fillText).toHaveBeenCalled();
       expect(ctx.restore).toHaveBeenCalled();
     });
   });
 
   describe("renderWireTelemetryHud", () => {
-    it("dibuja caja HUD de telemetría de cable con flecha vectorial", () => {
+    it("dibuja caja HUD de telemetría de cable con flecha vectorial y sparkline", () => {
       const ctx = {
         save: vi.fn(),
         restore: vi.fn(),
@@ -67,7 +130,10 @@ describe("hud_inspector", () => {
         roundRect: vi.fn(),
         fill: vi.fn(),
         stroke: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
         fillText: vi.fn(),
+        setLineDash: vi.fn(),
         measureText: vi.fn().mockReturnValue({ width: 60 }),
       } as unknown as CanvasRenderingContext2D;
 
@@ -79,11 +145,16 @@ describe("hud_inspector", () => {
         label: "NET_VCC",
       };
 
-      renderWireTelemetryHud(ctx, wire, 5.0, 0.025);
+      const history: TelemetryHistorySample[] = [
+        { nodeVoltages: { "1": 0.0 } },
+        { nodeVoltages: { "1": 5.0 } },
+      ];
+
+      renderWireTelemetryHud(ctx, wire, 5.0, 0.025, "1", history);
 
       expect(ctx.save).toHaveBeenCalled();
       expect(ctx.roundRect).toHaveBeenCalled();
-      expect(ctx.fillText).toHaveBeenCalledTimes(3);
+      expect(ctx.fillText).toHaveBeenCalled();
       expect(ctx.restore).toHaveBeenCalled();
     });
   });

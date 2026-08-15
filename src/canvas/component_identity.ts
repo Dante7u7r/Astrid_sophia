@@ -1,36 +1,17 @@
+// ==========================================================================
+// COMPONENT IDENTITY — Normalización, prefijos y generador de IDs únicos
+// ==========================================================================
+
 import type { ComponentInstance } from "../canvas_orchestrator";
 import { DMM_INITIAL_DISPLAY } from "../simulation/dmm";
+import { globalComponentRegistry } from "../components/registry";
 
-const COMPONENT_ID_PREFIXES: Record<ComponentInstance["type"], string> = {
-  resistor: "R",
-  capacitor: "C",
-  inductor: "L",
-  diode: "D",
-  vsource: "V",
-  ground: "GND",
-  nmos: "M",
-  opamp: "U",
-  pmos: "M",
-  npn: "Q",
-  pnp: "Q",
-  lamp: "LP",
-  relay: "RY",
-  buzzer: "BZ",
-  mcu_8051: "U",
-  mcu_avr: "U",
-  arduino_uno: "U",
-  esp32: "U",
-  raspberry_pi_pico: "U",
-  isource: "I",
-  led: "LED",
-  transformer: "T",
-  switch: "SW",
-  x: "X",
-  potentiometer: "RV",
-  ldr: "LDR",
-  thermistor: "RT",
-  dmm: "DMM",
-};
+export const COMPONENT_ID_PREFIXES: Record<ComponentInstance["type"], string> = new Proxy(
+  {} as Record<ComponentInstance["type"], string>,
+  {
+    get: (_target, prop: string) => globalComponentRegistry.getPrefix(prop as ComponentInstance["type"]),
+  },
+);
 
 export function normalizeComponentId(id: string): string {
   return id.trim().toUpperCase();
@@ -88,6 +69,10 @@ export function copyComponentConfiguration(
     spiceMacro: source.spiceMacro,
     pinCount: source.pinCount,
     firmwareHex: source.firmwareHex,
+    label: source.label,
+    fontSize: source.fontSize,
+    textColor: source.textColor,
+    noteTheme: source.noteTheme,
   });
   target.firmware = source.firmware ? source.firmware.slice() : undefined;
   target.dmmValue = source.type === "dmm" ? DMM_INITIAL_DISPLAY : undefined;
@@ -97,7 +82,7 @@ export function generateUniqueComponentId(
   components: readonly Pick<ComponentInstance, "id">[],
   type: ComponentInstance["type"],
 ): string {
-  const prefix = COMPONENT_ID_PREFIXES[type];
+  const prefix = globalComponentRegistry.getPrefix(type);
   const normalizedIds = new Set(components.map((component) => normalizeComponentId(component.id)));
   const suffixPattern = new RegExp(`^${prefix}(\\d+)$`, "i");
   let highestSuffix = 0;

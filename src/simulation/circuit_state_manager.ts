@@ -35,6 +35,7 @@ import type {
 } from "../canvas_orchestrator";
 import { type SimulationFrame } from "./simulation_runner";
 import { resetRuntime } from "./mcu-runtime";
+import { globalComponentRegistry } from "../components/registry";
 
 interface DemoLoadOscilloscopeState {
   transientResults: unknown[];
@@ -223,6 +224,105 @@ export class CircuitStateManager {
       }
     }
     return pinVoltageMap;
+  }
+
+  /**
+   * Sincroniza en tiempo real las corrientes de rama de todos los componentes
+   * y cables, y actualiza los actuadores visuales (como el brillo del LED).
+   */
+  syncComponentCurrentsAndActuators(
+    components: readonly ComponentInstance[],
+    wires: readonly WireInstance[],
+  ): void {
+    const pinVoltages = this.buildPinVoltageMap();
+    const branchCurrents: Record<string, number> = { ...this._liveCurrents };
+
+    for (const comp of components) {
+      const pins = globalComponentRegistry.getPins(comp);
+      const voltagesRecord: Record<number, number | undefined> = {};
+      for (const pin of pins) {
+        voltagesRecord[pin.pinIndex] = pinVoltages[`${comp.id}:${pin.pinIndex}`];
+      }
+
+      // Si el componente tiene corriente de rama externa (ej. fuentes independientes de Rust)
+      if (branchCurrents[comp.id] !== undefined) {
+        const iVal = branchCurrents[comp.id];
+        if (branchCurrents[`${comp.id}:0`] === undefined) branchCurrents[`${comp.id}:0`] = -iVal;
+        if (branchCurrents[`${comp.id}:1`] === undefined) branchCurrents[`${comp.id}:1`] = iVal;
+        if (branchCurrents[`${comp.id}:I`] === undefined) branchCurrents[`${comp.id}:I`] = iVal;
+      }
+
+      const behavior = globalComponentRegistry.evaluateLiveBehavior(comp, voltagesRecord);
+      if (behavior) {
+        if (behavior.glowLevel !== undefined) comp.glowLevel = behavior.glowLevel;
+        if (behavior.relayClosed !== undefined) comp.relayClosed = behavior.relayClosed;
+        if (behavior.buzzerLevel !== undefined) comp.buzzerLevel = behavior.buzzerLevel;
+
+        if (behavior.branchCurrents) {
+          for (const [pinIdxStr, current] of Object.entries(behavior.branchCurrents)) {
+            const pinIdx = Number(pinIdxStr);
+            branchCurrents[`${comp.id}:${pinIdx}`] = current;
+          }
+          const primaryI = behavior.branchCurrents[0];
+          if (primaryI !== undefined) {
+            branchCurrents[comp.id] = primaryI;
+            branchCurrents[`${comp.id}:I`] = primaryI;
+          }
+        }
+      }
+    }
+
+    // Propagación KCL a lo largo de componentes de 2 terminales y cables enlazados
+    for (let iter = 0; iter < 4; iter++) {
+      // 1. Propagar a través de los cables
+      for (const wire of wires) {
+        const fromKey = `${wire.from.componentId}:${wire.from.pinIndex}`;
+        const toKey = `${wire.to.componentId}:${wire.to.pinIndex}`;
+        let wireI = branchCurrents[wire.id] ?? branchCurrents[`${wire.id}:I`];
+
+        if (wireI === undefined) {
+          if (branchCurrents[fromKey] !== undefined) {
+            wireI = branchCurrents[fromKey];
+          } else if (branchCurrents[toKey] !== undefined) {
+            wireI = -branchCurrents[toKey];
+          }
+        }
+
+        if (wireI !== undefined) {
+          branchCurrents[wire.id] = wireI;
+          branchCurrents[`${wire.id}:I`] = wireI;
+          if (branchCurrents[fromKey] === undefined) {
+            branchCurrents[fromKey] = wireI;
+          }
+          if (branchCurrents[toKey] === undefined) {
+            branchCurrents[toKey] = -wireI;
+          }
+        }
+      }
+
+      // 2. Propagar a través de componentes de 2 terminales (resistencia, capacitor, bobina, diodo, led)
+      for (const comp of components) {
+        const pins = globalComponentRegistry.getPins(comp);
+        if (pins.length === 2) {
+          const k0 = `${comp.id}:0`;
+          const k1 = `${comp.id}:1`;
+          const i0 = branchCurrents[k0];
+          const i1 = branchCurrents[k1];
+
+          if (i0 !== undefined && i1 === undefined) {
+            branchCurrents[k1] = -i0;
+            branchCurrents[comp.id] = i0;
+            branchCurrents[`${comp.id}:I`] = i0;
+          } else if (i1 !== undefined && i0 === undefined) {
+            branchCurrents[k0] = -i1;
+            branchCurrents[comp.id] = -i1;
+            branchCurrents[`${comp.id}:I`] = -i1;
+          }
+        }
+      }
+    }
+
+    this._liveCurrents = branchCurrents;
   }
 }
 

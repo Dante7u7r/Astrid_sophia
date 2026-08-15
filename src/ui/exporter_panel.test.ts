@@ -46,4 +46,65 @@ describe("ExporterPanel", () => {
       "receive",
     );
   });
+
+  it("exporta plano esquemático vectorial CAD SVG", () => {
+    const createObjectUrl = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-svg");
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const addLog = vi.fn();
+
+    const panel = new ExporterPanel({
+      getOscilloscopePanel: () => null,
+      getActiveAnalysisMode: () => "DC",
+      getProbeNodes: () => ({ ch1: null, ch2: null }),
+      getVoltageMap: () => ({}),
+      addLog,
+      getComponents: () => [
+        { id: "R1", type: "resistor", value: 1000, x: 100, y: 100, rotation: 0 },
+      ],
+      getWires: () => [],
+      getCircuitTitle: () => "Circuito de Prueba",
+    });
+
+    panel.exportarEsquemaCAD_SVG("print_clean");
+
+    expect(createObjectUrl).toHaveBeenCalledOnce();
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(addLog).toHaveBeenCalledWith(
+      expect.stringContaining("Plano esquemático vectorial CAD exportado exitosamente"),
+      "receive",
+    );
+  });
+
+  it("exporta lista de materiales BOM CSV", () => {
+    const createObjectUrl = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-csv");
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const addLog = vi.fn();
+
+    const panel = new ExporterPanel({
+      getOscilloscopePanel: () => null,
+      getActiveAnalysisMode: () => "DC",
+      getProbeNodes: () => ({ ch1: null, ch2: null }),
+      getVoltageMap: () => ({}),
+      addLog,
+      getComponents: () => [
+        { id: "R1", type: "resistor", value: 1000, x: 100, y: 100, rotation: 0 },
+        { id: "R2", type: "resistor", value: 1000, x: 200, y: 100, rotation: 0 },
+      ],
+      getWires: () => [],
+      getCircuitTitle: () => "Amplificador",
+    });
+
+    panel.exportarListaMaterialesBOM();
+
+    expect(createObjectUrl).toHaveBeenCalledOnce();
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(addLog).toHaveBeenCalledWith(
+      expect.stringContaining("Lista de Materiales (BOM) exportada exitosamente"),
+      "receive",
+    );
+  });
 });

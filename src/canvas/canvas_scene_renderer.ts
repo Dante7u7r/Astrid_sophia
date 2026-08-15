@@ -71,12 +71,14 @@ export interface CanvasRenderHost {
   showThermalHeatmap?: boolean;
   showReactiveFields?: boolean;
   showTelemetryHud?: boolean;
+  transientResults?: readonly { time?: number; nodeVoltages?: Record<string, number>; branchCurrents?: Record<string, number> }[];
   clampCameraOffsets(): void;
   generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[];
   getComponentPins(component: ComponentInstance): PinInstance[];
 }
 
 export class CanvasSceneRenderer {
+  public hasOverlayRenderer = false;
   private gridPathCache: GridPathCache | null = null;
   private currentAnimationRenderer = new CurrentAnimationRenderer();
   private thermalHeatmapRenderer = new ThermalHeatmapRenderer();
@@ -133,8 +135,8 @@ export class CanvasSceneRenderer {
 
     const now = performance.now();
 
-    // 3b. Draw Current Flow Animation (Zero-GC)
-    if (this.host.showCurrentAnimation !== false) {
+    // 3b. Draw Current Flow Animation (solo si no hay capa overlay separada)
+    if (!this.hasOverlayRenderer && this.host.showCurrentAnimation !== false) {
       this.currentAnimationRenderer.flowMode = this.host.currentFlowMode ?? "conventional";
       this.currentAnimationRenderer.speedMultiplier = this.host.currentAnimationSpeed ?? 1.0;
       this.currentAnimationRenderer.renderCurrentFlow(
@@ -144,11 +146,12 @@ export class CanvasSceneRenderer {
         _voltageMap,
         visibleWorldBounds,
         now,
+        this.host.zoom,
       );
     }
 
-    // 3c. Draw Electro-Thermal Live Heatmap
-    if (this.host.showThermalHeatmap !== false) {
+    // 3c. Draw Electro-Thermal Live Heatmap (solo si no hay capa overlay separada)
+    if (!this.hasOverlayRenderer && this.host.showThermalHeatmap !== false) {
       this.thermalHeatmapRenderer.renderThermalHeatmap(
         this.ctx,
         visibleComponents,
@@ -176,12 +179,14 @@ export class CanvasSceneRenderer {
       });
     }
 
-    drawTemporaryWire(
-      this.ctx,
-      this.host.activePinForWire,
-      this.host.tempWireEnd,
-      (start, end) => this.host.generateOrthogonalPath(start, end),
-    );
+    if (!this.hasOverlayRenderer) {
+      drawTemporaryWire(
+        this.ctx,
+        this.host.activePinForWire,
+        this.host.tempWireEnd,
+        (start, end) => this.host.generateOrthogonalPath(start, end),
+      );
+    }
     // 6. Draw Highlights & Pins
     this.drawPins(_voltageMap, nodeMap, pinCache, visibleComponents, renderDetail, netHighlight, branchCurrents);
 
@@ -190,8 +195,10 @@ export class CanvasSceneRenderer {
 
     drawProbeBadges(this.ctx, probes);
     drawSParameterMarkers(this.ctx, sparMarkers);
-    drawSelectionBox(this.ctx, this.host.selectionStart, this.host.selectionEnd);
-    drawAlignmentGuides(this.ctx, this.host.activeAlignmentGuides ?? []);
+    if (!this.hasOverlayRenderer) {
+      drawSelectionBox(this.ctx, this.host.selectionStart, this.host.selectionEnd);
+      drawAlignmentGuides(this.ctx, this.host.activeAlignmentGuides ?? []);
+    }
 
     this.ctx.restore();
   }
@@ -422,7 +429,8 @@ export class CanvasSceneRenderer {
           const toKey = `${wire.to.componentId}:${wire.to.pinIndex}`;
           const vWire = voltageMap[fromKey] ?? voltageMap[toKey];
           const iWire = branchCurrents[`${wire.id}:I`] ?? branchCurrents[fromKey] ?? branchCurrents[toKey];
-          renderWireTelemetryHud(this.ctx, wire, vWire, iWire);
+          const wireNodeId = nodeMap ? (nodeMap[fromKey] ?? nodeMap[toKey]) : undefined;
+          renderWireTelemetryHud(this.ctx, wire, vWire, iWire, wireNodeId, this.host.transientResults);
         }
       }
     }
@@ -520,7 +528,7 @@ export class CanvasSceneRenderer {
           if (this.host.showTelemetryHud !== false && isHovered && nodeId) {
             const volt = voltageMap[pinKey];
             const current = branchCurrents[pinKey] ?? branchCurrents[`${pin.componentId}:I`];
-            renderPinTelemetryHud(this.ctx, pin, nodeId, volt, current);
+            renderPinTelemetryHud(this.ctx, pin, nodeId, volt, current, this.host.transientResults);
           }
         } else {
           this.ctx.fillStyle = "rgba(242, 201, 76, 0.75)";

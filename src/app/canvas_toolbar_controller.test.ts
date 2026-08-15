@@ -17,6 +17,9 @@ function setupDom(): HTMLCanvasElement {
     <button id="btn-zoom-fit"></button>
     <button id="btn-snap-grid" class="btn-active"></button>
     <button id="btn-toggle-labels" aria-pressed="false"></button>
+    <button id="btn-wire-mode"></button>
+    <button id="btn-undo-action"></button>
+    <button id="btn-redo-action"></button>
     <canvas id="canvas"></canvas>
   `;
 
@@ -172,5 +175,35 @@ describe("CanvasToolbarController", () => {
     expect(btn.getAttribute("aria-pressed")).toBe("false");
     expect(render).toHaveBeenCalledTimes(2);
     expect(addLog).toHaveBeenCalledWith("Etiquetas de cables ocultas.", "system");
+  });
+
+  it("ejecuta callbacks de modo cable, deshacer y rehacer al hacer clic en los botones", () => {
+    const canvas = setupDom();
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    const onWireMode = vi.fn();
+
+    initCanvasToolbarController({
+      canvasElement: canvas,
+      getOrchestrator: () => null,
+      getOscilloscopePanel: () => null,
+      clearVoltages: vi.fn(),
+      resetPerformanceCaches: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      addLog: vi.fn(),
+      onUndo,
+      onRedo,
+      onWireMode,
+    });
+
+    document.querySelector<HTMLButtonElement>("#btn-wire-mode")!.click();
+    expect(onWireMode).toHaveBeenCalledOnce();
+
+    document.querySelector<HTMLButtonElement>("#btn-undo-action")!.click();
+    expect(onUndo).toHaveBeenCalledOnce();
+
+    document.querySelector<HTMLButtonElement>("#btn-redo-action")!.click();
+    expect(onRedo).toHaveBeenCalledOnce();
   });
 });

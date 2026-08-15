@@ -1,4 +1,9 @@
+// ==========================================================================
+// COMPONENT RENDER MODEL — Estados visuales, etiquetas y formateo
+// ==========================================================================
+
 import type { ComponentInstance } from "../canvas_orchestrator";
+import { globalComponentRegistry } from "../components/registry";
 
 export interface ComponentVisualState {
   color: string;
@@ -10,23 +15,6 @@ export interface ComponentLabelLayout {
   idY: number;
   valueY: number;
 }
-
-const NO_STANDARD_LEADS = new Set<ComponentInstance["type"]>([
-  "ground",
-  "nmos",
-  "pmos",
-  "npn",
-  "pnp",
-  "opamp",
-  "relay",
-  "mcu_8051",
-  "mcu_avr",
-  "arduino_uno",
-  "esp32",
-  "raspberry_pi_pico",
-  "x",
-  "dmm",
-]);
 
 export function getComponentVisualState(
   isSelected: boolean,
@@ -54,7 +42,7 @@ export function getComponentVisualState(
 }
 
 export function shouldDrawStandardLeads(type: ComponentInstance["type"]): boolean {
-  return !NO_STANDARD_LEADS.has(type);
+  return globalComponentRegistry.hasStandardLeads(type);
 }
 
 export function getComponentLabelLayout(comp: ComponentInstance): ComponentLabelLayout {
@@ -77,7 +65,7 @@ export function getComponentLabelLayout(comp: ComponentInstance): ComponentLabel
 }
 
 export function shouldDrawValueLabel(type: ComponentInstance["type"]): boolean {
-  return type !== "ground" && type !== "x" && type !== "dmm";
+  return globalComponentRegistry.hasValueLabel(type);
 }
 
 export function formatComponentValue(comp: ComponentInstance): string {

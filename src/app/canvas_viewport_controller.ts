@@ -5,6 +5,7 @@ export interface CanvasViewportController {
 
 export interface CanvasViewportControllerDeps {
   canvasElement: HTMLCanvasElement;
+  overlayCanvasElement?: HTMLCanvasElement | null;
   requestRender(): void;
   requestAnimationFrame(callback: FrameRequestCallback): number;
   devicePixelRatio(): number;
@@ -34,6 +35,10 @@ export function createCanvasViewportController(
     prevCanvasHeight = bufH;
     deps.canvasElement.width = bufW;
     deps.canvasElement.height = bufH;
+    if (deps.overlayCanvasElement) {
+      deps.overlayCanvasElement.width = bufW;
+      deps.overlayCanvasElement.height = bufH;
+    }
     deps.requestAnimationFrame(() => deps.requestRender());
   };
 

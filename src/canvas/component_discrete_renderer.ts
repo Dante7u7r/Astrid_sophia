@@ -5,48 +5,83 @@ export function drawLed(
   comp: ComponentInstance,
   color: string,
 ): void {
-  ctx.moveTo(-12, -10);
-  ctx.lineTo(-12, 10);
-  ctx.lineTo(8, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(8, -10);
-  ctx.lineTo(8, 10);
-  ctx.stroke();
-
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(14, -6);
-  ctx.lineTo(20, -10);
-  ctx.moveTo(20, -10);
-  ctx.lineTo(16, -10);
-  ctx.moveTo(20, -10);
-  ctx.lineTo(20, -6);
-  ctx.moveTo(14, 6);
-  ctx.lineTo(20, 10);
-  ctx.moveTo(20, 10);
-  ctx.lineTo(16, 10);
-  ctx.moveTo(20, 10);
-  ctx.lineTo(20, 6);
-  ctx.stroke();
-
   const glow = comp.glowLevel ?? 0;
-  if (glow > 0.05) {
-    const grad = ctx.createRadialGradient(8, 0, 4, 8, 0, 28);
-    grad.addColorStop(0, `rgba(255, 100, 0, ${glow * 0.5})`);
-    grad.addColorStop(0.5, `rgba(255, 180, 0, ${glow * 0.2})`);
+
+  // 1. Resplandor radial exterior cuando está encendido
+  if (glow > 0.03) {
+    const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, 32);
+    grad.addColorStop(0, `rgba(255, 60, 40, ${glow * 0.75})`);
+    grad.addColorStop(0.4, `rgba(255, 140, 20, ${glow * 0.4})`);
+    grad.addColorStop(0.7, `rgba(255, 180, 0, ${glow * 0.15})`);
     grad.addColorStop(1, "rgba(255, 180, 0, 0)");
     ctx.save();
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(8, 0, 28, 0, Math.PI * 2);
+    ctx.arc(0, 0, 32, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
+
+  // 2. Triángulo del diodo ánodo -> cátodo
+  ctx.beginPath();
+  ctx.moveTo(-12, -10);
+  ctx.lineTo(-12, 10);
+  ctx.lineTo(8, 0);
+  ctx.closePath();
+
+  if (glow > 0.05) {
+    ctx.save();
+    ctx.fillStyle = `rgba(255, 68, 68, ${0.4 + glow * 0.6})`;
+    ctx.fill();
+    ctx.strokeStyle = "#FF6B6B";
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = "rgba(255, 50, 50, 0.9)";
+    ctx.shadowBlur = 8 * glow;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // 3. Barra del cátodo
+  ctx.beginPath();
+  ctx.moveTo(8, -10);
+  ctx.lineTo(8, 10);
+  if (glow > 0.05) {
+    ctx.save();
+    ctx.strokeStyle = "#FF8888";
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.stroke();
+  }
+
+  // 4. Flechas de emisión de fotones
+  ctx.save();
+  ctx.strokeStyle = glow > 0.05 ? `rgba(255, 200, 50, ${0.7 + glow * 0.3})` : color;
+  ctx.lineWidth = glow > 0.05 ? 1.6 : 1.2;
+  if (glow > 0.05) {
+    ctx.shadowColor = "rgba(255, 200, 50, 0.8)";
+    ctx.shadowBlur = 4 * glow;
+  }
+  ctx.beginPath();
+  ctx.moveTo(12, -6);
+  ctx.lineTo(20, -12);
+  ctx.moveTo(20, -12);
+  ctx.lineTo(15, -12);
+  ctx.moveTo(20, -12);
+  ctx.lineTo(20, -7);
+
+  ctx.moveTo(12, 6);
+  ctx.lineTo(20, 12);
+  ctx.moveTo(20, 12);
+  ctx.lineTo(15, 12);
+  ctx.moveTo(20, 12);
+  ctx.lineTo(20, 7);
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function drawSwitch(

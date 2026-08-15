@@ -41,6 +41,69 @@ interface GridNode {
   dirY: number;
 }
 
+class MinHeap<T> {
+  private readonly heap: T[] = [];
+  constructor(private readonly compare: (a: T, b: T) => number) {}
+
+  get length(): number {
+    return this.heap.length;
+  }
+
+  push(item: T): void {
+    this.heap.push(item);
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): T | undefined {
+    if (this.heap.length === 0) return undefined;
+    const top = this.heap[0];
+    const bottom = this.heap.pop()!;
+    if (this.heap.length > 0) {
+      this.heap[0] = bottom;
+      this.bubbleDown(0);
+    }
+    return top;
+  }
+
+  private bubbleUp(index: number): void {
+    const item = this.heap[index];
+    while (index > 0) {
+      const parentIdx = (index - 1) >> 1;
+      const parent = this.heap[parentIdx];
+      if (this.compare(item, parent) >= 0) break;
+      this.heap[index] = parent;
+      index = parentIdx;
+    }
+    this.heap[index] = item;
+  }
+
+  private bubbleDown(index: number): void {
+    const length = this.heap.length;
+    const item = this.heap[index];
+    while (true) {
+      const leftIdx = (index << 1) + 1;
+      const rightIdx = leftIdx + 1;
+      let smallest = index;
+
+      if (leftIdx < length && this.compare(this.heap[leftIdx], this.heap[smallest]) < 0) {
+        smallest = leftIdx;
+      }
+      if (rightIdx < length && this.compare(this.heap[rightIdx], this.heap[smallest]) < 0) {
+        smallest = rightIdx;
+      }
+      if (smallest === index) break;
+
+      this.heap[index] = this.heap[smallest];
+      this.heap[smallest] = item;
+      index = smallest;
+    }
+  }
+}
+
+/**
+ * Enrutador inteligente reactivo A* Manhattan para pistas conductoras con esquive de cajas de componentes.
+ * Utiliza Min-Heap de prioridad y Map hash O(1) para ejecución en sub-milisegundos a 60 FPS.
+ */
 export function generateSmartOrthogonalPath(
   start: Point2D,
   end: Point2D,
@@ -70,32 +133,36 @@ export function generateSmartOrthogonalPath(
   const step = gridSize;
   const endKey = `${endSnapped.x},${endSnapped.y}`;
 
-  const openList: GridNode[] = [];
+  const openQueue = new MinHeap<GridNode>((a, b) => a.f - b.f);
+  const openMap = new Map<string, GridNode>();
   const closedSet = new Set<string>();
 
   const manhattan = (p1: Point2D, p2: Point2D) => Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
 
+  const startH = manhattan(startSnapped, endSnapped);
   const startNode: GridNode = {
     x: startSnapped.x,
     y: startSnapped.y,
     g: 0,
-    h: manhattan(startSnapped, endSnapped),
-    f: manhattan(startSnapped, endSnapped),
+    h: startH,
+    f: startH,
     parent: null,
     dirX: 0,
     dirY: 0,
   };
 
-  openList.push(startNode);
+  openQueue.push(startNode);
+  openMap.set(`${startNode.x},${startNode.y}`, startNode);
+
   let stepsCount = 0;
   const maxSteps = 1500;
   let bestNode: GridNode | null = null;
 
-  while (openList.length > 0 && stepsCount < maxSteps) {
+  while (openQueue.length > 0 && stepsCount < maxSteps) {
     stepsCount++;
-    openList.sort((a, b) => a.f - b.f);
-    const current = openList.shift()!;
+    const current = openQueue.pop()!;
     const currentKey = `${current.x},${current.y}`;
+    openMap.delete(currentKey);
 
     if (currentKey === endKey) {
       bestNode = current;
@@ -121,16 +188,16 @@ export function generateSmartOrthogonalPath(
         continue;
       }
 
-      // Penalización por giro para preferir líneas rectas en la cuadrícula
+      // Penalización por giro para preferir líneas rectas y ordenadas
       const isTurn = current.parent !== null && (current.dirX !== dx || current.dirY !== dy);
-      const turnPenalty = isTurn ? step * 0.8 : 0;
+      const turnPenalty = isTurn ? step * 0.75 : 0;
 
       const tentativeG = current.g + step + turnPenalty;
-      const existingOpen = openList.find((n) => n.x === neighborPt.x && n.y === neighborPt.y);
+      const existingOpen = openMap.get(neighborKey);
 
       if (!existingOpen) {
         const h = manhattan(neighborPt, endSnapped);
-        openList.push({
+        const neighborNode: GridNode = {
           x: neighborPt.x,
           y: neighborPt.y,
           g: tentativeG,
@@ -139,13 +206,16 @@ export function generateSmartOrthogonalPath(
           parent: current,
           dirX: dx,
           dirY: dy,
-        });
+        };
+        openQueue.push(neighborNode);
+        openMap.set(neighborKey, neighborNode);
       } else if (tentativeG < existingOpen.g) {
         existingOpen.g = tentativeG;
         existingOpen.f = tentativeG + existingOpen.h;
         existingOpen.parent = current;
         existingOpen.dirX = dx;
         existingOpen.dirY = dy;
+        openQueue.push(existingOpen);
       }
     }
   }

@@ -284,12 +284,14 @@ export class SimulationController {
       if (oscilloscopePanel) oscilloscopePanel.transientResults = pssResults;
       const transientResults = oscilloscopePanel ? oscilloscopePanel.transientResults : [];
       if (transientResults.length > 0) {
-        this.dependencies.circuitState.setVoltagesFromSnapshot(transientResults[transientResults.length - 1].nodeVoltages);
+        const lastStep = transientResults[transientResults.length - 1];
+        this.dependencies.circuitState.setVoltagesFromSnapshot(lastStep.nodeVoltages, lastStep.branchCurrents ?? {});
       }
     } else if (mode === "TRAN" && Array.isArray(results)) {
       if (oscilloscopePanel) oscilloscopePanel.transientResults = results;
       if (results.length > 0) {
-        this.dependencies.circuitState.setVoltagesFromSnapshot(results[results.length - 1].nodeVoltages);
+        const lastStep = results[results.length - 1];
+        this.dependencies.circuitState.setVoltagesFromSnapshot(lastStep.nodeVoltages, lastStep.branchCurrents ?? {});
       }
       if (orchestrator) {
         this.dependencies.circuitState.actuatorHistory.precompute(
@@ -302,7 +304,7 @@ export class SimulationController {
       const dcResults: DcSimulationResult = isDcSimulationResult(results)
         ? results
         : { nodeVoltages: {} };
-      this.dependencies.circuitState.setVoltagesFromSnapshot(dcResults.nodeVoltages ?? {});
+      this.dependencies.circuitState.setVoltagesFromSnapshot(dcResults.nodeVoltages ?? {}, dcResults.branchCurrents ?? {});
     }
     this.dependencies.updateOscilloscopeRendering();
   }

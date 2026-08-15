@@ -87,6 +87,18 @@ export function getActiveNetHighlight(options: {
         netPinKeys.add(wireEndpointKey(wire.to));
       }
     }
+
+    // Si el cable activo tiene etiqueta, incluir todos los cables que comparten la misma etiqueta
+    if (activeWire.label && activeWire.label.trim()) {
+      const targetLabel = activeWire.label.trim().toUpperCase();
+      for (const w of wires) {
+        if (w.label && w.label.trim().toUpperCase() === targetLabel) {
+          netWireIds.add(w.id);
+          netPinKeys.add(wireEndpointKey(w.from));
+          netPinKeys.add(wireEndpointKey(w.to));
+        }
+      }
+    }
   } else if (activePinKey) {
     netPinKeys.add(activePinKey);
   }

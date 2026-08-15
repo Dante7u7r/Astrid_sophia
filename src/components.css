@@ -1713,6 +1713,76 @@ select.btn-text-only.sim-locked {
   margin: 4px 6px;
 }
 
+.context-menu-item-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.context-menu-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-menu-icon {
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.context-menu-arrow {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-left: 8px;
+  transition: transform 0.15s ease;
+}
+
+.context-menu-item-wrapper:hover > .context-menu-item .context-menu-arrow {
+  color: var(--cyan);
+  transform: translateX(2px);
+}
+
+.context-menu-submenu {
+  position: absolute;
+  top: -4px;
+  left: 100%;
+  margin-left: 4px;
+  z-index: 10001;
+  background: rgba(10, 15, 28, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 190px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7), 0 0 20px rgba(91, 243, 228, 0.1);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  animation: contextMenuFadeIn 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.context-menu-item-wrapper:hover > .context-menu-submenu,
+.context-menu-item-wrapper:focus-within > .context-menu-submenu {
+  display: flex;
+}
+
+.context-menu-submenu.flip-x {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: 4px;
+}
+
+.context-menu-submenu.flip-y {
+  top: auto;
+  bottom: -4px;
+}
+
 @media (max-width: 760px) {
   .main-header {
     display: grid;

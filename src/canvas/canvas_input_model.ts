@@ -23,6 +23,10 @@ export interface ZoomStep {
 export interface PaletteComponentData {
   type: ComponentInstance["type"];
   value: ComponentInstance["value"];
+  modelName?: string;
+  pinCount?: number;
+  pinLabels?: Record<number, string>;
+  spiceNetlist?: string;
 }
 
 export function clientToCanvasPoint(
@@ -41,11 +45,13 @@ export function resolveWheelZoomStep(
   limits: ZoomLimits,
   isPinch = false,
 ): ZoomStep {
-  const requestedFactor = isPinch
-    ? Math.exp(-deltaY * 0.01)
-    : deltaY < 0
-    ? 1.1
-    : 0.9;
+  let requestedFactor: number;
+  if (isPinch) {
+    const rawFactor = Math.exp(-deltaY * 0.0035);
+    requestedFactor = Math.min(Math.max(rawFactor, 0.90), 1.10);
+  } else {
+    requestedFactor = deltaY < 0 ? 1.1 : 0.9;
+  }
   const requestedZoom = currentZoom * requestedFactor;
   const clampedZoom = Math.min(Math.max(requestedZoom, limits.minZoom), limits.maxZoom);
   return {
@@ -95,9 +101,24 @@ export function hasCanvasSelection(state: {
 export function parsePaletteComponentData(dataset: DOMStringMap): PaletteComponentData {
   const rawValue = dataset.default || "1000";
   const numericValue = Number.parseFloat(rawValue);
+  let pinLabels: Record<number, string> | undefined;
+  if (dataset.pinLabels) {
+    try {
+      pinLabels = JSON.parse(dataset.pinLabels);
+    } catch {
+      pinLabels = undefined;
+    }
+  }
+
+  const pinCountNum = dataset.pinCount ? parseInt(dataset.pinCount, 10) : undefined;
+
   return {
     type: (dataset.type || "resistor") as ComponentInstance["type"],
     value: Number.isFinite(numericValue) ? numericValue : rawValue,
+    modelName: dataset.modelName,
+    pinCount: Number.isFinite(pinCountNum) ? pinCountNum : undefined,
+    pinLabels,
+    spiceNetlist: dataset.spiceNetlist,
   };
 }
 

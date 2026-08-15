@@ -26,6 +26,7 @@ function createHarness(options: {
   } as unknown as CanvasOrchestrator;
 
   let now = 100;
+  let inRaf = false;
   const controller = createRenderController({
     getOrchestrator: () => orchestrator,
     getOscilloscopePanel: () => options.oscilloscopePanel as never ?? null,
@@ -36,10 +37,7 @@ function createHarness(options: {
     circuitState,
     performanceMonitor: new PerformanceMonitor(),
     isVisualAuditStep: () => false,
-    requestAnimationFrame: options.requestAnimationFrame ?? ((callback) => {
-      callback(0);
-      return 1;
-    }),
+    requestAnimationFrame: options.requestAnimationFrame ?? vi.fn(() => 1),
     now: () => now,
   });
 
@@ -95,4 +93,20 @@ describe("RenderController", () => {
     expect(orchestrator.render).toHaveBeenCalledOnce();
   });
 
+  it("renderiza en modo por capas (base + overlay) cuando el orchestrator tiene layered rendering", () => {
+    const renderBase = vi.fn();
+    const renderOverlay = vi.fn();
+    const clearOverlay = vi.fn();
+
+    const { controller, orchestrator } = createHarness();
+    (orchestrator as any).hasLayeredRendering = vi.fn(() => true);
+    (orchestrator as any).renderBase = renderBase;
+    (orchestrator as any).renderOverlay = renderOverlay;
+    (orchestrator as any).clearOverlay = clearOverlay;
+
+    controller.updateCanvasRendering(true);
+
+    expect(renderBase).toHaveBeenCalledOnce();
+    expect(renderOverlay).toHaveBeenCalledOnce();
+  });
 });

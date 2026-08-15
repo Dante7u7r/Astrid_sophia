@@ -370,6 +370,53 @@
                       <span class="comp-desc">Diodo Emisor de Luz</span>
                     </div>
                   </div>
+                  <!-- Optoacoplador -->
+                  <div class="component-card" draggable="true" id="comp-opto" data-type="opto" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="6" y="8" width="28" height="24" rx="2" fill="currentColor" fill-opacity="0.1" />
+                        <path d="M 12 14 L 12 26" />
+                        <path d="M 28 14 L 28 26" />
+                        <path d="M 16 20 L 24 20" stroke-dasharray="2 2" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Optoacoplador</span>
+                      <span class="comp-desc">Aislamiento Óptico (DIP-4)</span>
+                    </div>
+                  </div>
+                  <!-- JFET Canal N -->
+                  <div class="component-card" draggable="true" id="comp-njf" data-type="njf" data-default="-2">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 23 10 L 23 30" />
+                        <path d="M 14 20 L 23 20" />
+                        <path d="M 23 12 L 29 12 L 29 4" />
+                        <path d="M 23 28 L 29 28 L 29 36" />
+                        <path d="M 18 16 L 22 20 L 18 24" fill="currentColor" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">JFET Canal N</span>
+                      <span class="comp-desc">Junction FET (N-Ch)</span>
+                    </div>
+                  </div>
+                  <!-- JFET Canal P -->
+                  <div class="component-card" draggable="true" id="comp-pjf" data-type="pjf" data-default="2">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 23 10 L 23 30" />
+                        <path d="M 14 20 L 23 20" />
+                        <path d="M 23 12 L 29 12 L 29 4" />
+                        <path d="M 23 28 L 29 28 L 29 36" />
+                        <path d="M 18 20 L 14 16 L 14 24 Z" fill="currentColor" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">JFET Canal P</span>
+                      <span class="comp-desc">Junction FET (P-Ch)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -468,6 +515,109 @@
                 </div>
               </div>
 
+              <!-- Categoria: Lógica Digital -->
+              <div class="category-group">
+                <div class="category-header" data-category="logica-digital">
+                  <span>Lógica Digital</span>
+                  <span class="category-arrow">▲</span>
+                </div>
+                <div class="category-content" id="cat-logica-digital">
+                  <!-- Compuerta AND -->
+                  <div class="component-card" draggable="true" id="comp-and-gate" data-type="and_gate" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 14 L 14 14" />
+                        <path d="M 4 26 L 14 26" />
+                        <path d="M 30 20 L 36 20" />
+                        <path d="M 14 8 L 22 8 C 28 8, 30 14, 30 20 C 30 26, 28 32, 22 32 L 14 32 Z" fill="currentColor" fill-opacity="0.1" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Compuerta AND</span>
+                      <span class="comp-desc">Y Lógica (2 entradas)</span>
+                    </div>
+                  </div>
+                  <!-- Compuerta OR -->
+                  <div class="component-card" draggable="true" id="comp-or-gate" data-type="or_gate" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 14 L 16 14" />
+                        <path d="M 4 26 L 16 26" />
+                        <path d="M 32 20 L 36 20" />
+                        <path d="M 12 8 Q 24 9 32 20 Q 24 31 12 32 Q 18 20 12 8 Z" fill="currentColor" fill-opacity="0.1" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Compuerta OR</span>
+                      <span class="comp-desc">O Lógica (2 entradas)</span>
+                    </div>
+                  </div>
+                  <!-- Inversor NOT -->
+                  <div class="component-card" draggable="true" id="comp-not-gate" data-type="not_gate" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 20 L 14 20" />
+                        <path d="M 30 20 L 36 20" />
+                        <path d="M 14 10 L 26 20 L 14 30 Z" fill="currentColor" fill-opacity="0.1" />
+                        <circle cx="28" cy="20" r="2" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Inversor NOT</span>
+                      <span class="comp-desc">Negación Lógica</span>
+                    </div>
+                  </div>
+                  <!-- Compuerta NAND -->
+                  <div class="component-card" draggable="true" id="comp-nand-gate" data-type="nand_gate" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 14 L 14 14" />
+                        <path d="M 4 26 L 14 26" />
+                        <path d="M 32 20 L 36 20" />
+                        <path d="M 14 8 L 22 8 C 27 8, 28 14, 28 20 C 28 26, 27 32, 22 32 L 14 32 Z" fill="currentColor" fill-opacity="0.1" />
+                        <circle cx="30" cy="20" r="2" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Compuerta NAND</span>
+                      <span class="comp-desc">Y Negada (2 entradas)</span>
+                    </div>
+                  </div>
+                  <!-- Compuerta NOR -->
+                  <div class="component-card" draggable="true" id="comp-nor-gate" data-type="nor_gate" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 14 L 16 14" />
+                        <path d="M 4 26 L 16 26" />
+                        <path d="M 34 20 L 36 20" />
+                        <path d="M 12 8 Q 23 9 30 20 Q 23 31 12 32 Q 18 20 12 8 Z" fill="currentColor" fill-opacity="0.1" />
+                        <circle cx="32" cy="20" r="2" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Compuerta NOR</span>
+                      <span class="comp-desc">O Negada (2 entradas)</span>
+                    </div>
+                  </div>
+                  <!-- Compuerta XOR -->
+                  <div class="component-card" draggable="true" id="comp-xor-gate" data-type="xor_gate" data-default="1">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 4 14 L 16 14" />
+                        <path d="M 4 26 L 16 26" />
+                        <path d="M 32 20 L 36 20" />
+                        <path d="M 9 8 Q 15 20 9 32" />
+                        <path d="M 13 8 Q 24 9 32 20 Q 24 31 13 32 Q 19 20 13 8 Z" fill="currentColor" fill-opacity="0.1" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Compuerta XOR</span>
+                      <span class="comp-desc">O Exclusiva (2 entradas)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Categoria: Digitales y MCUs -->
               <div class="category-group">
                 <div class="category-header" data-category="digitales-mcus">
@@ -547,12 +697,54 @@
               </div>
             </div>
 
+            <!-- CATEGORÍA: ANOTACIONES Y REDES EDA -->
+            <div class="category-group">
+              <div class="category-header" data-category="anotaciones">
+                <span>Anotaciones y Redes</span>
+                <span class="category-arrow">▲</span>
+              </div>
+              <div class="category-content" id="cat-anotaciones">
+                <!-- Puerto de Red (Net Label) -->
+                <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="6,20 14,10 34,10 34,30 14,30" fill="currentColor" fill-opacity="0.15" />
+                      <circle cx="6" cy="20" r="2.5" fill="currentColor" />
+                      <text x="22" y="23" text-anchor="middle" font-size="8" font-family="monospace" font-weight="bold" fill="currentColor">NET</text>
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Puerto de Red</span>
+                    <span class="comp-desc">Conexión Virtual SPICE (Net Tie)</span>
+                  </div>
+                </div>
+
+                <!-- Bloque de Nota / Título -->
+                <div class="component-card" draggable="true" id="comp-text_note" data-type="text_note" data-default="Nota de Ingeniería">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="6" y="8" width="28" height="24" rx="3" fill="currentColor" fill-opacity="0.12" />
+                      <line x1="10" y1="14" x2="30" y2="14" stroke-width="2.5" />
+                      <line x1="10" y1="20" x2="26" y2="20" />
+                      <line x1="10" y1="25" x2="20" y2="25" />
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Nota de Ingeniería</span>
+                    <span class="comp-desc">Títulos y Documentación</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- CATEGORÍA: MACROMODELOS SPICE -->
             <div class="category-group">
-              <div class="category-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
-                <span class="cat-icon">&#9881;</span>
-                <span class="cat-name">Macromodelos</span>
-                <span class="cat-arrow">&#9660;</span>
+              <div class="category-header" data-category="macromodelos" style="display: flex; align-items: center; justify-content: space-between;">
+                <span>Macromodelos</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <button id="btn-open-spice-import" class="btn-category-action" title="Importar Biblioteca SPICE (.lib, .subckt)" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38BDF8; border-radius: 4px; font-size: 10px; font-weight: 600; padding: 2px 6px; cursor: pointer;">+ SPICE</button>
+                  <span class="category-arrow">▲</span>
+                </div>
               </div>
               <div class="category-content" id="cat-macromodelos">
                 <div class="component-card" draggable="true" id="comp-subcircuit" data-type="x" data-default="1">
@@ -591,6 +783,9 @@
             <button id="btn-expand-right" class="btn-sidebar-edge-toggle right" aria-label="Mostrar panel de propiedades" data-tooltip="Mostrar Propiedades" type="button" style="display: none;">‹</button>
 
             <div class="canvas-controls-floating" id="canvas-floater-menu">
+              <button id="btn-wire-mode" class="btn-floating" data-tooltip="Trazar Cables (W)" aria-label="Modo de conexión de cables" type="button">✏️</button>
+              <button id="btn-undo-action" class="btn-floating" data-tooltip="Deshacer (Ctrl+Z)" aria-label="Deshacer última acción" type="button">↩️</button>
+              <button id="btn-redo-action" class="btn-floating" data-tooltip="Rehacer (Ctrl+Y)" aria-label="Rehacer última acción" type="button">↪️</button>
               <button id="btn-floater-instruments" class="btn-floating" data-tooltip="Abrir centro de instrumentos" aria-label="Abrir centro de instrumentos" type="button">🛠️</button>
               <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" aria-label="Aumentar zoom" type="button">+</button>
               <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" aria-label="Disminuir zoom" type="button">-</button>
@@ -600,8 +795,10 @@
               <button id="btn-clear-canvas" class="btn-floating" data-tooltip="Limpiar Todo" aria-label="Limpiar esquema" style="color: var(--danger);" type="button">🗑️</button>
             </div>
             
-            <!-- Canvas Interactivo Principal -->
+            <!-- Canvas Interactivo Principal (Capa Base Estática/Interactiva) -->
             <canvas id="circuit-canvas" tabindex="0" aria-label="Lienzo del esquema electrónico"></canvas>
+            <!-- Canvas Overlay Dinámico (Capa de Flujo de Corriente, Halos Térmicos y Trazado) -->
+            <canvas id="circuit-canvas-overlay" class="circuit-canvas-overlay" aria-hidden="true"></canvas>
 
           <!-- ALMACÉN DE CONTENIDOS DE INSTRUMENTOS (OCULTO - NUNCA VISIBLE EN EL DOCK) -->
           <div id="instruments-storage-pool" hidden style="display: none !important;">
@@ -897,7 +1094,8 @@
               <div id="wire-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label">Etiqueta de Red (Net Label)</label>
-                  <input id="prop-wire-label" class="prop-input" type="text" placeholder="Ej. VCC, GND, CLK, BUS_0" />
+                  <input id="prop-wire-label" class="prop-input" type="text" list="existing-net-labels" placeholder="Ej. VCC, GND, CLK, BUS_0" />
+                  <datalist id="existing-net-labels"></datalist>
                 </div>
                 <div class="property-group">
                   <label class="property-label">Color Personalizado</label>
@@ -905,6 +1103,27 @@
                     <input id="prop-wire-color" type="color" value="#66fcf1" style="width: 44px; height: 32px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; background: rgba(0,0,0,0.4);" />
                     <button id="btn-reset-wire-color" type="button" class="btn-secondary" style="font-size: 11px; padding: 4px 8px; height: 32px;">Restablecer Color</button>
                   </div>
+                </div>
+              </div>
+
+              <!-- Contenedor de Propiedades de Nota de Ingeniería / Texto -->
+              <div id="text-note-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-note-text">Texto / Documentación</label>
+                  <textarea id="prop-note-text" class="prop-input" rows="3" style="resize: vertical; font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.4;" placeholder="Escribe aquí el título o notas..."></textarea>
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-note-fontsize">Tamaño de Fuente (px)</label>
+                  <input id="prop-note-fontsize" class="prop-input" type="number" min="10" max="28" value="12" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-note-theme">Estilo Visual</label>
+                  <select id="prop-note-theme" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="card">Tarjeta con Franja (Estándar)</option>
+                    <option value="plain">Texto Plano (Sin Caja)</option>
+                    <option value="warning">Aviso / Advertencia</option>
+                    <option value="outline">Contorno Punteado</option>
+                  </select>
                 </div>
               </div>
 
@@ -1053,6 +1272,35 @@
                 <div class="property-group" style="margin-top:8px;">
                   <label class="property-label">Número de Pines</label>
                   <input id="prop-pin-count" class="prop-input" type="number" min="2" max="64" value="4" />
+                </div>
+              </div>
+
+              <!-- Contenedor de Modelos Comerciales para Semiconductores -->
+              <div id="semiconductor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-semi-model">Modelo Comercial Calibrado</label>
+                  <select id="prop-semi-model" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                    <option value="custom">-- Modelo Genérico / Personalizado --</option>
+                  </select>
+                </div>
+                <div id="prop-semi-desc" style="font-size: var(--font-2xs, 11px); color: var(--text-muted); line-height: 1.4; padding: 6px 8px; background: rgba(0,0,0,0.3); border-radius: 4px; display: none;"></div>
+              </div>
+
+              <!-- Contenedor de Lógica Digital -->
+              <div id="logic-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-logic-voh">Nivel Lógico Alto VOH (V)</label>
+                  <select id="prop-logic-voh" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                    <option value="5.0" selected>5.0 V (TTL / CMOS 5V)</option>
+                    <option value="3.3">3.3 V (LVCMOS 3.3V)</option>
+                    <option value="2.5">2.5 V (CMOS 2.5V)</option>
+                    <option value="1.8">1.8 V (CMOS 1.8V)</option>
+                    <option value="12.0">12.0 V (CMOS Serie 4000)</option>
+                  </select>
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-logic-vth">Tensión de Umbral Vth (V)</label>
+                  <input id="prop-logic-vth" class="prop-input" type="number" min="0.1" max="10" step="0.1" value="2.5" />
                 </div>
               </div>
 

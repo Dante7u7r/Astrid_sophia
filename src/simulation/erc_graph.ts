@@ -190,7 +190,10 @@ export function evaluateRealtimeErcIssues(
   if (components.length === 0) return issues;
 
   // 1. Verificación de presencia de Tierra (GND) en el esquema
-  const hasGnd = components.some(c => c.type === "ground");
+  const hasGnd = components.some(c =>
+    c.type === "ground" ||
+    (c.type === "net_label" && ["GND", "0", "TIERRA", "GROUND"].includes(String(c.label || c.value || "").trim().toUpperCase()))
+  ) || wires.some(w => ["GND", "0", "TIERRA", "GROUND"].includes((w.label || "").trim().toUpperCase()));
   if (!hasGnd) {
     for (const comp of components) {
       if (comp.type === "vsource" || comp.type === "isource") {

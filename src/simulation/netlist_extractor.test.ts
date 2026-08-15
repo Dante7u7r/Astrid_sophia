@@ -427,4 +427,113 @@ describe("extractElectricalNetlist", () => {
     expect(nodeV1_0).toBe(nodeR1_0);
     expect(nodeV1_0).toBe(nodeR2_0);
   });
+
+  test("conecta virtualmente dos cables separados que comparten el mismo wire.label", () => {
+    const components: ComponentInstance[] = [
+      { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 },
+      { id: "R2", type: "resistor", value: 2000, x: 200, y: 0, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 0, y: 100, rotation: 0 },
+    ];
+
+    const wire1: WireInstance = {
+      id: "w1",
+      from: { componentId: "R1", pinIndex: 0 },
+      to: { componentId: "R1", pinIndex: 0 },
+      label: "BUS_CLK",
+    };
+
+    const wire2: WireInstance = {
+      id: "w2",
+      from: { componentId: "R2", pinIndex: 0 },
+      to: { componentId: "R2", pinIndex: 0 },
+      label: "BUS_CLK",
+    };
+
+    const wireGnd1: WireInstance = {
+      id: "wg1",
+      from: { componentId: "R1", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+    const wireGnd2: WireInstance = {
+      id: "wg2",
+      from: { componentId: "R2", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      const count = c.type === "ground" ? 1 : 2;
+      return Array.from({ length: count }, (_, i) => ({
+        componentId: c.id,
+        pinIndex: i,
+        x: c.x + i * 20,
+        y: c.y,
+      }));
+    };
+
+    const res = extractElectricalNetlist(components, [wire1, wire2, wireGnd1, wireGnd2], getPins);
+    expect(res.error).toBeUndefined();
+    expect(res.pinToNodeMap["R1:0"]).toBeDefined();
+    expect(res.pinToNodeMap["R1:0"]).toBe(res.pinToNodeMap["R2:0"]);
+  });
+
+  test("conecta puertos net_label al mismo nodo SPICE y omite text_note del netlist", () => {
+    const components: ComponentInstance[] = [
+      { id: "V1", type: "vsource", value: 5, x: 0, y: 0, rotation: 0 },
+      { id: "NET1", type: "net_label", value: "VCC_BUS", label: "VCC_BUS", x: 20, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 100, y: 0, rotation: 0 },
+      { id: "NET2", type: "net_label", value: "VCC_BUS", label: "VCC_BUS", x: 100, y: 0, rotation: 0 },
+      { id: "NOTE1", type: "text_note", value: "Etapa de Entrada", label: "Etapa de Entrada", x: 50, y: 50, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 0, y: 50, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "text_note") return [];
+      if (c.type === "net_label" || c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wireV1toNet1: WireInstance = {
+      id: "w1",
+      from: { componentId: "V1", pinIndex: 0 },
+      to: { componentId: "NET1", pinIndex: 0 },
+    };
+
+    const wireR1toNet2: WireInstance = {
+      id: "w2",
+      from: { componentId: "R1", pinIndex: 0 },
+      to: { componentId: "NET2", pinIndex: 0 },
+    };
+
+    const wireV1toGnd: WireInstance = {
+      id: "wg1",
+      from: { componentId: "V1", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+
+    const wireR1toGnd: WireInstance = {
+      id: "wg2",
+      from: { componentId: "R1", pinIndex: 1 },
+      to: { componentId: "GND1", pinIndex: 0 },
+    };
+
+    const res = extractElectricalNetlist(
+      components,
+      [wireV1toNet1, wireR1toNet2, wireV1toGnd, wireR1toGnd],
+      getPins,
+    );
+    expect(res.error).toBeUndefined();
+    // V1 pin 0 y R1 pin 0 deben unirse a través de las dos net_labels "VCC_BUS"
+    expect(res.pinToNodeMap["V1:0"]).toBeDefined();
+    expect(res.pinToNodeMap["V1:0"]).toBe(res.pinToNodeMap["R1:0"]);
+
+    // NOTE1 y NET1/NET2 no deben emitirse como componentes SPICE primitivos
+    const emittedTypes = res.netlist.components.map(c => c.type);
+    expect(emittedTypes).not.toContain("text_note");
+    expect(emittedTypes).not.toContain("net_label");
+  });
 });

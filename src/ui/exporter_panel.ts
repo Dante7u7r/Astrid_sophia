@@ -1,10 +1,13 @@
 import { type OscilloscopePanel, type TimeStepResult } from "./oscilloscope_panel";
 import {
   type ExportSnapshot,
+  buildBomExport,
   buildCsvExport,
   buildSvgExport,
   buildTouchstoneExport,
 } from "./exporter_model";
+import { buildCadSchematicSvg, type CadExportOptions } from "./cad_schematic_exporter";
+import type { ComponentInstance, WireInstance } from "../canvas_orchestrator";
 import { type AnalysisMode } from "./simulation_controls";
 import { recordExport, recordUiError } from "../feedback/instrumentation";
 
@@ -37,6 +40,9 @@ export class ExporterPanel {
       getProbeNodes: () => { ch1: string | null; ch2: string | null };
       getVoltageMap: () => Record<string, number>;
       addLog: (text: string, type?: 'system' | 'send' | 'receive' | 'error') => void;
+      getComponents?: () => readonly ComponentInstance[];
+      getWires?: () => readonly WireInstance[];
+      getCircuitTitle?: () => string;
     }
   ) {}
 
@@ -54,6 +60,42 @@ export class ExporterPanel {
     this.downloadBlob(new Blob([content], { type: 'image/svg+xml;charset=utf-8' }), filename);
     this.callbacks.addLog(`Grafico vectorial exportado exitosamente a ${filename}`, "receive");
     recordExport("svg", this.exportItemCount(snapshot));
+  }
+
+  public exportarEsquemaCAD_SVG(theme: CadExportOptions["theme"] = "print_clean"): void {
+    const components = this.callbacks.getComponents ? this.callbacks.getComponents() : [];
+    const wires = this.callbacks.getWires ? this.callbacks.getWires() : [];
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+
+    const options: CadExportOptions = {
+      theme,
+      includeGrid: true,
+      includeTitleBlock: true,
+      includeNetLabels: true,
+      titleBlockInfo: {
+        title,
+        author: "Ingeniería Electrónica",
+        organization: "ASTRYD SOPHIA CAD",
+        revision: "1.0",
+        date: new Date().toISOString().split("T")[0],
+        sheet: "1 / 1",
+      },
+    };
+
+    const { filename, content } = buildCadSchematicSvg(components, wires, options);
+    this.downloadBlob(new Blob([content], { type: "image/svg+xml;charset=utf-8" }), filename);
+    this.callbacks.addLog(`Plano esquemático vectorial CAD exportado exitosamente a ${filename}`, "receive");
+    recordExport("svg", components.length + wires.length);
+  }
+
+  public exportarListaMaterialesBOM(): void {
+    const components = this.callbacks.getComponents ? this.callbacks.getComponents() : [];
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+
+    const { filename, content } = buildBomExport(components, title);
+    this.downloadBlob(new Blob([content], { type: "text/csv;charset=utf-8;" }), filename);
+    this.callbacks.addLog(`Lista de Materiales (BOM) exportada exitosamente a ${filename}`, "receive");
+    recordExport("csv", components.length);
   }
 
   public exportarDatosTouchstone(): void {
@@ -414,11 +456,15 @@ export class ExporterPanel {
     const s2pBtn = document.querySelector("#export-s2p-btn");
     const h5Btn = document.querySelector("#export-h5-btn");
     const pdfBtn = document.querySelector("#export-pdf-btn");
+    const cadSvgBtn = document.querySelector("#export-cad-svg-btn");
+    const bomBtn = document.querySelector("#export-bom-btn");
 
     if (csvBtn) csvBtn.addEventListener("click", () => this.exportarDatosCSV());
     if (svgBtn) svgBtn.addEventListener("click", () => this.exportarDatosSVG());
     if (s2pBtn) s2pBtn.addEventListener("click", () => this.exportarDatosTouchstone());
     if (h5Btn) h5Btn.addEventListener("click", () => this.exportarDatosHDF5());
     if (pdfBtn) pdfBtn.addEventListener("click", () => this.exportarReportePDF());
+    if (cadSvgBtn) cadSvgBtn.addEventListener("click", () => this.exportarEsquemaCAD_SVG("print_clean"));
+    if (bomBtn) bomBtn.addEventListener("click", () => this.exportarListaMaterialesBOM());
   }
 }

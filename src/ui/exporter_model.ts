@@ -160,3 +160,50 @@ function buildTransientPath(
   }
   return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" /><text x="60" y="${node === ch1Node ? "70" : "90"}" fill="${color}" font-size="11" font-weight="bold">${name} (${node})</text>`;
 }
+
+export interface BomEntry {
+  itemNumber: number;
+  designators: string;
+  quantity: number;
+  componentType: string;
+  nominalValue: string;
+}
+
+export function buildBomExport(
+  components: readonly { id: string; type: string; value?: number | string; modelName?: string }[],
+  circuitTitle = "Circuito Astryd Sophia",
+): TextExport {
+  const filtered = components.filter((c) => c.type !== "ground" && c.type !== "dmm");
+  const groups = new Map<string, { designators: string[]; type: string; value: string }>();
+
+  for (const comp of filtered) {
+    const val = comp.modelName ? `${comp.modelName} (${comp.value ?? ""})` : String(comp.value ?? "");
+    const key = `${comp.type}__${val}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.designators.push(comp.id);
+    } else {
+      groups.set(key, {
+        designators: [comp.id],
+        type: comp.type.toUpperCase(),
+        value: val,
+      });
+    }
+  }
+
+  let content = `Item,Designadores,Cantidad,Tipo de Componente,Valor Nominal / Modelo\n`;
+  let item = 1;
+
+  for (const group of groups.values()) {
+    const designatorList = group.designators.sort().join(" ");
+    content += `${item},"${designatorList}",${group.designators.length},"${group.type}","${group.value}"\n`;
+    item++;
+  }
+
+  const safeTitle = circuitTitle.toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return {
+    filename: `lista_de_materiales_${safeTitle}.csv`,
+    content,
+  };
+}
+

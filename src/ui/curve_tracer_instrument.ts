@@ -2,8 +2,8 @@
  * CurveTracerInstrument — Trazador de Curvas I-V de Semiconductores
  */
 
-import { CanvasOrchestrator } from "../canvas_orchestrator";
-import type { InstrumentCallbacks } from "./instrument_callbacks";
+import type { CanvasOrchestrator } from "../canvas_orchestrator";
+import { createNoopInstrumentCallbacks, type InstrumentCallbacks } from "./instrument_callbacks";
 import { ensureCanvasDpr } from "./canvas_dpr";
 
 export class CurveTracerInstrument {
@@ -16,7 +16,11 @@ export class CurveTracerInstrument {
   // Selected semiconductor for tracing
   private selectedCompId: string | null = null;
 
-  constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks = {} as any) {
+  constructor(
+    container: HTMLElement,
+    orchestrator: CanvasOrchestrator,
+    callbacks: InstrumentCallbacks = createNoopInstrumentCallbacks(),
+  ) {
     this.container = container;
     this.orchestrator = orchestrator;
     this.callbacks = callbacks;

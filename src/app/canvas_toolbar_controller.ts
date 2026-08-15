@@ -19,6 +19,9 @@ export interface CanvasToolbarControllerDeps {
   updateCanvasRendering(): void;
   markCurrentTabAsModified(): void;
   addLog(text: string, type?: "system" | "error"): void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onWireMode?: () => void;
 }
 
 export function initCanvasToolbarController(deps: CanvasToolbarControllerDeps): void {
@@ -95,22 +98,52 @@ export function initCanvasToolbarController(deps: CanvasToolbarControllerDeps): 
   }
 
   const btnSnapGrid = document.querySelector<HTMLButtonElement>("#btn-snap-grid");
-  if (!btnSnapGrid || !deps.getOrchestrator()) return;
+  if (btnSnapGrid) {
+    let snapEnabled = true;
+    btnSnapGrid.addEventListener("click", () => {
+      snapEnabled = !snapEnabled;
+      btnSnapGrid.classList.toggle("btn-active", snapEnabled);
+      btnSnapGrid.setAttribute("aria-pressed", String(snapEnabled));
+      btnSnapGrid.setAttribute(
+        "aria-label",
+        snapEnabled ? "Desactivar ajuste a rejilla" : "Activar ajuste a rejilla",
+      );
 
-  let snapEnabled = true;
-  btnSnapGrid.addEventListener("click", () => {
-    snapEnabled = !snapEnabled;
-    btnSnapGrid.classList.toggle("btn-active", snapEnabled);
-    btnSnapGrid.setAttribute("aria-pressed", String(snapEnabled));
-    btnSnapGrid.setAttribute(
-      "aria-label",
-      snapEnabled ? "Desactivar ajuste a rejilla" : "Activar ajuste a rejilla",
-    );
+      const orchestrator = deps.getOrchestrator();
+      if (orchestrator) {
+        orchestrator.gridSize = snapEnabled ? 20 : 1;
+      }
+      deps.addLog(snapEnabled ? "Alineación a rejilla activada." : "Alineación a rejilla desactivada.", "system");
+    });
+  }
 
-    const orchestrator = deps.getOrchestrator();
-    if (orchestrator) {
-      orchestrator.gridSize = snapEnabled ? 20 : 1;
+  const btnWireMode = document.querySelector("#btn-wire-mode");
+  btnWireMode?.addEventListener("click", () => {
+    if (deps.onWireMode) {
+      deps.onWireMode();
+    } else {
+      const keyboardEvent = new KeyboardEvent("keydown", { key: "w" });
+      window.dispatchEvent(keyboardEvent);
     }
-    deps.addLog(snapEnabled ? "Alineación a rejilla activada." : "Alineación a rejilla desactivada.", "system");
+  });
+
+  const btnUndo = document.querySelector("#btn-undo-action");
+  btnUndo?.addEventListener("click", () => {
+    if (deps.onUndo) {
+      deps.onUndo();
+    } else {
+      const keyboardEvent = new KeyboardEvent("keydown", { key: "z", ctrlKey: true });
+      window.dispatchEvent(keyboardEvent);
+    }
+  });
+
+  const btnRedo = document.querySelector("#btn-redo-action");
+  btnRedo?.addEventListener("click", () => {
+    if (deps.onRedo) {
+      deps.onRedo();
+    } else {
+      const keyboardEvent = new KeyboardEvent("keydown", { key: "y", ctrlKey: true });
+      window.dispatchEvent(keyboardEvent);
+    }
   });
 }

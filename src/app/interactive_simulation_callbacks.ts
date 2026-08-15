@@ -38,6 +38,11 @@ export function createInteractiveSimulationCallbacks(
         dependencies.updateOscilloscopeRendering();
       }
 
+      const orchestrator = dependencies.getOrchestrator();
+      if (orchestrator) {
+        orchestrator.transientResults = ownerTab.transientResults;
+      }
+
       dependencies.updateCanvasRendering();
 
       if (frame.isFinal) {

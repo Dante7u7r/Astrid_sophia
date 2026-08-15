@@ -288,6 +288,13 @@ export class ActuatorHistoryManager {
 
           buzzerLevelState.set(comp.id, nextLevel);
           buzzerLevel = nextLevel;
+        } else if (comp.type === 'led') {
+          const node0 = pinToNodeMap[`${comp.id}:0`] ?? "";
+          const node1 = pinToNodeMap[`${comp.id}:1`] ?? "";
+          const v0 = step.nodeVoltages[node0] ?? 0;
+          const v1 = step.nodeVoltages[node1] ?? 0;
+          const vDrop = v0 - v1;
+          glowLevel = vDrop > 1.5 ? clamp01((vDrop - 1.5) / 0.6) : 0;
         }
 
         hist.push({ glowLevel, relayClosed, buzzerLevel });

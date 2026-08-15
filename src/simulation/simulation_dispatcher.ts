@@ -92,7 +92,10 @@ export function runElectricalRuleCheck(
   }
 
   // 2. Tierra (GND) — referencia obligatoria
-  const hasGnd = netlist.components.some(c => c.type === 'ground');
+  const hasGnd =
+    netlist.components.some(c => c.type === 'ground') ||
+    netlist.components.some(c => c.pins.includes("0")) ||
+    wires.some(w => w.label && ["GND", "0", "TIERRA", "GROUND"].includes(w.label.trim().toUpperCase()));
   if (!hasGnd) {
     errors.push("Referencia a Tierra ausente (GND): El circuito necesita al menos un nodo de referencia de 0 V para que el motor matemático de Rust converja.");
   }

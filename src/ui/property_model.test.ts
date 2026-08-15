@@ -60,6 +60,18 @@ describe("property_model", () => {
       showUnitGroup: true,
       showSliderControls: true,
     });
+    expect(getValueEditorPresentation("net_label")).toMatchObject({
+      showValueGroup: true,
+      showUnitGroup: false,
+      valueLabel: "Nombre de Red",
+      showSliderControls: false,
+    });
+    expect(getValueEditorPresentation("text_note")).toMatchObject({
+      showValueGroup: true,
+      showUnitGroup: false,
+      valueLabel: "Contenido de la Nota",
+      showSliderControls: false,
+    });
   });
 
   it("limita parametros de switch", () => {

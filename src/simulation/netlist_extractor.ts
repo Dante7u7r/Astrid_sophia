@@ -187,6 +187,7 @@ export function computeTopologySignature(
       let extra = "";
       if (c.type === "dmm") extra = `:${normalizeDmmMode(c.value)}`;
       else if (c.type === "x") extra = `:${c.spiceMacro ?? ""}`;
+      else if (c.type === "net_label") extra = `:${String(c.label || c.value || c.id).trim().toUpperCase()}`;
       return `${c.id}:${c.type}:${pinCount}${extra}`;
     })
     .sort()
@@ -200,7 +201,8 @@ export function computeTopologySignature(
       const toKey = w.to.isJunction && w.to.junctionPos
         ? `j_${Math.round(w.to.junctionPos.x)}_${Math.round(w.to.junctionPos.y)}`
         : `${w.to.componentId}:${w.to.pinIndex}`;
-      return `${w.id}:${fromKey}->${toKey}`;
+      const labelExtra = w.label ? `:${w.label.trim().toUpperCase()}` : "";
+      return `${w.id}:${fromKey}->${toKey}${labelExtra}`;
     })
     .sort()
     .join("|");
@@ -244,6 +246,11 @@ export function extractElectricalNetlist(
     compPinMapping = {};
 
     for (const comp of components) {
+      if (comp.type === 'text_note') {
+        compPinMapping[comp.id] = [];
+        continue;
+      }
+
       if (comp.type === 'relay') {
         compPinMapping[comp.id] = [
           pinKey(comp.id, 0),
@@ -273,6 +280,24 @@ export function extractElectricalNetlist(
         ? `junction:${Math.round(wire.to.junctionPos.x)}_${Math.round(wire.to.junctionPos.y)}`
         : pinKey(wire.to.componentId, wire.to.pinIndex);
       dsu!.union(keyFrom, keyTo);
+
+      // Unión virtual por etiqueta de red en cable (Named Net Tie)
+      if (wire.label && wire.label.trim().length > 0) {
+        const netKey = `net_virtual:${wire.label.trim().toUpperCase()}`;
+        dsu!.union(keyFrom, netKey);
+      }
+    }
+
+    // Unión virtual para componentes net_label (Puertos de Red Banderola EDA)
+    for (const comp of components) {
+      if (comp.type === 'net_label') {
+        const netName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
+        if (netName.length > 0) {
+          const compPin = pinKey(comp.id, 0);
+          const netKey = `net_virtual:${netName}`;
+          dsu!.union(compPin, netKey);
+        }
+      }
     }
 
     // 3. Identificar el grupo de Tierra (GND) y asignarle el ID de nodo "0"
@@ -282,6 +307,16 @@ export function extractElectricalNetlist(
         const gndPinKey = `${comp.id}:0`;
         gndRoot = dsu!.find(gndPinKey);
         break;
+      }
+    }
+
+    if (!gndRoot) {
+      for (const gndAlias of ["GND", "0", "TIERRA", "GROUND"]) {
+        const gndKey = `net_virtual:${gndAlias}`;
+        if (dsu!.has(gndKey)) {
+          gndRoot = dsu!.find(gndKey);
+          break;
+        }
       }
     }
 
@@ -515,6 +550,10 @@ export function extractElectricalNetlist(
         pins: [offsetNodeId, pin1Node, pin2Node, pin3Node, pin4Node],
       });
     } else {
+      if (comp.type === 'net_label' || comp.type === 'text_note') {
+        continue;
+      }
+
       const pinsMapped = getComponentNodes(pinsKeys);
 
       let subcircuitName: string | undefined;

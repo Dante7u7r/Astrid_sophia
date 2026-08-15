@@ -1,4 +1,5 @@
 import { safeInvoke as invoke } from "./simulation/tauri_mock";
+import "./components";
 import { CanvasOrchestrator, ComponentInstance } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
 import { DEFAULT_TRANSIENT_DURATION_SECONDS, SimulationSettings } from "./ui/settings_modal";
@@ -291,9 +292,10 @@ function initOscilloscopeInterface() {
 
 function initCanvasCAD() {
   const canvasElement = document.querySelector("#circuit-canvas") as HTMLCanvasElement;
+  const overlayCanvasElement = document.querySelector("#circuit-canvas-overlay") as HTMLCanvasElement | null;
   if (!canvasElement) return;
 
-  orchestrator = new CanvasOrchestrator(canvasElement);
+  orchestrator = new CanvasOrchestrator(canvasElement, overlayCanvasElement);
   installPerformanceHarness({
     enabled: performanceAuditEnabled,
     getOrchestrator: () => orchestrator,
@@ -306,6 +308,7 @@ function initCanvasCAD() {
 
   const canvasViewportController = createCanvasViewportController({
     canvasElement,
+    overlayCanvasElement,
     requestRender: () => updateCanvasRendering(),
     requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
     devicePixelRatio: () => window.devicePixelRatio || 1,
@@ -398,15 +401,13 @@ function initCanvasCAD() {
     },
     onSwitchDoubleClick: async (comp) => {
       comp.switchState = !(comp.switchState ?? false);
-      if (simulationRunner?.isSimulationActive() ?? false) {
+      if (simulationRunner && simulationRunner.isSimulationActive()) {
         try {
-          await invoke("inject_live_mutation", {
-            mutation: {
-              componentId: comp.id,
-              field: "switch_state",
-              value: comp.switchState ? 1.0 : 0.0,
-            },
-          });
+          await simulationRunner.mutateComponent(
+            comp.id,
+            "switch_state",
+            comp.switchState ? 1.0 : 0.0,
+          );
           addLog(
             `Switch [${comp.id}] → ${comp.switchState ? "Cerrado" : "Abierto"} (mutación en caliente)`,
             "system",
@@ -455,6 +456,9 @@ function initCanvasCAD() {
     updateCanvasRendering,
     markCurrentTabAsModified,
     addLog,
+    onUndo: () => circuitHistory.undo(),
+    onRedo: () => circuitHistory.redo(),
+    onWireMode: () => addLog("Modo cable activo: haz clic en un pin para trazar la conexión.", "system"),
   });
 }
 
