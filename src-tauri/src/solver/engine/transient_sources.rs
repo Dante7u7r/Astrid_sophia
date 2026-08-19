@@ -82,9 +82,11 @@ fn evaluate_waveform(
     let freq = override_or(overrides, "frequency", comp.frequency).unwrap_or(1e3);
     let offset = override_or(overrides, "offset", comp.offset).unwrap_or(0.0);
     let duty = override_or(overrides, "duty_cycle", comp.duty_cycle).unwrap_or(0.5);
+    let phase_deg = override_or(overrides, "phase", comp.phase).unwrap_or(0.0);
+    let phase_rad = phase_deg.to_radians();
 
     match wave {
-        "sine" => offset + amp * (2.0 * std::f64::consts::PI * freq * t).sin(),
+        "sine" => offset + amp * (2.0 * std::f64::consts::PI * freq * t + phase_rad).sin(),
         "square" => {
             let period = 1.0 / freq;
             let t_mod = t % period;
@@ -103,6 +105,29 @@ fn evaluate_waveform(
             } else {
                 offset
             }
+        }
+        "triangle" => {
+            let period = 1.0 / freq;
+            let t_mod = t % period;
+            let phase = t_mod / period;
+            let normalized = if phase < 0.5 {
+                phase * 2.0
+            } else {
+                2.0 - phase * 2.0
+            };
+            offset + amp * (2.0 * normalized - 1.0)
+        }
+        "sawtooth" => {
+            let period = 1.0 / freq;
+            let t_mod = t % period;
+            offset + amp * (2.0 * (t_mod / period) - 1.0)
+        }
+        "am" => {
+            let mod_freq = override_or(overrides, "modFrequency", comp.mod_frequency).unwrap_or(freq / 10.0);
+            let mod_index = override_or(overrides, "modIndex", comp.mod_index).unwrap_or(0.8);
+            let carrier = (2.0 * std::f64::consts::PI * freq * t + phase_rad).sin();
+            let modulation = 1.0 + mod_index * (2.0 * std::f64::consts::PI * mod_freq * t).sin();
+            offset + amp * modulation * carrier
         }
         _ => fallback,
     }

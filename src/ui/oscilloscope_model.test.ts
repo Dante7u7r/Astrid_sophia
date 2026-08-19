@@ -41,7 +41,7 @@ describe("oscilloscope_model", () => {
   });
 
   it("devuelve ceros sin muestras", () => {
-    expect(calculateOscilloscopeMetrics([], "1")).toEqual({ vpp: 0, vrms: 0, freq: 0 });
+    expect(calculateOscilloscopeMetrics([], "1")).toMatchObject({ vpp: 0, vrms: 0, freq: 0 });
   });
 
   it("encuentra el inicio de trigger por flanco", () => {
@@ -115,5 +115,34 @@ describe("oscilloscope_model", () => {
     expect(settings.voltsPerDiv).toBe(20);
     expect(settings.timeDivValue).toBe(0.2);
     expect(settings.centerVoltage).toBe(50);
+  });
+
+  it("aplica acoplamiento AC, GND e inversion de traza", () => {
+    // Señal con componente DC de 10V y rizado de +/-1V (9V a 11V)
+    const pointsDc = [
+      point(0, 9),
+      point(0.05, 11),
+    ];
+
+    // 1. Acoplamiento DC: y centrado en 40 - (10/1)*10 = -60 (fuera de pantalla hacia arriba)
+    const dcTrace = buildTyTracePoints(pointsDc, "1", { width: 100, height: 80 }, { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.01 }, 0, { coupling: "dc" });
+    expect(dcTrace[0].y).toBeLessThan(0);
+
+    // 2. Acoplamiento AC: resta el promedio (10V) -> 9V pasa a -1V, 11V pasa a +1V
+    const acTrace = buildTyTracePoints(pointsDc, "1", { width: 100, height: 80 }, { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.01 }, 0, { coupling: "ac" });
+    // at t=0, v=-1V -> y = 40 - (-1/1)*10 = 50
+    // at t=0.05, v=+1V -> y = 40 - (1/1)*10 = 30
+    expect(acTrace[0].y).toBeCloseTo(50);
+    expect(acTrace[1].y).toBeCloseTo(30);
+
+    // 3. Acoplamiento GND: siempre en centro 0V (y = 40)
+    const gndTrace = buildTyTracePoints(pointsDc, "1", { width: 100, height: 80 }, { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.01 }, 0, { coupling: "gnd" });
+    expect(gndTrace[0].y).toBe(40);
+    expect(gndTrace[1].y).toBe(40);
+
+    // 4. Inversion (INV): invierte signo
+    const invTrace = buildTyTracePoints(pointsDc, "1", { width: 100, height: 80 }, { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.01 }, 0, { coupling: "ac", invert: true });
+    expect(invTrace[0].y).toBeCloseTo(30); // antes era 50
+    expect(invTrace[1].y).toBeCloseTo(50); // antes era 30
   });
 });

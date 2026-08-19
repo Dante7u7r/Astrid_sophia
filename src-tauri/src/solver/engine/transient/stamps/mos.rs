@@ -1,4 +1,4 @@
-use super::super::super::devices::*;
+﻿use super::super::super::devices::*;
 use super::super::super::transient_companions::stamp_companion_conductance;
 use super::StampContext;
 use crate::solver::types::ComponentData;
@@ -102,7 +102,7 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let ieq_g = igs - gg * vgs;
 
     // Estampar capacidades parásitas (Fase 13)
-    let (c_gs, c_gd, c_ds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l);
+    let (c_gs, c_gd, c_ds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
     let g_eq_gs = c_gs / dt;
     let g_eq_gd = c_gd / dt;
     let g_eq_ds = c_ds / dt;
@@ -174,10 +174,10 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     }
 
     if node_drain > 0 {
-        vector_z_iter[node_drain - 1] -= ieq - i_eq_gd - i_eq_ds;
+        vector_z_iter[node_drain - 1] += -ieq - i_eq_gd + i_eq_ds;
     }
     if node_source > 0 {
-        vector_z_iter[node_source - 1] += ieq + i_eq_gs + i_eq_ds + ieq_g;
+        vector_z_iter[node_source - 1] += ieq - i_eq_gs - i_eq_ds + ieq_g;
     }
     if node_gate > 0 {
         vector_z_iter[node_gate - 1] += i_eq_gs + i_eq_gd - ieq_g;
@@ -223,9 +223,11 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     };
 
     let vsg = v_source - v_gate;
-    let vsd = (v_source - v_drain).max(0.0);
+    let mut vsd = v_source - v_drain;
+    if vsd < 0.0 {
+        vsd = 0.0;
+    }
     let vsb = v_source - v_bulk;
-    let lambda = 0.02;
 
     // Self-Heating: Vth y Kp dependen de la temperatura de unión
     let tj_p = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
@@ -233,6 +235,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vth_abs = -(vth_0 + MOS_VTH_TC * (tj_p - PHYS_T));
     let kp_0 = 0.02;
     let kp = kp_0 * (tj_p / PHYS_T).powf(MOS_MOBILITY_EXPO);
+    let lambda = 0.02;
     let vt = (PHYS_KB * tj_p) / PHYS_Q;
 
     let (isd, gm_sd, gds_cond, igs, gg) = if comp.comp_type == "bsim4pmos" {
@@ -262,7 +265,8 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
 
         let isd_val = triode_curr * factor_early;
         let gm_sd_val = (2.0 * kp * vsd) * factor_early;
-        let gds_cond_val = (2.0 * kp * (vsg - vth_abs - vsd)) * factor_early + triode_curr * lambda;
+        let gds_cond_val =
+            (2.0 * kp * (vsg - vth_abs - vsd)) * factor_early + triode_curr * lambda;
 
         (isd_val, gm_sd_val, gds_cond_val.max(1e-9), 0.0, 1e-12)
     } else {
@@ -281,7 +285,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let ieq_g = igs - gg * vsg;
 
     // Estampar capacidades parásitas (Fase 13)
-    let (c_sg, c_sd, c_gd) = get_pmos_capacitances(vsg, vsd, vth_abs, comp.w, comp.l);
+    let (c_sg, c_sd, c_gd) = get_pmos_capacitances(vsg, vsd, vth_abs, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
     let g_eq_sg = c_sg / dt;
     let g_eq_sd = c_sd / dt;
     let g_eq_gd = c_gd / dt;
@@ -303,7 +307,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     };
     let vsg_prev = v_source_prev - v_gate_prev;
     let vsd_prev = v_source_prev - v_drain_prev;
-    let vgd_prev = v_drain_prev - v_gate_prev;
+    let vgd_prev = v_gate_prev - v_drain_prev;
 
     let i_eq_sg = g_eq_sg * vsg_prev;
     let i_eq_sd = g_eq_sd * vsd_prev;
@@ -319,7 +323,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         &mut matrix_a_iter,
         node_drain,
         node_drain,
-        gds_cond + g_eq_gd + g_eq_sd,
+        gds_cond + g_eq_sd + g_eq_gd,
     );
     stamp_companion_conductance(
         &mut matrix_a_iter,
@@ -363,12 +367,12 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     }
 
     if node_drain > 0 {
-        vector_z_iter[node_drain - 1] += ieq_sd + i_eq_gd + i_eq_sd;
+        vector_z_iter[node_drain - 1] += ieq_sd - i_eq_sd - i_eq_gd;
     }
     if node_source > 0 {
-        vector_z_iter[node_source - 1] -= ieq_sd - i_eq_sg - i_eq_sd - ieq_g;
+        vector_z_iter[node_source - 1] += -ieq_sd + i_eq_sg + i_eq_sd + ieq_g;
     }
     if node_gate > 0 {
-        vector_z_iter[node_gate - 1] += i_eq_sg + i_eq_gd + ieq_g;
+        vector_z_iter[node_gate - 1] += -i_eq_sg + i_eq_gd - ieq_g;
     }
 }

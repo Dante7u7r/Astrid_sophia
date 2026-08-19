@@ -7,6 +7,16 @@ export interface OscilloscopeMetrics {
   vpp: number;
   vrms: number;
   freq: number;
+  vmax: number;
+  vmin: number;
+  vavg: number;
+  period: number;
+  duty: number;
+}
+
+export interface TraceChannelConfig {
+  coupling?: "dc" | "ac" | "gnd";
+  invert?: boolean;
 }
 
 export interface TyTracePoint {
@@ -23,7 +33,6 @@ export const OSCILLOSCOPE_TIME_PER_DIV = [
   1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5,
 ] as const;
 
-const traceCache = new WeakMap<readonly TimeStepResult[], Map<string, readonly TyTracePoint[]>>();
 const metricsCache = new WeakMap<readonly TimeStepResult[], Map<string, OscilloscopeMetrics>>();
 
 function findVisibleEndIndex(
@@ -112,7 +121,9 @@ export function calculateOscilloscopeMetrics(
   results: readonly TimeStepResult[],
   nodeId: string,
 ): OscilloscopeMetrics {
-  if (results.length === 0) return { vpp: 0, vrms: 0, freq: 0 };
+  if (results.length === 0) {
+    return { vpp: 0, vrms: 0, freq: 0, vmax: 0, vmin: 0, vavg: 0, period: 0, duty: 0 };
+  }
 
   let resultCache = metricsCache.get(results);
   if (!resultCache) {
@@ -126,32 +137,50 @@ export function calculateOscilloscopeMetrics(
 
   let maxV = -Infinity;
   let minV = Infinity;
+  let sumV = 0;
   let sumSq = 0;
 
   for (const pt of results) {
     const v = pt.nodeVoltages[nodeId] ?? 0;
     if (v > maxV) maxV = v;
     if (v < minV) minV = v;
+    sumV += v;
     sumSq += v * v;
   }
 
+  const count = results.length;
   const vpp = maxV - minV;
-  const vrms = Math.sqrt(sumSq / results.length);
+  const vavg = sumV / count;
+  const vrms = Math.sqrt(sumSq / count);
   let crossings = 0;
+  let timeHigh = 0;
   const avg = (maxV + minV) / 2;
-  for (let i = 1; i < results.length; i++) {
+
+  for (let i = 1; i < count; i++) {
     const v0 = results[i - 1].nodeVoltages[nodeId] ?? 0;
     const v1 = results[i].nodeVoltages[nodeId] ?? 0;
     if (v0 <= avg && v1 > avg) crossings++;
+    if (v1 >= avg) {
+      timeHigh += (results[i].time - results[i - 1].time);
+    }
   }
 
   const first = results[0];
-  const last = results[results.length - 1];
+  const last = results[count - 1];
   const totalDuration = last.time - first.time;
-  const metrics = {
+  const freq = totalDuration > 0 ? crossings / totalDuration : 0;
+  const period = freq > 0 ? 1 / freq : 0;
+  const duty = totalDuration > 0 ? Math.min(100, Math.max(0, (timeHigh / totalDuration) * 100)) : 50;
+
+  const metrics: OscilloscopeMetrics = {
     vpp,
     vrms,
-    freq: totalDuration > 0 ? crossings / totalDuration : 0,
+    freq,
+    vmax: Number.isFinite(maxV) ? maxV : 0,
+    vmin: Number.isFinite(minV) ? minV : 0,
+    vavg: Number.isFinite(vavg) ? vavg : 0,
+    period,
+    duty,
   };
   resultCache.set(cacheKey, metrics);
   return metrics;
@@ -162,15 +191,50 @@ export function findTriggerStartIndex(
   nodeId: string | null,
   edge: TriggerEdge,
   level: number,
+  timeDivValue?: number,
 ): number {
   if (!nodeId || results.length <= 2) return 0;
 
-  for (let i = 1; i < results.length; i++) {
+  // Search in recent window to lock onto the live periodic signal
+  const windowDuration = timeDivValue ? timeDivValue * 10 : Infinity;
+  const latestTime = results[results.length - 1].time;
+  const searchStartTime = Number.isFinite(windowDuration) ? Math.max(0, latestTime - windowDuration * 2.5) : 0;
+
+  let searchStartIdx = 1;
+  if (searchStartTime > 0) {
+    for (let i = results.length - 1; i >= 1; i--) {
+      if (results[i].time <= searchStartTime) {
+        searchStartIdx = i;
+        break;
+      }
+    }
+  }
+
+  let bestTriggerIdx = -1;
+  for (let i = searchStartIdx; i < results.length; i++) {
     const v0 = results[i - 1].nodeVoltages[nodeId] ?? 0;
     const v1 = results[i].nodeVoltages[nodeId] ?? 0;
-    if (edge === "rising" && v0 <= level && v1 > level) return i;
-    if (edge === "falling" && v0 >= level && v1 < level) return i;
+    if (edge === "rising" && v0 <= level && v1 > level) {
+      bestTriggerIdx = i;
+    } else if (edge === "falling" && v0 >= level && v1 < level) {
+      bestTriggerIdx = i;
+    }
   }
+
+  if (bestTriggerIdx > 0) {
+    return bestTriggerIdx;
+  }
+
+  // Fallback for flat DC or untriggered signal: display latest rolling window
+  if (Number.isFinite(windowDuration) && windowDuration > 0) {
+    const fallbackStartTime = Math.max(0, latestTime - windowDuration);
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].time >= fallbackStartTime) {
+        return i;
+      }
+    }
+  }
+
   return 0;
 }
 
@@ -180,6 +244,7 @@ export function buildTyTracePoints(
   dimensions: { width: number; height: number },
   scale: { voltsPerDiv: number; offsetPixels: number; timeDivValue: number },
   startIndex = 0,
+  config?: TraceChannelConfig,
 ): TyTracePoint[] {
   if (!nodeId || results.length === 0 || startIndex >= results.length) return [];
 
@@ -189,36 +254,35 @@ export function buildTyTracePoints(
   const divHeight = dimensions.height / 8;
   const firstTime = results[startIndex].time;
   const endIndex = findVisibleEndIndex(results, startIndex, firstTime + windowDuration);
-  const maxPoints = Math.max(64, Math.min(4_000, Math.ceil(dimensions.width * 2)));
-  let resultCache = traceCache.get(results);
-  if (!resultCache) {
-    resultCache = new Map();
-    traceCache.set(results, resultCache);
+  const maxPoints = Math.max(64, Math.min(2_000, Math.ceil(dimensions.width * 2)));
+
+  // Calculate average for AC coupling if requested
+  let acOffset = 0;
+  if (config?.coupling === "ac" && endIndex > startIndex) {
+    let sum = 0;
+    for (let i = startIndex; i < endIndex; i++) {
+      sum += results[i].nodeVoltages[nodeId] ?? 0;
+    }
+    acOffset = sum / (endIndex - startIndex);
   }
-  const cacheKey = [
-    nodeId,
-    results.length,
-    results[results.length - 1]?.time ?? 0,
-    startIndex,
-    endIndex,
-    dimensions.width,
-    dimensions.height,
-    scale.voltsPerDiv,
-    scale.offsetPixels,
-    scale.timeDivValue,
-  ].join(":");
-  const cached = resultCache.get(cacheKey);
-  if (cached) return [...cached];
-  if (resultCache.size >= 32) resultCache.clear();
 
   const toPoint = (pt: TimeStepResult): TyTracePoint => {
     const relativeTime = pt.time - firstTime;
-    const x = (relativeTime / windowDuration) * dimensions.width;
-    const v = pt.nodeVoltages[nodeId] ?? 0.0;
+    const x = Math.min(dimensions.width, (relativeTime / windowDuration) * dimensions.width);
+    let v = pt.nodeVoltages[nodeId] ?? 0.0;
+    if (config?.coupling === "gnd") {
+      v = 0.0;
+    } else if (config?.coupling === "ac") {
+      v = v - acOffset;
+    }
+    if (config?.invert) {
+      v = -v;
+    }
     const y = dimensions.height / 2 - (v / scale.voltsPerDiv) * divHeight - scale.offsetPixels;
     return { x, y };
   };
-  const points = buildMinMaxTrace(
+
+  return buildMinMaxTrace(
     results,
     nodeId,
     startIndex,
@@ -226,8 +290,6 @@ export function buildTyTracePoints(
     maxPoints,
     toPoint,
   );
-  resultCache.set(cacheKey, points);
-  return points;
 }
 
 export interface AutoFitSettings {
@@ -265,7 +327,8 @@ export function calculateAutoFitSettings(
     return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
   }
 
-  const requiredVoltsPerDiv = Math.max((maxVoltage - minVoltage) / 4, OSCILLOSCOPE_VOLTS_PER_DIV[0]);
+  const vSpan = maxVoltage - minVoltage;
+  const requiredVoltsPerDiv = vSpan > 1e-4 ? Math.max(vSpan / 5, OSCILLOSCOPE_VOLTS_PER_DIV[0]) : 1.0;
   const voltsPerDiv = OSCILLOSCOPE_VOLTS_PER_DIV.find((value) => value >= requiredVoltsPerDiv)
     ?? OSCILLOSCOPE_VOLTS_PER_DIV[OSCILLOSCOPE_VOLTS_PER_DIV.length - 1];
   const metrics = calculateOscilloscopeMetrics(results, nodeId);

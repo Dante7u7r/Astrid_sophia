@@ -58,6 +58,7 @@ export function createWorkspaceTab(
   id: string,
   name: string,
   initialData?: InitialTabData,
+  defaultAnalysisMode?: AnalysisMode,
 ): Tab {
   return {
     id,
@@ -83,7 +84,7 @@ export function createWorkspaceTab(
     ch2ProbeNode: "2",
     ch3ProbeNode: "3",
     ch4ProbeNode: "4",
-    activeAnalysisMode: "DC",
+    activeAnalysisMode: defaultAnalysisMode ?? "DC",
   };
 }
 

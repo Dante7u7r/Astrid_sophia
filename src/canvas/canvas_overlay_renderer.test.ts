@@ -78,4 +78,20 @@ describe("CanvasOverlayRenderer", () => {
     renderer.clear();
     expect(canvas).toBeDefined();
   });
+
+  it("renderiza caja de selección cuando selectionStart y selectionEnd están definidos", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const host = createMockHost({
+      showCurrentAnimation: false,
+      selectionStart: { x: 50, y: 50 },
+      selectionEnd: { x: 200, y: 150 },
+    });
+    const renderer = new CanvasOverlayRenderer(canvas, host);
+
+    renderer.renderOverlay({}, {});
+    expect(canvas.width).toBe(800);
+  });
 });

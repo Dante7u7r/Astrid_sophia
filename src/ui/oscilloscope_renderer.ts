@@ -102,57 +102,159 @@ export function drawXyTrace(
   ctx.shadowBlur = 0;
 }
 
+export interface ReticleChannelMarker {
+  num: number;
+  color: string;
+  offsetPixels: number;
+  active: boolean;
+}
+
+export interface ReticleTriggerMarker {
+  levelVolts: number;
+  voltsPerDiv: number;
+  mode: "auto" | "normal" | "single";
+  triggered: boolean;
+  paused: boolean;
+}
+
+export interface ReticleOverlayOptions {
+  channels?: readonly ReticleChannelMarker[];
+  trigger?: ReticleTriggerMarker | null;
+}
+
 export function drawTyReticle(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
+  options?: ReticleOverlayOptions,
 ): { divWidth: number; divHeight: number } {
   const divWidth = width / 10;
   const divHeight = height / 8;
-  
-  // Dotted sub-grid lines
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.05)";
+
+  // 1. High-precision Dotted Sub-grid
+  ctx.save();
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
   ctx.lineWidth = 1;
-  for (let x = 0; x <= width; x += divWidth) {
+  ctx.setLineDash([1, 4]);
+
+  for (let x = divWidth; x < width - 1; x += divWidth) {
+    const rx = Math.floor(x) + 0.5;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= height; y += divHeight) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
+    ctx.moveTo(rx, 0);
+    ctx.lineTo(rx, height);
     ctx.stroke();
   }
 
-  // Primary Center Crosshairs (glowing cyan accent)
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.25)";
+  for (let y = divHeight; y < height - 1; y += divHeight) {
+    const ry = Math.floor(y) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, ry);
+    ctx.lineTo(width, ry);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // 2. Primary Center Crosshairs (Continuous glowing axis)
+  const centerX = Math.floor(width / 2) + 0.5;
+  const centerY = Math.floor(height / 2) + 0.5;
+
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(0, height / 2);
-  ctx.lineTo(width, height / 2);
-  ctx.moveTo(width / 2, 0);
-  ctx.lineTo(width / 2, height);
+  ctx.moveTo(0, centerY);
+  ctx.lineTo(width, centerY);
+  ctx.moveTo(centerX, 0);
+  ctx.lineTo(centerX, height);
   ctx.stroke();
 
-  // Tick marks along center X axis (5 ticks per div)
+  // 3. Calibration Tick marks along center axes (5 sub-ticks per division)
   const subDivX = divWidth / 5;
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.4)";
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.55)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = 0; x <= width; x += subDivX) {
-    ctx.moveTo(x, height / 2 - 3);
-    ctx.lineTo(x, height / 2 + 3);
+    const rx = Math.floor(x) + 0.5;
+    ctx.moveTo(rx, centerY - 3);
+    ctx.lineTo(rx, centerY + 3);
   }
-  // Tick marks along center Y axis (5 ticks per div)
   const subDivY = divHeight / 5;
   for (let y = 0; y <= height; y += subDivY) {
-    ctx.moveTo(width / 2 - 3, y);
-    ctx.lineTo(width / 2 + 3, y);
+    const ry = Math.floor(y) + 0.5;
+    ctx.moveTo(centerX - 3, ry);
+    ctx.lineTo(centerX + 3, ry);
   }
   ctx.stroke();
 
+  // 4. Ground reference tags on the left bezel for active channels
+  if (options?.channels) {
+    for (const ch of options.channels) {
+      if (!ch.active) continue;
+      const tagY = Math.max(8, Math.min(height - 8, centerY - ch.offsetPixels));
+      ctx.fillStyle = ch.color;
+      ctx.beginPath();
+      ctx.moveTo(0, tagY - 6);
+      ctx.lineTo(12, tagY - 6);
+      ctx.lineTo(18, tagY);
+      ctx.lineTo(12, tagY + 6);
+      ctx.lineTo(0, tagY + 6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#030712";
+      ctx.font = "bold 9px var(--font-mono)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${ch.num}`, 7, tagY);
+    }
+  }
+
+  // 5. Trigger level indicator tag on the right bezel
+  if (options?.trigger) {
+    const trig = options.trigger;
+    const trigOffsetPx = (trig.levelVolts / (trig.voltsPerDiv || 1)) * divHeight;
+    const trigY = Math.max(8, Math.min(height - 8, centerY - trigOffsetPx));
+
+    // Trigger tag on right edge
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath();
+    ctx.moveTo(width, trigY - 6);
+    ctx.lineTo(width - 12, trigY - 6);
+    ctx.lineTo(width - 18, trigY);
+    ctx.lineTo(width - 12, trigY + 6);
+    ctx.lineTo(width, trigY + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#030712";
+    ctx.font = "bold 9px var(--font-mono)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("T", width - 7, trigY);
+
+    // Trigger Status Badge at top right
+    const statusText = trig.paused ? "STOP" : trig.triggered ? "TRIG'D" : trig.mode.toUpperCase();
+    const statusColor = trig.paused ? "#f43f5e" : trig.triggered ? "#22c55e" : "#38bdf8";
+
+    ctx.font = "bold 9px var(--font-mono)";
+    const badgeW = ctx.measureText(statusText).width + 12;
+    const badgeX = width - badgeW - 24;
+    const badgeY = 8;
+
+    ctx.fillStyle = "rgba(10, 15, 25, 0.85)";
+    ctx.strokeStyle = statusColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, 16, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = statusColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(statusText, badgeX + badgeW / 2, badgeY + 8);
+  }
+
+  ctx.restore();
   return { divWidth, divHeight };
 }
 
@@ -190,6 +292,119 @@ export function drawPvtTraces(
   ctx.shadowBlur = 0;
 }
 
+export function drawSplitTyReticle(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  activeChannels: Array<{ num: number; color: string; offsetPixels: number; voltsPerDiv: number }>,
+  trigger?: ReticleOverlayOptions["trigger"],
+): void {
+  const n = activeChannels.length;
+  if (n <= 1) return;
+  const slotHeight = height / n;
+  const divWidth = width / 10;
+
+  ctx.save();
+
+  // Draw each channel's sub-grid
+  for (let k = 0; k < n; k++) {
+    const ch = activeChannels[k];
+    const topY = k * slotHeight;
+    const centerY = topY + slotHeight / 2;
+    const divHeight = slotHeight / 8;
+
+    // Slot separator
+    if (k > 0) {
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, Math.floor(topY) + 0.5);
+      ctx.lineTo(width, Math.floor(topY) + 0.5);
+      ctx.stroke();
+    }
+
+    // Dotted sub-grid for this slot
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([1, 4]);
+    for (let x = divWidth; x < width - 1; x += divWidth) {
+      const rx = Math.floor(x) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(rx, topY);
+      ctx.lineTo(rx, topY + slotHeight);
+      ctx.stroke();
+    }
+    for (let y = divHeight; y < slotHeight - 1; y += divHeight) {
+      const ry = Math.floor(topY + y) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, ry);
+      ctx.lineTo(width, ry);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Center sub-axis
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, Math.floor(centerY) + 0.5);
+    ctx.lineTo(width, Math.floor(centerY) + 0.5);
+    ctx.stroke();
+
+    // Ground indicator tag
+    const tagY = Math.max(topY + 6, Math.min(topY + slotHeight - 6, centerY - ch.offsetPixels));
+    ctx.fillStyle = ch.color;
+    ctx.beginPath();
+    ctx.moveTo(0, tagY - 6);
+    ctx.lineTo(12, tagY - 6);
+    ctx.lineTo(18, tagY);
+    ctx.lineTo(12, tagY + 6);
+    ctx.lineTo(0, tagY + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#030712";
+    ctx.font = "bold 9px var(--font-mono)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${ch.num}`, 7, tagY);
+
+    // Channel label badge in top-left of the slot
+    ctx.fillStyle = ch.color;
+    ctx.font = "bold 9px var(--font-mono)";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(`CH${ch.num} (${ch.voltsPerDiv} V/div)`, 24, topY + 4);
+  }
+
+  // Trigger Status Badge at top right
+  if (trigger) {
+    const statusText = trigger.paused ? "STOP" : trigger.triggered ? "TRIG'D" : trigger.mode.toUpperCase();
+    const statusColor = trigger.paused ? "#f43f5e" : trigger.triggered ? "#22c55e" : "#38bdf8";
+
+    ctx.font = "bold 9px var(--font-mono)";
+    const badgeW = ctx.measureText(statusText).width + 12;
+    const badgeX = width - badgeW - 24;
+    const badgeY = 8;
+
+    ctx.fillStyle = "rgba(10, 15, 25, 0.85)";
+    ctx.strokeStyle = statusColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, 16, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = statusColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(statusText, badgeX + badgeW / 2, badgeY + 8);
+  }
+
+  ctx.restore();
+}
+
 export function drawOscilloscopeCursors(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -202,6 +417,7 @@ export function drawOscilloscopeCursors(
   voltsPerDiv: number,
   voltageOffset: number,
   timeDivValue: number,
+  signalPeriod?: number,
 ): void {
   ctx.strokeStyle = "rgba(251, 191, 36, 0.7)";
   ctx.lineWidth = 1;
@@ -242,7 +458,12 @@ export function drawOscilloscopeCursors(
   const deltaVoltage = Math.abs(cursorV2 - cursorV1);
   const frequency = deltaTime > 0 ? 1 / deltaTime : 0;
   const deltaSymbol = "\u0394";
-  const label = `${deltaSymbol}t: ${(deltaTime * 1_000).toFixed(2)} ms | 1/${deltaSymbol}t: ${frequency.toFixed(1)} Hz | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
+  let label = `${deltaSymbol}t: ${(deltaTime * 1_000).toFixed(2)} ms | 1/${deltaSymbol}t: ${frequency.toFixed(1)} Hz | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
+  if (signalPeriod && signalPeriod > 0) {
+    const phaseDeg = ((deltaTime / signalPeriod) * 360) % 360;
+    label += ` | Phase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
+  }
+
   ctx.font = "bold 9px var(--font-sans)";
   const textWidth = ctx.measureText(label).width;
   ctx.fillStyle = "rgba(10, 15, 25, 0.9)";

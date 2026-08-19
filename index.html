@@ -803,7 +803,7 @@
           <!-- ALMACÉN DE CONTENIDOS DE INSTRUMENTOS (OCULTO - NUNCA VISIBLE EN EL DOCK) -->
           <div id="instruments-storage-pool" hidden style="display: none !important;">
             <!-- 1. Osciloscopio Digital de Nivel Profesional -->
-            <div class="inst-content-box osc-theme-rack" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;">
+            <div class="inst-content-box osc-theme-rack" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; flex: 1 1 0; background: #070a14;">
               <!-- Scope Header Console -->
               <div class="osc-header-bar" id="osc-header">
                 <div class="osc-panel-controls" id="osc-controls">
@@ -818,12 +818,16 @@
                   <!-- Mode & Tools -->
                   <button id="osc-mode-ty" class="btn-osc-mini active" type="button">T-Y</button>
                   <button id="osc-mode-xy" class="btn-osc-mini" type="button">X-Y</button>
+                  <button id="osc-mode-split" class="btn-osc-mini" type="button" title="Alternar cuadrícula dividida para separar los canales">⊞ Split</button>
+                  <button id="osc-math-btn" class="btn-osc-mini" type="button" title="Canal Matemático (CH1 - CH2)">🧮 MATH</button>
                   <button id="osc-cursors-btn" class="btn-osc-mini" type="button">📏 Cursores: OFF</button>
                   
                   <span class="osc-v-divider"></span>
                   
                   <button id="osc-pause-btn" class="btn-osc-mini osc-btn-action" type="button">⏸ Pausa</button>
                   <button id="osc-autofit-btn" class="btn-osc-mini osc-btn-autofit" type="button" data-tooltip="Auto-escalar Volts/div y Tiempo/div">✨ Auto</button>
+                  <button id="osc-snapshot-btn" class="btn-osc-mini" type="button" title="Descargar captura PNG limpia del osciloscopio">📸 PNG</button>
+                  <button id="osc-csv-btn" class="btn-osc-mini" type="button" title="Exportar trazas a CSV">💾 CSV</button>
                 </div>
               </div>
 
@@ -841,23 +845,77 @@
                     </div>
 
                     <canvas class="osc-canvas" id="osc-canvas"></canvas>
-                    <div class="osc-grid-overlay"></div>
                   </div>
 
-                  <!-- Telemetry Bottom Bar -->
-                  <div class="osc-measurements-bar">
-                    <div id="osc-meas-ch1" class="meas-card ch1"><span class="meas-badge">CH1</span> <span class="meas-val">--</span></div>
-                    <div id="osc-meas-ch2" class="meas-card ch2"><span class="meas-badge">CH2</span> <span class="meas-val">--</span></div>
-                    <div id="osc-meas-ch3" class="meas-card ch3"><span class="meas-badge">CH3</span> <span class="meas-val">--</span></div>
-                    <div id="osc-meas-ch4" class="meas-card ch4"><span class="meas-badge">CH4</span> <span class="meas-val">--</span></div>
+                  <!-- Telemetry Bottom Bar (Digital Instrument Readout) -->
+                  <div class="osc-measurements-bar" id="osc-measurements-bar">
+                    <!-- CH1 Readout -->
+                    <div id="osc-meas-ch1" class="meas-digital-card ch1 active">
+                      <div class="meas-card-header">
+                        <span class="meas-badge">CH1</span>
+                        <span class="meas-node-badge" id="osc-meas-node-ch1">Nodo: 1</span>
+                      </div>
+                      <div class="meas-metrics-grid">
+                        <div class="meas-cell"><span class="cell-lbl">Vpp</span><span class="cell-num" id="meas-vpp-ch1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vrms</span><span class="cell-num" id="meas-vrms-ch1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch1">--</span></div>
+                      </div>
+                    </div>
+
+                    <!-- CH2 Readout -->
+                    <div id="osc-meas-ch2" class="meas-digital-card ch2">
+                      <div class="meas-card-header">
+                        <span class="meas-badge">CH2</span>
+                        <span class="meas-node-badge" id="osc-meas-node-ch2">Nodo: 2</span>
+                      </div>
+                      <div class="meas-metrics-grid">
+                        <div class="meas-cell"><span class="cell-lbl">Vpp</span><span class="cell-num" id="meas-vpp-ch2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vrms</span><span class="cell-num" id="meas-vrms-ch2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch2">--</span></div>
+                      </div>
+                    </div>
+
+                    <!-- CH3 Readout -->
+                    <div id="osc-meas-ch3" class="meas-digital-card ch3">
+                      <div class="meas-card-header">
+                        <span class="meas-badge">CH3</span>
+                        <span class="meas-node-badge" id="osc-meas-node-ch3">Nodo: 3</span>
+                      </div>
+                      <div class="meas-metrics-grid">
+                        <div class="meas-cell"><span class="cell-lbl">Vpp</span><span class="cell-num" id="meas-vpp-ch3">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vrms</span><span class="cell-num" id="meas-vrms-ch3">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch3">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch3">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch3">--</span></div>
+                      </div>
+                    </div>
+
+                    <!-- CH4 Readout -->
+                    <div id="osc-meas-ch4" class="meas-digital-card ch4">
+                      <div class="meas-card-header">
+                        <span class="meas-badge">CH4</span>
+                        <span class="meas-node-badge" id="osc-meas-node-ch4">Nodo: 4</span>
+                      </div>
+                      <div class="meas-metrics-grid">
+                        <div class="meas-cell"><span class="cell-lbl">Vpp</span><span class="cell-num" id="meas-vpp-ch4">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vrms</span><span class="cell-num" id="meas-vrms-ch4">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch4">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch4">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch4">--</span></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Right Control Console Panel -->
                 <div class="osc-sidebar-controls">
-                  <!-- TIMEBASE CONTROL RACK -->
+                  <!-- HORIZONTAL TIMEBASE RACK -->
                   <div class="osc-rack-section">
-                    <div class="rack-section-title">⏱️ TIEMPOBASE (HORIZ)</div>
+                    <div class="rack-section-title">⏱️ BASE DE TIEMPO (HORIZONTAL)</div>
                     <div class="rack-row">
                       <label for="osc-time-div" class="rack-label">Tiempo / Div</label>
                       <select id="osc-time-div" class="osc-select" aria-label="Tiempo por división">
@@ -866,7 +924,7 @@
                         <option value="0.000005">5 µs/div</option>
                         <option value="0.00001">10 µs/div</option>
                         <option value="0.00002">20 µs/div</option>
-                        <option value="0.000005">50 µs/div</option>
+                        <option value="0.00005">50 µs/div</option>
                         <option value="0.0001">100 µs/div</option>
                         <option value="0.0002">200 µs/div</option>
                         <option value="0.0005">500 µs/div</option>
@@ -911,102 +969,83 @@
                       </div>
                       <input id="osc-trigger-level" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Nivel de disparo" />
                     </div>
+                    <div class="rack-row style-margin-top">
+                      <label for="osc-trigger-sweep-mode" class="rack-label">Modo Disparo</label>
+                      <select id="osc-trigger-sweep-mode" class="osc-select" aria-label="Modo de barrido de disparo">
+                        <option value="auto" selected>Auto (Continuo)</option>
+                        <option value="normal">Normal (Sincronizado)</option>
+                        <option value="single">Single (Disparo Único)</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <!-- CHANNELS CONTROL RACK -->
+                  <!-- VERTICAL CHANNELS TABBED RACK -->
                   <div class="osc-rack-section flex-grow-section">
                     <div class="rack-section-title">⚡ CANALES VERTICALES</div>
-                    <div class="osc-channels-grid">
-                      <!-- CH1 Card -->
-                      <div class="osc-ch-card ch1">
-                        <div class="ch-card-header">
-                          <span class="ch-card-title">CANAL 1</span>
-                          <span class="ch-card-node" id="osc-ch1-node">Nodo: N01</span>
+                    
+                    <!-- Channel Selector Tabs -->
+                    <div class="osc-channel-tabs-bar">
+                      <button id="osc-tab-ch1" class="osc-channel-tab ch1 active" type="button" data-ch="ch1"><span class="ch-tab-dot"></span> CH1</button>
+                      <button id="osc-tab-ch2" class="osc-channel-tab ch2" type="button" data-ch="ch2"><span class="ch-tab-dot"></span> CH2</button>
+                      <button id="osc-tab-ch3" class="osc-channel-tab ch3" type="button" data-ch="ch3"><span class="ch-tab-dot"></span> CH3</button>
+                      <button id="osc-tab-ch4" class="osc-channel-tab ch4" type="button" data-ch="ch4"><span class="ch-tab-dot"></span> CH4</button>
+                      <button id="osc-tab-math" class="osc-channel-tab math" type="button" data-ch="math"><span class="ch-tab-dot"></span> MATH</button>
+                    </div>
+
+                    <!-- Focused Channel Control Card -->
+                    <div class="osc-focused-card ch1" id="osc-focused-card">
+                      <div class="ch-focused-head">
+                        <span class="ch-focused-title" id="osc-focused-title">CANAL 1</span>
+                        <button id="osc-focused-toggle-btn" class="btn-osc-mini active" type="button">ON</button>
+                      </div>
+
+                      <div class="rack-row">
+                        <div class="rack-label-group">
+                          <label for="osc-focused-node" class="rack-label">Sonda / Nodo Circuito</label>
+                          <button id="osc-focused-pick-probe-btn" class="btn-osc-mini" type="button" title="Haz clic y luego toca un terminal en el lienzo">📍 Sonda</button>
                         </div>
-                        <div class="ch-card-controls">
-                          <div class="ch-ctrl-group">
-                            <label for="osc-volts-ch1" class="ch-ctrl-label">V/div</label>
-                            <select id="osc-volts-ch1" class="osc-select-mini" aria-label="Voltios por división del canal 1">
-                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
-                            </select>
+                        <input id="osc-focused-node" type="text" class="osc-select" value="1" placeholder="Ej. 1, out..." />
+                      </div>
+
+                      <div class="rack-row">
+                        <label class="rack-label">Acoplamiento</label>
+                        <div class="ch-quick-toggles">
+                          <div class="btn-group-coupling">
+                            <button id="osc-focused-dc" class="btn-osc-mode active" type="button">DC</button>
+                            <button id="osc-focused-ac" class="btn-osc-mode" type="button">AC</button>
+                            <button id="osc-focused-gnd" class="btn-osc-mode" type="button">GND</button>
                           </div>
-                          <div class="ch-ctrl-group">
-                            <div class="ch-slider-head">
-                              <label for="osc-offset-ch1" class="ch-ctrl-label">Offset</label>
-                              <span id="osc-offset-ch1-val" class="ch-offset-readout">0 px</span>
-                            </div>
-                            <input id="osc-offset-ch1" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 1" />
-                          </div>
+                          <button id="osc-focused-inv" class="btn-osc-mode btn-inv" type="button" title="Invertir polaridad">INV</button>
                         </div>
                       </div>
 
-                      <!-- CH2 Card -->
-                      <div class="osc-ch-card ch2">
-                        <div class="ch-card-header">
-                          <span class="ch-card-title">CANAL 2</span>
-                          <span class="ch-card-node" id="osc-ch2-node">Nodo: N02</span>
+                      <div class="rack-row">
+                        <div class="rack-label-group">
+                          <label for="osc-focused-volts" class="rack-label">Escala V / Div</label>
+                          <span id="osc-focused-volts-badge" class="rack-val-badge">1.0 V/div</span>
                         </div>
-                        <div class="ch-card-controls">
-                          <div class="ch-ctrl-group">
-                            <label for="osc-volts-ch2" class="ch-ctrl-label">V/div</label>
-                            <select id="osc-volts-ch2" class="osc-select-mini" aria-label="Voltios por división del canal 2">
-                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
-                            </select>
-                          </div>
-                          <div class="ch-ctrl-group">
-                            <div class="ch-slider-head">
-                              <label for="osc-offset-ch2" class="ch-ctrl-label">Offset</label>
-                              <span id="osc-offset-ch2-val" class="ch-offset-readout">0 px</span>
-                            </div>
-                            <input id="osc-offset-ch2" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 2" />
-                          </div>
-                        </div>
+                        <select id="osc-focused-volts" class="osc-select" aria-label="Voltios por división">
+                          <option value="0.005">5 mV/div</option>
+                          <option value="0.01">10 mV/div</option>
+                          <option value="0.02">20 mV/div</option>
+                          <option value="0.05">50 mV/div</option>
+                          <option value="0.1">100 mV/div</option>
+                          <option value="0.2">200 mV/div</option>
+                          <option value="0.5">500 mV/div</option>
+                          <option value="1" selected>1.0 V/div</option>
+                          <option value="2">2.0 V/div</option>
+                          <option value="5">5.0 V/div</option>
+                          <option value="10">10 V/div</option>
+                          <option value="20">20 V/div</option>
+                        </select>
                       </div>
 
-                      <!-- CH3 Card -->
-                      <div class="osc-ch-card ch3">
-                        <div class="ch-card-header">
-                          <span class="ch-card-title">CANAL 3</span>
-                          <span class="ch-card-node" id="osc-ch3-node">Nodo: N03</span>
+                      <div class="rack-row">
+                        <div class="rack-label-group">
+                          <label for="osc-focused-offset" class="rack-label">Offset Vertical</label>
+                          <span id="osc-focused-offset-val" class="ch-offset-readout">0.00 V</span>
                         </div>
-                        <div class="ch-card-controls">
-                          <div class="ch-ctrl-group">
-                            <label for="osc-volts-ch3" class="ch-ctrl-label">V/div</label>
-                            <select id="osc-volts-ch3" class="osc-select-mini" aria-label="Voltios por división del canal 3">
-                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
-                            </select>
-                          </div>
-                          <div class="ch-ctrl-group">
-                            <div class="ch-slider-head">
-                              <label for="osc-offset-ch3" class="ch-ctrl-label">Offset</label>
-                              <span id="osc-offset-ch3-val" class="ch-offset-readout">0 px</span>
-                            </div>
-                            <input id="osc-offset-ch3" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 3" />
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- CH4 Card -->
-                      <div class="osc-ch-card ch4">
-                        <div class="ch-card-header">
-                          <span class="ch-card-title">CANAL 4</span>
-                          <span class="ch-card-node" id="osc-ch4-node">Nodo: N04</span>
-                        </div>
-                        <div class="ch-card-controls">
-                          <div class="ch-ctrl-group">
-                            <label for="osc-volts-ch4" class="ch-ctrl-label">V/div</label>
-                            <select id="osc-volts-ch4" class="osc-select-mini" aria-label="Voltios por división del canal 4">
-                              <option value="0.005">5 mV</option><option value="0.01">10 mV</option><option value="0.02">20 mV</option><option value="0.05">50 mV</option><option value="0.1">100 mV</option><option value="0.2">0.2 V</option><option value="0.5">0.5 V</option><option value="1.0" selected>1.0 V</option><option value="2.0">2.0 V</option><option value="5.0">5.0 V</option><option value="10.0">10 V</option><option value="20.0">20 V</option>
-                            </select>
-                          </div>
-                          <div class="ch-ctrl-group">
-                            <div class="ch-slider-head">
-                              <label for="osc-offset-ch4" class="ch-ctrl-label">Offset</label>
-                              <span id="osc-offset-ch4-val" class="ch-offset-readout">0 px</span>
-                            </div>
-                            <input id="osc-offset-ch4" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Desplazamiento vertical del canal 4" />
-                          </div>
-                        </div>
+                        <input id="osc-focused-offset" type="range" class="osc-slider" min="-4" max="4" step="0.05" value="0" aria-label="Desplazamiento vertical" />
                       </div>
                     </div>
                   </div>
@@ -1027,6 +1066,9 @@
 
             <!-- 6. Asistente e Inteligencia de Simulación -->
             <div class="inst-content-box" id="inst-intelligence" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+
+            <!-- 7. Analizador de Respuesta en Frecuencia y Bode -->
+            <div class="inst-content-box" id="inst-bode" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
           </div>
 
           <!-- DOCK INFERIOR (COMPACT INSTRUMENT LAUNCHER HUB) -->
@@ -1045,6 +1087,7 @@
               <button class="inst-tab" data-tab="logic" data-short-label="LOG">⌗ Lógico</button>
               <button class="inst-tab" data-tab="fft" data-short-label="FFT">📈 Espectro (FFT)</button>
               <button class="inst-tab" data-tab="tracer" data-short-label="I-V">🔬 Trazador I-V</button>
+              <button class="inst-tab" data-tab="bode" data-short-label="BOD">📈 Bode / AC</button>
               <button class="inst-tab" data-tab="intelligence" data-short-label="IA">◈ Inteligencia</button>
             </div>
             <button
@@ -1079,6 +1122,7 @@
                 <label class="property-label">Valor Nominal</label>
                 <div class="property-input-wrapper">
                 <input id="prop-val-input" class="prop-input" type="text" inputmode="decimal" value="1000" />
+                  <button id="btn-snap-standard" class="btn-adj" type="button" title="Ajustar al valor comercial estándar más cercano (E24)" style="width: auto; padding: 0 6px; font-size: 11px; font-weight: bold; color: var(--accent-color);">E24</button>
                   <button id="prop-val-dec" class="btn-adj" type="button" aria-label="Disminuir valor">-</button>
                   <button id="prop-val-inc" class="btn-adj" type="button" aria-label="Aumentar valor">+</button>
                 </div>
@@ -1088,6 +1132,14 @@
                <div class="property-group" id="group-comp-unit">
                 <label class="property-label">Unidad Física</label>
                 <input id="prop-unit-input" class="prop-input" type="text" value="Ohms (Ω)" readonly />
+              </div>
+
+              <!-- Selector de Plantillas / Presets Rápidos -->
+              <div class="property-group" id="group-comp-preset" style="display: none;">
+                <label class="property-label">Plantilla / Preset Rápido</label>
+                <select id="prop-preset-select" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                  <option value="">-- Cargar Plantilla Comercial --</option>
+                </select>
               </div>
 
               <!-- Contenedor de Propiedades de Cable -->
@@ -1128,35 +1180,160 @@
               </div>
 
               <!-- Contenedor de Propiedades de Onda para Fuentes -->
-              <div id="wave-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px;">
+              <div id="wave-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label">Tipo de Onda</label>
                   <select id="prop-wave-type" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
                     <option value="dc">Corriente Continua (CC)</option>
-                    <option value="sine">Senoidal (Transitorio)</option>
-                    <option value="square">Cuadrada (Transitorio)</option>
-                    <option value="pulse">Pulso (Transitorio)</option>
+                    <option value="sine">Senoidal (AC)</option>
+                    <option value="square">Cuadrada</option>
+                    <option value="triangle">Triangular</option>
+                    <option value="sawtooth">Diente de Sierra</option>
+                    <option value="pulse">Pulso (Duty Cycle)</option>
+                    <option value="am">Modulación de Amplitud (AM)</option>
                   </select>
                 </div>
                 
                 <div id="group-wave-amp" class="property-group" style="display: none;">
-                  <label class="property-label">Amplitud (Vpk)</label>
+                  <label class="property-label">Amplitud (Vpk / Ap)</label>
                   <input id="prop-wave-amp" class="prop-input" type="number" step="0.1" value="5" />
                 </div>
                 
                 <div id="group-wave-freq" class="property-group" style="display: none;">
-                  <label class="property-label">Frecuencia (Hz)</label>
+                  <label id="label-wave-freq" class="property-label">Frecuencia (Hz)</label>
                   <input id="prop-wave-freq" class="prop-input" type="number" step="1" value="1000" />
+                </div>
+
+                <div id="group-wave-mod-freq" class="property-group" style="display: none;">
+                  <label class="property-label">Frecuencia Moduladora fm (Hz)</label>
+                  <input id="prop-wave-mod-freq" class="prop-input" type="number" step="1" value="100" />
+                </div>
+
+                <div id="group-wave-mod-index" class="property-group" style="display: none;">
+                  <label class="property-label">Índice de Modulación m (0.0 - 1.0)</label>
+                  <input id="prop-wave-mod-index" class="prop-input" type="number" step="0.05" min="0" max="1" value="0.8" />
+                </div>
+
+                <div id="group-wave-phase" class="property-group" style="display: none;">
+                  <label class="property-label">Fase Inicial (º grados)</label>
+                  <input id="prop-wave-phase" class="prop-input" type="number" step="5" min="-360" max="360" value="0" />
                 </div>
                 
                 <div id="group-wave-offset" class="property-group" style="display: none;">
-                  <label class="property-label">Tensión Offset (V)</label>
+                  <label class="property-label">Tensión Offset (V / A)</label>
                   <input id="prop-wave-offset" class="prop-input" type="number" step="0.1" value="0" />
                 </div>
                 
                 <div id="group-wave-duty" class="property-group" style="display: none;">
-                  <label class="property-label">Ciclo de Trabajo / Ancho</label>
+                  <label class="property-label">Ciclo de Trabajo / Duty</label>
                   <input id="prop-wave-duty" class="prop-input" type="number" step="0.05" min="0.01" max="0.99" value="0.5" />
+                </div>
+
+                <div id="group-wave-rs" class="property-group" style="display: flex;">
+                  <label class="property-label">Resistencia Interna Rs (Ω: 0 = Ideal)</label>
+                  <input id="prop-wave-rs" class="prop-input" type="number" step="0.1" min="0" value="0" />
+                </div>
+
+                <div id="group-wave-ac-mag" class="property-group" style="display: flex;">
+                  <label class="property-label">Magnitud AC (Barrido Bode / AC Sweep)</label>
+                  <input id="prop-wave-ac-mag" class="prop-input" type="number" step="0.1" value="1.0" />
+                </div>
+
+                <div id="group-wave-ac-phase" class="property-group" style="display: flex;">
+                  <label class="property-label">Fase AC (º grados para Bode)</label>
+                  <input id="prop-wave-ac-phase" class="prop-input" type="number" step="5" min="-360" max="360" value="0" />
+                </div>
+              </div>
+
+              <!-- Contenedor de Propiedades del Resistor -->
+              <div id="resistor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-resistor-tolerance">Tolerancia Nominal</label>
+                  <select id="prop-resistor-tolerance" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="0.1">±0.1% (Ultra precisión)</option>
+                    <option value="0.5">±0.5% (Precisión)</option>
+                    <option value="1" selected>±1% (Metal Film estándar)</option>
+                    <option value="2">±2%</option>
+                    <option value="5">±5% (Carbón estándar)</option>
+                    <option value="10">±10%</option>
+                  </select>
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-resistor-power">Potencia Máxima (W)</label>
+                  <select id="prop-resistor-power" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="0.125">1/8 W (0.125 W - SMD 0805)</option>
+                    <option value="0.25" selected>1/4 W (0.25 W - Through-hole estándar)</option>
+                    <option value="0.5">1/2 W (0.5 W)</option>
+                    <option value="1.0">1 W</option>
+                    <option value="2.0">2 W</option>
+                    <option value="5.0">5 W (Cerámica / Potencia)</option>
+                    <option value="10.0">10 W</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Contenedor de Propiedades del Capacitor -->
+              <div id="capacitor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-capacitor-voltage">Tensión Máxima Nominal (V)</label>
+                  <select id="prop-capacitor-voltage" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="6.3">6.3 V</option>
+                    <option value="10">10 V</option>
+                    <option value="16">16 V</option>
+                    <option value="25" selected>25 V</option>
+                    <option value="35">35 V</option>
+                    <option value="50">50 V</option>
+                    <option value="100">100 V</option>
+                    <option value="250">250 V</option>
+                    <option value="400">400 V</option>
+                    <option value="1000">1000 V (Alta tensión)</option>
+                  </select>
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-capacitor-esr">Resistencia Serie Equivalente ESR (Ω)</label>
+                  <input id="prop-capacitor-esr" class="prop-input" type="number" min="0" step="0.01" value="0" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-capacitor-dielectric">Tipo Dieléctrico / Tecnología</label>
+                  <select id="prop-capacitor-dielectric" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="ceramic" selected>Cerámico (MLCC X7R / C0G)</option>
+                    <option value="electrolytic">Electrolítico de Aluminio</option>
+                    <option value="tantalum">Tántalo (Bajo ESR)</option>
+                    <option value="film">Película (Film Poliéster)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Contenedor de Propiedades del Inductor -->
+              <div id="inductor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-inductor-dcr">Resistencia DC Devanado DCR (Ω)</label>
+                  <input id="prop-inductor-dcr" class="prop-input" type="number" min="0" step="0.01" value="0" />
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-inductor-isat">Corriente Máxima de Saturación (A)</label>
+                  <input id="prop-inductor-isat" class="prop-input" type="number" min="0.01" step="0.1" value="1.0" />
+                </div>
+              </div>
+
+              <!-- Contenedor de Propiedades de Optoelectrónica (LED) -->
+              <div id="led-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-led-color">Color de Emisión y Vf Física</label>
+                  <select id="prop-led-color" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="red" selected>🔴 Rojo (Vf ≈ 1.8 V, 630 nm)</option>
+                    <option value="green">🟢 Verde (Vf ≈ 2.1 V, 565 nm)</option>
+                    <option value="blue">🔵 Azul (Vf ≈ 3.2 V, 470 nm)</option>
+                    <option value="yellow">🟡 Amarillo (Vf ≈ 2.0 V, 590 nm)</option>
+                    <option value="white">⚪ Blanco (Vf ≈ 3.2 V, 6000 K)</option>
+                    <option value="orange">🟠 Naranja (Vf ≈ 2.0 V, 610 nm)</option>
+                    <option value="uv">🟣 Ultravioleta (Vf ≈ 3.6 V, 395 nm)</option>
+                    <option value="ir">🟤 Infrarrojo (Vf ≈ 1.2 V, 940 nm)</option>
+                  </select>
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-led-imax">Corriente Máxima Continua (mA)</label>
+                  <input id="prop-led-imax" class="prop-input" type="number" min="1" max="1000" step="1" value="20" />
                 </div>
               </div>
 
@@ -1168,6 +1345,14 @@
                     <input id="prop-wiper-slider" type="range" min="0.01" max="0.99" step="0.01" value="0.5" style="flex-grow: 1;" />
                     <span id="prop-wiper-display" style="min-width: 32px; font-weight: bold; color: var(--accent-color);">50%</span>
                   </div>
+                </div>
+                <div class="property-group">
+                  <label class="property-label" for="prop-pot-taper">Curva de Variación (Taper)</label>
+                  <select id="prop-pot-taper" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="linear" selected>Lineal (Tipo B - Estándar)</option>
+                    <option value="log">Logarítmica (Tipo A - Control de Volumen)</option>
+                    <option value="antilog">Antilogarítmica (Tipo C)</option>
+                  </select>
                 </div>
               </div>
 
@@ -1284,6 +1469,10 @@
                   </select>
                 </div>
                 <div id="prop-semi-desc" style="font-size: var(--font-2xs, 11px); color: var(--text-muted); line-height: 1.4; padding: 6px 8px; background: rgba(0,0,0,0.3); border-radius: 4px; display: none;"></div>
+                <div id="group-diode-bv" class="property-group" style="display: none;">
+                  <label class="property-label" for="prop-diode-bv">Tensión Zener Vz (V: 0 = Diodo Común)</label>
+                  <input id="prop-diode-bv" class="prop-input" type="number" min="0" step="0.1" value="0" placeholder="Ej. 3.3, 5.1, 12.0" />
+                </div>
               </div>
 
               <!-- Contenedor de Lógica Digital -->
@@ -1331,6 +1520,19 @@
         </div>
         <div class="panel-body">
           <form class="properties-form" id="settings-form">
+            <div class="property-group">
+              <label class="property-label" for="settings-default-mode-input">Modo de Simulación por Defecto</label>
+              <select id="settings-default-mode-input" class="prop-input">
+                <option value="DC">⚖️ Análisis CC (Punto de Operación)</option>
+                <option value="TRAN" selected>⏱️ Transitorio (Tiempo Real Interactivo)</option>
+                <option value="AC">📈 Barrido CA (Respuesta en Frecuencia)</option>
+                <option value="SENS">🔍 Sensibilidad (Peor Caso)</option>
+                <option value="PSS">⚠️ PSS (Periodic Steady State)</option>
+                <option value="STB">⚠️ Polos y Ceros (Estabilidad)</option>
+                <option value="PVT">🔬 PVT Corner Analysis</option>
+                <option value="SPAR">📡 Parámetros S (Microondas / RF)</option>
+              </select>
+            </div>
             <div class="property-group">
               <label class="property-label" for="settings-dt-input">Paso de Tiempo (dt)</label>
               <input id="settings-dt-input" class="prop-input" type="number" min="0.000000001" step="any" value="0.0001" />

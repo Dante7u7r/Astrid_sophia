@@ -71,6 +71,102 @@ export const OpampDefinition: ComponentDefinition = {
   },
 };
 
+/**
+ * Dibuja un glifo miniatura de la forma de onda dentro del círculo de la fuente.
+ * Se invoca solo cuando waveType !== "dc" y !== undefined.
+ */
+function drawWaveformGlyph(
+  ctx: CanvasRenderingContext2D,
+  waveType: string,
+  color: string,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+
+  const w = 12;  // Mitad del ancho del glifo
+  const h = 7;   // Mitad de la altura del glifo
+
+  switch (waveType) {
+    case "sine":
+      // Mini senoidale ∿
+      ctx.moveTo(-w, 0);
+      ctx.bezierCurveTo(-w * 0.5, -h * 2, w * 0.5, h * 2, w, 0);
+      break;
+
+    case "square":
+      // Mini cuadrada ⊓⊔
+      ctx.moveTo(-w, h);
+      ctx.lineTo(-w, -h);
+      ctx.lineTo(0, -h);
+      ctx.lineTo(0, h);
+      ctx.lineTo(w, h);
+      ctx.lineTo(w, -h);
+      break;
+
+    case "triangle":
+      // Mini triangular /\/
+      ctx.moveTo(-w, 0);
+      ctx.lineTo(-w * 0.5, -h);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(w * 0.5, h);
+      ctx.lineTo(w, 0);
+      break;
+
+    case "sawtooth":
+      // Mini diente de sierra /|/|
+      ctx.moveTo(-w, h);
+      ctx.lineTo(0, -h);
+      ctx.lineTo(0, h);
+      ctx.lineTo(w, -h);
+      break;
+
+    case "pulse":
+      // Mini pulso con duty estrecho
+      ctx.moveTo(-w, h);
+      ctx.lineTo(-w, -h);
+      ctx.lineTo(-w * 0.3, -h);
+      ctx.lineTo(-w * 0.3, h);
+      ctx.lineTo(w, -h);
+      ctx.lineTo(w, h);
+      break;
+
+    case "am":
+      // Glifo de Modulación en Amplitud (AM)
+      ctx.font = "bold 9px 'JetBrains Mono', 'Fira Code', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = color;
+      ctx.fillText("AM", 0, 0);
+      break;
+  }
+
+  if (waveType !== "am") {
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Dibuja los símbolos +/- estándar de una fuente DC */
+function drawDcPolaritySymbols(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Plus (+) near positive side
+  ctx.moveTo(-11, 0);
+  ctx.lineTo(-5, 0);
+  ctx.moveTo(-8, -3);
+  ctx.lineTo(-8, 3);
+  // Minus (-) near negative side
+  ctx.moveTo(5, 0);
+  ctx.lineTo(11, 0);
+  ctx.stroke();
+}
+
 export const VsourceDefinition: ComponentDefinition = {
   type: "vsource",
   name: "Fuente de Tensión",
@@ -88,18 +184,12 @@ export const VsourceDefinition: ComponentDefinition = {
     ctx.fill();
     ctx.stroke();
 
-    ctx.strokeStyle = state.color;
-    ctx.lineWidth = 1.5;
-    // Plus (+) near positive side (-10)
-    ctx.beginPath();
-    ctx.moveTo(-11, 0);
-    ctx.lineTo(-5, 0);
-    ctx.moveTo(-8, -3);
-    ctx.lineTo(-8, 3);
-    // Minus (-) near negative side (10)
-    ctx.moveTo(5, 0);
-    ctx.lineTo(11, 0);
-    ctx.stroke();
+    const wt = comp.waveType as string | undefined;
+    if (wt && wt !== "dc") {
+      drawWaveformGlyph(ctx, wt, state.color);
+    } else {
+      drawDcPolaritySymbols(ctx, state.color);
+    }
   },
 };
 
@@ -120,13 +210,19 @@ export const IsourceDefinition: ComponentDefinition = {
     ctx.fill();
     ctx.stroke();
 
-    // Flecha de sentido de corriente
-    ctx.beginPath();
-    ctx.moveTo(-10, 0);
-    ctx.lineTo(10, 0);
-    ctx.lineTo(4, -5);
-    ctx.moveTo(10, 0);
-    ctx.lineTo(4, 5);
-    ctx.stroke();
+    const wt = comp.waveType as string | undefined;
+    if (wt && wt !== "dc") {
+      drawWaveformGlyph(ctx, wt, state.color);
+    } else {
+      // Flecha de sentido de corriente
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.lineTo(10, 0);
+      ctx.lineTo(4, -5);
+      ctx.moveTo(10, 0);
+      ctx.lineTo(4, 5);
+      ctx.stroke();
+    }
   },
 };
+

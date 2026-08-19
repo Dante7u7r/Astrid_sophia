@@ -402,26 +402,69 @@ export class IntelligenceCenter {
     if (!container) return;
     container.replaceChildren();
     if (recommendations.length === 0) {
-      container.textContent = "No hay sugerencias activas.";
+      const emptyDiv = this.documentRef.createElement("div");
+      emptyDiv.id = "intelligence-empty-state";
+      emptyDiv.style.cssText = "font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px dashed rgba(255,255,255,0.08);";
+      emptyDiv.textContent = "✓ Sin advertencias ni conflictos detectados en el circuito actual.";
+      container.appendChild(emptyDiv);
       return;
     }
+
     for (const recommendation of recommendations) {
       const card = this.documentRef.createElement("article");
-      card.className = "intelligence-recommendation";
+      const safety = recommendation.safetyClass;
+      const safetyClass =
+        safety === "scientific-review-required" ? "critical" :
+        safety === "reversible" ? "reversible" : "informational";
+      card.className = `intel-card ${safetyClass} intelligence-recommendation`;
+
+      // Encabezado de la tarjeta: Badge de Severidad y Medidor de Confianza
+      const header = this.documentRef.createElement("div");
+      header.style.cssText = "display: flex; justify-content: space-between; align-items: center; gap: 6px;";
+
+      const badge = this.documentRef.createElement("span");
+      badge.style.cssText = `font-size: 0.58rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-family: var(--font-mono); ${
+        safety === "scientific-review-required" ? "background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);" :
+        safety === "reversible" ? "background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);" :
+        "background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);"
+      }`;
+      badge.textContent =
+        safety === "scientific-review-required" ? "🛑 Revisión Requerida" :
+        safety === "reversible" ? "⚡ Ajuste Automático" : "ℹ️ Información";
+
+      const confidenceSpan = this.documentRef.createElement("span");
+      confidenceSpan.style.cssText = "font-size: 0.62rem; color: var(--text-muted); font-family: var(--font-mono);";
+      confidenceSpan.textContent = `Confianza: ${(recommendation.confidence * 100).toFixed(0)}%`;
+
+      header.append(badge, confidenceSpan);
+
+      // Título
       const title = this.documentRef.createElement("h5");
+      title.style.cssText = "margin: 0; font-size: 0.78rem; font-weight: 700; color: #fff;";
       title.textContent = recommendation.title;
+
+      // Explicación teórica
       const explanation = this.documentRef.createElement("p");
+      explanation.style.cssText = "margin: 0; font-size: 0.7rem; color: rgba(226, 232, 240, 0.85); line-height: 1.4;";
       explanation.textContent = recommendation.explanation;
-      const evidence = this.documentRef.createElement("p");
+
+      // Evidencia física / topológica
+      const evidence = this.documentRef.createElement("div");
       evidence.className = "intelligence-evidence";
-      evidence.textContent = `Evidencia: ${recommendation.evidence} Confianza: ${(recommendation.confidence * 100).toFixed(0)}%.`;
+      evidence.style.cssText = "background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 4px; font-size: 0.62rem; color: #38bdf8; font-family: var(--font-mono);";
+      evidence.textContent = `🔍 Evidencia: ${recommendation.evidence}`;
+
+      // Barra de acciones
       const actions = this.documentRef.createElement("div");
       actions.className = "intelligence-actions";
+      actions.style.cssText = "display: flex; gap: 6px; align-items: center; margin-top: 2px;";
+
       if (recommendation.safetyClass === "reversible" && recommendation.settingsPatch) {
         const apply = this.documentRef.createElement("button");
         apply.type = "button";
-        apply.className = "btn-osc-mini";
-        apply.textContent = "Aplicar ajuste";
+        apply.className = "intel-btn active";
+        apply.style.cssText = "font-size: 0.65rem; padding: 3px 8px;";
+        apply.textContent = "⚡ Aplicar ajuste";
         let isApplied = false;
         apply.addEventListener("click", () => {
           const changed = isApplied
@@ -432,31 +475,37 @@ export class IntelligenceCenter {
             return;
           }
           isApplied = !isApplied;
-          apply.textContent = isApplied ? "Deshacer ajuste" : "Aplicar ajuste";
+          apply.textContent = isApplied ? "↩ Deshacer ajuste" : "⚡ Aplicar ajuste";
+          apply.classList.toggle("active", !isApplied);
           this.announce(isApplied ? "Ajuste aplicado; puedes deshacerlo." : "Ajuste revertido.");
         });
         actions.appendChild(apply);
       }
+
       const reject = this.documentRef.createElement("button");
       reject.type = "button";
-      reject.className = "btn-osc-mini";
-      reject.textContent = "No es útil";
+      reject.className = "intel-btn";
+      reject.style.cssText = "font-size: 0.65rem; padding: 3px 8px;";
+      reject.textContent = "✕ Descartar";
       reject.addEventListener("click", () => {
         rejectRecommendation(recommendation.recommendationId);
         card.remove();
-        this.announce("Recomendación marcada como no útil.");
+        this.announce("Recomendación descartada.");
       });
       actions.appendChild(reject);
+
       const disable = this.documentRef.createElement("button");
       disable.type = "button";
-      disable.className = "btn-osc-mini";
-      disable.textContent = "Desactivar regla";
+      disable.className = "intel-btn";
+      disable.style.cssText = "font-size: 0.65rem; padding: 3px 8px;";
+      disable.textContent = "🔇 Silenciar regla";
       disable.addEventListener("click", () => {
         setRuleDisabled(recommendation.ruleId, true);
         this.announce(`Regla ${recommendation.ruleId} desactivada localmente.`);
       });
       actions.appendChild(disable);
-      card.append(title, explanation, evidence, actions);
+
+      card.append(header, title, explanation, evidence, actions);
       container.appendChild(card);
     }
   }
@@ -598,33 +647,72 @@ export class IntelligenceCenter {
     if (!container || this.element("intelligence-recommendations-list")) return;
 
     container.innerHTML = `
-      <div style="display: flex; gap: 12px; height: 100%; font-family: var(--font-sans); color: var(--text-main); padding: 10px; box-sizing: border-box;">
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; overflow-y: auto;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h4 style="color: var(--cyan); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">◈ Asesor Inteligente</h4>
-            <span id="intelligence-live-status" style="font-size: 0.65rem; color: var(--text-muted);">Asistente en tiempo real listo</span>
+      <div class="intel-main-layout">
+        <!-- Área Principal: Lista de Recomendaciones del Asesor -->
+        <main class="intel-content-area">
+          <!-- Barra Superior: Estado Global y Acciones -->
+          <div class="intel-top-bar">
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span style="font-weight: bold; font-size: 0.75rem; color: #38bdf8; display: flex; align-items: center; gap: 4px;">
+                ◈ Asesor Experto y Diagnóstico
+              </span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span id="intelligence-live-status" style="font-size: 0.65rem; color: var(--text-muted); font-family: var(--font-mono);">
+                Asistente en tiempo real listo
+              </span>
+            </div>
           </div>
-          <div id="intelligence-recommendations-list" style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1;">
-            <div id="intelligence-empty-state" style="font-size: 0.7rem; color: var(--text-muted); text-align: center; padding: 20px;">Sin advertencias ni recomendaciones en el circuito actual.</div>
-          </div>
-        </div>
 
-        <div style="width: 240px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; overflow-y: auto;">
-          <h5 style="color: var(--text-muted); font-size: 0.68rem; text-transform: uppercase; margin: 0;">Telemetría y Estado</h5>
-          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.68rem; font-family: var(--font-mono);">
-            <div style="display: flex; justify-content: space-between;"><span>Modo Consentimiento:</span> <strong id="intelligence-consent-summary">Local</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span>Eventos Locales:</span> <strong id="intelligence-event-count">0</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span>Tamaño Almacén:</span> <strong id="intelligence-byte-count">0 B</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span>Tasa Éxito MNA:</span> <strong id="intelligence-success-rate">100%</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span>Latencia P95:</span> <strong id="intelligence-p95">—</strong></div>
+          <!-- Lista de Tarjetas del Asesor -->
+          <div id="intelligence-recommendations-list" class="intel-recommendations-scroll">
+            <div id="intelligence-empty-state" style="font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px dashed rgba(255,255,255,0.08);">
+              ✓ Sin advertencias ni conflictos detectados en el circuito actual.
+            </div>
           </div>
-          <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0;" />
-          <div style="display: flex; gap: 6px;">
-            <button id="intelligence-refresh-btn" class="btn-osc-mini" style="flex: 1; justify-content: center;" type="button">🔄 Actualizar</button>
-            <button id="intelligence-export-btn" class="btn-osc-mini" style="flex: 1; justify-content: center;" type="button">📥 Exportar</button>
+        </main>
+
+        <!-- Barra Lateral: Telemetría, Rendimiento y Salud MNA -->
+        <aside class="intel-sidebar">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <h4 class="gen-section-title" style="color: #38bdf8;">📊 Telemetría y Solver</h4>
           </div>
-          <div id="intelligence-shadow-status" style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;"></div>
-        </div>
+
+          <!-- Tarjetas de Métricas -->
+          <div class="tracer-metric-card">
+            <span class="rack-label" style="font-size: 0.55rem; color: #38bdf8;">Tasa de Éxito MNA</span>
+            <span id="intelligence-success-rate" class="tracer-metric-val" style="color: #22c55e;">100%</span>
+          </div>
+
+          <div class="tracer-metric-card">
+            <span class="rack-label" style="font-size: 0.55rem; color: #a855f7;">Latencia P95 del Solver</span>
+            <span id="intelligence-p95" class="tracer-metric-val" style="color: #c084fc;">—</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div class="tracer-metric-card">
+              <span class="rack-label" style="font-size: 0.55rem;">Eventos</span>
+              <span id="intelligence-event-count" style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold; color: #fff;">0</span>
+            </div>
+            <div class="tracer-metric-card">
+              <span class="rack-label" style="font-size: 0.55rem;">Almacén</span>
+              <span id="intelligence-byte-count" style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold; color: #fff;">0 B</span>
+            </div>
+          </div>
+
+          <div class="tracer-metric-card">
+            <span class="rack-label" style="font-size: 0.55rem;">Consentimiento</span>
+            <span id="intelligence-consent-summary" style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-sub);">Local</span>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div style="display: flex; gap: 4px; margin-top: 4px;">
+            <button id="intelligence-refresh-btn" type="button" class="intel-btn" style="flex: 1; justify-content: center;">🔄 Actualizar</button>
+            <button id="intelligence-export-btn" type="button" class="intel-btn" style="flex: 1; justify-content: center;">📥 Exportar</button>
+          </div>
+
+          <div id="intelligence-shadow-status" style="font-size: 0.62rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
+        </aside>
       </div>
     `;
   }

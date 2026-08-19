@@ -99,19 +99,25 @@ export function drawSelectionBox(
 ): void {
   if (!selectionStart || !selectionEnd) return;
 
-  ctx.save();
-  ctx.fillStyle = "rgba(102, 252, 241, 0.05)";
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.4)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 3]);
-
   const x = Math.min(selectionStart.x, selectionEnd.x);
   const y = Math.min(selectionStart.y, selectionEnd.y);
   const w = Math.abs(selectionStart.x - selectionEnd.x);
   const h = Math.abs(selectionStart.y - selectionEnd.y);
 
+  if (w < 1 && h < 1) return;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(56, 189, 248, 0.15)";
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 3]);
+
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 4);
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, 3);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
   ctx.fill();
   ctx.stroke();
   ctx.restore();

@@ -18,6 +18,28 @@ pub struct ComponentData {
     pub duty_cycle: Option<f64>,
     pub tolerance: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub mod_frequency: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mod_index: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_resistance: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ac_mag: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ac_phase: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub esr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dcr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub isat: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub power_rating: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voltage_rating: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub w: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l: Option<f64>,
@@ -84,6 +106,12 @@ pub struct ComponentData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gate_vlow: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate_trise: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate_tfall: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate_rout: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub jfet_vto: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jfet_beta: Option<f64>,
@@ -93,6 +121,24 @@ pub struct ComponentData {
     pub jfet_cgs: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jfet_cgd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mos_cgs: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mos_cgd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_aol: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_gbw: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_sr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_rin: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_rout: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_vos: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_ib: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub va_model_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

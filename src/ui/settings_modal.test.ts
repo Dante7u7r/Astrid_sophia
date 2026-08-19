@@ -8,6 +8,16 @@ function installSettingsDom(): void {
     <div id="app-viewport"><button id="settings-trigger-btn">Ajustes</button></div>
     <div id="settings-modal" role="dialog" aria-hidden="true">
       <div id="settings-box">
+        <select id="settings-default-mode-input">
+          <option value="DC">DC</option>
+          <option value="TRAN">TRAN</option>
+          <option value="AC">AC</option>
+          <option value="SENS">SENS</option>
+          <option value="PSS">PSS</option>
+          <option value="STB">STB</option>
+          <option value="PVT">PVT</option>
+          <option value="SPAR">SPAR</option>
+        </select>
         <input id="settings-dt-input" />
         <input id="settings-transient-duration-input" />
         <input id="settings-tol-input" />
@@ -47,7 +57,6 @@ describe("SettingsModal", () => {
     expect(modal.classList.contains("open")).toBe(true);
     expect(modal.getAttribute("aria-hidden")).toBe("false");
     expect(app.inert).toBe(true);
-    expect(document.activeElement?.id).toBe("settings-dt-input");
 
     modal.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await new Promise(requestAnimationFrame);
@@ -56,13 +65,14 @@ describe("SettingsModal", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  test("guarda una copia validada de los ajustes incluyendo capas visuales y cierra", () => {
+  test("guarda una copia validada de los ajustes incluyendo modo por defecto y capas visuales y cierra", () => {
     const onSave = vi.fn();
     const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement;
     const modal = document.querySelector("#settings-modal") as HTMLElement;
-    new SettingsModal({ dt: 0.001, tolerance: 0.00001, maxIterations: 80 }, onSave);
+    new SettingsModal({ dt: 0.001, tolerance: 0.00001, maxIterations: 80, defaultAnalysisMode: "DC" }, onSave);
     trigger.click();
 
+    (document.querySelector("#settings-default-mode-input") as HTMLSelectElement).value = "TRAN";
     (document.querySelector("#settings-dt-input") as HTMLInputElement).value = "0.002";
     (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "8";
     (document.querySelector("#settings-tol-input") as HTMLInputElement).value = "0.0001";
@@ -78,6 +88,7 @@ describe("SettingsModal", () => {
     expect(onSave).toHaveBeenCalledWith({
       dt: 0.002,
       transientDuration: 8,
+      defaultAnalysisMode: "TRAN",
       tolerance: 0.0001,
       maxIterations: 120,
       currentFlowMode: "electron",

@@ -106,10 +106,22 @@ pub(crate) fn update_trapezoidal_history(
             let voltage = node_voltage(node_pos) - node_voltage(node_neg);
             let previous_current = *ind_states.get(&comp.id).unwrap();
             let previous_voltage = *ind_voltages.get(&comp.id).unwrap_or(&0.0);
-            let current = if trap_active_this_step {
-                previous_current + (dt / (2.0 * comp.value)) * (voltage + previous_voltage)
+            let l_nominal = comp.value.max(1e-18);
+            let ind_val_safe = if let Some(isat) = comp.isat {
+                if isat > 0.0 {
+                    let ratio = previous_current / isat;
+                    l_nominal / (1.0 + ratio * ratio)
+                } else {
+                    l_nominal
+                }
             } else {
-                previous_current + (dt / comp.value) * voltage
+                l_nominal
+            }.max(1e-18);
+
+            let current = if trap_active_this_step {
+                previous_current + (dt / (2.0 * ind_val_safe)) * (voltage + previous_voltage)
+            } else {
+                previous_current + (dt / ind_val_safe) * voltage
             };
             ind_states_prev.insert(comp.id.clone(), previous_current);
             ind_states.insert(comp.id.clone(), current);

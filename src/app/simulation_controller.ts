@@ -12,16 +12,20 @@ import type {
   DcSimulationResult,
   PssSimulationResult,
   SensitivityAnalysisResult,
+  StabilityAnalysisResult,
   SimulationDispatchResult,
 } from "../simulation/tauri_commands";
 import type { AcSweepResult, TimeStepResult } from "../ui/oscilloscope_panel";
 import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
+import type { InstrumentsDock } from "../ui/instruments_dock";
 import type { AnalysisMode, SimulationControlHandlers } from "../ui/simulation_controls";
 import {
   DEFAULT_TRANSIENT_DURATION_SECONDS,
   type SimulationSettings,
 } from "../ui/settings_modal";
 import { parseErcIssues } from "../ui/instrumentation_menu";
+import { DiagnosticModal, type DiagnosticIssue } from "../ui/diagnostic_modal";
+import { TelemetryPanel } from "../ui/telemetry_panel";
 import {
   beginFeedbackRun,
   failFeedbackRun,
@@ -34,6 +38,7 @@ import { evaluateSimulationAdvice } from "../intelligence/advisor_runtime";
 export interface SimulationControllerDependencies {
   getOrchestrator(): CanvasOrchestrator | null;
   getOscilloscopePanel(): OscilloscopePanel | null;
+  getInstrumentsDock?(): InstrumentsDock | null;
   getSimulationRunner(): SimulationRunner | null;
   getSimulationSettings(): SimulationSettings;
   setSimulationRunning(running: boolean): void;
@@ -189,6 +194,82 @@ export class SimulationController {
       this.dependencies.addLog("Corrige estos errores topológicos en el lienzo para poder simular.", "error");
       this.dependencies.addLog("----------------------------------------------------------------", "error");
       this.dependencies.setSimulationRunning(false);
+
+      const diagnosticIssues: DiagnosticIssue[] = [];
+      for (const err of ercResult.errors) {
+        const compMatch = err.match(/\[([a-zA-Z0-9_,\s]+)\]/);
+        const compId = compMatch ? compMatch[1].split(",")[0].trim() : undefined;
+        let remedy = "Revisa las conexiones de este componente.";
+        if (err.toLowerCase().includes("tierra") || err.toLowerCase().includes("ground") || err.toLowerCase().includes("nodo 0")) {
+          remedy = "Añade un símbolo de Tierra (GND) y conéctalo al polo negativo del circuito.";
+        } else if (err.toLowerCase().includes("cortocircuito")) {
+          remedy = "Elimina el cable que une los dos terminales de la misma fuente.";
+        } else if (err.toLowerCase().includes("flotante")) {
+          remedy = "Conecta este terminal a un cable o elimina el componente si no lo necesitas.";
+        }
+
+        diagnosticIssues.push({
+          id: `erc-err-${diagnosticIssues.length}`,
+          severity: "error",
+          title: "Inconsistencia Topológica (ERC)",
+          message: err,
+          remedy,
+          componentId: compId,
+        });
+      }
+
+      for (const warn of ercResult.warnings) {
+        const compMatch = warn.match(/\[([a-zA-Z0-9_]+)\]/);
+        const compId = compMatch ? compMatch[1] : undefined;
+        const pinMatch = warn.match(/terminal index (\d+)/);
+        const pinIdx = pinMatch ? parseInt(pinMatch[1], 10) : undefined;
+        diagnosticIssues.push({
+          id: `erc-warn-${diagnosticIssues.length}`,
+          severity: "warning",
+          title: "Advertencia Eléctrica",
+          message: warn,
+          remedy: "Verifica si este terminal requiere conexión en tu diseño.",
+          componentId: compId,
+          pinIndex: pinIdx,
+        });
+      }
+
+      DiagnosticModal.show({
+        title: "Chequeo Eléctrico (ERC) Fallido",
+        subtitle: "Se encontraron problemas topológicos que impiden resolver las ecuaciones del circuito:",
+        issues: diagnosticIssues,
+        onFocusComponent: (componentId) => {
+          orchestrator.focusComponent(componentId);
+          this.dependencies.updateCanvasRendering();
+        },
+        onOpenSettings: () => {
+          const settingsBtn = document.querySelector("#settings-trigger-btn") as HTMLButtonElement | null;
+          settingsBtn?.click();
+        },
+      });
+
+      TelemetryPanel.showToast("La simulación no pudo iniciar por errores en el circuito.", "error", {
+        title: "Chequeo ERC Fallido",
+        durationMs: 8000,
+        actions: [
+          {
+            label: "Ver Diagnóstico Completo",
+            primary: true,
+            onClick: () => {
+              DiagnosticModal.show({
+                title: "Chequeo Eléctrico (ERC) Fallido",
+                subtitle: "Problemas detectados en el esquema:",
+                issues: diagnosticIssues,
+                onFocusComponent: (componentId) => {
+                  orchestrator.focusComponent(componentId);
+                  this.dependencies.updateCanvasRendering();
+                },
+              });
+            },
+          },
+        ],
+      });
+
       return;
     }
 
@@ -249,10 +330,17 @@ export class SimulationController {
     this.dependencies.circuitState.audioOrchestrator.stopAll();
     this.dependencies.getOscilloscopePanel()?.stop();
     this.dependencies.circuitState.resetAll();
+    const orchestrator = this.dependencies.getOrchestrator();
+    if (orchestrator) {
+      for (const comp of orchestrator.components) {
+        comp.glowLevel = 0;
+      }
+    }
     // También invalida cualquier reproducción visual de resultados ya
     // calculados; «Detener» debe dejar el lienzo inmediatamente en reposo.
     this.dependencies.resetPerformanceCaches();
     this.dependencies.setSimulationRunning(false);
+    this.dependencies.updateCanvasRendering();
   }
 
   setActiveAnalysisMode(mode: AnalysisMode): void {
@@ -270,14 +358,30 @@ export class SimulationController {
   private applyResults(mode: AnalysisMode, results: SimulationDispatchResult): void {
     const oscilloscopePanel = this.dependencies.getOscilloscopePanel();
     const orchestrator = this.dependencies.getOrchestrator();
+    const dock = this.dependencies.getInstrumentsDock ? this.dependencies.getInstrumentsDock() : null;
 
     if (mode === "AC") {
       if (oscilloscopePanel && isAcSweepResult(results)) {
         oscilloscopePanel.acSweepResults = results;
       }
+      if (dock?.bodeAnalyzer && isAcSweepResult(results)) {
+        dock.bodeAnalyzer.setAcSweepResult(results);
+        dock.switchTab("bode");
+      }
     } else if (mode === "SENS") {
       if (isSensitivityAnalysisResult(results)) {
         this.dependencies.circuitState.setVoltagesFromSnapshot(results.nominalVoltages ?? {});
+        if (dock?.bodeAnalyzer) {
+          dock.bodeAnalyzer.setSensitivityResult(results);
+          dock.switchTab("bode");
+        }
+      }
+    } else if (mode === "STB") {
+      if (isStabilityAnalysisResult(results)) {
+        if (dock?.bodeAnalyzer) {
+          dock.bodeAnalyzer.setStabilityResult(results);
+          dock.switchTab("bode");
+        }
       }
     } else if (mode === "PSS") {
       const pssResults = isPssSimulationResult(results) ? results : [];
@@ -340,6 +444,14 @@ function isSensitivityAnalysisResult(
   return !Array.isArray(result)
     && "sensitivities" in result
     && "worstCaseLimits" in result;
+}
+
+function isStabilityAnalysisResult(
+  result: SimulationDispatchResult,
+): result is StabilityAnalysisResult {
+  return !Array.isArray(result)
+    && "isStable" in result
+    && "poles" in result;
 }
 
 function isPssSimulationResult(result: SimulationDispatchResult): result is PssSimulationResult {

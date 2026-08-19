@@ -25,58 +25,89 @@ export type SimulationErrorKind =
   | "singular-matrix"
   | "max-iterations-exceeded"
   | "invalid-circuit"
+  | "timestep-too-small"
   | "unknown";
 
 export interface ClassifiedSimulationError {
   kind: SimulationErrorKind;
+  title: string;
   /** Mensaje original de Rust, sin modificar — para logs/debug. */
   rawMessage: string;
   /** Mensaje apto para mostrar al usuario, en español, sin jerga de álgebra lineal interna. */
   userMessage: string;
+  /** Recomendación práctica para solucionar el problema. */
+  remedy: string;
+  severity: "error" | "warning";
+  actionType: "focus" | "settings" | "none";
   /**
    * Si el mensaje de Rust menciona un identificador de nodo/componente
    * reconocible (best-effort regex), se extrae aquí para que la UI pueda
-   * resaltarlo en el esquemático — ver references/simulation-feedback.md,
-   * "Convergence failure": el feedback debe señalar el nodo problemático,
-   * no solo mostrar texto genérico.
+   * resaltarlo en el esquemático.
    */
   suspectedComponentOrNetId: string | null;
 }
 
-const PATTERNS: Array<{ kind: SimulationErrorKind; regex: RegExp; userMessage: string }> = [
+const PATTERNS: Array<{
+  kind: SimulationErrorKind;
+  regex: RegExp;
+  title: string;
+  userMessage: string;
+  remedy: string;
+  actionType: "focus" | "settings" | "none";
+}> = [
   {
     kind: "singular-matrix",
     regex: /singular/i,
+    title: "Matriz Singular (Nodo Flotante o Cortocircuito)",
     userMessage:
       "El circuito tiene una matriz singular — probablemente un nodo flotante (sin referencia a tierra) o un lazo de fuentes de voltaje en conflicto.",
+    remedy:
+      "Verifica que el circuito tenga al menos un terminal conectado a Tierra (GND) y que ninguna fuente de voltaje esté cortocircuitada consigo misma.",
+    actionType: "focus",
+  },
+  {
+    kind: "timestep-too-small",
+    regex: /timestep too small|step size too small|dt min/i,
+    title: "Paso de Integración Demasiado Pequeño",
+    userMessage:
+      "El solver redujo el paso de tiempo por debajo del umbral mínimo permitido debido a una conmutación extremadamente abrupta.",
+    remedy:
+      "Aumenta los tiempos de subida/bajada de las fuentes de pulsos, o cambia el método de integración a Gear-2 / Trapezoidal en Ajustes.",
+    actionType: "settings",
   },
   {
     kind: "max-iterations-exceeded",
     regex: /100 iter|max.{0,20}iteration|iteration.{0,20}limit/i,
+    title: "Límite de Iteraciones Excedido",
     userMessage:
       "El solver no convergió dentro del límite de 100 iteraciones de Newton-Raphson. Suele indicar un punto de operación inicial muy alejado de la solución, o un modelo no-lineal con comportamiento extremo en el rango actual.",
+    remedy:
+      "Ajusta el paso de tiempo dt en Ajustes o revisa componentes no lineales (diodos, MOSFETs) para asegurar que sus tensiones no excedan los límites físicos.",
+    actionType: "settings",
   },
   {
     kind: "convergence-failure",
     regex: /converg/i,
+    title: "Fallo de Convergencia Numérica",
     userMessage:
       "El análisis no convergió. Revisa componentes no-lineales (diodos, transistores) por valores de modelo poco realistas, o intenta ajustar las condiciones iniciales.",
+    remedy:
+      "Verifica que las fuentes no generen discontinuidades infinitas y considera añadir resistencias de amortiguamiento en paralelo.",
+    actionType: "settings",
   },
   {
     kind: "invalid-circuit",
     regex: /invalid|disconnected|no ground|missing ground/i,
+    title: "Circuito Inválido o Desconectado",
     userMessage:
       "El circuito no es válido para simular — verifica que exista una referencia a tierra (GND) y que no haya nets completamente desconectados del resto del circuito.",
+    remedy:
+      "Añade un símbolo de Tierra (GND) y conecta todos los terminales antes de iniciar la simulación.",
+    actionType: "focus",
   },
 ];
 
 // Best-effort: busca algo con forma de identificador de componente o net
-// dentro del mensaje de error (ej. "R1", "N$3", "Q2") — funciona si Rust
-// interpola el id del nodo/componente problemático en el string de error
-// (recomendado hacerlo en mna_solver.rs si no se hace ya, porque mejora
-// muchísimo la utilidad de este clasificador). Si Rust no interpola
-// ningún id, esto da null y la UI simplemente no resalta nada — caída
-// segura, no un error.
 const COMPONENT_OR_NET_ID_PATTERN = /\b([A-Z]{1,3}\d+|N\$\d+)\b/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,32 +124,51 @@ export function classifySimulationError(error: unknown): ClassifiedSimulationErr
     const kind = stringField(error, "kind");
     const details = error.details;
     const rawMessage = stringField(details, "message") ?? JSON.stringify(error);
-    
+
     let tsKind: SimulationErrorKind = "unknown";
+    let title = "Error de Simulación";
     let suspectedComponentOrNetId: string | null = null;
     let userMessage = stringField(details, "message") ?? "";
+    let remedy = "Revisa los componentes y conexiones del circuito.";
+    let actionType: "focus" | "settings" | "none" = "none";
 
     if (kind === "SingularMatrix") {
       tsKind = "singular-matrix";
+      title = "Matriz Singular (Nodo Flotante)";
       suspectedComponentOrNetId = stringField(details, "node");
       userMessage = stringField(details, "message") ?? userMessage;
+      remedy = "Asegura una conexión a Tierra (GND) y elimina nodos aislados.";
+      actionType = "focus";
     } else if (kind === "MaxIterationsExceeded") {
       tsKind = "max-iterations-exceeded";
+      title = "Límite de Iteraciones Excedido";
       suspectedComponentOrNetId = stringField(details, "component");
       userMessage = stringField(details, "message") ?? userMessage;
+      remedy = "Ajusta la tolerancia o el paso de tiempo en Ajustes de Simulación.";
+      actionType = "settings";
     } else if (kind === "ConvergenceFailure") {
       tsKind = "convergence-failure";
+      title = "Fallo de Convergencia";
       suspectedComponentOrNetId = stringField(details, "component");
       userMessage = stringField(details, "message") ?? userMessage;
+      remedy = "Revisa modelos de semiconductores o condiciones iniciales.";
+      actionType = "settings";
     } else if (kind === "InvalidCircuit") {
       tsKind = "invalid-circuit";
+      title = "Circuito Inválido";
       userMessage = stringField(details, "message") ?? userMessage;
+      remedy = "Verifica que todos los cables estén correctamente enlazados a pines.";
+      actionType = "focus";
     }
 
     return {
       kind: tsKind,
+      title,
       rawMessage,
       userMessage,
+      remedy,
+      severity: "error",
+      actionType,
       suspectedComponentOrNetId,
     };
   }
@@ -130,8 +180,12 @@ export function classifySimulationError(error: unknown): ClassifiedSimulationErr
       const idMatch = rawMessage.match(COMPONENT_OR_NET_ID_PATTERN);
       return {
         kind: pattern.kind,
+        title: pattern.title,
         rawMessage,
         userMessage: pattern.userMessage,
+        remedy: pattern.remedy,
+        severity: "error",
+        actionType: pattern.actionType,
         suspectedComponentOrNetId: idMatch ? idMatch[1] : null,
       };
     }
@@ -139,8 +193,12 @@ export function classifySimulationError(error: unknown): ClassifiedSimulationErr
 
   return {
     kind: "unknown",
+    title: "Error de Simulación",
     rawMessage,
-    userMessage: `Error de simulación no reconocido: ${rawMessage}`,
+    userMessage: `Error inesperado durante la simulación: ${rawMessage}`,
+    remedy: "Revisa la consola de telemetría para obtener detalles técnicos adicionales.",
+    severity: "error",
+    actionType: "none",
     suspectedComponentOrNetId: null,
   };
 }

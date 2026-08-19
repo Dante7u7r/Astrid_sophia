@@ -23,6 +23,13 @@ import {
   pinKey,
 } from "./netlist_node_model";
 import { allowsFloatingPins } from "./component_pin_rules";
+import {
+  COMMERCIAL_BJTS,
+  COMMERCIAL_DIODES,
+  COMMERCIAL_MOSFETS,
+  COMMERCIAL_JFETS,
+  COMMERCIAL_OPAMPS,
+} from "./commercial_models_catalog";
 
 // ==========================================================================
 // INTERFACES DE LA NETLIST ELÉCTRICA
@@ -38,6 +45,62 @@ export interface ExtractedComponent {
   readonly frequency?: number;
   readonly offset?: number;
   readonly dutyCycle?: number;
+  readonly phase?: number;
+  readonly modFrequency?: number;
+  readonly modIndex?: number;
+  readonly sourceResistance?: number;
+  readonly acMag?: number;
+  readonly acPhase?: number;
+  readonly tolerance?: number;
+  readonly powerRating?: number;
+  readonly voltageRating?: number;
+  readonly esr?: number;
+  readonly dielectricType?: string;
+  readonly dcResistance?: number;
+  readonly currentRating?: number;
+  readonly isat?: number;
+  readonly potTaper?: string;
+  readonly ledColor?: string;
+  readonly forwardVoltage?: number;
+  readonly maxCurrent?: number;
+  readonly diodeBv?: number;
+  readonly modelName?: string;
+  readonly diodeIs?: number;
+  readonly diodeRs?: number;
+  readonly diodeN?: number;
+  readonly diodeCjo?: number;
+  readonly diodeTt?: number;
+  readonly diodeIbv?: number;
+  readonly bjtIs?: number;
+  readonly bjtBf?: number;
+  readonly bjtVaf?: number;
+  readonly bjtRb?: number;
+  readonly bjtRc?: number;
+  readonly bjtCje?: number;
+  readonly bjtCjc?: number;
+  readonly mosVth?: number;
+  readonly mosRon?: number;
+  readonly mosCgs?: number;
+  readonly mosCgd?: number;
+  readonly jfetVto?: number;
+  readonly jfetBeta?: number;
+  readonly jfetLambda?: number;
+  readonly jfetCgs?: number;
+  readonly jfetCgd?: number;
+  readonly opampAol?: number;
+  readonly opampGbw?: number;
+  readonly opampSr?: number;
+  readonly opampRin?: number;
+  readonly opampRout?: number;
+  readonly opampVos?: number;
+  readonly opampIb?: number;
+  readonly gateTrise?: number;
+  readonly gateTfall?: number;
+  readonly gateRout?: number;
+  readonly gateVhigh?: number;
+  readonly gateVlow?: number;
+  readonly riseDelay?: number;
+  readonly fallDelay?: number;
   readonly switchState?: boolean;
   readonly switchRon?: number;
   readonly switchRoff?: number;
@@ -528,26 +591,39 @@ export function extractElectricalNetlist(
       const pin3Node = pinsMapped[3] || "0"; // V-
       const pin4Node = pinsMapped[4] || "0"; // Out
 
-      const offsetNodeId = resolveNode(`${comp.id}__offset_node`);
+      const modelKey = comp.modelName;
+      let opampAol = comp.opampAol ?? (comp.openLoopGain !== undefined ? Number(comp.openLoopGain) : 100000.0);
+      let opampGbw = comp.opampGbw ?? 1.0e6;
+      let opampSr = comp.opampSr ?? 0.5;
+      let opampRin = comp.opampRin ?? 2.0e6;
+      let opampRout = comp.opampRout ?? 75.0;
+      let opampVos = comp.opampVos ?? (comp.offsetVoltage !== undefined ? Number(comp.offsetVoltage) : 0.0);
+      let opampIb = comp.opampIb ?? 80e-9;
 
-      const vos = comp.offsetVoltage !== undefined ? Number(comp.offsetVoltage) : 0.002;
-      const aol = comp.openLoopGain !== undefined ? Number(comp.openLoopGain) : 100000.0;
+      if (modelKey && COMMERCIAL_OPAMPS[modelKey]) {
+        const om = COMMERCIAL_OPAMPS[modelKey];
+        opampAol = om.aol;
+        opampGbw = om.gbwHz;
+        opampSr = om.slewRateVUs;
+        opampRin = om.rin;
+        opampRout = om.rout;
+        opampVos = om.vos;
+        opampIb = om.ib ?? opampIb;
+      }
 
-      // 1. Fuente de tensión offset en serie
-      extractedComponents.push({
-        id: `${comp.id}__vos`,
-        type: 'vsource',
-        value: vos,
-        pins: [pin0Node, offsetNodeId],
-        waveType: 'dc',
-      });
-
-      // 2. Elemento opamp primitivo
       extractedComponents.push({
         id: comp.id,
         type: 'opamp',
-        value: aol,
-        pins: [offsetNodeId, pin1Node, pin2Node, pin3Node, pin4Node],
+        value: opampAol,
+        pins: [pin0Node, pin1Node, pin2Node, pin3Node, pin4Node],
+        modelName: comp.modelName,
+        opampAol,
+        opampGbw,
+        opampSr,
+        opampRin,
+        opampRout,
+        opampVos,
+        opampIb,
       });
     } else {
       if (comp.type === 'net_label' || comp.type === 'text_note') {
@@ -568,6 +644,87 @@ export function extractElectricalNetlist(
         }
       }
 
+      const modelKey = comp.modelName;
+      let diodeIs = comp.diodeIs;
+      let diodeRs = comp.diodeRs;
+      let diodeN = comp.diodeN;
+      let diodeCjo = comp.diodeCjo;
+      let diodeTt = comp.diodeTt;
+      let diodeBv = comp.diodeBv;
+      let diodeIbv = comp.diodeIbv;
+      let forwardVoltage = comp.forwardVoltage;
+
+      let bjtIs = comp.bjtIs;
+      let bjtBf = comp.bjtBf;
+      let bjtVaf = comp.bjtVaf;
+      let bjtRb = comp.bjtRb;
+      let bjtRc = comp.bjtRc;
+      let bjtCje = comp.bjtCje;
+      let bjtCjc = comp.bjtCjc;
+
+      let mosVth = comp.mosVth;
+      let mosRon = comp.mosRon;
+      let mosCgs = comp.mosCgs;
+      let mosCgd = comp.mosCgd;
+
+      let jfetVto = comp.jfetVto;
+      let jfetBeta = comp.jfetBeta;
+      let jfetLambda = comp.jfetLambda;
+      let jfetCgs = comp.jfetCgs;
+      let jfetCgd = comp.jfetCgd;
+
+      let opampAol = comp.opampAol;
+      let opampGbw = comp.opampGbw;
+      let opampSr = comp.opampSr;
+      let opampRin = comp.opampRin;
+      let opampRout = comp.opampRout;
+      let opampVos = comp.opampVos;
+      let opampIb = comp.opampIb;
+
+      if (modelKey) {
+        if (comp.type === "diode" || comp.type === "led") {
+          const dm = COMMERCIAL_DIODES[modelKey];
+          if (dm) {
+            diodeIs = dm.is;
+            diodeRs = dm.rs;
+            diodeN = dm.n;
+            diodeCjo = dm.cjo;
+            diodeTt = dm.tt;
+            diodeBv = dm.bv ?? diodeBv;
+            diodeIbv = dm.ibv;
+            forwardVoltage = dm.forwardVoltage ?? forwardVoltage;
+          }
+        } else if (comp.type === "npn" || comp.type === "pnp") {
+          const bm = COMMERCIAL_BJTS[modelKey];
+          if (bm) {
+            bjtIs = bm.is;
+            bjtBf = bm.bf;
+            bjtVaf = bm.vaf;
+            bjtRb = bm.rb;
+            bjtRc = bm.rc;
+            bjtCje = bm.cje;
+            bjtCjc = bm.cjc;
+          }
+        } else if (comp.type === "nmos" || comp.type === "pmos") {
+          const mm = COMMERCIAL_MOSFETS[modelKey];
+          if (mm) {
+            mosVth = mm.vth;
+            mosRon = mm.ron;
+            mosCgs = mm.cgs;
+            mosCgd = mm.cgd;
+          }
+        } else if (comp.type === "njf" || comp.type === "pjf") {
+          const jm = COMMERCIAL_JFETS[modelKey];
+          if (jm) {
+            jfetVto = jm.vto;
+            jfetBeta = jm.beta;
+            jfetLambda = jm.lambda;
+            jfetCgs = jm.cgs;
+            jfetCgd = jm.cgd;
+          }
+        }
+      }
+
       extractedComponents.push({
         id: comp.id,
         type: comp.type,
@@ -578,6 +735,62 @@ export function extractElectricalNetlist(
         frequency: comp.frequency,
         offset: comp.offset,
         dutyCycle: comp.dutyCycle,
+        phase: comp.phase,
+        modFrequency: comp.modFrequency,
+        modIndex: comp.modIndex,
+        sourceResistance: comp.sourceResistance,
+        acMag: comp.acMag,
+        acPhase: comp.acPhase,
+        tolerance: comp.tolerance,
+        powerRating: comp.powerRating,
+        voltageRating: comp.voltageRating,
+        esr: comp.esr,
+        dielectricType: comp.dielectricType,
+        dcResistance: comp.dcResistance,
+        currentRating: comp.currentRating,
+        isat: comp.isat,
+        potTaper: comp.potTaper,
+        ledColor: comp.ledColor,
+        forwardVoltage,
+        maxCurrent: comp.maxCurrent,
+        diodeBv,
+        modelName: comp.modelName,
+        diodeIs,
+        diodeRs,
+        diodeN,
+        diodeCjo,
+        diodeTt,
+        diodeIbv,
+        bjtIs,
+        bjtBf,
+        bjtVaf,
+        bjtRb,
+        bjtRc,
+        bjtCje,
+        bjtCjc,
+        mosVth,
+        mosRon,
+        mosCgs,
+        mosCgd,
+        jfetVto,
+        jfetBeta,
+        jfetLambda,
+        jfetCgs,
+        jfetCgd,
+        opampAol,
+        opampGbw,
+        opampSr,
+        opampRin,
+        opampRout,
+        opampVos,
+        opampIb,
+        gateTrise: comp.gateTrise,
+        gateTfall: comp.gateTfall,
+        gateRout: comp.gateRout,
+        gateVhigh: comp.gateVhigh,
+        gateVlow: comp.gateVlow,
+        riseDelay: comp.riseDelay,
+        fallDelay: comp.fallDelay,
         switchState: comp.type === 'switch' ? (comp.switchState ?? false) : undefined,
         switchRon: comp.switchRon,
         switchRoff: comp.switchRoff,

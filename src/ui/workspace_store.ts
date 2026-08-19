@@ -1,4 +1,5 @@
 import { createWorkspaceTab, type InitialTabData, type Tab } from "./workspace_state";
+import type { AnalysisMode } from "./simulation_controls";
 
 export class WorkspaceStore {
   private readonly workspaceTabs: Tab[] = [];
@@ -29,9 +30,9 @@ export class WorkspaceStore {
     return this.workspaceTabs.some(tab => tab.id === tabId);
   }
 
-  public createTab(id: string, name?: string, initialData?: InitialTabData): Tab {
+  public createTab(id: string, name?: string, initialData?: InitialTabData, defaultAnalysisMode?: AnalysisMode): Tab {
     const tabName = name || `Circuito ${this.workspaceTabs.length + 1}`;
-    const tab = createWorkspaceTab(id, tabName, initialData);
+    const tab = createWorkspaceTab(id, tabName, initialData, defaultAnalysisMode);
     this.workspaceTabs.push(tab);
     return tab;
   }

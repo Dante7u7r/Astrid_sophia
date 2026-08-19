@@ -62,4 +62,59 @@ describe("canvas_input_controller", () => {
     expect(zoomAt).toHaveBeenNthCalledWith(2, 0.85, 200, 100);
     expect(inputCallbacks.requestRender).toHaveBeenCalledTimes(2);
   });
+
+  it("inicia, actualiza y completa cuadro de selección con el ratón", () => {
+    const canvas = document.createElement("canvas");
+    Object.defineProperties(canvas, {
+      clientWidth: { value: 800 },
+      clientHeight: { value: 600 },
+    });
+    canvas.getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+      right: 800,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }));
+    document.body.appendChild(canvas);
+
+    const completeBoxSelection = vi.fn();
+    const orchestrator = {
+      screenToWorld: (x: number, y: number) => ({ x, y }),
+      checkHover: vi.fn(),
+      selectComponentAt: vi.fn(() => null),
+      completeBoxSelection,
+      stopDragging: vi.fn(),
+      selectedComponents: [],
+      selectedWires: [],
+      selectionStart: null as { x: number; y: number } | null,
+      selectionEnd: null as { x: number; y: number } | null,
+      hoveredPin: null,
+      hoveredWireHandle: null,
+      hoveredWire: null,
+      activePinForWire: null,
+      isDragging: false,
+      isDraggingWireHandle: false,
+    } as unknown as CanvasOrchestrator;
+
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    // 1. Mouse down en espacio vacío
+    canvas.dispatchEvent(new MouseEvent("mousedown", { clientX: 100, clientY: 100, button: 0, bubbles: true }));
+    expect(orchestrator.selectionStart).toEqual({ x: 100, y: 100 });
+    expect(orchestrator.selectionEnd).toEqual({ x: 100, y: 100 });
+
+    // 2. Mouse move arrastrando
+    canvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 250, clientY: 200, bubbles: true }));
+    expect(orchestrator.selectionEnd).toEqual({ x: 250, y: 200 });
+
+    // 3. Mouse up completa selección
+    canvas.dispatchEvent(new MouseEvent("mouseup", { clientX: 250, clientY: 200, button: 0, bubbles: true }));
+    expect(completeBoxSelection).toHaveBeenCalledOnce();
+  });
 });

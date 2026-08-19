@@ -142,6 +142,21 @@ export function createDesktopWorkspaceControllers(
       if (settings.showReactiveFields !== undefined) orch.showReactiveFields = settings.showReactiveFields;
       if (settings.showTelemetryHud !== undefined) orch.showTelemetryHud = settings.showTelemetryHud;
     }
+    if (settings.defaultAnalysisMode) {
+      if (typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem("astryd-default-analysis-mode", settings.defaultAnalysisMode);
+        } catch {
+          // ignore
+        }
+      }
+      deps.setActiveAnalysisMode(settings.defaultAnalysisMode);
+      deps.getSimulationControls()?.setActiveModeButton(settings.defaultAnalysisMode);
+      const activeTab = tabManager.getActiveTab();
+      if (activeTab) {
+        activeTab.activeAnalysisMode = settings.defaultAnalysisMode;
+      }
+    }
     deps.updateCanvasRendering();
     const extra = (settings.currentFlowMode || settings.currentAnimationSpeed)
       ? `, flujo=${settings.currentFlowMode ?? "convencional"}, vel=${settings.currentAnimationSpeed ?? 1.0}x`

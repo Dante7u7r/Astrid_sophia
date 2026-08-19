@@ -286,7 +286,19 @@ pub fn get_nmos_capacitances(
     vth: f64,
     w_opt: Option<f64>,
     l_opt: Option<f64>,
+    cgs_opt: Option<f64>,
+    cgd_opt: Option<f64>,
 ) -> (f64, f64, f64) {
+    if let (Some(cgs_val), Some(cgd_val)) = (cgs_opt, cgd_opt) {
+        let (c_gs, c_gd) = if vgs <= vth {
+            (cgs_val * 0.5, cgd_val)
+        } else if vds < vgs - vth {
+            (cgs_val, cgd_val * 1.5)
+        } else {
+            (cgs_val * 0.8, cgd_val * 0.5)
+        };
+        return (c_gs, c_gd, MOS_CDSO);
+    }
     let w = w_opt.unwrap_or(10.0e-6);
     let l = l_opt.unwrap_or(0.18e-6);
     let area_factor = (w * l) / (10.0e-6 * 0.18e-6);
@@ -310,7 +322,19 @@ pub fn get_pmos_capacitances(
     vth_abs: f64,
     w_opt: Option<f64>,
     l_opt: Option<f64>,
+    cgs_opt: Option<f64>,
+    cgd_opt: Option<f64>,
 ) -> (f64, f64, f64) {
+    if let (Some(cgs_val), Some(cgd_val)) = (cgs_opt, cgd_opt) {
+        let (c_sg, c_sd) = if vsg <= vth_abs {
+            (cgs_val * 0.5, cgd_val)
+        } else if vsd < vsg - vth_abs {
+            (cgs_val, cgd_val * 1.5)
+        } else {
+            (cgs_val * 0.8, cgd_val * 0.5)
+        };
+        return (c_sg, c_sd, MOS_CDSO);
+    }
     let w = w_opt.unwrap_or(10.0e-6);
     let l = l_opt.unwrap_or(0.18e-6);
     let area_factor = (w * l) / (10.0e-6 * 0.18e-6);

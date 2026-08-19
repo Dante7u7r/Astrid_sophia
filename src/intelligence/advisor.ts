@@ -59,6 +59,34 @@ function minRcTau(context: AdvisorContext): number | null {
   return Math.min(...resistors) * Math.min(...capacitors);
 }
 
+function maxRcTau(context: AdvisorContext): number | null {
+  const resistors = context.netlist.components
+    .filter((component) => /resistor|potentiometer|thermistor|ldr/i.test(component.type))
+    .map((component) => component.value)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const capacitors = context.netlist.components
+    .filter((component) => /capacitor/i.test(component.type))
+    .map((component) => component.value)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (resistors.length === 0 || capacitors.length === 0) return null;
+  return Math.max(...resistors) * Math.max(...capacitors);
+}
+
+function minLcResonanceFreq(context: AdvisorContext): number | null {
+  const inductors = context.netlist.components
+    .filter((component) => /inductor/i.test(component.type))
+    .map((component) => component.value)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const capacitors = context.netlist.components
+    .filter((component) => /capacitor/i.test(component.type))
+    .map((component) => component.value)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (inductors.length === 0 || capacitors.length === 0) return null;
+  const lMin = Math.min(...inductors);
+  const cMin = Math.min(...capacitors);
+  return 1 / (2 * Math.PI * Math.sqrt(lMin * cMin));
+}
+
 function ercRule(
   id: string,
   pattern: RegExp,
@@ -248,6 +276,47 @@ export const ADVISOR_RULES: readonly AdvisorRule[] = [
         safetyClass: "informational",
         confidence: 0.99,
       } : null;
+    },
+  },
+  {
+    id: "tran.lc-resonance-step",
+    version: 1,
+    evaluate(context) {
+      if (context.analysis !== "TRAN") return null;
+      const fRes = minLcResonanceFreq(context);
+      if (fRes === null || fRes <= 0) return null;
+      const period = 1 / fRes;
+      if (context.settings.dt <= period / 10) return null;
+      const recommendedDt = Math.max(1e-9, period / 20);
+      const fStr = fRes >= 1e6 ? `${(fRes / 1e6).toFixed(2)} MHz` : fRes >= 1e3 ? `${(fRes / 1e3).toFixed(1)} kHz` : `${fRes.toFixed(0)} Hz`;
+      return {
+        title: "Paso temporal insuficiente para circuito resonante LC",
+        explanation: `El circuito contiene inductores y capacitores con resonancia aproximada a ${fStr}. Un paso temporal grande producirá aliasing numérico y distorsión de la oscilación.`,
+        evidence: `f_res = ${fStr}; dt actual = ${context.settings.dt.toExponential(2)} s (debe ser ≤ ${(period / 10).toExponential(2)} s).`,
+        safetyClass: "reversible",
+        confidence: 0.95,
+        settingsPatch: { dt: recommendedDt },
+      };
+    },
+  },
+  {
+    id: "tran.stiff-system-warning",
+    version: 1,
+    evaluate(context) {
+      if (context.analysis !== "TRAN") return null;
+      const minTau = minRcTau(context);
+      const maxTau = maxRcTau(context);
+      if (minTau === null || maxTau === null || minTau <= 0) return null;
+      const ratio = maxTau / minTau;
+      if (ratio < 1e4) return null;
+      return {
+        title: "Sistema dinámico rígido (Stiff System)",
+        explanation: "Existen constantes de tiempo extremadamente dispares en el circuito. La integración numérica requiere tolerancias estrictas para evitar inestabilidad.",
+        evidence: `Ratio τ_máx / τ_mín = ${ratio.toExponential(1)} (> 10⁴).`,
+        safetyClass: "reversible",
+        confidence: 0.89,
+        settingsPatch: { tolerance: 1e-6, maxIterations: 100 },
+      };
     },
   },
 ] as const;

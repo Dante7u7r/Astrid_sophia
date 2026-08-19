@@ -1,10 +1,24 @@
 /**
- * LogicAnalyzerInstrument — Analizador Lógico Digital de 8 Canales
+ * LogicAnalyzerInstrument — Analizador Lógico Digital de 8 Canales (LA-800 Pro)
+ *
+ * Instrumento de laboratorio digital para captura de señales lógicas multicanal (D0..D7),
+ * decodificación de buses paralelos (Hex), disparo por flanco (Trigger), regla temporal y cursores de tiempo.
  */
 
 import { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { InstrumentCallbacks } from "./instrument_callbacks";
 import { ensureCanvasDpr } from "./canvas_dpr";
+import {
+  decodeParallelBus,
+  findTriggerMatch,
+  formatTimeDiv,
+  LOGIC_FAMILIES,
+  type ChannelTriggerConfig,
+  type LogicSample,
+  type LogicThresholdConfig,
+  type TriggerEdge,
+} from "./logic_analyzer_model";
+import { drawLogicAnalyzer, type LogicRendererChannel } from "./logic_analyzer_renderer";
 
 export class LogicAnalyzerInstrument {
   private container: HTMLElement;
@@ -12,97 +26,259 @@ export class LogicAnalyzerInstrument {
   private callbacks: InstrumentCallbacks;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
-  // Configuration: mapping of 8 digital channels (D0 - D7) to electrical node names
+  // Configuración de Canales (D0..D7)
   private channels: (string | null)[] = [null, null, null, null, null, null, null, null];
-  private nodeHistory: Record<string, { time: number; val: number }[]> = {};
+  private channelEnabled: boolean[] = [true, true, true, true, true, true, true, true];
+  private nodeHistory: Record<string, LogicSample[]> = {};
+
+  // Configuración de Umbrales y Disparo
+  private selectedThreshold: LogicThresholdConfig = LOGIC_FAMILIES[0]; // TTL 5V por defecto
+  private triggerConfig: ChannelTriggerConfig = { channelIndex: 0, edge: "none" };
+  private isBusEnabled = true;
+  private isCursorsEnabled = false;
+
+  // Ventana de Tiempo / Zoom y Pan
+  private timeDiv = 10e-6; // 10 µs / div por defecto
+  private timeOffset = 0;   // Segundos de desplazamiento
+  private isAutoFit = true;
+
+  // Cursores T1 y T2
+  private cursorT1: number | null = null;
+  private cursorT2: number | null = null;
+
+  private pollIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(container: HTMLElement, orchestrator: CanvasOrchestrator, callbacks: InstrumentCallbacks) {
     this.container = container;
     this.orchestrator = orchestrator;
     this.callbacks = callbacks;
+
     this.render();
     this.initCanvas();
     this.bindEvents();
+    this.updateSelectors();
+
+    this.pollIntervalId = setInterval(() => this.updateSelectors(), 1500);
   }
 
-  private render() {
+  private render(): void {
     this.container.innerHTML = `
-      <div class="logic-analyzer-panel" style="display: flex; flex-direction: column; height: 100%; width: 100%; background: #030508; color: #fff; font-family: var(--font-sans); border-radius: 6px; overflow: hidden; border: 1px solid var(--border-subtle);">
-        <!-- Top Toolbar -->
-        <div style="height: 36px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); background: rgba(255,255,255,0.03);">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-weight: 700; font-size: 0.8rem; color: #a855f7; display: flex; align-items: center; gap: 4px;">
-              📊 Analizador Lógico (8 CH)
-            </span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 0.7rem; color: var(--text-muted);">Threshold: TTL 2.5V</span>
-          </div>
-        </div>
-
-        <!-- Main Workspace -->
-        <div style="flex-grow: 1; display: flex; overflow: hidden;">
-          <!-- Sidebar Canales -->
-          <div style="width: 140px; border-right: 1px solid var(--border-subtle); background: rgba(0,0,0,0.3); display: flex; flex-direction: column; padding: 4px;">
-            <div style="font-size: 0.65rem; color: var(--text-muted); padding: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 4px; font-weight: 600;">
-              ASIGNACIÓN CANALES
-            </div>
-            <div id="logic-channels-selectors" style="display: flex; flex-direction: column; gap: 4px; overflow-y: auto;">
-              ${Array.from({ length: 8 }).map((_, i) => `
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 0.65rem; font-weight: bold; width: 22px; color: hsl(${i * 45}, 80%, 60%);">D${i}</span>
-                  <select data-index="${i}" class="logic-channel-select" style="flex-grow: 1; font-size: 0.65rem; background: #0c101b; color: #fff; border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 2px;">
-                    <option value="">-- OFF --</option>
-                  </select>
-                </div>
-              `).join("")}
-            </div>
+      <div class="logic-main-layout">
+        <!-- Barra Lateral: Canales Digitales D0-D7 y Umbrales -->
+        <aside class="logic-sidebar">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <h4 class="gen-section-title" style="color: #c084fc;">📊 Canales (D0..D7)</h4>
+            <button id="logic-btn-auto-assign" type="button" class="logic-btn" style="padding: 2px 6px; font-size: 0.6rem;">
+              ⚡ Auto-Asignar
+            </button>
           </div>
 
-          <!-- Screen Canvas Display -->
-          <div style="flex-grow: 1; display: flex; flex-direction: column;">
-            <div style="height: 24px; padding: 4px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); background: rgba(0,0,0,0.2);">
-              <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Líneas de Tiempo Lógicas (0 / 1)</span>
-              <button id="logic-clear-btn" class="btn-osc-mini" style="font-size: 0.62rem; padding: 2px 8px;">Limpiar</button>
+          <!-- Selector de Familia Lógica -->
+          <div style="display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px;">
+            <label class="rack-label" style="font-size: 0.58rem;">Familia Lógica</label>
+            <select id="logic-family-select" class="osc-select" style="width: 100%; cursor: pointer;">
+              ${LOGIC_FAMILIES.map(
+                (f) => `<option value="${f.id}" ${f.id === this.selectedThreshold.id ? "selected" : ""}>${f.name}</option>`,
+              ).join("")}
+            </select>
+          </div>
+
+          <!-- Lista de Asignación de Canales D0..D7 -->
+          <div id="logic-channels-list" style="display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1;">
+            ${Array.from({ length: 8 }).map((_, i) => `
+              <div class="logic-ch-row">
+                <input type="checkbox" id="logic-ch-en-${i}" data-ch="${i}" checked style="cursor: pointer;" />
+                <span class="logic-ch-badge" style="color: hsl(${i * 45}, 85%, 60%);">D${i}</span>
+                <select id="logic-select-ch-${i}" data-index="${i}" class="logic-channel-select osc-select-mini" style="flex: 1; cursor: pointer;">
+                  <option value="">-- OFF --</option>
+                </select>
+              </div>
+            `).join("")}
+          </div>
+
+          <!-- Panel de Disparo (Trigger) -->
+          <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; display: flex; flex-direction: column; gap: 4px;">
+            <div class="rack-label-group">
+              <span class="rack-label">🎯 Disparo (Trigger)</span>
             </div>
-            <div style="flex-grow: 1; position: relative;">
-              <canvas id="logic-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+              <select id="logic-trig-source" class="osc-select-mini" style="cursor: pointer;">
+                ${Array.from({ length: 8 }).map((_, i) => `<option value="${i}">Canal D${i}</option>`).join("")}
+              </select>
+              <select id="logic-trig-edge" class="osc-select-mini" style="cursor: pointer;">
+                <option value="none">Libre (OFF)</option>
+                <option value="rising">Flanco ↑</option>
+                <option value="falling">Flanco ↓</option>
+                <option value="either">Flanco ↕</option>
+                <option value="high">Nivel Alto (1)</option>
+                <option value="low">Nivel Bajo (0)</option>
+              </select>
             </div>
           </div>
-        </div>
+        </aside>
+
+        <!-- Área Principal de Diagrama de Tiempos -->
+        <main class="logic-content-area">
+          <!-- Barra Superior: Controles de Base de Tiempo, Bus, Cursores y Exportación -->
+          <div class="logic-top-bar">
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button id="logic-btn-bus" type="button" class="logic-btn active" title="Alternar decodificación de bus paralelo">
+                🔢 Bus Hex: ON
+              </button>
+              <button id="logic-btn-cursors" type="button" class="logic-btn" title="Alternar cursores temporales T1 y T2">
+                📏 Cursores: OFF
+              </button>
+              <button id="logic-btn-clear" type="button" class="logic-btn" title="Limpiar historial de captura">
+                🧹 Limpiar
+              </button>
+            </div>
+
+            <!-- Base de Tiempo y Zoom -->
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button id="logic-zoom-in" type="button" class="logic-btn" title="Aumentar resolución temporal (Zoom In)">➕</button>
+              <button id="logic-zoom-out" type="button" class="logic-btn" title="Disminuir resolución temporal (Zoom Out)">➖</button>
+              <button id="logic-zoom-fit" type="button" class="logic-btn" title="Ajustar a todas las muestras capturadas">⛶ Auto-Fit</button>
+              <button id="logic-btn-export-csv" type="button" class="logic-btn" title="Exportar datos a CSV">💾 CSV</button>
+              <button id="logic-btn-snapshot" type="button" class="logic-btn" title="Descargar captura PNG">📸 PNG</button>
+            </div>
+          </div>
+
+          <!-- Visor Gráfico Central del Diagrama de Tiempos -->
+          <div class="logic-viewport-frame">
+            <canvas id="logic-canvas" class="logic-canvas"></canvas>
+          </div>
+
+          <!-- Barra Inferior de Telemetría y Mediciones -->
+          <div class="logic-telemetry-bar">
+            <span id="logic-status-samples">Muestras: 0</span>
+            <span id="logic-status-span">Rango: 0.00 µs</span>
+            <span id="logic-status-cursors" style="color: #eab308;">Cursores: Inactivos</span>
+          </div>
+        </main>
       </div>
     `;
   }
 
-  private initCanvas() {
+  private initCanvas(): void {
     this.canvas = this.container.querySelector("#logic-canvas") as HTMLCanvasElement;
     if (this.canvas) {
       this.ctx = this.canvas.getContext("2d");
-      const resize = () => {
-        if (this.canvas && this.ctx) {
-          ensureCanvasDpr(this.canvas, this.ctx);
-          this.drawWaveforms();
-        }
-      };
-      window.addEventListener("resize", resize);
-      setTimeout(resize, 100);
+      this.resizeObserver = new ResizeObserver(() => {
+        this.drawWaveforms();
+      });
+      this.resizeObserver.observe(this.canvas);
+      this.drawWaveforms();
     }
   }
 
-  private bindEvents() {
-    const clearBtn = this.container.querySelector("#logic-clear-btn");
-    if (clearBtn) {
-      clearBtn.addEventListener("click", () => {
-        this.nodeHistory = {};
+  private bindEvents(): void {
+    // 1. Selector de Familia Lógica
+    const familySelect = this.container.querySelector("#logic-family-select") as HTMLSelectElement | null;
+    familySelect?.addEventListener("change", () => {
+      const found = LOGIC_FAMILIES.find((f) => f.id === familySelect.value);
+      if (found) {
+        this.selectedThreshold = found;
+        this.drawWaveforms();
+      }
+    });
+
+    // 2. Botón Bus Hex ON/OFF
+    const busBtn = this.container.querySelector("#logic-btn-bus") as HTMLButtonElement | null;
+    busBtn?.addEventListener("click", () => {
+      this.isBusEnabled = !this.isBusEnabled;
+      busBtn.classList.toggle("active", this.isBusEnabled);
+      busBtn.textContent = this.isBusEnabled ? "🔢 Bus Hex: ON" : "🔢 Bus Hex: OFF";
+      this.drawWaveforms();
+    });
+
+    // 3. Botón Cursores ON/OFF
+    const cursorsBtn = this.container.querySelector("#logic-btn-cursors") as HTMLButtonElement | null;
+    cursorsBtn?.addEventListener("click", () => {
+      this.isCursorsEnabled = !this.isCursorsEnabled;
+      cursorsBtn.classList.toggle("active", this.isCursorsEnabled);
+      cursorsBtn.textContent = this.isCursorsEnabled ? "📏 Cursores: ON" : "📏 Cursores: OFF";
+
+      if (this.isCursorsEnabled) {
+        const timeBounds = this.getTimeBounds();
+        const duration = timeBounds.endTime - timeBounds.startTime;
+        this.cursorT1 = timeBounds.startTime + duration * 0.25;
+        this.cursorT2 = timeBounds.startTime + duration * 0.75;
+      } else {
+        this.cursorT1 = null;
+        this.cursorT2 = null;
+      }
+      this.drawWaveforms();
+    });
+
+    // 4. Limpiar Muestras
+    this.container.querySelector("#logic-btn-clear")?.addEventListener("click", () => {
+      this.nodeHistory = {};
+      this.drawWaveforms();
+    });
+
+    // 5. Controles de Zoom
+    this.container.querySelector("#logic-zoom-in")?.addEventListener("click", () => {
+      this.isAutoFit = false;
+      this.timeDiv = Math.max(1e-9, this.timeDiv * 0.5);
+      this.drawWaveforms();
+    });
+
+    this.container.querySelector("#logic-zoom-out")?.addEventListener("click", () => {
+      this.isAutoFit = false;
+      this.timeDiv = Math.min(10, this.timeDiv * 2.0);
+      this.drawWaveforms();
+    });
+
+    this.container.querySelector("#logic-zoom-fit")?.addEventListener("click", () => {
+      this.isAutoFit = true;
+      this.drawWaveforms();
+    });
+
+    // 6. Configuración de Disparo (Trigger)
+    const trigSourceEl = this.container.querySelector("#logic-trig-source") as HTMLSelectElement | null;
+    const trigEdgeEl = this.container.querySelector("#logic-trig-edge") as HTMLSelectElement | null;
+
+    const updateTrigger = () => {
+      this.triggerConfig = {
+        channelIndex: parseInt(trigSourceEl?.value || "0", 10),
+        edge: (trigEdgeEl?.value || "none") as TriggerEdge,
+      };
+      this.drawWaveforms();
+    };
+
+    trigSourceEl?.addEventListener("change", updateTrigger);
+    trigEdgeEl?.addEventListener("change", updateTrigger);
+
+    // 7. Auto-Asignación de Canales
+    this.container.querySelector("#logic-btn-auto-assign")?.addEventListener("click", () => {
+      this.autoAssignNodes();
+    });
+
+    // 8. Habilitación individual de canales (checkboxes) y selección de nodos
+    for (let i = 0; i < 8; i++) {
+      const chk = this.container.querySelector(`#logic-ch-en-${i}`) as HTMLInputElement | null;
+      chk?.addEventListener("change", () => {
+        this.channelEnabled[i] = chk.checked;
+        this.drawWaveforms();
+      });
+
+      const sel = this.container.querySelector(`#logic-select-ch-${i}`) as HTMLSelectElement | null;
+      sel?.addEventListener("change", () => {
+        this.channels[i] = sel.value || null;
         this.drawWaveforms();
       });
     }
 
-    // Actualizar dinámicamente las opciones del selector de nodos disponibles
-    const updateSelectors = () => {
-      const selectElements = this.container.querySelectorAll(".logic-channel-select") as NodeListOf<HTMLSelectElement>;
-      const existingNodes = Object.keys(this.orchestrator.components.reduce<Record<string, boolean>>((acc, comp) => {
+    // 9. Exportación CSV y PNG
+    this.container.querySelector("#logic-btn-export-csv")?.addEventListener("click", () => this.exportCsv());
+    this.container.querySelector("#logic-btn-snapshot")?.addEventListener("click", () => this.snapshotPng());
+  }
+
+  public updateSelectors(): void {
+    const existingNodes = Object.keys(
+      this.orchestrator.components.reduce<Record<string, boolean>>((acc, comp) => {
         const pins = this.orchestrator.getComponentPins(comp);
         pins.forEach((_, idx) => {
           const key = `${comp.id}:${idx}`;
@@ -113,126 +289,197 @@ export class LogicAnalyzerInstrument {
       }, Object.keys(this.nodeHistory).reduce<Record<string, boolean>>((acc, n) => {
         acc[n] = true;
         return acc;
-      }, { "0": true })));
+      }, { "0": true })),
+    );
 
-      selectElements.forEach((select) => {
-        const index = parseInt(select.getAttribute("data-index") || "0", 10);
-        const currentVal = this.channels[index] || "";
-        
-        // Regenerar opciones
-        let html = `<option value="">-- OFF --</option>`;
-        Object.keys(existingNodes).sort().forEach((node) => {
-          html += `<option value="${node}" ${node === currentVal ? "selected" : ""}>Nodo ${node}</option>`;
-        });
-        select.innerHTML = html;
+    for (let i = 0; i < 8; i++) {
+      const select = this.container.querySelector(`#logic-select-ch-${i}`) as HTMLSelectElement | null;
+      if (!select) continue;
+
+      const currentVal = this.channels[i] || "";
+      let html = `<option value="">-- OFF --</option>`;
+      existingNodes.sort().forEach((node) => {
+        html += `<option value="${node}" ${node === currentVal ? "selected" : ""}>Nodo ${node}</option>`;
       });
-    };
 
-    updateSelectors();
-    setInterval(updateSelectors, 2000);
-
-    // Guardar canal seleccionado
-    this.container.addEventListener("change", (e) => {
-      const select = e.target as HTMLSelectElement;
-      if (select && select.classList.contains("logic-channel-select")) {
-        const index = parseInt(select.getAttribute("data-index") || "0", 10);
-        this.channels[index] = select.value || null;
-        this.drawWaveforms();
+      if (select.innerHTML !== html) {
+        select.innerHTML = html;
       }
-    });
+    }
   }
 
-  public recordTimeStep(time: number, nodeVoltages: Record<string, number>) {
-    // Almacenar el historial de voltajes
+  private autoAssignNodes(): void {
+    const existingNodes = Object.keys(this.nodeHistory).filter((n) => n !== "0");
+    for (let i = 0; i < 8; i++) {
+      if (i < existingNodes.length) {
+        this.channels[i] = existingNodes[i];
+      }
+    }
+    this.updateSelectors();
+    this.drawWaveforms();
+  }
+
+  public recordTimeStep(time: number, nodeVoltages: Record<string, number>): void {
     for (const [node, voltage] of Object.entries(nodeVoltages)) {
       if (!this.nodeHistory[node]) {
         this.nodeHistory[node] = [];
       }
       this.nodeHistory[node].push({ time, val: voltage });
 
-      // Mantener buffer de tamaño manejable
-      if (this.nodeHistory[node].length > 1000) {
-        this.nodeHistory[node].shift();
+      // Mantener tamaño de historial seguro (máximo 8000 muestras por nodo)
+      if (this.nodeHistory[node].length > 8000) {
+        this.nodeHistory[node].splice(0, 2000);
       }
     }
 
     this.drawWaveforms();
   }
 
-  private drawWaveforms() {
-    if (!this.canvas || !this.ctx) return;
-    const { width: w, height: h } = ensureCanvasDpr(this.canvas, this.ctx);
-    this.ctx.clearRect(0, 0, w, h);
+  private getTimeBounds(): { startTime: number; endTime: number } {
+    let minTime = Infinity;
+    let maxTime = -Infinity;
 
-    const channelHeight = h / 8;
-
-    // Dibujar rejilla horizontal y etiquetas de canal
     for (let i = 0; i < 8; i++) {
-      const topY = i * channelHeight;
-
-      // Color de canal
-      const hue = i * 45;
-      this.ctx.strokeStyle = "rgba(255,255,255,0.03)";
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, topY + channelHeight);
-      this.ctx.lineTo(w, topY + channelHeight);
-      this.ctx.stroke();
-
-      // Línea de referencia baja (0)
-      this.ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-      this.ctx.beginPath();
-      this.ctx.moveTo(60, topY + channelHeight - 8);
-      this.ctx.lineTo(w, topY + channelHeight - 8);
-      this.ctx.stroke();
-
-      // Nombre de canal en pantalla
-      this.ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
-      this.ctx.font = "bold 9px var(--font-mono)";
-      this.ctx.fillText(`D${i}: ${this.channels[i] ? `Nodo ${this.channels[i]}` : "OFF"}`, 8, topY + 16);
-
-      // Dibujar la señal digital
       const node = this.channels[i];
-      if (!node || !this.nodeHistory[node] || this.nodeHistory[node].length < 2) continue;
-
-      const history = this.nodeHistory[node];
-      const maxPoints = history.length;
-      
-      this.ctx.strokeStyle = `hsl(${hue}, 90%, 55%)`;
-      this.ctx.lineWidth = 2;
-      this.ctx.beginPath();
-
-      const getLogicState = (v: number): "0" | "1" | "X" => {
-        if (v < 0.8) return "0";
-        if (v > 2.0) return "1";
-        return "X";
-      };
-
-      const getPixelY = (state: "0" | "1" | "X"): number => {
-        if (state === "1") return topY + 10;
-        if (state === "0") return topY + channelHeight - 10;
-        return topY + channelHeight / 2; // Undefined / Z state in center
-      };
-
-      for (let p = 0; p < maxPoints; p++) {
-        const pt = history[p];
-        const state = getLogicState(pt.val);
-        const x = 60 + ((w - 70) * p) / (maxPoints - 1);
-        const y = getPixelY(state);
-
-        if (p === 0) {
-          this.ctx.moveTo(x, y);
-        } else {
-          // Dibujar transiciones verticales perfectas de lógica digital
-          const prevState = getLogicState(history[p - 1].val);
-          if (prevState !== state) {
-            const prevY = getPixelY(prevState);
-            this.ctx.lineTo(x, prevY);
-          }
-          this.ctx.lineTo(x, y);
-        }
+      if (node && this.nodeHistory[node] && this.nodeHistory[node].length > 0) {
+        const h = this.nodeHistory[node];
+        minTime = Math.min(minTime, h[0].time);
+        maxTime = Math.max(maxTime, h[h.length - 1].time);
       }
-      this.ctx.stroke();
+    }
+
+    if (!Number.isFinite(minTime) || !Number.isFinite(maxTime) || minTime >= maxTime) {
+      return { startTime: 0, endTime: 100e-6 };
+    }
+
+    if (this.isAutoFit) {
+      return { startTime: minTime, endTime: maxTime };
+    }
+
+    const totalWindow = this.timeDiv * 10;
+    const start = Math.max(minTime, maxTime - totalWindow + this.timeOffset);
+    return { startTime: start, endTime: start + totalWindow };
+  }
+
+  public drawWaveforms(): void {
+    if (!this.canvas || !this.ctx) return;
+    const { width, height } = ensureCanvasDpr(this.canvas, this.ctx);
+
+    const timeBounds = this.getTimeBounds();
+    const channelsHistory = this.channels.map((node) => (node ? this.nodeHistory[node] || [] : []));
+
+    // Renderizar Canales Digitales
+    const rendererChannels: LogicRendererChannel[] = Array.from({ length: 8 }).map((_, i) => ({
+      index: i,
+      nodeName: this.channels[i],
+      enabled: this.channelEnabled[i],
+      color: `hsl(${i * 45}, 85%, 60%)`,
+      samples: channelsHistory[i],
+    }));
+
+    // Búsqueda de Trigger Match
+    let triggerTime: number | null = null;
+    if (this.triggerConfig.edge !== "none") {
+      const trigIdx = findTriggerMatch(channelsHistory, this.triggerConfig, this.selectedThreshold);
+      const trigSamples = channelsHistory[this.triggerConfig.channelIndex];
+      if (trigSamples && trigIdx < trigSamples.length) {
+        triggerTime = trigSamples[trigIdx].time;
+      }
+    }
+
+    // Decodificación de Bus
+    const busPackets = this.isBusEnabled
+      ? decodeParallelBus(channelsHistory, this.channelEnabled, this.selectedThreshold, timeBounds)
+      : [];
+
+    drawLogicAnalyzer(this.ctx, {
+      width,
+      height,
+      channels: rendererChannels,
+      threshold: this.selectedThreshold,
+      timeWindow: timeBounds,
+      triggerTime,
+      isBusEnabled: this.isBusEnabled,
+      busPackets,
+      cursors: this.isCursorsEnabled ? { cursorT1: this.cursorT1, cursorT2: this.cursorT2 } : undefined,
+    });
+
+    // Actualizar barra de estado y telemetría
+    this.updateStatusFooter(timeBounds);
+  }
+
+  private updateStatusFooter(timeBounds: { startTime: number; endTime: number }): void {
+    let totalSamples = 0;
+    for (const node of this.channels) {
+      if (node && this.nodeHistory[node]) totalSamples += this.nodeHistory[node].length;
+    }
+
+    const samplesEl = this.container.querySelector("#logic-status-samples");
+    if (samplesEl) samplesEl.textContent = `Muestras: ${totalSamples.toLocaleString()}`;
+
+    const spanEl = this.container.querySelector("#logic-status-span");
+    const spanDuration = timeBounds.endTime - timeBounds.startTime;
+    if (spanEl) spanEl.textContent = `Rango: ${formatTimeDiv(spanDuration / 10)}`;
+
+    const cursorsEl = this.container.querySelector("#logic-status-cursors") as HTMLElement | null;
+    if (cursorsEl) {
+      if (this.isCursorsEnabled && this.cursorT1 !== null && this.cursorT2 !== null) {
+        const dt = Math.abs(this.cursorT2 - this.cursorT1);
+        const f = dt > 0 ? 1 / dt : 0;
+        const fStr = f >= 1e6 ? `${(f / 1e6).toFixed(2)} MHz` : f >= 1e3 ? `${(f / 1e3).toFixed(2)} kHz` : `${f.toFixed(0)} Hz`;
+        const dtStr = dt >= 1e-3 ? `${(dt * 1e3).toFixed(2)} ms` : `${(dt * 1e6).toFixed(2)} µs`;
+        cursorsEl.textContent = `Δt: ${dtStr} | f: ${fStr}`;
+      } else {
+        cursorsEl.textContent = "Cursores: Inactivos";
+      }
     }
   }
+
+  public exportCsv(): void {
+    const activeChs = this.channels.map((n, i) => ({ idx: i, node: n, en: this.channelEnabled[i] })).filter((c) => c.en && c.node);
+
+    if (activeChs.length === 0) return;
+
+    let csv = "Time_s," + activeChs.map((c) => `D${c.idx}_Node_${c.node}`).join(",") + "\n";
+
+    // Unir timestamps
+    const timesSet = new Set<number>();
+    for (const ch of activeChs) {
+      const h = this.nodeHistory[ch.node!];
+      if (h) h.forEach((s) => timesSet.add(s.time));
+    }
+    const sortedTimes = Array.from(timesSet).sort((a, b) => a - b);
+
+    for (const t of sortedTimes) {
+      const vals = activeChs.map((ch) => {
+        const h = this.nodeHistory[ch.node!];
+        if (!h || h.length === 0) return "0";
+        const sample = h.find((s) => s.time === t);
+        return sample ? (sample.val >= this.selectedThreshold.vHigh ? "1" : "0") : "0";
+      });
+      csv += `${t},${vals.join(",")}\n`;
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `analizador_logico_${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  public snapshotPng(): void {
+    if (!this.canvas) return;
+    const link = document.createElement("a");
+    link.download = `analizador_logico_captura_${Date.now()}.png`;
+    link.href = this.canvas.toDataURL("image/png");
+    link.click();
+  }
+
+  public destroy(): void {
+    if (this.pollIntervalId) clearInterval(this.pollIntervalId);
+    if (this.resizeObserver) this.resizeObserver.disconnect();
+  }
 }
+

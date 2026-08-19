@@ -25,6 +25,7 @@ import { invokeTyped, type SimulationDispatchResult } from "./tauri_commands";
 import { type CircuitNetlist } from "./netlist_extractor";
 import { type SimulationRunner } from "./simulation_runner";
 import { TelemetryPanel } from "../ui/telemetry_panel";
+import { DiagnosticModal } from "../ui/diagnostic_modal";
 import { type ComponentInstance, type PinInstance, type WireInstance } from "../canvas_orchestrator";
 import { type AnalysisMode } from "../ui/simulation_controls";
 import { type TSResult } from "./fallback_solver";
@@ -526,7 +527,50 @@ export async function dispatchSimulation(
         }
       }
 
-      TelemetryPanel.logError(classified.userMessage);
+      TelemetryPanel.showToast(classified.userMessage, "error", {
+        title: classified.title,
+        durationMs: 8000,
+        actions: [
+          ...(classified.suspectedComponentOrNetId && callbacks.onHighlightElement
+            ? [
+                {
+                  label: `🎯 Localizar ${classified.suspectedComponentOrNetId}`,
+                  primary: true,
+                  onClick: () => {
+                    callbacks.onHighlightElement!(classified.suspectedComponentOrNetId!);
+                  },
+                },
+              ]
+            : []),
+          {
+            label: "Ver Diagnóstico",
+            onClick: () => {
+              DiagnosticModal.show({
+                title: classified.title,
+                subtitle: "El solver matemático reportó una inconsistencia:",
+                issues: [
+                  {
+                    id: "solver-error-1",
+                    severity: "error",
+                    title: classified.title,
+                    message: classified.userMessage,
+                    remedy: classified.remedy,
+                    componentId: classified.suspectedComponentOrNetId ?? undefined,
+                  },
+                ],
+                onFocusComponent: classified.suspectedComponentOrNetId
+                  ? (id) => callbacks.onHighlightElement?.(id)
+                  : undefined,
+                onOpenSettings: () => {
+                  const settingsBtn = document.querySelector("#settings-trigger-btn") as HTMLButtonElement | null;
+                  settingsBtn?.click();
+                },
+              });
+            },
+          },
+        ],
+      });
+
       callbacks.onIpcStatusUpdate("Error de simulación", "var(--accent-red)");
       if (callbacks.onSimulationFinished) {
         callbacks.onSimulationFinished();

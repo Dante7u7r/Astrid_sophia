@@ -69,7 +69,17 @@ pub(crate) fn stamp_transient_companions(
                 let node_neg = comp.pins.get(1).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
                 let prev_il = *state.ind_states.get(&comp.id).unwrap_or(&0.0);
                 let dt_safe = params.dt.max(1e-18);
-                let ind_val_safe = comp.value.max(1e-18);
+                let l_nominal = comp.value.max(1e-18);
+                let ind_val_safe = if let Some(isat) = comp.isat {
+                    if isat > 0.0 {
+                        let ratio = prev_il / isat;
+                        l_nominal / (1.0 + ratio * ratio)
+                    } else {
+                        l_nominal
+                    }
+                } else {
+                    l_nominal
+                }.max(1e-18);
 
                 let (g_eq, i_eq) = if params.gear2_active_this_step {
                     let prev_prev_il = *state.ind_states_prev.get(&comp.id).unwrap_or(&prev_il);

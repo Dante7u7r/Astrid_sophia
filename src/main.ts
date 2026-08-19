@@ -3,6 +3,7 @@ import "./components";
 import { CanvasOrchestrator, ComponentInstance } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
 import { DEFAULT_TRANSIENT_DURATION_SECONDS, SimulationSettings } from "./ui/settings_modal";
+import { type AnalysisMode } from "./ui/simulation_controls";
 import { OscilloscopePanel, TimeStepResult } from "./ui/oscilloscope_panel";
 import {
   extractElectricalNetlist,
@@ -52,6 +53,7 @@ import { initCanvasToolbarController } from "./app/canvas_toolbar_controller";
 import { createIpcStatusController } from "./app/ipc_status_controller";
 import { runStartupSequence } from "./app/startup_sequence";
 import { createDesktopControllerRegistry } from "./app/desktop_controller_registry";
+import { type SimulationController } from "./app/simulation_controller";
 import { initializeFeedbackRuntime } from "./feedback/runtime";
 import { configureAdvisorRuntime } from "./intelligence/advisor_runtime";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
@@ -72,11 +74,21 @@ if (visualAudit.enabled) {
   document.documentElement.dataset.auditStep = visualAudit.step;
 }
 
+const savedDefaultMode = (typeof localStorage !== "undefined"
+  ? localStorage.getItem("astryd-default-analysis-mode")
+  : null) as AnalysisMode | null;
+
+const validModes: AnalysisMode[] = ["DC", "AC", "TRAN", "SENS", "PSS", "STB", "PVT", "SPAR"];
+const initialMode: AnalysisMode = (savedDefaultMode && validModes.includes(savedDefaultMode))
+  ? savedDefaultMode
+  : "TRAN";
+
 let simSettings: SimulationSettings = {
   dt: 0.0001,
   tolerance: 0.00001,
   maxIterations: 100,
   transientDuration: DEFAULT_TRANSIENT_DURATION_SECONDS,
+  defaultAnalysisMode: initialMode,
 };
 configureAdvisorRuntime({
   getSettings: () => ({ ...simSettings }),
@@ -88,7 +100,7 @@ configureAdvisorRuntime({
   },
 });
 
-let activeAnalysisMode: 'DC' | 'AC' | 'TRAN' | 'SENS' | 'PSS' | 'STB' | 'PVT' | 'SPAR' = 'DC';
+let activeAnalysisMode: AnalysisMode = initialMode;
 let mcuDebugPanel: McuDebugPanel | null = null;
 
 let panelLayoutManager: PanelLayoutManager | null = null;
@@ -157,6 +169,7 @@ function resetPerformanceCaches(): void {
 }
 // Instancia global del runner de simulación interactiva
 let simulationRunner: SimulationRunner | null = null;
+let simulationController: SimulationController | null = null;
 
 function addLog(text: string, type: 'system' | 'send' | 'receive' | 'error' = 'system') {
   consoleLogController.addLog(text, type);
@@ -204,6 +217,10 @@ function extractNetlist(reportErrors = false): CircuitNetlist | null {
       TelemetryPanel.logError(result.error);
       addLog(`[Pre-flight ERC] ${result.error}`, "error");
     }
+    if (orchestrator.simulationActive || simulationRunner?.isSimulationActive()) {
+      void simulationController?.stopSimulation();
+      addLog("[Simulación] Circuito modificado o abierto. Simulación detenida.", "system");
+    }
     return null;
   }
 
@@ -237,6 +254,13 @@ function initOscilloscopeInterface() {
     probePlacementController.setMode(mode);
     addLog(`[Osciloscopio] Modo colocación de sonda del ${mode} activo. Haz clic sobre un terminal del componente en el lienzo para conectar la sonda.`, "system");
   };
+
+  if (oscilloscopePanel) {
+    oscilloscopePanel.onPickProbeRequested = (channel) => {
+      const mode = channel.toUpperCase() as ProbeChannel;
+      handleProbeActivation(mode);
+    };
+  }
 
   const setupChBtn = (btn: HTMLButtonElement | null, channel: ProbeChannel, getProbe: () => string | null, colorName: string) => {
     if (!btn) return;
@@ -520,6 +544,7 @@ window.addEventListener("DOMContentLoaded", () => {
   tabManager = controllers.tabManager;
   propertyEditor = controllers.propertyEditor;
   simulationRunner = controllers.simulationRunner;
+  simulationController = controllers.simulationController;
   oscilloscopePanel = controllers.oscilloscopePanel;
   mcuDebugPanel = controllers.mcuDebugPanel;
   runStartupSequence(visualAudit, {

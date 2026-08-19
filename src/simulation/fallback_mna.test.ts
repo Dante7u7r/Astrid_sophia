@@ -58,6 +58,7 @@ describe("fallback_mna", () => {
   });
 
   it("evalua formas de onda soportadas", () => {
+    // Sine: en t=0.25 con freq=1 → sin(π/2) = 1 → offset + amp = 3 + 2 = 5
     expect(evaluateWaveformValue({
       value: 1,
       waveType: "sine",
@@ -66,6 +67,7 @@ describe("fallback_mna", () => {
       offset: 3,
     }, 0.25)).toBeCloseTo(5);
 
+    // Square: en t=0.75, segunda mitad → offset - amp = 1 - 2 = -1
     expect(evaluateWaveformValue({
       value: 0,
       waveType: "square",
@@ -75,6 +77,7 @@ describe("fallback_mna", () => {
       dutyCycle: 0.5,
     }, 0.75)).toBe(-1);
 
+    // Pulse: en t=0.25, primera mitad → offset + amp = 1 + 2 = 3
     expect(evaluateWaveformValue({
       value: 0,
       waveType: "pulse",
@@ -83,6 +86,93 @@ describe("fallback_mna", () => {
       offset: 1,
       dutyCycle: 0.5,
     }, 0.25)).toBe(3);
+
+    // Triangle: en t=0 → phase=0, normalized=0 → offset + amp*(2*0 - 1) = 0 + 5*(-1) = -5
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "triangle",
+      amplitude: 5,
+      frequency: 1,
+      offset: 0,
+    }, 0)).toBeCloseTo(-5);
+
+    // Triangle: en t=0.25 → phase=0.25, normalized=0.5 → offset + amp*(2*0.5 - 1) = 0
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "triangle",
+      amplitude: 5,
+      frequency: 1,
+      offset: 0,
+    }, 0.25)).toBeCloseTo(0);
+
+    // Triangle: en t=0.5 → phase=0.5, normalized=1.0 → offset + amp*(2*1 - 1) = 5
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "triangle",
+      amplitude: 5,
+      frequency: 1,
+      offset: 0,
+    }, 0.5)).toBeCloseTo(5);
+
+    // Sawtooth: en t=0 → 2*(0/1)-1 = -1 → offset + amp*(-1) = 0 + 3*(-1) = -3
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "sawtooth",
+      amplitude: 3,
+      frequency: 1,
+      offset: 0,
+    }, 0)).toBeCloseTo(-3);
+
+    // Sawtooth: en t=0.5 → 2*(0.5)-1 = 0 → offset + 0 = 0
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "sawtooth",
+      amplitude: 3,
+      frequency: 1,
+      offset: 0,
+    }, 0.5)).toBeCloseTo(0);
+
+    // AM (Modulación de Amplitud):
+    // En t = 0 -> sin(0) = 0 -> v(0) = offset = 2
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "am",
+      amplitude: 10,
+      frequency: 1000,
+      modFrequency: 100,
+      modIndex: 0.5,
+      offset: 2,
+    }, 0)).toBeCloseTo(2);
+
+    // AM en cresta de portadora (t = 0.00025, fc*t = 0.25 -> carrier = 1):
+    // mod = 1 + 0.5 * sin(2*pi*100*0.00025) = 1 + 0.5 * sin(0.05*pi) = 1 + 0.5 * 0.156434465 = 1.078217
+    // v(t) = 0 + 10 * 1.078217 * 1 = 10.78217
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "am",
+      amplitude: 10,
+      frequency: 1000,
+      modFrequency: 100,
+      modIndex: 0.5,
+      offset: 0,
+    }, 0.00025)).toBeCloseTo(10.78217, 3);
+
+    // Sine con fase inicial (phase = 90 deg -> cos):
+    // En t = 0 -> sin(0 + 90 deg) = 1 -> v(0) = 5
+    expect(evaluateWaveformValue({
+      value: 0,
+      waveType: "sine",
+      amplitude: 5,
+      frequency: 1,
+      offset: 0,
+      phase: 90,
+    }, 0)).toBeCloseTo(5);
+  });
+
+  it("devuelve el valor nominal para dc o waveType indefinido", () => {
+    expect(evaluateWaveformValue({ value: 12 }, 0.5)).toBe(12);
+    expect(evaluateWaveformValue({ value: 5, waveType: "dc" }, 0.1)).toBe(5);
+    expect(evaluateWaveformValue({ value: 3.3, waveType: undefined }, 0)).toBe(3.3);
   });
 
   it("estampa modelos companion de capacitor e inductor", () => {

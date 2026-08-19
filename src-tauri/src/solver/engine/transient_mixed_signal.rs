@@ -9,18 +9,16 @@ pub(crate) fn initialize_mixed_signal_scheduler(netlist: &CircuitNetlist) -> Mix
             let is_not = comp.comp_type == "not_gate";
             let output_pin = if is_not { 1 } else { 2 };
             scheduler.set_state(&comp.id, output_pin, false);
-            scheduler
+
+            let entry = scheduler
                 .last_analog_v
                 .entry(comp.id.clone())
-                .or_default()
-                .insert(0, 0.0);
+                .or_default();
+            entry.insert(0, 0.0);
             if !is_not {
-                scheduler
-                    .last_analog_v
-                    .get_mut(&comp.id)
-                    .unwrap()
-                    .insert(1, 0.0);
+                entry.insert(1, 0.0);
             }
+            entry.insert(output_pin, 0.0);
         } else if is_mcu_component_type(&comp.comp_type) {
             scheduler.set_state(&comp.id, 1, comp.value as i32 == 1);
             scheduler.schedule_event(MixedSignalEvent {
@@ -129,6 +127,13 @@ fn detect_gate_crossings(
     last_v.insert(0, v_a_curr);
     if !is_not {
         last_v.insert(1, v_b_curr);
+    }
+    let out_pin_idx = if is_not { 1 } else { 2 };
+    if let Some(p_str) = comp.pins.get(out_pin_idx) {
+        if let Ok(node_out) = p_str.parse::<usize>() {
+            let v_out_curr = node_voltage(step_solution, node_out);
+            last_v.insert(out_pin_idx, v_out_curr);
+        }
     }
 }
 

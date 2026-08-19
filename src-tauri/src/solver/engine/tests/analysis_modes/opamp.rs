@@ -147,3 +147,107 @@ fn test_opamp_dominant_pole() {
     );
     assert!(amp_high < -10.0, "La ganancia en alta frecuencia debería estar severamente atenuada por el polo, obtenido: {} dBV", amp_high);
 }
+
+#[test]
+fn test_opamp_commercial_2pole_ac_frequency_response() {
+    // Amplificador inversor con LM741: R1 = 1k, Rf = 10k (Ganancia nominal = 10 = 20 dB)
+    // GBW = 1 MHz, Aol = 200k, f_p1 = 5 Hz, f_p2 = 2 MHz
+    // Ancho de banda de lazo cerrado esperado: f_3dB = GBW / (1 + Rf/R1) = 1 MHz / 11 = ~90.9 kHz
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 1.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ac_mag: Some(1.0),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Vpos".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Vneg".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -15.0,
+                pins: vec!["5".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rf".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10000.0,
+                pins: vec!["2".to_string(), "3".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "X1".to_string(),
+                comp_type: "opamp".to_string(),
+                value: 200000.0,
+                pins: vec![
+                    "0".to_string(), // IN+ (GND)
+                    "2".to_string(), // IN-
+                    "4".to_string(), // V+
+                    "5".to_string(), // V-
+                    "3".to_string(), // OUT
+                ],
+                opamp_aol: Some(200000.0),
+                opamp_gbw: Some(1.0e6), // 1 MHz GBW (LM741)
+                opamp_rin: Some(2.0e6),
+                opamp_rout: Some(75.0),
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    // 1. En baja frecuencia (100 Hz): debe tener ganancia plena de ~20 dB (10 V/V)
+    let ac_settings_passband = AcSweepSettings {
+        f_start: 100.0,
+        f_end: 100.0,
+        points_per_decade: 1,
+        op_guess: None,
+    };
+    let res_passband = solve_ac_sweep(&netlist, &ac_settings_passband).unwrap();
+    let gain_100hz = res_passband.node_amplitudes.get("3").unwrap()[0];
+
+    assert!(
+        (gain_100hz - 20.0).abs() < 0.5,
+        "La ganancia en banda pasante a 100 Hz debe ser ~20 dB, obtenido: {:.2} dB",
+        gain_100hz
+    );
+
+    // 2. A 10 MHz (muy por encima del ancho de banda cerrado de 90 kHz y de f_p2 a 2 MHz):
+    // Debe exhibir atenuación severa de 2 polos (-40 dB/década)
+    let ac_settings_stopband = AcSweepSettings {
+        f_start: 10.0e6,
+        f_end: 10.0e6,
+        points_per_decade: 1,
+        op_guess: None,
+    };
+    let res_stopband = solve_ac_sweep(&netlist, &ac_settings_stopband).unwrap();
+    let gain_10mhz = res_stopband.node_amplitudes.get("3").unwrap()[0];
+
+    assert!(
+        gain_10mhz < -20.0,
+        "A 10 MHz la salida debe estar atenuada por la respuesta de 2 polos: {:.2} dB",
+        gain_10mhz
+    );
+}

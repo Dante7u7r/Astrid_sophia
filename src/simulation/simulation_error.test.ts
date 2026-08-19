@@ -37,7 +37,16 @@ describe("classifySimulationError", () => {
     const raw = "some weird error message";
     const res = classifySimulationError(raw);
     expect(res.kind).toBe("unknown");
-    expect(res.userMessage).toContain("no reconocido");
+    expect(res.userMessage).toContain("inesperado");
+    expect(res.title).toBe("Error de Simulación");
+  });
+
+  test("clasifica timestep too small", () => {
+    const raw = "transient solver failed: timestep too small at t=0.0012";
+    const res = classifySimulationError(raw);
+    expect(res.kind).toBe("timestep-too-small");
+    expect(res.title).toContain("Paso de Integración");
+    expect(res.actionType).toBe("settings");
   });
 
   test("clasifica estructurado singular matrix", () => {
@@ -52,6 +61,8 @@ describe("classifySimulationError", () => {
     expect(res.kind).toBe("singular-matrix");
     expect(res.suspectedComponentOrNetId).toBe("N$2");
     expect(res.userMessage).toBe("Matriz singular detectada.");
+    expect(res.title).toContain("Matriz Singular");
+    expect(res.remedy).toContain("Tierra");
   });
 
   test("clasifica estructurado max iterations exceeded", () => {
@@ -66,5 +77,6 @@ describe("classifySimulationError", () => {
     expect(res.kind).toBe("max-iterations-exceeded");
     expect(res.suspectedComponentOrNetId).toBe("R5");
     expect(res.userMessage).toBe("Límite de iteraciones alcanzado.");
+    expect(res.actionType).toBe("settings");
   });
 });

@@ -1,3 +1,5 @@
+import type { AnalysisMode } from "./simulation_controls";
+
 export const DEFAULT_TRANSIENT_DURATION_SECONDS = 10;
 
 export interface SimulationSettings {
@@ -6,6 +8,7 @@ export interface SimulationSettings {
   maxIterations: number;
   /** Duración física de una corrida TRAN. Opcional para abrir archivos previos. */
   transientDuration?: number;
+  defaultAnalysisMode?: AnalysisMode;
   currentFlowMode?: "conventional" | "electron";
   currentAnimationSpeed?: number;
   showCurrentAnimation?: boolean;
@@ -20,6 +23,7 @@ export class SettingsModal {
   private btnCancelSettings: HTMLButtonElement | null = null;
   private btnSaveSettings: HTMLButtonElement | null = null;
 
+  private defaultModeInput: HTMLSelectElement | null = null;
   private dtInput: HTMLInputElement | null = null;
   private transientDurationInput: HTMLInputElement | null = null;
   private tolInput: HTMLInputElement | null = null;
@@ -40,6 +44,7 @@ export class SettingsModal {
     this.settings = {
       ...initialSettings,
       transientDuration: initialSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS,
+      defaultAnalysisMode: initialSettings.defaultAnalysisMode ?? "DC",
       currentFlowMode: initialSettings.currentFlowMode ?? "conventional",
       currentAnimationSpeed: initialSettings.currentAnimationSpeed ?? 1.0,
       showCurrentAnimation: initialSettings.showCurrentAnimation ?? true,
@@ -54,6 +59,7 @@ export class SettingsModal {
     this.btnCancelSettings = document.querySelector("#btn-cancel-settings");
     this.btnSaveSettings = document.querySelector("#btn-save-settings");
 
+    this.defaultModeInput = document.querySelector("#settings-default-mode-input");
     this.dtInput = document.querySelector("#settings-dt-input");
     this.transientDurationInput = document.querySelector("#settings-transient-duration-input");
     this.tolInput = document.querySelector("#settings-tol-input");
@@ -108,6 +114,9 @@ export class SettingsModal {
 
   private open(): void {
     if (!this.settingsModal) return;
+    if (this.defaultModeInput) {
+      this.defaultModeInput.value = this.settings.defaultAnalysisMode ?? "DC";
+    }
     if (this.dtInput) this.dtInput.value = this.settings.dt.toString();
     if (this.transientDurationInput) {
       this.transientDurationInput.value = (this.settings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS).toString();
@@ -127,7 +136,7 @@ export class SettingsModal {
     this.settingsModal.classList.add("open");
     this.settingsModal.setAttribute("aria-hidden", "false");
     if (this.appViewport) this.appViewport.inert = true;
-    requestAnimationFrame(() => this.dtInput?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => (this.defaultModeInput ?? this.dtInput)?.focus({ preventScroll: true }));
   }
 
   private close(): void {
@@ -180,6 +189,9 @@ export class SettingsModal {
       this.settings.transientDuration = transientDuration;
       this.settings.tolerance = tolerance;
       this.settings.maxIterations = maxIterations;
+      if (this.defaultModeInput) {
+        this.settings.defaultAnalysisMode = this.defaultModeInput.value as AnalysisMode;
+      }
       if (this.flowModeInput) {
         this.settings.currentFlowMode = this.flowModeInput.value === "electron" ? "electron" : "conventional";
       }

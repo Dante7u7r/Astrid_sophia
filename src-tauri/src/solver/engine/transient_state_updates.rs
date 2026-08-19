@@ -43,14 +43,25 @@ pub(crate) fn update_passive_storage_states(
                     node_voltage(step_solution, node_pos) - node_voltage(step_solution, node_neg);
                 let prev_il = *ind_states.get(&comp.id).unwrap();
                 let prev_prev_il = *ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
+                let l_nominal = comp.value.max(1e-18);
+                let ind_val_safe = if let Some(isat) = comp.isat {
+                    if isat > 0.0 {
+                        let ratio = prev_il / isat;
+                        l_nominal / (1.0 + ratio * ratio)
+                    } else {
+                        l_nominal
+                    }
+                } else {
+                    l_nominal
+                }.max(1e-18);
 
                 let new_il = if params.gear2_active_this_step {
-                    let g_eq = 1.0 / (params.gear_a * comp.value);
+                    let g_eq = 1.0 / (params.gear_a * ind_val_safe);
                     let i_eq_val = -(params.gear_b / params.gear_a) * prev_il
                         - (params.gear_c / params.gear_a) * prev_prev_il;
                     g_eq * new_vl + i_eq_val
                 } else {
-                    (params.dt / comp.value) * new_vl + prev_il
+                    (params.dt / ind_val_safe) * new_vl + prev_il
                 };
 
                 ind_states_prev.insert(comp.id.clone(), prev_il);

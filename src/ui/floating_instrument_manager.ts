@@ -130,6 +130,50 @@ export class FloatingInstrumentManager {
     this.updatePinButton(pinBtn, windowRecord.isPinned);
     pinBtn.addEventListener("click", () => this.togglePin(tabId));
 
+    // Botón Maximizar / Restaurar tamaño
+    const maxBtn = document.createElement("button");
+    maxBtn.className = "floating-window-btn max-btn";
+    maxBtn.type = "button";
+    maxBtn.title = "Maximizar / Restaurar ventana";
+    maxBtn.innerHTML = "⛶";
+    let isMaximized = false;
+    let savedPlacement: { top: string; left: string; width: string; height: string } | null = null;
+
+    maxBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!isMaximized) {
+        savedPlacement = {
+          top: win.style.top,
+          left: win.style.left,
+          width: win.style.width,
+          height: win.style.height,
+        };
+        win.style.top = "8px";
+        win.style.left = "8px";
+        win.style.width = "calc(100% - 16px)";
+        win.style.height = "calc(100% - 16px)";
+        win.classList.add("is-maximized");
+        maxBtn.innerHTML = "❐";
+        isMaximized = true;
+      } else {
+        if (savedPlacement) {
+          win.style.top = savedPlacement.top;
+          win.style.left = savedPlacement.left;
+          win.style.width = savedPlacement.width;
+          win.style.height = savedPlacement.height;
+        } else {
+          win.style.width = "720px";
+          win.style.height = "480px";
+        }
+        win.classList.remove("is-maximized");
+        maxBtn.innerHTML = "⛶";
+        isMaximized = false;
+      }
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    });
+
     const popinBtn = document.createElement("button");
     popinBtn.className = "floating-window-btn";
     popinBtn.type = "button";
@@ -145,6 +189,7 @@ export class FloatingInstrumentManager {
     closeBtn.addEventListener("click", () => this.popIn(tabId));
 
     actionsEl.appendChild(pinBtn);
+    actionsEl.appendChild(maxBtn);
     actionsEl.appendChild(popinBtn);
     actionsEl.appendChild(closeBtn);
     header.appendChild(titleEl);
@@ -168,6 +213,15 @@ export class FloatingInstrumentManager {
 
     this.floatingWindows.set(tabId, windowRecord);
     this.applyWindowPlacement(windowRecord);
+
+    const savedState = this.loadWindowState(tabId);
+    if (savedState) {
+      if (savedState.width) win.style.width = savedState.width;
+      if (savedState.height) win.style.height = savedState.height;
+      if (savedState.top) win.style.top = savedState.top;
+      if (savedState.left && savedState.left !== "auto") win.style.left = savedState.left;
+      if (savedState.right && savedState.right !== "auto") win.style.right = savedState.right;
+    }
 
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"));
@@ -208,6 +262,7 @@ export class FloatingInstrumentManager {
       this.updatePinButton(pinBtn, info.isPinned);
     }
     this.applyWindowPlacement(info);
+    this.saveWindowState(tabId, info);
   }
 
   private updatePinButton(btn: HTMLButtonElement, isPinned: boolean): void {
@@ -241,6 +296,39 @@ export class FloatingInstrumentManager {
       windowEl.style.top = `${topPx}px`;
       windowEl.style.left = `${leftPx}px`;
       windowEl.style.right = "auto";
+    }
+  }
+
+  private saveWindowState(tabId: string, info: FloatingWindowInfo): void {
+    try {
+      const state = {
+        top: info.windowEl.style.top,
+        left: info.windowEl.style.left,
+        right: info.windowEl.style.right,
+        width: info.windowEl.style.width,
+        height: info.windowEl.style.height,
+        isPinned: info.isPinned,
+      };
+      localStorage.setItem(`astryd_flt_win_${tabId}`, JSON.stringify(state));
+    } catch {
+      // Ignorar errores de storage
+    }
+  }
+
+  private loadWindowState(tabId: string): {
+    top: string;
+    left: string;
+    right: string;
+    width: string;
+    height: string;
+    isPinned: boolean;
+  } | null {
+    try {
+      const raw = localStorage.getItem(`astryd_flt_win_${tabId}`);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
     }
   }
 
@@ -296,7 +384,10 @@ export class FloatingInstrumentManager {
     };
 
     const onMouseUp = () => {
-      isDragging = false;
+      if (isDragging) {
+        isDragging = false;
+        this.saveWindowState(info.tabId, info);
+      }
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };

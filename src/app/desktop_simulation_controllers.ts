@@ -46,7 +46,9 @@ export interface DesktopSimulationControllerDeps {
   getTabManager(): TabManager | null;
   getOrchestrator(): CanvasOrchestrator | null;
   getOscilloscopePanel(): OscilloscopePanel | null;
+  getInstrumentsDock?(): import("../ui/instruments_dock").InstrumentsDock | null;
   getSimulationSettings(): SimulationSettings;
+  getActiveAnalysisMode?(): AnalysisMode;
   setActiveAnalysisMode(mode: AnalysisMode): void;
   getSparPorts(): { nodeId: string; z0: number }[];
   getSparSweepSettings(): { fStart: number; fEnd: number; pointsPerDecade: number };
@@ -124,6 +126,7 @@ export function createDesktopSimulationControllers(
   const simulationController = createSimulationController({
     getOrchestrator: deps.getOrchestrator,
     getOscilloscopePanel: deps.getOscilloscopePanel,
+    getInstrumentsDock: deps.getInstrumentsDock,
     getSimulationRunner: () => simulationRunner,
     getSimulationSettings: deps.getSimulationSettings,
     setSimulationRunning,
@@ -146,6 +149,9 @@ export function createDesktopSimulationControllers(
   });
 
   simulationControls = initSimulationControls(simulationController.createControlHandlers());
+  if (deps.getActiveAnalysisMode) {
+    simulationControls.setActiveModeButton(deps.getActiveAnalysisMode());
+  }
 
   return {
     simulationRunner,

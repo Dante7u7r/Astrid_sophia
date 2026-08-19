@@ -347,3 +347,348 @@ fn test_self_heating_diode_transient() {
         is_ratio
     );
 }
+
+#[test]
+fn test_mosfet_switching_with_commercial_cgs_cgd_miller() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vdd".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 12.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                wave_type: Some("pulse".to_string()),
+                amplitude: Some(10.0),
+                frequency: Some(100e3), // 100 kHz (periodo 10 µs)
+                offset: Some(0.0),
+                duty_cycle: Some(0.5),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rg".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0, // 1 kΩ resistencia de compuerta
+                pins: vec!["2".to_string(), "3".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rload".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10.0, // 10 Ω carga en drenador
+                pins: vec!["1".to_string(), "4".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "M1".to_string(),
+                comp_type: "nmos".to_string(),
+                value: 3.0, // Vth = 3.0 V (similar a IRFZ44N)
+                pins: vec!["3".to_string(), "4".to_string(), "0".to_string()], // G, D, S
+                mos_cgs: Some(1.7e-9), // 1.7 nF
+                mos_cgd: Some(200e-12), // 200 pF
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 5e-8,    // 50 ns
+        t_max: 10e-6, // 10 µs
+        fixed_step: None,
+        integration_method: None,
+    };
+
+    let results = solve_transient_circuit(&netlist, &settings).unwrap();
+    assert!(!results.is_empty(), "Debe converger la simulación transitoria de MOSFET con Cgs/Cgd");
+
+    // Verificar que en t=200ns, la compuerta V(3) no ha alcanzado 10V instantáneamente sino que tiene retardo RC
+    let v_gate_early = results.iter()
+        .min_by(|a, b| ((a.time - 2e-7).abs()).partial_cmp(&(b.time - 2e-7).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("3").unwrap())
+        .unwrap();
+
+    assert!(
+        v_gate_early > 0.0 && v_gate_early < 9.5,
+        "La compuerta debe exhibir rampa de carga RC dinámica con Cgs: Vg(200ns)={:.2}V",
+        v_gate_early
+    );
+}
+
+#[test]
+fn test_jfet_dynamic_gate_transient() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vdd".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                wave_type: Some("sine".to_string()),
+                amplitude: Some(0.5),
+                frequency: Some(10e3),
+                offset: Some(-1.0),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rd".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 2200.0,
+                pins: vec!["1".to_string(), "3".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "J1".to_string(),
+                comp_type: "njf".to_string(),
+                value: -2.5,
+                pins: vec!["3".to_string(), "2".to_string(), "0".to_string()], // D, G, S
+                jfet_vto: Some(-2.5),
+                jfet_beta: Some(0.0012),
+                jfet_cgs: Some(4.5e-12),
+                jfet_cgd: Some(1.5e-12),
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-6,
+        t_max: 1e-4,
+        fixed_step: None,
+        integration_method: None,
+    };
+
+    let results = solve_transient_circuit(&netlist, &settings).unwrap();
+    assert!(!results.is_empty(), "La simulación transitoria de JFET debe converger con Cgs y Cgd");
+}
+
+#[test]
+fn test_opamp_slew_rate_limiting_transient() {
+    // Seguidor de tensión (Buffer) con OpAmp sometido a escalón de 10V
+    // Parámetros: SR = 0.5 V/µs (LM741)
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0, // Tensión DC inicial en t=0 es 0V (escalón parte de 0V)
+                pins: vec!["1".to_string(), "0".to_string()],
+                wave_type: Some("square".to_string()),
+                amplitude: Some(10.0),
+                frequency: Some(10e3), // 10 kHz (período 100 µs, semiperíodo positivo 50 µs)
+                offset: Some(0.0),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Vpos".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Vneg".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -15.0,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "X1".to_string(),
+                comp_type: "opamp".to_string(),
+                value: 200000.0,
+                pins: vec![
+                    "1".to_string(), // IN+
+                    "2".to_string(), // IN- (retroalimentado desde OUT)
+                    "3".to_string(), // V+
+                    "4".to_string(), // V-
+                    "2".to_string(), // OUT
+                ],
+                opamp_aol: Some(200000.0),
+                opamp_gbw: Some(1.0e6),
+                opamp_sr: Some(0.5), // 0.5 V/µs
+                opamp_rin: Some(2.0e6),
+                opamp_rout: Some(75.0),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rload".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10000.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-7,    // 100 ns
+        t_max: 30e-6, // 30 µs
+        fixed_step: None,
+        integration_method: None,
+    };
+
+    let results = solve_transient_circuit(&netlist, &settings).unwrap();
+    assert!(!results.is_empty(), "La simulación de OpAmp con Slew Rate debe converger");
+
+    // En t = 10 µs, con SR = 0.5 V/µs, la salida debe haber subido a aproximadamente ~5V (entre 4.0V y 6.5V)
+    let v_out_10us = results.iter()
+        .min_by(|a, b| ((a.time - 10e-6).abs()).partial_cmp(&(b.time - 10e-6).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("2").unwrap())
+        .unwrap();
+
+    assert!(
+        v_out_10us >= 3.5 && v_out_10us <= 7.0,
+        "La salida debe estar limitada por Slew Rate (0.5 V/µs): Vout(10µs)={:.2}V",
+        v_out_10us
+    );
+
+    // En t = 25 µs, la rampa debe haber completado los 10V
+    let v_out_25us = results.iter()
+        .min_by(|a, b| ((a.time - 25e-6).abs()).partial_cmp(&(b.time - 25e-6).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("2").unwrap())
+        .unwrap();
+
+    assert!(
+        v_out_25us >= 9.0,
+        "La salida debe alcanzar el estado estacionario (~10V) tras 20µs: Vout(25µs)={:.2}V",
+        v_out_25us
+    );
+}
+
+#[test]
+fn test_saturable_inductor_current_spike() {
+    // Circuito RL serie excitado por fuente escalón de 10V
+    // L0 = 100 µH, Isat = 2.0 A, Rseries = 1.0 Ω
+    let netlist_saturable = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 10.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "L1".to_string(),
+                comp_type: "inductor".to_string(),
+                value: 100e-6, // 100 µH
+                pins: vec!["2".to_string(), "0".to_string()],
+                isat: Some(2.0), // Saturación a 2.0 A
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let netlist_linear = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 10.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "L1".to_string(),
+                comp_type: "inductor".to_string(),
+                value: 100e-6, // 100 µH ideal
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-7,    // 100 ns
+        t_max: 30e-6, // 30 µs
+        fixed_step: Some(true),
+        integration_method: Some("BE".to_string()),
+    };
+
+    let res_sat = solve_transient_circuit(&netlist_saturable, &settings).unwrap();
+    let res_lin = solve_transient_circuit(&netlist_linear, &settings).unwrap();
+
+    // Medir corriente i_L = (V(1) - V(2)) / R1 en t = 30 µs
+    let v_r1_sat = res_sat.iter()
+        .min_by(|a, b| ((a.time - 30e-6).abs()).partial_cmp(&(b.time - 30e-6).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("1").unwrap() - *s.node_voltages.get("2").unwrap())
+        .unwrap();
+    let i_sat_30us = v_r1_sat / 1.0;
+
+    let v_r1_lin = res_lin.iter()
+        .min_by(|a, b| ((a.time - 30e-6).abs()).partial_cmp(&(b.time - 30e-6).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("1").unwrap() - *s.node_voltages.get("2").unwrap())
+        .unwrap();
+    let i_lin_30us = v_r1_lin / 1.0;
+
+    // En t = 30 µs, la inductancia ideal llega a ~2.6 A, mientras que la inductancia
+    // saturable colapsa su valor efectivo y permite una corriente significativamente mayor
+    assert!(
+        i_sat_30us > i_lin_30us * 1.3,
+        "La inductancia saturable debe exhibir pico de corriente mayor que la lineal: Isat(30µs)={:.2}A vs Ilin(30µs)={:.2}A",
+        i_sat_30us, i_lin_30us
+    );
+}
+

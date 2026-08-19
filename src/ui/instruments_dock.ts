@@ -8,6 +8,7 @@ import { SignalGeneratorInstrument } from "./signal_generator_instrument";
 import { LogicAnalyzerInstrument } from "./logic_analyzer_instrument";
 import { FftAnalyzerInstrument } from "./fft_analyzer_instrument";
 import { CurveTracerInstrument } from "./curve_tracer_instrument";
+import { BodeAnalyzerInstrument } from "./bode_analyzer_instrument";
 import { CanvasOrchestrator } from "../canvas_orchestrator";
 import {
   createNoopInstrumentCallbacks,
@@ -26,6 +27,7 @@ export class InstrumentsDock {
   public logicAnalyzer: LogicAnalyzerInstrument | null = null;
   public fftAnalyzer: FftAnalyzerInstrument | null = null;
   public curveTracer: CurveTracerInstrument | null = null;
+  public bodeAnalyzer: BodeAnalyzerInstrument | null = null;
 
   constructor(
     container: HTMLElement,
@@ -101,6 +103,11 @@ export class InstrumentsDock {
     const tracerContainer = (document.querySelector("#inst-tracer") || this.container.querySelector("#inst-tracer")) as HTMLElement | null;
     if (tracerContainer) {
       this.curveTracer = new CurveTracerInstrument(tracerContainer, orchestrator, callbacks);
+    }
+
+    const bodeContainer = (document.querySelector("#inst-bode") || this.container.querySelector("#inst-bode")) as HTMLElement | null;
+    if (bodeContainer) {
+      this.bodeAnalyzer = new BodeAnalyzerInstrument(bodeContainer, orchestrator, callbacks);
     }
   }
 

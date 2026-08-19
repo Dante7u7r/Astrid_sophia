@@ -102,6 +102,7 @@ function errorCode(error: unknown): string {
   const classified = classifySimulationError(error);
   switch (classified.kind) {
     case "singular-matrix": return "SIM_SINGULAR_MATRIX";
+    case "timestep-too-small": return "SIM_TIMESTEP_TOO_SMALL";
     case "max-iterations-exceeded": return "SIM_MAX_ITERATIONS";
     case "convergence-failure": return "SIM_CONVERGENCE_FAILURE";
     case "invalid-circuit": return "SIM_INVALID_CIRCUIT";

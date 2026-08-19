@@ -37,9 +37,9 @@ function context(patch: Partial<AdvisorContext> = {}): AdvisorContext {
 }
 
 describe("asesor determinista", () => {
-  it("incluye veintiuna reglas versionadas y no recomienda sobre el caso sano", () => {
-    expect(ADVISOR_RULES).toHaveLength(21);
-    expect(new Set(ADVISOR_RULES.map((rule) => rule.id)).size).toBe(21);
+  it("incluye veintitrés reglas versionadas y no recomienda sobre el caso sano", () => {
+    expect(ADVISOR_RULES).toHaveLength(23);
+    expect(new Set(ADVISOR_RULES.map((rule) => rule.id)).size).toBe(23);
     expect(evaluateAdvisor(context())).toEqual([]);
   });
 
@@ -64,6 +64,7 @@ describe("asesor determinista", () => {
       { input: context({ netlist: { ...baseNetlist, components: [...baseNetlist.components, { id: "M1", type: "bsim4nmos", value: 1, pins: ["1", "0", "0", "0"] }] } }), expected: ["model.experimental-bsim"] },
       { input: context({ netlist: { ...baseNetlist, components: [...baseNetlist.components, { id: "A1", type: "arduino_uno", value: 1, pins: ["1", "0"], firmware: new Uint8Array([1]) }] } }), expected: ["model.firmware-present"] },
       { input: context({ analysis: "TRAN", settings: { ...defaultSettings, dt: 1e-3 }, netlist: { ...baseNetlist, components: [...baseNetlist.components, { id: "C1", type: "capacitor", value: 1e-6, pins: ["1", "0"] }] } }), expected: ["tran.rc-time-step"] },
+      { input: context({ analysis: "TRAN", settings: { ...defaultSettings, dt: 1e-3 }, netlist: { ...baseNetlist, components: [...baseNetlist.components, { id: "L1", type: "inductor", value: 1e-3, pins: ["1", "0"] }, { id: "C1", type: "capacitor", value: 1e-6, pins: ["1", "0"] }] } }), expected: ["tran.rc-time-step", "tran.lc-resonance-step"] },
       { input: context({ erc: { passed: false, errors: ["Referencia a Tierra ausente (GND)"], warnings: [] } }), expected: ["erc.missing-ground"] },
       { input: context({ erc: { passed: true, errors: [], warnings: ["Pin flotante detectado"] } }), expected: ["erc.floating-pin"] },
     ];

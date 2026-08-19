@@ -103,8 +103,8 @@ export function attachCanvasInput(
           orchestrator.startDraggingSelected(worldPt.x, worldPt.y);
           callbacks.onSelectionChanged(comp);
         } else if (!isShift && !orchestrator.hoveredWire) {
-          orchestrator.selectionStart = orchestrator.snapPointToGrid(worldPt);
-          orchestrator.selectionEnd = orchestrator.snapPointToGrid(worldPt);
+          orchestrator.selectionStart = { x: worldPt.x, y: worldPt.y };
+          orchestrator.selectionEnd = { x: worldPt.x, y: worldPt.y };
           callbacks.onHideMcuDebug();
           callbacks.onSelectionChanged(null);
         } else if (orchestrator.selectedWire) {
@@ -139,7 +139,7 @@ export function attachCanvasInput(
     }
 
     if (orchestrator.selectionStart) {
-      orchestrator.selectionEnd = orchestrator.snapPointToGrid(worldPt);
+      orchestrator.selectionEnd = { x: worldPt.x, y: worldPt.y };
     }
 
     if (orchestrator.activePinForWire) {

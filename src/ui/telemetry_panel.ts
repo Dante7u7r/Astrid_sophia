@@ -15,8 +15,21 @@ export class TelemetryPanel {
   public static showToast(
     message: string,
     type: 'success' | 'warning' | 'error' | 'info' = 'error',
-    title?: string
+    titleOrOptions?: string | {
+      title?: string;
+      durationMs?: number;
+      actions?: Array<{ label: string; primary?: boolean; onClick: () => void }>;
+    }
   ): void {
+    if (typeof document === 'undefined') return;
+    const options = typeof titleOrOptions === 'object' && titleOrOptions !== null
+      ? titleOrOptions
+      : { title: typeof titleOrOptions === 'string' ? titleOrOptions : undefined };
+
+    const durationMs = options.durationMs !== undefined
+      ? options.durationMs
+      : type === 'error' ? 7000 : 4000;
+
     // 1. Create or get container
     let container = document.getElementById('toast-container');
     if (!container) {
@@ -52,7 +65,7 @@ export class TelemetryPanel {
     };
     const titleDiv = document.createElement('div');
     titleDiv.className = 'toast-title';
-    titleDiv.textContent = title || defaultTitles[type];
+    titleDiv.textContent = options.title || defaultTitles[type];
 
     const messageDiv = document.createElement('div');
     messageDiv.className = 'toast-message';
@@ -60,6 +73,25 @@ export class TelemetryPanel {
 
     content.appendChild(titleDiv);
     content.appendChild(messageDiv);
+
+    // Actions
+    if (options.actions && options.actions.length > 0) {
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'toast-actions';
+      actionsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;';
+      for (const action of options.actions) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn-toast-action ${action.primary ? 'btn-toast-primary' : ''}`;
+        btn.textContent = action.label;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          action.onClick();
+        });
+        actionsDiv.appendChild(btn);
+      }
+      content.appendChild(actionsDiv);
+    }
 
     // 5. Close button
     const closeBtn = document.createElement('button');
@@ -87,15 +119,17 @@ export class TelemetryPanel {
 
     closeBtn.addEventListener('click', removeCard);
 
-    // 7. Auto-destruct after 4 seconds
-    setTimeout(removeCard, 4000);
+    // 7. Auto-destruct after durationMs (if > 0)
+    if (durationMs > 0) {
+      setTimeout(removeCard, durationMs);
+    }
   }
 
   public static logError(errorMsg: string): void {
     TelemetryPanel.lastError = errorMsg;
     recordUiError("simulation", "UI_SIMULATION_ERROR", errorMsg);
     console.error(`[TelemetryPanel Error Log] ${errorMsg}`);
-    
+
     // Automatically trigger a Toast error notification for logged simulation errors
     TelemetryPanel.showToast(errorMsg, 'error');
   }

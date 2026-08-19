@@ -1,9 +1,10 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 import supportBundleSchema from "../../feedback/contracts/support-bundle.v2.schema.json";
 import eventSchema from "../../feedback/contracts/feedback-event.v1.schema.json";
 import type { FeedbackEventV1 } from "./contracts.generated";
-import { createRedactedSupportBundle } from "./intelligence_center";
+import { createRedactedSupportBundle, IntelligenceCenter } from "./intelligence_center";
 
 const completed: FeedbackEventV1 = {
   schemaVersion: 1,
@@ -85,3 +86,64 @@ describe("paquete redactado de soporte", () => {
     expect(second).toEqual(first);
   });
 });
+
+describe("IntelligenceCenter UI & Asesor Component", () => {
+  it("renderiza el rack layout del Centro de Inteligencia y las tarjetas con badges de severidad", () => {
+    const container = document.createElement("div");
+    container.id = "inst-intelligence";
+    document.body.appendChild(container);
+
+    const mockBus = {
+      getStatus: () => Promise.resolve({ consentMode: "local", eventCount: 15, logicalBytes: 1024 }),
+      query: () => Promise.resolve({ events: [completed], hasMore: false }),
+      export: () => Promise.resolve({ events: [completed], hasMore: false }),
+      delete: () => Promise.resolve({ rowsDeleted: 0 }),
+      emit: () => true,
+      flush: () => Promise.resolve(),
+    };
+
+    const center = new IntelligenceCenter(mockBus as any, document);
+    center.init();
+
+    const list = document.querySelector("#intelligence-recommendations-list");
+    expect(list).not.toBeNull();
+
+    // Disparar evento de recomendaciones con diferentes clases de seguridad
+    window.dispatchEvent(
+      new CustomEvent("astryd-recommendations", {
+        detail: [
+          {
+            recommendationId: "rec-1",
+            ruleId: "tran.rc-time-step",
+            ruleVersion: 1,
+            title: "Reduce el paso temporal respecto a RC",
+            explanation: "Explicación teórica",
+            evidence: "dt/tau = 10",
+            safetyClass: "reversible",
+            confidence: 0.95,
+            settingsPatch: { dt: 1e-5 },
+          },
+          {
+            recommendationId: "rec-2",
+            ruleId: "model.experimental-bsim",
+            ruleVersion: 1,
+            title: "Trata BSIM como modelo experimental",
+            explanation: "No reproduce corriente de referencia",
+            evidence: "1 dispositivo BSIM",
+            safetyClass: "scientific-review-required",
+            confidence: 1.0,
+          },
+        ],
+      }),
+    );
+
+    const cards = document.querySelectorAll(".intelligence-recommendation");
+    expect(cards.length).toBe(2);
+    expect(cards[0].textContent).toContain("Ajuste Automático");
+    expect(cards[0].textContent).toContain("⚡ Aplicar ajuste");
+    expect(cards[1].textContent).toContain("Revisión Requerida");
+
+    container.remove();
+  });
+});
+

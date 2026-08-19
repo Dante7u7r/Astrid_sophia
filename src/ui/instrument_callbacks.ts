@@ -6,6 +6,7 @@ export interface InstrumentCallbacks {
   requestRender(immediate?: boolean): void;
   getPinNode(pinKey: string): string | undefined;
   log(text: string, type?: InstrumentLogType): void;
+  isSimulating?: () => boolean;
 }
 
 export function createNoopInstrumentCallbacks(): InstrumentCallbacks {

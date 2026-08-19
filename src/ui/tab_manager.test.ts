@@ -143,7 +143,7 @@ describe("TabManager", () => {
 
     const second = harness.manager.createNewTab("Segunda");
     expect(second).not.toBeNull();
-    expect(harness.getMode()).toBe("DC");
+    expect(harness.getMode()).toBe("PVT");
     expect(harness.getProbes()).toEqual({ ch1: "1", ch2: "2", ch3: "3", ch4: "4" });
     expect(harness.getSparPorts()).toEqual([]);
     expect(harness.getVoltages()).toEqual({});
@@ -159,6 +159,25 @@ describe("TabManager", () => {
     expect(harness.oscilloscope.pvtTraces).toHaveLength(1);
     expect(harness.getOscilloscopeState().timeDivValue).toBe(0.005);
     expect(harness.resetRuntimeState).toHaveBeenCalled();
+  });
+
+  test("conserva el modo de analisis al cerrar una pestana y cambiar a otra", async () => {
+    const harness = createHarness();
+    harness.setMode("TRAN");
+    const first = harness.manager.createNewTab("Primera")!;
+    expect(first.activeAnalysisMode).toBe("TRAN");
+
+    const second = harness.manager.createNewTab("Segunda")!;
+    expect(second.activeAnalysisMode).toBe("TRAN");
+
+    // Cambiamos modo mientras segunda está activa
+    harness.setMode("AC");
+    second.activeAnalysisMode = "AC";
+
+    // Cerrar la segunda pestaña activa debe devolver a la primera y restaurar su modo TRAN
+    await harness.manager.closeTab(second.id);
+    expect(harness.manager.getActiveTabId()).toBe(first.id);
+    expect(harness.getMode()).toBe("TRAN");
   });
 
   test("bloquea crear, cambiar y cerrar la pestana activa durante una simulacion", async () => {

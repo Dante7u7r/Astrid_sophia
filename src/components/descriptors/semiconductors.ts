@@ -71,10 +71,25 @@ export const LedDefinition: ComponentDefinition = {
     const v0 = pinVoltages[0] ?? 0;
     const v1 = pinVoltages[1] ?? 0;
     const vDiff = v0 - v1;
-    const isForward = vDiff > 1.5;
-    const glow = isForward ? Math.max(0, Math.min(1, (vDiff - 1.5) / 0.6)) : 0;
+
+    let vThresh = 1.5;
+    const colorKey = comp.ledColor?.toLowerCase() || "red";
+    if (colorKey === "green" || colorKey === "yellow" || colorKey === "orange") {
+      vThresh = 1.8;
+    } else if (colorKey === "blue" || colorKey === "white") {
+      vThresh = 2.6;
+    } else if (colorKey === "uv") {
+      vThresh = 2.9;
+    } else if (colorKey === "ir") {
+      vThresh = 1.1;
+    }
+
+    const isForward = vDiff > 0.4;
+    const glow = isForward
+      ? Math.max(0.15, Math.min(1.0, (vDiff - 0.4) / Math.max(0.2, vThresh - 0.4)))
+      : 0;
     comp.glowLevel = glow;
-    const i = isForward ? Math.max(0, (vDiff - 1.7) / 20) : 0;
+    const i = isForward ? Math.max(0, (vDiff - 0.6) / 20) : 0;
     return {
       glowLevel: glow,
       branchCurrents: { 0: i, 1: -i },

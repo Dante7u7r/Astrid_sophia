@@ -1,45 +1,117 @@
 import type { ComponentInstance } from "../canvas_orchestrator";
 
+interface LedColorTheme {
+  lens: string;
+  glowPrefix: string;
+  beam: string;
+  stroke: string;
+  photonStroke: string;
+}
+
+const LED_THEMES: Record<string, LedColorTheme> = {
+  red: {
+    lens: "rgba(239, 68, 68, ",
+    glowPrefix: "rgba(239, 68, 68, ",
+    beam: "#EF4444",
+    stroke: "#F87171",
+    photonStroke: "rgba(252, 165, 165, ",
+  },
+  green: {
+    lens: "rgba(34, 197, 94, ",
+    glowPrefix: "rgba(34, 197, 94, ",
+    beam: "#22C55E",
+    stroke: "#4ADE80",
+    photonStroke: "rgba(134, 239, 172, ",
+  },
+  blue: {
+    lens: "rgba(59, 130, 246, ",
+    glowPrefix: "rgba(59, 130, 246, ",
+    beam: "#3B82F6",
+    stroke: "#60A5FA",
+    photonStroke: "rgba(147, 197, 253, ",
+  },
+  yellow: {
+    lens: "rgba(234, 179, 8, ",
+    glowPrefix: "rgba(234, 179, 8, ",
+    beam: "#EAB308",
+    stroke: "#FACC15",
+    photonStroke: "rgba(254, 240, 138, ",
+  },
+  orange: {
+    lens: "rgba(249, 115, 22, ",
+    glowPrefix: "rgba(249, 115, 22, ",
+    beam: "#F97316",
+    stroke: "#FB923C",
+    photonStroke: "rgba(253, 186, 116, ",
+  },
+  white: {
+    lens: "rgba(248, 250, 252, ",
+    glowPrefix: "rgba(241, 245, 249, ",
+    beam: "#FFFFFF",
+    stroke: "#F1F5F9",
+    photonStroke: "rgba(255, 255, 255, ",
+  },
+  uv: {
+    lens: "rgba(168, 85, 247, ",
+    glowPrefix: "rgba(168, 85, 247, ",
+    beam: "#A855F7",
+    stroke: "#C084FC",
+    photonStroke: "rgba(216, 180, 254, ",
+  },
+  ir: {
+    lens: "rgba(148, 163, 184, ",
+    glowPrefix: "rgba(147, 51, 234, ",
+    beam: "rgba(168, 85, 247, 0.6)",
+    stroke: "#94A3B8",
+    photonStroke: "rgba(192, 132, 252, ",
+  },
+};
+
 export function drawLed(
   ctx: CanvasRenderingContext2D,
   comp: ComponentInstance,
   color: string,
 ): void {
-  const glow = comp.glowLevel ?? 0;
+  const glow = Math.max(0, Math.min(1, comp.glowLevel ?? 0));
+  const colorKey = comp.ledColor?.toLowerCase() || "red";
+  const theme = LED_THEMES[colorKey] ?? LED_THEMES.red;
 
-  // 1. Resplandor radial exterior cuando está encendido
-  if (glow > 0.03) {
-    const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, 32);
-    grad.addColorStop(0, `rgba(255, 60, 40, ${glow * 0.75})`);
-    grad.addColorStop(0.4, `rgba(255, 140, 20, ${glow * 0.4})`);
-    grad.addColorStop(0.7, `rgba(255, 180, 0, ${glow * 0.15})`);
-    grad.addColorStop(1, "rgba(255, 180, 0, 0)");
+  // 1. Resplandor radial exterior cuando está encendido (Halo fotónico difuso)
+  if (glow > 0.02) {
+    const radius = 24 + glow * 16;
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, radius);
+    grad.addColorStop(0, `${theme.glowPrefix}${(glow * 0.85).toFixed(3)})`);
+    grad.addColorStop(0.35, `${theme.glowPrefix}${(glow * 0.45).toFixed(3)})`);
+    grad.addColorStop(0.7, `${theme.glowPrefix}${(glow * 0.15).toFixed(3)})`);
+    grad.addColorStop(1, `${theme.glowPrefix}0)`);
+
     ctx.save();
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(0, 0, 32, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
-  // 2. Triángulo del diodo ánodo -> cátodo
+  // 2. Triángulo del diodo ánodo -> cátodo (Lente semiconductora)
   ctx.beginPath();
   ctx.moveTo(-12, -10);
   ctx.lineTo(-12, 10);
   ctx.lineTo(8, 0);
   ctx.closePath();
 
-  if (glow > 0.05) {
+  if (glow > 0.02) {
     ctx.save();
-    ctx.fillStyle = `rgba(255, 68, 68, ${0.4 + glow * 0.6})`;
+    ctx.fillStyle = `${theme.lens}${(0.25 + glow * 0.75).toFixed(3)})`;
     ctx.fill();
-    ctx.strokeStyle = "#FF6B6B";
+    ctx.strokeStyle = theme.stroke;
     ctx.lineWidth = 1.8;
-    ctx.shadowColor = "rgba(255, 50, 50, 0.9)";
-    ctx.shadowBlur = 8 * glow;
+    ctx.shadowColor = theme.beam;
+    ctx.shadowBlur = 10 * glow;
     ctx.stroke();
     ctx.restore();
   } else {
+    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
     ctx.fill();
     ctx.stroke();
   }
@@ -48,23 +120,26 @@ export function drawLed(
   ctx.beginPath();
   ctx.moveTo(8, -10);
   ctx.lineTo(8, 10);
-  if (glow > 0.05) {
+  if (glow > 0.02) {
     ctx.save();
-    ctx.strokeStyle = "#FF8888";
+    ctx.strokeStyle = theme.stroke;
     ctx.lineWidth = 2.0;
+    ctx.shadowColor = theme.beam;
+    ctx.shadowBlur = 6 * glow;
     ctx.stroke();
     ctx.restore();
   } else {
     ctx.stroke();
   }
 
-  // 4. Flechas de emisión de fotones
+  // 4. Flechas de emisión de fotones (Radiación óptica)
   ctx.save();
-  ctx.strokeStyle = glow > 0.05 ? `rgba(255, 200, 50, ${0.7 + glow * 0.3})` : color;
-  ctx.lineWidth = glow > 0.05 ? 1.6 : 1.2;
-  if (glow > 0.05) {
-    ctx.shadowColor = "rgba(255, 200, 50, 0.8)";
-    ctx.shadowBlur = 4 * glow;
+  const photonColor = glow > 0.02 ? `${theme.photonStroke}${(0.5 + glow * 0.5).toFixed(3)})` : color;
+  ctx.strokeStyle = photonColor;
+  ctx.lineWidth = glow > 0.02 ? 1.6 : 1.2;
+  if (glow > 0.02) {
+    ctx.shadowColor = theme.beam;
+    ctx.shadowBlur = 6 * glow;
   }
   ctx.beginPath();
   ctx.moveTo(12, -6);

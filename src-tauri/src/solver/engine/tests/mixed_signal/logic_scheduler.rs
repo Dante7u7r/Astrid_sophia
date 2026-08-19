@@ -218,3 +218,80 @@ fn test_logic_gate_hysteresis() {
     assert_eq!(u1.gate_vhigh, Some(3.0));
     assert_eq!(u1.gate_vlow, Some(1.0));
 }
+
+#[test]
+fn test_logic_gate_analog_rise_fall_ramp() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                wave_type: Some("pulse".to_string()),
+                amplitude: Some(5.0),
+                frequency: Some(500e3), // Periodo 2 µs: 1 µs en 5V, 1 µs en 0V
+                offset: Some(0.0),
+                duty_cycle: Some(0.5),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "U1".to_string(),
+                comp_type: "not_gate".to_string(),
+                value: 0.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                delay: Some(0.0),
+                gate_trise: Some(100e-9), // 100 ns tiempo de subida analógico
+                gate_tfall: Some(100e-9), // 100 ns tiempo de bajada analógico
+                gate_vhigh: Some(2.0), // Umbral de entrada alto
+                gate_vlow: Some(0.8),  // Umbral de entrada bajo
+                gate_rout: Some(50.0),
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: Some(true),
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 10e-9,   // 10 ns
+        t_max: 1.5e-6, // 1.5 µs
+        integration_method: Some("BE".to_string()),
+        fixed_step: Some(true),
+    };
+
+    let (results, _, _) = solve_transient_circuit_with_initial_states(
+        &netlist,
+        &settings,
+        HashMap::new(),
+        HashMap::new(),
+    )
+    .unwrap();
+
+    let v_50ns_into_rise = results.iter()
+        .min_by(|a, b| ((a.time - 1.05e-6).abs()).partial_cmp(&(b.time - 1.05e-6).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("2").unwrap())
+        .unwrap();
+
+    // A t = 1.2 µs (200 ns tras el flanco), la salida debe haber alcanzado 5V
+    let v_completed_rise = results.iter()
+        .min_by(|a, b| ((a.time - 1.2e-6).abs()).partial_cmp(&(b.time - 1.2e-6).abs()).unwrap())
+        .map(|s| *s.node_voltages.get("2").unwrap())
+        .unwrap();
+
+    assert!(
+        v_50ns_into_rise > 0.5 && v_50ns_into_rise < 4.5,
+        "La salida debe mostrar una rampa analógica continua a mitad del tiempo de subida: V(1.05µs)={:.2}V",
+        v_50ns_into_rise
+    );
+    assert!(
+        v_completed_rise > 4.5,
+        "La salida debe alcanzar el estado alto al finalizar t_rise: V(1.2µs)={:.2}V",
+        v_completed_rise
+    );
+}

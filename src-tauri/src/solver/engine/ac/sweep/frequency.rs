@@ -83,12 +83,13 @@ pub(super) fn solve_ac_frequencies(
                             matrix_a.add_element(node_neg - 1, col, Complex::new(-1.0, 0.0));
                             matrix_a.add_element(col, node_neg - 1, Complex::new(-1.0, 0.0));
                         }
-                        let ac_amp = comp.amplitude.unwrap_or(if comp.id == "V1" {
+                        let ac_amp = comp.ac_mag.or(comp.amplitude).unwrap_or(if comp.id == "V1" {
                             comp.value
                         } else {
                             0.0
                         });
-                        vector_z[col] = Complex::new(ac_amp, 0.0);
+                        let ac_phase_rad = comp.ac_phase.or(comp.phase).unwrap_or(0.0).to_radians();
+                        vector_z[col] = Complex::from_polar(ac_amp, ac_phase_rad);
                     }
                     "capacitor" => {
                         let node_a = comp.pins[0].parse::<usize>().unwrap();
@@ -296,13 +297,19 @@ pub(super) fn solve_ac_frequencies(
                         let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
                         let pin_out = comp.pins[4].parse::<usize>().unwrap();
 
-                        let r_in = 1e7;
-                        let r_out = 100.0;
-                        let g_in = Complex::new(1.0 / r_in, 0.0);
-                        let g_out = Complex::new(1.0 / r_out, 0.0);
-                        let g_m_opamp_val = *opamp_gm.get(&comp.id).unwrap_or(&1000.0);
-                        let pole_factor = Complex::new(1.0, f_val / 10.0);
-                        let g_m_opamp = Complex::new(g_m_opamp_val, 0.0) / pole_factor;
+                        let a_ol = comp.opamp_aol.unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
+                        let gbw = comp.opamp_gbw.unwrap_or(1e6);
+                        let r_in = comp.opamp_rin.unwrap_or(1e7);
+                        let r_out = comp.opamp_rout.unwrap_or(75.0);
+                        let g_in = Complex::new(1.0 / r_in.max(1.0), 0.0);
+                        let g_out = Complex::new(1.0 / r_out.max(1e-3), 0.0);
+                        let g_m_opamp_val = *opamp_gm.get(&comp.id).unwrap_or(&(a_ol / r_out));
+
+                        let f_p1 = (gbw / a_ol.max(1.0)).max(0.1);
+                        let f_p2 = (2.0 * gbw).max(1.0);
+                        let pole_factor1 = Complex::new(1.0, f_val / f_p1);
+                        let pole_factor2 = Complex::new(1.0, f_val / f_p2);
+                        let g_m_opamp = (Complex::new(g_m_opamp_val, 0.0) / pole_factor1) / pole_factor2;
 
                         stamp_conductance(&mut matrix_a, pin_in_pos, pin_in_pos, g_in);
                         stamp_conductance(&mut matrix_a, pin_in_neg, pin_in_neg, g_in);

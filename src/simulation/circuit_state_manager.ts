@@ -219,7 +219,9 @@ export class CircuitStateManager {
   buildPinVoltageMap(): Record<string, number> {
     const pinVoltageMap: Record<string, number> = {};
     for (const [pinKey, nodeId] of Object.entries(this._pinToNodeMap)) {
-      if (this._liveVoltages[nodeId] !== undefined) {
+      if (nodeId === "0") {
+        pinVoltageMap[pinKey] = this._liveVoltages["0"] ?? 0.0;
+      } else if (this._liveVoltages[nodeId] !== undefined) {
         pinVoltageMap[pinKey] = this._liveVoltages[nodeId];
       }
     }
@@ -261,13 +263,27 @@ export class CircuitStateManager {
         if (behavior.branchCurrents) {
           for (const [pinIdxStr, current] of Object.entries(behavior.branchCurrents)) {
             const pinIdx = Number(pinIdxStr);
-            branchCurrents[`${comp.id}:${pinIdx}`] = current;
+            if (branchCurrents[`${comp.id}:${pinIdx}`] === undefined) {
+              branchCurrents[`${comp.id}:${pinIdx}`] = current;
+            }
           }
           const primaryI = behavior.branchCurrents[0];
-          if (primaryI !== undefined) {
+          if (primaryI !== undefined && branchCurrents[comp.id] === undefined) {
             branchCurrents[comp.id] = primaryI;
             branchCurrents[`${comp.id}:I`] = primaryI;
           }
+        }
+      }
+
+      // Si el solver SPICE entrega corriente directa de rama para el LED
+      if (comp.type === "led") {
+        const iFwd = Math.max(
+          0,
+          branchCurrents[comp.id] ?? branchCurrents[`${comp.id}:0`] ?? 0,
+        );
+        if (iFwd > 1e-5) {
+          const opticalGlow = Math.min(1.0, Math.max(0.15, Math.sqrt(iFwd / 0.015)));
+          comp.glowLevel = Math.max(comp.glowLevel ?? 0, opticalGlow);
         }
       }
     }

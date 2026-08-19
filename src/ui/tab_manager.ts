@@ -143,7 +143,7 @@ export class TabManager {
     return tab;
   }
 
-  public createNewTab(name?: string, initialData?: InitialTabData): Tab | null {
+  public createNewTab(name?: string, initialData?: InitialTabData, analysisMode?: AnalysisMode): Tab | null {
     if (this.activeTabId && !this.callbacks.canChangeActiveTab()) {
       this.callbacks.addLog(
         "Deten la simulacion activa antes de crear otra pestana.",
@@ -153,7 +153,8 @@ export class TabManager {
     }
 
     const tabId = Math.random().toString(36).substring(2, 9);
-    const newTab = this.store.createTab(tabId, name, initialData);
+    const mode = analysisMode ?? this.callbacks.getActiveAnalysisMode();
+    const newTab = this.store.createTab(tabId, name, initialData, mode);
 
     this.switchTab(tabId);
     return newTab;
@@ -252,7 +253,7 @@ export class TabManager {
           orchestrator.components = [];
           orchestrator.wires = [];
         }
-        this.createNewTab("Circuito 1");
+        this.createNewTab("Circuito 1", undefined, this.callbacks.getActiveAnalysisMode());
       }
     } else {
       this.renderTabsBar();
@@ -301,11 +302,11 @@ export class TabManager {
     const btnAddTab = document.querySelector("#btn-add-tab");
     if (btnAddTab) {
       btnAddTab.addEventListener("click", () => {
-        this.createNewTab();
+        this.createNewTab(undefined, undefined, this.callbacks.getActiveAnalysisMode());
       });
     }
 
-    this.createNewTab("Circuito 1");
+    this.createNewTab("Circuito 1", undefined, this.callbacks.getActiveAnalysisMode());
     onAddTabShortcut();
   }
 }

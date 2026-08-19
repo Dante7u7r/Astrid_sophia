@@ -34,7 +34,6 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         -15.0
     };
 
-    let v_diff = v_in_pos - v_in_neg;
     let mut v_span = v_vplus - v_vminus;
     let mut v_mid = 0.5 * (v_vplus + v_vminus);
 
@@ -44,13 +43,15 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         v_mid = 0.0;
     }
 
-    let a_ol = 1e5; // Ganancia de lazo abierto
-    let r_in = 1e7; // 10 Mohm
-    let r_out = 100.0; // 100 ohm
-    let g_out = 1.0 / r_out;
-    let g_in = 1.0 / r_in;
+    let a_ol = comp.opamp_aol.unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
+    let r_in = comp.opamp_rin.unwrap_or(1e7);
+    let r_out = comp.opamp_rout.unwrap_or(75.0);
+    let v_os = comp.opamp_vos.unwrap_or(0.0);
+    let i_b = comp.opamp_ib.unwrap_or(0.0);
+    let g_out = 1.0 / r_out.max(1e-3);
+    let g_in = 1.0 / r_in.max(1.0);
 
-    // 1. Estampar conductancia de entrada diferencial R_in
+    // 1. Estampar conductancia de entrada diferencial R_in y bias currents
     let mut stamp_conductance = |r: usize, c: usize, g: f64| {
         if r > 0 && c > 0 {
             matrix_a.add_element(r - 1, c - 1, g);
@@ -61,7 +62,17 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     stamp_conductance(pin_in_pos, pin_in_neg, -g_in);
     stamp_conductance(pin_in_neg, pin_in_pos, -g_in);
 
-    // 2. Calcular V_int_ctrl no lineal con tanh
+    if i_b.abs() > 0.0 {
+        if pin_in_pos > 0 {
+            vector_z[pin_in_pos - 1] -= i_b;
+        }
+        if pin_in_neg > 0 {
+            vector_z[pin_in_neg - 1] -= i_b;
+        }
+    }
+
+    // 2. Calcular V_int_ctrl no lineal con tanh y offset
+    let v_diff = (v_in_pos - v_in_neg) + v_os;
     let arg = (a_ol * v_diff) / v_span;
     let tanh_val = arg.tanh();
     let v_int_ctrl = v_mid + 0.5 * v_span * tanh_val;

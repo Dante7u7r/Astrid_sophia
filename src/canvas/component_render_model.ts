@@ -5,6 +5,27 @@
 import type { ComponentInstance } from "../canvas_orchestrator";
 import { globalComponentRegistry } from "../components/registry";
 
+const WAVE_LABELS: Record<string, string> = {
+  sine: "∿",
+  square: "⊓",
+  triangle: "△",
+  sawtooth: "⩘",
+  pulse: "⊓",
+  am: "AM",
+};
+
+/** Devuelve un glifo compacto para el tipo de onda */
+export function formatWaveLabel(waveType: string): string {
+  return WAVE_LABELS[waveType] ?? waveType.toUpperCase();
+}
+
+/** Formatea frecuencia con sufijo de ingeniería (Hz, kHz, MHz) */
+export function formatFreq(hz: number): string {
+  if (hz >= 1e6) return `${+(hz / 1e6).toPrecision(4)} MHz`;
+  if (hz >= 1e3) return `${+(hz / 1e3).toPrecision(4)} kHz`;
+  return `${+hz.toPrecision(4)} Hz`;
+}
+
 export interface ComponentVisualState {
   color: string;
   lineWidth: number;
@@ -73,30 +94,49 @@ export function formatComponentValue(comp: ComponentInstance): string {
   if (comp.type === "resistor") {
     const numericVal = Number(comp.value);
     formattedVal = numericVal >= 1000 ? `${numericVal / 1000} kOhm` : `${numericVal} Ohm`;
+    if (comp.tolerance !== undefined) {
+      formattedVal += ` \u00B1${comp.tolerance}%`;
+    }
   } else if (comp.type === "capacitor") {
     const numericVal = Number(comp.value);
     formattedVal = numericVal < 1e-6 ? `${numericVal * 1e9} nF` : `${numericVal * 1e6} uF`;
+    if (comp.voltageRating !== undefined) {
+      formattedVal += ` ${comp.voltageRating}V`;
+    }
   } else if (comp.type === "inductor") {
     const numericVal = Number(comp.value);
     formattedVal = numericVal < 1e-3 ? `${numericVal * 1e6} uH` : `${numericVal * 1e3} mH`;
+    if (comp.currentRating !== undefined) {
+      formattedVal += ` ${comp.currentRating}A`;
+    }
   } else if (comp.type === "vsource") {
     if (comp.waveType && comp.waveType !== "dc") {
-      const modeStr = comp.waveType.toUpperCase();
       const amp = comp.amplitude ?? comp.value;
       const freq = comp.frequency ?? 1000;
-      formattedVal = `${modeStr} ${amp}V ${freq}Hz`;
+      if (comp.waveType === "am") {
+        const m = comp.modIndex !== undefined ? Math.round(comp.modIndex * 100) : 80;
+        formattedVal = `AM ${amp}Vp ${formatFreq(freq)} (m=${m}%)`;
+      } else {
+        formattedVal = `${formatWaveLabel(comp.waveType)} ${amp}Vp ${formatFreq(freq)}`;
+      }
     } else {
       formattedVal = `${comp.value} V`;
     }
   } else if (comp.type === "isource") {
     if (comp.waveType && comp.waveType !== "dc") {
-      const modeStr = comp.waveType.toUpperCase();
       const amp = comp.amplitude ?? comp.value;
       const freq = comp.frequency ?? 1000;
-      formattedVal = `${modeStr} ${amp}A ${freq}Hz`;
+      if (comp.waveType === "am") {
+        const m = comp.modIndex !== undefined ? Math.round(comp.modIndex * 100) : 80;
+        formattedVal = `AM ${amp}Ap ${formatFreq(freq)} (m=${m}%)`;
+      } else {
+        formattedVal = `${formatWaveLabel(comp.waveType)} ${amp}Ap ${formatFreq(freq)}`;
+      }
     } else {
       formattedVal = `${comp.value} A`;
     }
+  } else if (comp.type === "led") {
+    formattedVal = comp.ledColor ? `LED ${comp.ledColor.toUpperCase()}` : "LED";
   } else if (comp.type === "potentiometer") {
     const totalR = Number(comp.value);
     const formattedR = totalR >= 1000 ? `${totalR / 1000} kOhm` : `${totalR} Ohm`;
@@ -127,8 +167,6 @@ export function formatComponentValue(comp: ComponentInstance): string {
     else if (mode === 2) formattedVal = `Modo integrado: Umbral · ${supply}`;
     else if (mode === 3) formattedVal = `Modo integrado: PWM · ${supply}`;
     else formattedVal = `Modo integrado: Seguidor · ${supply}`;
-  } else if (comp.type === "led") {
-    formattedVal = "LED";
   } else if (comp.type === "switch") {
     formattedVal = comp.switchState ? "Cerrado" : "Abierto";
   } else if (comp.type === "transformer") {

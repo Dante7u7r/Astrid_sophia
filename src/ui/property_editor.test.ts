@@ -10,17 +10,54 @@ function installPropertyDom(): void {
     <input id="prop-id-input" />
     <div id="group-comp-val"><span class="property-label"></span>
       <input id="prop-val-input" />
+      <button id="btn-snap-standard">E24</button>
       <button id="prop-val-dec"></button>
       <button id="prop-val-inc"></button>
       <input id="prop-val-slider" type="range" />
     </div>
     <div id="group-comp-unit"><input id="prop-unit-input" /></div>
+    <div id="group-comp-preset">
+      <select id="prop-preset-select"></select>
+    </div>
     <div id="wave-properties-container">
-      <select id="prop-wave-type"><option value="dc">CC</option><option value="sine">Seno</option></select>
-      <div id="field-wave-amp"><input id="prop-wave-amp" /></div>
-      <div id="field-wave-freq"><input id="prop-wave-freq" /></div>
-      <div id="field-wave-offset"><input id="prop-wave-offset" /></div>
-      <div id="field-wave-duty"><input id="prop-wave-duty" /></div>
+      <select id="prop-wave-type"><option value="dc">CC</option><option value="sine">Seno</option><option value="am">AM</option></select>
+      <div id="group-wave-amp"><input id="prop-wave-amp" /></div>
+      <div id="group-wave-freq"><input id="prop-wave-freq" /></div>
+      <div id="group-wave-mod-freq"><input id="prop-wave-mod-freq" /></div>
+      <div id="group-wave-mod-index"><input id="prop-wave-mod-index" /></div>
+      <div id="group-wave-phase"><input id="prop-wave-phase" /></div>
+      <div id="group-wave-offset"><input id="prop-wave-offset" /></div>
+      <div id="group-wave-duty"><input id="prop-wave-duty" /></div>
+      <div id="group-wave-rs"><input id="prop-wave-rs" /></div>
+      <div id="group-wave-ac-mag"><input id="prop-wave-ac-mag" /></div>
+      <div id="group-wave-ac-phase"><input id="prop-wave-ac-phase" /></div>
+    </div>
+    <div id="resistor-properties-container">
+      <select id="prop-resistor-tolerance"><option value="1">1%</option><option value="5">5%</option></select>
+      <select id="prop-resistor-power"><option value="0.25">0.25W</option><option value="1">1W</option></select>
+    </div>
+    <div id="capacitor-properties-container">
+      <select id="prop-capacitor-voltage"><option value="25">25V</option><option value="50">50V</option></select>
+      <input id="prop-capacitor-esr" />
+      <select id="prop-capacitor-dielectric"><option value="ceramic">Ceramic</option><option value="electrolytic">Electrolytic</option></select>
+    </div>
+    <div id="inductor-properties-container">
+      <input id="prop-inductor-dcr" />
+      <input id="prop-inductor-isat" />
+    </div>
+    <div id="led-properties-container">
+      <select id="prop-led-color"><option value="red">Red</option><option value="green">Green</option><option value="blue">Blue</option></select>
+      <input id="prop-led-imax" />
+    </div>
+    <div id="potentiometer-container">
+      <input id="prop-wiper-slider" type="range" min="0.01" max="0.99" step="0.01" value="0.5" />
+      <span id="prop-wiper-display">50%</span>
+      <select id="prop-pot-taper"><option value="linear">Lineal</option><option value="log">Log</option></select>
+    </div>
+    <div id="semiconductor-properties-container">
+      <select id="prop-semi-model"><option value="custom">custom</option></select>
+      <div id="prop-semi-desc"></div>
+      <div id="group-diode-bv"><input id="prop-diode-bv" /></div>
     </div>
     <div id="dmm-properties-container">
       <select id="prop-dmm-mode">
@@ -164,5 +201,129 @@ describe("PropertyEditor componentes especiales", () => {
     expect(source.value).toBe(12);
     expect(source.offset).toBe(12);
     expect(extractNetlist).toHaveBeenCalledOnce();
+  });
+
+  test("aplica y persiste parametros avanzados de fuente AM, fase y resistencia interna", () => {
+    const source: ComponentInstance = {
+      id: "V_RF", type: "vsource", value: 1, x: 0, y: 0, rotation: 0,
+    };
+    createEditor(source);
+
+    const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
+    waveTypeSelect.value = "am";
+    waveTypeSelect.dispatchEvent(new Event("change"));
+
+    (document.querySelector("#prop-wave-amp") as HTMLInputElement).value = "10";
+    (document.querySelector("#prop-wave-freq") as HTMLInputElement).value = "1000000";
+    (document.querySelector("#prop-wave-mod-freq") as HTMLInputElement).value = "1000";
+    (document.querySelector("#prop-wave-mod-index") as HTMLInputElement).value = "0.75";
+    (document.querySelector("#prop-wave-phase") as HTMLInputElement).value = "45";
+    (document.querySelector("#prop-wave-offset") as HTMLInputElement).value = "1.5";
+    (document.querySelector("#prop-wave-rs") as HTMLInputElement).value = "50";
+
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+
+    expect(source.waveType).toBe("am");
+    expect(source.amplitude).toBe(10);
+    expect(source.frequency).toBe(1000000);
+    expect(source.modFrequency).toBe(1000);
+    expect(source.modIndex).toBe(0.75);
+    expect(source.phase).toBe(45);
+    expect(source.offset).toBe(1.5);
+    expect(source.sourceResistance).toBe(50);
+  });
+
+  test("aplica y persiste propiedades de ingenieria para pasivos y optoelectronica", () => {
+    // 1. Resistor: tolerancia y potencia
+    const resistor: ComponentInstance = { id: "R1", type: "resistor", value: 4700, x: 0, y: 0, rotation: 0 };
+    createEditor(resistor);
+    (document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement).value = "5";
+    (document.querySelector("#prop-resistor-power") as HTMLSelectElement).value = "1";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+    expect(resistor.tolerance).toBe(5);
+    expect(resistor.powerRating).toBe(1);
+
+    // 2. Capacitor: voltage rating, esr, dieléctrico
+    const capacitor: ComponentInstance = { id: "C1", type: "capacitor", value: 1e-6, x: 0, y: 0, rotation: 0 };
+    createEditor(capacitor);
+    (document.querySelector("#prop-capacitor-voltage") as HTMLSelectElement).value = "50";
+    (document.querySelector("#prop-capacitor-esr") as HTMLInputElement).value = "0.05";
+    (document.querySelector("#prop-capacitor-dielectric") as HTMLSelectElement).value = "electrolytic";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+    expect(capacitor.voltageRating).toBe(50);
+    expect(capacitor.esr).toBe(0.05);
+    expect(capacitor.dielectricType).toBe("electrolytic");
+
+    // 3. Inductor: DCR y corriente de saturación
+    const inductor: ComponentInstance = { id: "L1", type: "inductor", value: 1e-3, x: 0, y: 0, rotation: 0 };
+    createEditor(inductor);
+    (document.querySelector("#prop-inductor-dcr") as HTMLInputElement).value = "0.15";
+    (document.querySelector("#prop-inductor-isat") as HTMLInputElement).value = "2.5";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+    expect(inductor.dcResistance).toBe(0.15);
+    expect(inductor.currentRating).toBe(2.5);
+
+    // 4. LED: color y corriente máxima
+    const led: ComponentInstance = { id: "D1", type: "led", value: 0, x: 0, y: 0, rotation: 0 };
+    createEditor(led);
+    (document.querySelector("#prop-led-color") as HTMLSelectElement).value = "blue";
+    (document.querySelector("#prop-led-imax") as HTMLInputElement).value = "30";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+    expect(led.ledColor).toBe("blue");
+    expect(led.maxCurrent).toBe(30);
+
+    // 5. Potenciómetro: curva / taper
+    const pot: ComponentInstance = { id: "POT1", type: "potentiometer", value: 10000, x: 0, y: 0, rotation: 0 };
+    createEditor(pot);
+    (document.querySelector("#prop-pot-taper") as HTMLSelectElement).value = "log";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+    expect(pot.potTaper).toBe("log");
+  });
+
+  test("ajusta valor nominal a la serie comercial E24 al pulsar el boton E24", () => {
+    const resistor: ComponentInstance = { id: "R1", type: "resistor", value: 4620, x: 0, y: 0, rotation: 0 };
+    createEditor(resistor);
+    const valInput = document.querySelector("#prop-val-input") as HTMLInputElement;
+    valInput.value = "4620";
+
+    const btnSnap = document.querySelector("#btn-snap-standard") as HTMLButtonElement;
+    btnSnap.click();
+
+    expect(resistor.value).toBe(4700);
+  });
+
+  test("carga plantillas comerciales / presets rapidos en componentes", () => {
+    const capacitor: ComponentInstance = { id: "C1", type: "capacitor", value: 1e-6, x: 0, y: 0, rotation: 0 };
+    createEditor(capacitor);
+
+    const presetSelect = document.querySelector("#prop-preset-select") as HTMLSelectElement;
+    expect(presetSelect.options.length).toBeGreaterThan(1);
+
+    presetSelect.value = "decoupling_100n";
+    presetSelect.dispatchEvent(new Event("change"));
+
+    expect(capacitor.value).toBe(1e-7);
+    expect(capacitor.voltageRating).toBe(50);
+    expect(capacitor.dielectricType).toBe("ceramic");
+  });
+
+  test("aplica magnitud y fase AC para barridos de frecuencia Bode y tension Zener", () => {
+    const source: ComponentInstance = { id: "V1", type: "vsource", value: 10, x: 0, y: 0, rotation: 0 };
+    createEditor(source);
+
+    (document.querySelector("#prop-wave-ac-mag") as HTMLInputElement).value = "2.5";
+    (document.querySelector("#prop-wave-ac-phase") as HTMLInputElement).value = "45";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+
+    expect(source.acMag).toBe(2.5);
+    expect(source.acPhase).toBe(45);
+
+    const diode: ComponentInstance = { id: "D1", type: "diode", value: 0.7, x: 0, y: 0, rotation: 0 };
+    createEditor(diode);
+
+    (document.querySelector("#prop-diode-bv") as HTMLInputElement).value = "5.1";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+
+    expect(diode.diodeBv).toBe(5.1);
   });
 });

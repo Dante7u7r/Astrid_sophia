@@ -68,30 +68,67 @@ export function stampVoltageSource(
 }
 
 export function evaluateWaveformValue(
-  comp: Pick<ExtractedComponent, "value" | "waveType" | "amplitude" | "frequency" | "offset" | "dutyCycle">,
+  comp: Pick<
+    ExtractedComponent,
+    "value" | "waveType" | "amplitude" | "frequency" | "offset" | "dutyCycle" | "phase" | "modFrequency" | "modIndex"
+  >,
   t: number,
 ): number {
-  let value = comp.value;
-  if (!comp.waveType) return value;
+  if (!comp.waveType || comp.waveType === "dc") return comp.value;
 
   const amp = comp.amplitude ?? 0;
   const freq = comp.frequency ?? 1000;
   const offset = comp.offset ?? 0;
   const duty = comp.dutyCycle ?? 0.5;
+  const phaseRad = (((comp.phase ?? 0) * Math.PI) / 180);
 
-  if (comp.waveType === "sine") {
-    value = offset + amp * Math.sin(2 * Math.PI * freq * t);
-  } else if (comp.waveType === "square") {
-    const period = 1.0 / freq;
-    const tMod = t % period;
-    value = tMod < duty * period ? offset + amp : offset - amp;
-  } else if (comp.waveType === "pulse") {
-    const period = 1.0 / freq;
-    const tMod = t % period;
-    value = tMod < duty * period ? offset + amp : offset;
+  switch (comp.waveType) {
+    case "sine":
+      return offset + amp * Math.sin(2 * Math.PI * freq * t + phaseRad);
+
+    case "square": {
+      const period = 1.0 / freq;
+      const tMod = t % period;
+      return tMod < duty * period ? offset + amp : offset - amp;
+    }
+
+    case "pulse": {
+      const period = 1.0 / freq;
+      const tMod = t % period;
+      return tMod < duty * period ? offset + amp : offset;
+    }
+
+    case "triangle": {
+      const period = 1.0 / freq;
+      const tMod = t % period;
+      const phase = tMod / period;
+      // Rampa ascendente 0→1 en [0, 0.5], descendente 1→0 en [0.5, 1]
+      const normalized = phase < 0.5
+        ? phase * 2.0
+        : 2.0 - phase * 2.0;
+      return offset + amp * (2.0 * normalized - 1.0);
+    }
+
+    case "sawtooth": {
+      const period = 1.0 / freq;
+      const tMod = t % period;
+      // Rampa lineal ascendente de -amp a +amp en un período
+      return offset + amp * (2.0 * (tMod / period) - 1.0);
+    }
+
+    case "am": {
+      // Modulación de Amplitud (AM): v(t) = Offset + Ac * [1 + m * sin(2*pi*fm*t)] * sin(2*pi*fc*t + phase)
+      const carrierFreq = freq;
+      const modFreq = comp.modFrequency ?? (freq / 10);
+      const modIndex = comp.modIndex ?? 0.8;
+      const carrier = Math.sin(2 * Math.PI * carrierFreq * t + phaseRad);
+      const modulation = 1.0 + modIndex * Math.sin(2 * Math.PI * modFreq * t);
+      return offset + amp * modulation * carrier;
+    }
+
+    default:
+      return comp.value;
   }
-
-  return value;
 }
 
 export function stampCapacitorBackwardEuler(

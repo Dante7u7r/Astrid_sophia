@@ -93,6 +93,10 @@ export function createDesktopControllerRegistry(
 
   const setActiveAnalysisMode = (mode: AnalysisMode): void => {
     deps.setActiveAnalysisMode(mode);
+    const activeTab = tabManager?.getActiveTab();
+    if (activeTab) {
+      activeTab.activeAnalysisMode = mode;
+    }
     updateQaState({ lastSimulationMode: mode });
   };
 
@@ -157,6 +161,7 @@ export function createDesktopControllerRegistry(
     getTabManager: () => tabManager,
     getOrchestrator: deps.getOrchestrator,
     getOscilloscopePanel: () => oscilloscopePanel,
+    getInstrumentsDock: deps.getInstrumentsDock,
     getSimulationSettings: deps.getSimulationSettings,
     setActiveAnalysisMode: deps.setActiveAnalysisMode,
     getSparPorts: deps.getSparPorts,

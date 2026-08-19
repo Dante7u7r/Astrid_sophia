@@ -65,6 +65,8 @@ export function createProbePlacementController(
     panel.ch2ProbeNode = nodes.ch2;
     panel.ch3ProbeNode = nodes.ch3;
     panel.ch4ProbeNode = nodes.ch4;
+    panel.syncFocusedChannelUI?.();
+    panel.draw?.();
   };
 
   return {

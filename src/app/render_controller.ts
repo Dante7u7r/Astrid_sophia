@@ -181,8 +181,11 @@ export class RenderController {
 
     if (!this.dependencies.isVisualAuditStep("skip-canvas-render")) {
       const isLayered = typeof orchestrator.hasLayeredRendering === "function" && orchestrator.hasLayeredRendering();
+      const hasActiveActuators = orchestrator.components.some(
+        (c) => (c.glowLevel && c.glowLevel > 0.01) || c.type === "lamp" || c.type === "buzzer" || c.type === "relay",
+      );
       if (isLayered) {
-        if (this.baseSceneDirty) {
+        if (this.baseSceneDirty || (orchestrator.simulationActive && hasActiveActuators)) {
           orchestrator.renderBase(
             pinVoltageMap,
             probeMarkers,
@@ -207,8 +210,6 @@ export class RenderController {
 
     if (this.shouldContinueCanvasAnimation(orchestrator, branchCurrents)) {
       this.scheduleNextCanvasFrame();
-    } else if (typeof orchestrator.clearOverlay === "function") {
-      orchestrator.clearOverlay();
     }
   }
 

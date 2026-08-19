@@ -201,6 +201,71 @@ export interface ComponentInstance {
   pinLabels?: Record<number, string>;
   // Número dinámico de pines para subcircuito genérico (defecto 4)
   pinCount?: number;
+
+  // Parámetros avanzados de Fuentes (RF / AM / Fase / Resistencia interna / Barrido AC)
+  phase?: number; // Fase inicial en grados (0 - 360)
+  modFrequency?: number; // Frecuencia de modulación AM (Hz)
+  modIndex?: number; // Índice de modulación AM (0.0 - 1.0)
+  sourceResistance?: number; // Resistencia interna de la fuente Rs (Ohms)
+  acMag?: number; // Magnitud AC para barridos en frecuencia / Bode (V o A)
+  acPhase?: number; // Fase AC en grados para barridos en frecuencia / Bode
+
+  // Parámetros de Componentes Pasivos (R, C, L, Pot)
+  tolerance?: number; // Tolerancia de fabricación (% ej. 1, 5, 10)
+  powerRating?: number; // Potencia nominal de disipación (W ej. 0.25, 0.5, 1.0)
+  voltageRating?: number; // Tensión máxima admisible (V ej. 16, 25, 50, 100, 400)
+  esr?: number; // Resistencia Serie Equivalente (Ohms)
+  dielectricType?: "ceramic" | "electrolytic" | "tantalum" | "film"; // Tipo de dieléctrico
+  dcResistance?: number; // Resistencia de devanado DCR (Ohms)
+  currentRating?: number; // Corriente máxima de trabajo (A)
+  isat?: number; // Corriente de saturación magnética Isat (A)
+  potTaper?: "linear" | "log" | "antilog"; // Curva de variación del potenciómetro
+
+  // Parámetros de Diodos y Optoelectrónica (LED)
+  ledColor?: "red" | "green" | "blue" | "yellow" | "white" | "orange" | "ir" | "uv";
+  forwardVoltage?: number; // Tensión directa Vf (V)
+  maxCurrent?: number; // Corriente máxima If_max (mA)
+  diodeBv?: number; // Tensión de ruptura Zener / Breakdown (V ej. 3.3, 5.1, 12.0)
+
+  // Parámetros físicos SPICE de semiconductores
+  diodeIs?: number;
+  diodeRs?: number;
+  diodeN?: number;
+  diodeCjo?: number;
+  diodeTt?: number;
+  diodeIbv?: number;
+  bjtIs?: number;
+  bjtBf?: number;
+  bjtVaf?: number;
+  bjtRb?: number;
+  bjtRc?: number;
+  bjtCje?: number;
+  bjtCjc?: number;
+  mosVth?: number;
+  mosRon?: number;
+  mosCgs?: number;
+  mosCgd?: number;
+  jfetVto?: number;
+  jfetBeta?: number;
+  jfetLambda?: number;
+  jfetCgs?: number;
+  jfetCgd?: number;
+  opampAol?: number;
+  opampGbw?: number;
+  opampSr?: number;
+  opampRin?: number;
+  opampRout?: number;
+  opampVos?: number;
+  opampIb?: number;
+
+  // Parámetros de compuertas lógicas digitales y de señal mixta
+  gateTrise?: number;
+  gateTfall?: number;
+  gateRout?: number;
+  gateVhigh?: number;
+  gateVlow?: number;
+  riseDelay?: number;
+  fallDelay?: number;
 }
 
 export interface PinInstance {
@@ -785,5 +850,25 @@ export class CanvasOrchestrator {
     } else if (this.selectedComponents.length > 0) {
       this.selectedComponent = null;
     }
+  }
+
+  /**
+   * Centra el lienzo sobre un componente específico, lo selecciona y actualiza la escena.
+   */
+  public focusComponent(componentId: string): boolean {
+    const comp = this.components.find((c) => c.id === componentId);
+    if (!comp) return false;
+
+    this.selectedComponents = [comp];
+    this.selectedComponent = comp;
+    this.selectedWire = null;
+
+    const width = this.canvas.clientWidth || 800;
+    const height = this.canvas.clientHeight || 600;
+
+    this.offsetX = width / 2 - comp.x * this.zoom;
+    this.offsetY = height / 2 - comp.y * this.zoom;
+    this.render();
+    return true;
   }
 }
