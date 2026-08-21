@@ -238,3 +238,192 @@ fn test_mos_flicker_noise_geometry() {
         noise_w10
     );
 }
+
+#[test]
+fn test_diode_shot_and_flicker_noise() {
+    // Circuito: Fuente DC polarizando un diodo a través de R1=1k
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 2.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "D1".to_string(),
+                comp_type: "diode".to_string(),
+                value: 0.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.0),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = NoiseSweepSettings {
+        output_node: "2".to_string(),
+        reference_node: "0".to_string(),
+        ac_settings: AcSweepSettings {
+            f_start: 1.0,
+            f_end: 100.0e3,
+            points_per_decade: 5,
+            op_guess: None,
+        },
+    };
+
+    let result = solve_noise_sweep(&netlist, &settings).unwrap();
+    assert!(!result.output_noise_density.is_empty());
+
+    // A 1 Hz el ruido debe ser mayor que a 100 kHz por efecto del ruido 1/f (flicker)
+    let n_low = result.output_noise_density[0]; // 1 Hz
+    let n_high = *result.output_noise_density.last().unwrap(); // 100 kHz
+    assert!(
+        n_low > n_high,
+        "El ruido a baja frecuencia (1 Hz: {:.3e}) debe superar al de alta frecuencia (100 kHz: {:.3e}) por flicker noise",
+        n_low,
+        n_high
+    );
+
+    // El ruido de alta frecuencia debe estar en el orden físico correcto (nV/sqrt(Hz))
+    assert!(
+        n_high > 1e-12 && n_high < 1e-6,
+        "La densidad de ruido de alta frecuencia debe ser física y finita: {:.3e} V/rHz",
+        n_high
+    );
+}
+
+#[test]
+fn test_bjt_noise_sweep_common_emitter() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V_CC".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 10.0,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_BB".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 1.5,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_B".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 100.0e3,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_C".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["3".to_string(), "4".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Q1".to_string(),
+                comp_type: "npn".to_string(),
+                value: 100.0,
+                pins: vec!["2".to_string(), "4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.0),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = NoiseSweepSettings {
+        output_node: "4".to_string(),
+        reference_node: "0".to_string(),
+        ac_settings: AcSweepSettings {
+            f_start: 10.0,
+            f_end: 10.0e3,
+            points_per_decade: 3,
+            op_guess: None,
+        },
+    };
+
+    let result = solve_noise_sweep(&netlist, &settings).unwrap();
+    assert!(!result.output_noise_density.is_empty());
+    for &dens in &result.output_noise_density {
+        assert!(dens > 0.0 && dens.is_finite(), "Densidad de ruido BJT válida: {}", dens);
+    }
+}
+
+#[test]
+fn test_temperature_scaling_thermal_noise() {
+    let build_netlist = |temp: f64| CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10000.0,
+                pins: vec!["2".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(temp),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = NoiseSweepSettings {
+        output_node: "1".to_string(),
+        reference_node: "0".to_string(),
+        ac_settings: AcSweepSettings {
+            f_start: 1000.0,
+            f_end: 1000.0,
+            points_per_decade: 1,
+            op_guess: None,
+        },
+    };
+
+    let res_100k = solve_noise_sweep(&build_netlist(100.0), &settings).unwrap();
+    let res_400k = solve_noise_sweep(&build_netlist(400.0), &settings).unwrap();
+
+    let n_100 = res_100k.output_noise_density[0];
+    let n_400 = res_400k.output_noise_density[0];
+
+    // Ratio teórico: sqrt(400 / 100) = 2.0000
+    let ratio = n_400 / n_100;
+    assert!(
+        (ratio - 2.0).abs() < 0.01,
+        "La escala de ruido térmico con la temperatura debe ser exactamente sqrt(T2/T1) = 2.0, obtenido: {:.4}",
+        ratio
+    );
+}

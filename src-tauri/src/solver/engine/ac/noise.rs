@@ -539,6 +539,7 @@ pub fn solve_noise_sweep(
             let ac_gain = v_out_ac.norm().max(1e-12);
 
             // 6. Sumar todas las fuentes de ruido estocásticas incorreladas
+            let circuit_temp = netlist.temperature.unwrap_or(PHYS_T);
             let mut total_output_noise_sq = 0.0;
 
             for comp in &netlist.components {
@@ -546,14 +547,16 @@ pub fn solve_noise_sweep(
                     "resistor" => {
                         let n_a = comp.pins[0].parse::<usize>().unwrap();
                         let n_b = comp.pins[1].parse::<usize>().unwrap();
-                        let s_val = 4.0 * PHYS_KB * PHYS_T / comp.value;
+                        let s_val = 4.0 * PHYS_KB * circuit_temp / comp.value;
                         (n_a, n_b, s_val)
                     }
                     "diode" | "led" => {
                         let n_a = comp.pins[0].parse::<usize>().unwrap();
                         let n_b = comp.pins[1].parse::<usize>().unwrap();
                         let id = *diode_currents.get(&comp.id).unwrap_or(&0.0);
-                        let s_val = 2.0 * PHYS_Q * id.abs() + (1e-14 * id.abs()) / f_val;
+                        let s_shot = 2.0 * PHYS_Q * id.abs();
+                        let s_flicker = (1e-14 * id.abs()) / f_val.max(1e-3);
+                        let s_val = s_shot + s_flicker;
                         (n_a, n_b, s_val)
                     }
                     "opto" => {
@@ -568,7 +571,8 @@ pub fn solve_noise_sweep(
                             let (i_led, i_ce) = *opto_currents.get(&comp.id).unwrap_or(&(0.0, 0.0));
 
                             // Ruido shot del LED (A-K): S = 2*q*|I_led| + flicker 1/f
-                            let s_led = 2.0 * PHYS_Q * i_led.abs() + (1e-14 * i_led.abs()) / f_val;
+                            let s_led = 2.0 * PHYS_Q * i_led.abs()
+                                + (1e-14 * i_led.abs()) / f_val.max(1e-3);
                             if s_led > 0.0 && (n_a > 0 || n_k > 0) {
                                 let mut z_led = DVector::<Complex<f64>>::zeros(size);
                                 if n_a > 0 {
@@ -628,7 +632,7 @@ pub fn solve_noise_sweep(
                         let n_d = comp.pins[1].parse::<usize>().unwrap();
                         let n_s = comp.pins[2].parse::<usize>().unwrap();
 
-                        let (gm, _, ids, igs, _): (f64, f64, f64, f64, f64) = if is_nmos {
+                        let (gm, gds, ids, igs, _): (f64, f64, f64, f64, f64) = if is_nmos {
                             *nmos_parameters
                                 .get(&comp.id)
                                 .unwrap_or(&(0.0, 1e-5, 0.0, 0.0, 1e-12))
@@ -641,8 +645,10 @@ pub fn solve_noise_sweep(
                         let w = comp.w.unwrap_or(10.0e-6);
                         let l = comp.l.unwrap_or(0.18e-6);
                         let c_ox = 15e-12 / (10.0e-6 * 0.18e-6);
-                        let s_flicker = (1e-13 * ids.abs()) / (f_val * w * l * c_ox);
-                        let s_val_channel = (8.0 / 3.0) * PHYS_KB * PHYS_T * gm + s_flicker;
+                        let s_flicker = (1e-13 * ids.abs()) / (f_val.max(1e-3) * w * l * c_ox);
+                        let s_val_channel =
+                            (8.0 / 3.0) * PHYS_KB * circuit_temp * (gm.abs() + gds.max(0.0))
+                                + s_flicker;
 
                         // Channel noise contribution
                         if s_val_channel > 0.0 && (n_d > 0 || n_s > 0) {
@@ -704,7 +710,7 @@ pub fn solve_noise_sweep(
                             .get(&comp.id)
                             .unwrap_or(&(1e-3, 1e-5, 0.0, 0.0));
 
-                        let s_ib = 2.0 * PHYS_Q * ib.abs() + (1e-14 * ib.abs()) / f_val;
+                        let s_ib = 2.0 * PHYS_Q * ib.abs() + (1e-14 * ib.abs()) / f_val.max(1e-3);
                         let s_ic = 2.0 * PHYS_Q * ic.abs();
 
                         // Base contribution
@@ -750,6 +756,97 @@ pub fn solve_noise_sweep(
                             Complex::new(0.0, 0.0)
                         });
                         total_output_noise_sq += s_ic * v_out_c.norm_sqr();
+
+                        (0, 0, 0.0)
+                    }
+                    "njf" | "pjf" => {
+                        let n_d = comp.pins[0].parse::<usize>().unwrap();
+                        let n_g = comp.pins[1].parse::<usize>().unwrap();
+                        let n_s = comp.pins[2].parse::<usize>().unwrap();
+
+                        let (gm, gds, ids) =
+                            *jfet_parameters.get(&comp.id).unwrap_or(&(0.0, 1e-9, 0.0));
+
+                        let s_flicker = (1e-14 * ids.abs()) / f_val.max(1e-3);
+                        let s_val_channel =
+                            (8.0 / 3.0) * PHYS_KB * circuit_temp * (gm.abs() + gds) + s_flicker;
+
+                        if s_val_channel > 0.0 && (n_d > 0 || n_s > 0) {
+                            let mut z_chan = DVector::<Complex<f64>>::zeros(size);
+                            if n_d > 0 {
+                                z_chan[n_d - 1] += Complex::new(1.0, 0.0);
+                            }
+                            if n_s > 0 {
+                                z_chan[n_s - 1] -= Complex::new(1.0, 0.0);
+                            }
+                            let v_chan_tf = symbolic
+                                .solve_complex(workspace, &z_chan)
+                                .unwrap_or_else(|| DVector::zeros(size));
+                            let v_out_chan = (if n_out > 0 {
+                                v_chan_tf[n_out - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            }) - (if n_ref > 0 {
+                                v_chan_tf[n_ref - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            });
+                            total_output_noise_sq += s_val_channel * v_out_chan.norm_sqr();
+                        }
+
+                        // Gate leakage shot noise
+                        let s_val_gate = 2.0 * PHYS_Q * 1e-12; // 1 pA leakage corriente típica JFET
+                        if n_g > 0 || n_s > 0 {
+                            let mut z_gate = DVector::<Complex<f64>>::zeros(size);
+                            if n_g > 0 {
+                                z_gate[n_g - 1] += Complex::new(1.0, 0.0);
+                            }
+                            if n_s > 0 {
+                                z_gate[n_s - 1] -= Complex::new(1.0, 0.0);
+                            }
+                            let v_gate_tf = symbolic
+                                .solve_complex(workspace, &z_gate)
+                                .unwrap_or_else(|| DVector::zeros(size));
+                            let v_out_gate = (if n_out > 0 {
+                                v_gate_tf[n_out - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            }) - (if n_ref > 0 {
+                                v_gate_tf[n_ref - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            });
+                            total_output_noise_sq += s_val_gate * v_out_gate.norm_sqr();
+                        }
+
+                        (0, 0, 0.0)
+                    }
+                    "opamp" | "opamp_ideal" => {
+                        let pin_out = if comp.pins.len() >= 5 {
+                            comp.pins[4].parse::<usize>().unwrap()
+                        } else {
+                            comp.pins[2].parse::<usize>().unwrap()
+                        };
+
+                        // Ruido térmico de la resistencia interna de salida Rout (100 Ohm)
+                        if pin_out > 0 {
+                            let s_rout = 4.0 * PHYS_KB * circuit_temp / 100.0;
+                            let mut z_out = DVector::<Complex<f64>>::zeros(size);
+                            z_out[pin_out - 1] += Complex::new(1.0, 0.0);
+                            let v_out_tf = symbolic
+                                .solve_complex(workspace, &z_out)
+                                .unwrap_or_else(|| DVector::zeros(size));
+                            let v_out_diff = (if n_out > 0 {
+                                v_out_tf[n_out - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            }) - (if n_ref > 0 {
+                                v_out_tf[n_ref - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            });
+                            total_output_noise_sq += s_rout * v_out_diff.norm_sqr();
+                        }
 
                         (0, 0, 0.0)
                     }
