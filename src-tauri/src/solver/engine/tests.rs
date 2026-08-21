@@ -77,4 +77,8 @@ mod core_tests {
     mod aging {
         include!("tests/aging_tests.rs");
     }
+
+    mod radiation {
+        include!("tests/radiation_tests.rs");
+    }
 }
