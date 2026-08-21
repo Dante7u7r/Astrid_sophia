@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "suiteId": "bsim3-gap-characterization",
   "title": "Caracterización no bloqueante de la brecha BSIM3",
-  "generatedAtUnixSeconds": 1787287531,
+  "generatedAtUnixSeconds": 1787288297,
   "solverVersion": "0.1.0",
-  "gitHead": "ff636b14c46b",
+  "gitHead": "9aa9233640fa",
   "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {

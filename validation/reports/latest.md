@@ -5,7 +5,7 @@ Observaciones: **50/50** dentro de tolerancia.
 
 - Suite: `phase4-external-correlation`
 - Solver: `0.1.0`
-- Git: `ff636b14c46b` (`dirty`)
+- Git: `9aa9233640fa` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-47 : Circuit level simulation program`
 
@@ -57,7 +57,7 @@ Observaciones: **50/50** dentro de tolerancia.
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_3v | -1.0959113160e-7 A | -1.0959156327e-7 A | 4.317e-13 | 1.096e-11 | PASS |
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_4v | -5.2445013003e-6 A | -5.2445288435e-6 A | 2.754e-11 | 5.245e-10 | PASS |
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_5v | -2.5097491050e-4 A | -2.5097655809e-4 A | 1.648e-9 | 2.510e-8 | PASS |
-| pss-rc-sine-steady-state | PSS | output_peak_to_peak | 1.5678268901e0 V | 1.5717672548e0 V | 3.940e-3 | 3.144e-2 | PASS |
+| pss-rc-sine-steady-state | PSS | output_peak_to_peak | 1.5678268895e0 V | 1.5717672548e0 V | 3.940e-3 | 3.144e-2 | PASS |
 | stability-rc-pole-zero | STABILITY | dominant_pole_real | -2.0000000000e3 rad/s | -2.0000000000e3 rad/s | 2.274e-13 | 1.000e1 | PASS |
 | stability-rc-pole-zero | STABILITY | transmission_zero_real | -1.0000000000e3 rad/s | -1.0000000000e3 rad/s | 0.000e0 | 1.000e1 | PASS |
 | stability-rc-pole-zero | STABILITY | stable_flag | 1.0000000000e0 boolean | 1.0000000000e0 boolean | 0.000e0 | 0.000e0 | PASS |

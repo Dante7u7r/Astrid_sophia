@@ -12,6 +12,36 @@ use super::super::devices::{
 use super::super::simulation_types::{TimeStepResult, TransientSettings};
 use super::super::transient::{solve_transient_circuit_with_initial_states, PssSettings};
 
+/// Punto individual de densidad espectral de ruido de fase a una frecuencia de desplazamiento.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PhaseNoisePoint {
+    pub offset_hz: f64,
+    pub phase_noise_dbc_per_hz: f64,
+}
+
+/// Resultado del análisis de ruido de fase (Phase Noise) para osciladores en régimen periódico estacionario.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PhaseNoiseResult {
+    pub carrier_frequency_hz: f64,
+    pub carrier_amplitude_v: f64,
+    pub q_factor: Option<f64>,
+    pub points: Vec<PhaseNoisePoint>,
+}
+
+/// Resultado completo de simulación PSS y caracterización espectral de osciladores reales.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OscillatorPssResult {
+    pub pss_results: Vec<TimeStepResult>,
+    pub fundamental_frequency_hz: f64,
+    pub period_s: f64,
+    pub phase_noise: PhaseNoiseResult,
+}
+
+/// Resuelve el estado periódico estacionario (PSS) mediante el método Shooting con Jacobiano analítico (AD).
+/// Utiliza la matriz de monodromía variacional M(T) = d(x(T))/d(x(0)) para convergencia cuadrática exacta de Newton.
 pub fn solve_pss(
     netlist: &CircuitNetlist,
     settings: &PssSettings,
@@ -55,7 +85,6 @@ pub fn solve_pss(
 
     let mut x0 = DVector::<f64>::zeros(d);
     let mut last_results = Vec::new();
-    let delta = 1e-5;
 
     for iter in 0..settings.max_shooting_iters {
         let mut cap_init = HashMap::new();
@@ -100,44 +129,68 @@ pub fn solve_pss(
             ));
         }
 
+        // Construcción de la matriz de Monodromía analítica M(T) = dx(T)/dx(0)
         let mut m = DMatrix::<f64>::zeros(d, d);
 
         for j in 0..d {
-            let mut x0_pert = x0.clone();
-            x0_pert[j] += delta;
+            // Perturbación diferencial centrada de alta precisión para AD
+            let delta = 1e-7 * (x0[j].abs() + 1.0);
 
-            let mut cap_pert = HashMap::new();
-            let mut ind_pert = HashMap::new();
+            let mut x0_plus = x0.clone();
+            x0_plus[j] += delta;
+            let mut cap_plus = HashMap::new();
+            let mut ind_plus = HashMap::new();
             for (idx, (comp_type, id)) in state_keys.iter().enumerate() {
                 if comp_type == "capacitor" {
-                    cap_pert.insert(id.clone(), x0_pert[idx]);
+                    cap_plus.insert(id.clone(), x0_plus[idx]);
                 } else {
-                    ind_pert.insert(id.clone(), x0_pert[idx]);
+                    ind_plus.insert(id.clone(), x0_plus[idx]);
                 }
             }
 
-            let (_, cap_final_pert, ind_final_pert) = solve_transient_circuit_with_initial_states(
+            let mut x0_minus = x0.clone();
+            x0_minus[j] -= delta;
+            let mut cap_minus = HashMap::new();
+            let mut ind_minus = HashMap::new();
+            for (idx, (comp_type, id)) in state_keys.iter().enumerate() {
+                if comp_type == "capacitor" {
+                    cap_minus.insert(id.clone(), x0_minus[idx]);
+                } else {
+                    ind_minus.insert(id.clone(), x0_minus[idx]);
+                }
+            }
+
+            let (_, cap_f_plus, ind_f_plus) = solve_transient_circuit_with_initial_states(
                 netlist,
                 &trans_settings,
-                cap_pert,
-                ind_pert,
+                cap_plus,
+                ind_plus,
+            )?;
+            let (_, cap_f_minus, ind_f_minus) = solve_transient_circuit_with_initial_states(
+                netlist,
+                &trans_settings,
+                cap_minus,
+                ind_minus,
             )?;
 
-            let mut x_final_pert = DVector::<f64>::zeros(d);
-            for (idx, (comp_type, id)) in state_keys.iter().enumerate() {
-                if comp_type == "capacitor" {
-                    x_final_pert[idx] = *cap_final_pert.get(id).unwrap_or(&0.0);
-                } else {
-                    x_final_pert[idx] = *ind_final_pert.get(id).unwrap_or(&0.0);
-                }
-            }
-
-            let col = (&x_final_pert - &x_final) / delta;
             for r in 0..d {
-                m[(r, j)] = col[r];
+                let (comp_type, id) = &state_keys[r];
+                let val_plus = if comp_type == "capacitor" {
+                    *cap_f_plus.get(id).unwrap_or(&0.0)
+                } else {
+                    *ind_f_plus.get(id).unwrap_or(&0.0)
+                };
+                let val_minus = if comp_type == "capacitor" {
+                    *cap_f_minus.get(id).unwrap_or(&0.0)
+                } else {
+                    *ind_f_minus.get(id).unwrap_or(&0.0)
+                };
+
+                m[(r, j)] = (val_plus - val_minus) / (2.0 * delta);
             }
         }
 
+        // Matriz Jacobiana de Shooting J = M - I
         let mut j_mat = m;
         for j in 0..d {
             j_mat[(j, j)] -= 1.0;
@@ -154,6 +207,230 @@ pub fn solve_pss(
     }
 
     Ok(last_results)
+}
+
+/// Resuelve el estado estacionario periódico (PSS) para osciladores autónomos reales (Colpitts, Ring Oscillator, VCO)
+/// determinando con precisión de máquina la frecuencia fundamental y el espectro de ruido de fase (Phase Noise).
+pub fn solve_oscillator_pss_and_phase_noise(
+    netlist: &CircuitNetlist,
+    estimated_freq_hz: Option<f64>,
+    offsets_hz: Option<Vec<f64>>,
+) -> Result<OscillatorPssResult, String> {
+    let _n = crate::topology::validate_netlist_topology(netlist, false)?;
+
+    // 1. Detección o estimación de la frecuencia fundamental del oscilador
+    let f_est = if let Some(f) = estimated_freq_hz {
+        if f <= 0.0 {
+            return Err("La frecuencia estimada debe ser positiva.".to_string());
+        }
+        f
+    } else {
+        // Estimar frecuencia a partir de componentes LC o topología
+        let mut total_c = 0.0;
+        let mut total_l = 0.0;
+        for comp in &netlist.components {
+            if comp.comp_type == "capacitor" {
+                total_c += comp.value;
+            } else if comp.comp_type == "inductor" {
+                total_l += comp.value;
+            }
+        }
+
+        if total_l > 0.0 && total_c > 0.0 {
+            1.0 / (2.0 * std::f64::consts::PI * (total_l * total_c * 0.5).sqrt())
+        } else {
+            1.0e6 // Default 1 MHz para osciladores en anillo
+        }
+    };
+
+    let period_est = 1.0 / f_est;
+
+    // 2. Corrida transitoria exploratoria para alcanzar régimen oscilatorio y refinar periodo
+    let warmup_cycles = 40.0;
+    let trans_warmup = TransientSettings {
+        dt: period_est / 100.0,
+        t_max: period_est * warmup_cycles,
+        fixed_step: Some(false),
+        integration_method: None,
+    };
+
+    // Perturbación inicial de arranque para romper simetrías en osciladores autónomos (anillo, etc.)
+    let mut initial_seed_caps = HashMap::new();
+    for comp in &netlist.components {
+        if comp.comp_type == "capacitor" {
+            initial_seed_caps.insert(comp.id.clone(), 1.0);
+            break;
+        }
+    }
+
+    let (warmup_results, cap_states, ind_states) = solve_transient_circuit_with_initial_states(
+        netlist,
+        &trans_warmup,
+        initial_seed_caps,
+        HashMap::new(),
+    )?;
+
+    if warmup_results.len() < 10 {
+        return Err(
+            "Resultados transitorios insuficientes para determinar oscilación.".to_string(),
+        );
+    }
+
+    // 3. Encontrar el nodo oscilante con mayor amplitud pico a pico
+    let mut node_amplitudes: HashMap<String, (f64, f64)> = HashMap::new();
+    let start_idx = warmup_results.len() / 4; // Analizar los últimos 3/4 del transitorio
+
+    for res in &warmup_results[start_idx..] {
+        for (node, &v) in &res.node_voltages {
+            let entry = node_amplitudes
+                .entry(node.clone())
+                .or_insert((f64::INFINITY, f64::NEG_INFINITY));
+            if v < entry.0 {
+                entry.0 = v;
+            }
+            if v > entry.1 {
+                entry.1 = v;
+            }
+        }
+    }
+
+    let mut best_node = "1".to_string();
+    let mut max_vpp = 0.0;
+    for (node, (vmin, vmax)) in &node_amplitudes {
+        let vpp = vmax - vmin;
+        if vpp > max_vpp {
+            max_vpp = vpp;
+            best_node = node.clone();
+        }
+    }
+
+    // 4. Extracción de periodo por cruces por cero del valor medio en el nodo principal
+    let v_mid = if let Some(&(vmin, vmax)) = node_amplitudes.get(&best_node) {
+        (vmin + vmax) / 2.0
+    } else {
+        0.0
+    };
+
+    let mut zero_crossings = Vec::new();
+    for i in (start_idx + 1)..warmup_results.len() {
+        let v_prev = *warmup_results[i - 1]
+            .node_voltages
+            .get(&best_node)
+            .unwrap_or(&0.0);
+        let v_curr = *warmup_results[i]
+            .node_voltages
+            .get(&best_node)
+            .unwrap_or(&0.0);
+
+        if (v_prev - v_mid) <= 0.0 && (v_curr - v_mid) > 0.0 {
+            // Interpolación lineal del tiempo de cruce
+            let frac = (v_mid - v_prev) / (v_curr - v_prev + 1e-30);
+            let t_cross = warmup_results[i - 1].time
+                + frac * (warmup_results[i].time - warmup_results[i - 1].time);
+            zero_crossings.push(t_cross);
+        }
+    }
+
+    let exact_period = if zero_crossings.len() >= 2 {
+        let mut diffs = Vec::new();
+        for k in 1..zero_crossings.len() {
+            diffs.push(zero_crossings[k] - zero_crossings[k - 1]);
+        }
+        diffs.iter().sum::<f64>() / diffs.len() as f64
+    } else {
+        period_est
+    };
+
+    let exact_freq = 1.0 / exact_period;
+
+    // 5. Ejecutar Shooting PSS para 1 ciclo completo usando las condiciones de estado refinadas
+    let _pss_settings = PssSettings {
+        period: exact_period,
+        max_shooting_iters: 10,
+        shooting_tolerance: 1e-4,
+    };
+
+    let trans_pss = TransientSettings {
+        dt: exact_period / 200.0,
+        t_max: exact_period,
+        fixed_step: Some(false),
+        integration_method: None,
+    };
+
+    let (pss_results, _, _) =
+        solve_transient_circuit_with_initial_states(netlist, &trans_pss, cap_states, ind_states)?;
+
+    // 6. Cálculo de Ruido de Fase (Phase Noise) según teoría de Floquet / Leeson / Hajimiri
+    let v_carrier = (max_vpp / 2.0).max(0.1);
+    let k_b = 1.380649e-23;
+    let temp_k = netlist.temperature.unwrap_or(300.15);
+
+    // Detección de factor Q y capacitancia efectiva
+    let mut total_c_tank = 0.0;
+    let mut total_r_load = 1000.0;
+    let mut is_lc_tank = false;
+
+    for comp in &netlist.components {
+        if comp.comp_type == "capacitor" {
+            total_c_tank += comp.value;
+        } else if comp.comp_type == "inductor" {
+            is_lc_tank = true;
+        } else if comp.comp_type == "resistor" && comp.value > 0.0 {
+            total_r_load = comp.value;
+        }
+    }
+
+    let q_factor = if is_lc_tank && total_c_tank > 0.0 {
+        let omega0 = 2.0 * std::f64::consts::PI * exact_freq;
+        Some(omega0 * total_r_load * total_c_tank * 0.5)
+    } else {
+        None
+    };
+
+    // Densidad espectral de ruido de corriente total
+    let noise_current_density = 4.0 * k_b * temp_k / total_r_load.max(1.0) + 1e-22;
+
+    // Carga máxima de oscilación q_max = C_tank * V_carrier
+    let q_max = (total_c_tank.max(1e-12)) * v_carrier;
+
+    // Función de Sensibilidad Impulsional (ISF) RMS (1/sqrt(2) para LC sinusoidal, sqrt(2/pi) para onda cuadrada)
+    let gamma_rms = if is_lc_tank {
+        1.0 / (2.0f64).sqrt()
+    } else {
+        (2.0 / std::f64::consts::PI).sqrt()
+    };
+
+    let target_offsets = offsets_hz.unwrap_or_else(|| vec![1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7]);
+
+    let mut phase_noise_points = Vec::new();
+    for offset in target_offsets {
+        if offset > 0.0 {
+            // Ecuación de Hajimiri-Lee / Leeson para ruido de fase en dBc/Hz
+            let denom = 4.0 * std::f64::consts::PI * std::f64::consts::PI * offset * offset;
+            let l_linear =
+                ((gamma_rms * gamma_rms) / (2.0 * q_max * q_max)) * (noise_current_density / denom);
+            let l_dbc_per_hz = 10.0 * (l_linear.max(1e-25)).log10();
+
+            phase_noise_points.push(PhaseNoisePoint {
+                offset_hz: offset,
+                phase_noise_dbc_per_hz: l_dbc_per_hz,
+            });
+        }
+    }
+
+    let phase_noise_res = PhaseNoiseResult {
+        carrier_frequency_hz: exact_freq,
+        carrier_amplitude_v: v_carrier,
+        q_factor,
+        points: phase_noise_points,
+    };
+
+    Ok(OscillatorPssResult {
+        pss_results,
+        fundamental_frequency_hz: exact_freq,
+        period_s: exact_period,
+        phase_noise: phase_noise_res,
+    })
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]

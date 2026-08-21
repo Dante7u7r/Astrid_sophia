@@ -212,3 +212,249 @@ fn test_stability_zeros_extraction() {
         );
     }
 }
+
+#[test]
+fn test_colpitts_oscillator_pss_and_phase_noise() {
+    // Oscilador Colpitts LC:
+    // L1 = 10 uH, C1 = 10 nF, C2 = 10 nF => Ceq = 5 nF
+    // Frecuencia teórica f0 = 1 / (2*pi*sqrt(L*Ceq)) = 1 / (2*pi*sqrt(10e-6 * 5e-9)) = 711.76 kHz
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "VCC".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_BIAS".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "L1".to_string(),
+                comp_type: "inductor".to_string(),
+                value: 10.0e-6,
+                pins: vec!["2".to_string(), "3".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 10.0e-9,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C2".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 10.0e-9,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "M1".to_string(),
+                comp_type: "nmos".to_string(),
+                value: 0.7,
+                pins: vec!["3".to_string(), "2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let result = solve_oscillator_pss_and_phase_noise(&netlist, Some(711.76e3), Some(vec![1.0e4, 1.0e5, 1.0e6]));
+    assert!(result.is_ok(), "El PSS del oscilador Colpitts debe converger exitosamente");
+
+    let pss_data = result.unwrap();
+    assert!(
+        pss_data.fundamental_frequency_hz > 100.0e3 && pss_data.fundamental_frequency_hz < 10.0e6,
+        "La frecuencia fundamental de Colpitts debe estar en el rango de MHz/kHz, obtenido: {}",
+        pss_data.fundamental_frequency_hz
+    );
+    assert!(
+        !pss_data.pss_results.is_empty(),
+        "El ciclo límite PSS debe contener puntos de solución temporal"
+    );
+
+    // Validar espectro de ruido de fase
+    let pn = pss_data.phase_noise;
+    assert_eq!(pn.points.len(), 3);
+    let pn_10k = pn.points[0].phase_noise_dbc_per_hz;
+    let pn_100k = pn.points[1].phase_noise_dbc_per_hz;
+    let pn_1m = pn.points[2].phase_noise_dbc_per_hz;
+
+    // A mayor offset, el ruido de fase debe disminuir (pendiente de Leeson ~ -20 dB/década)
+    assert!(pn_100k < pn_10k, "L(100 kHz) debe ser menor que L(10 kHz)");
+    assert!(pn_1m < pn_100k, "L(1 MHz) debe ser menor que L(100 kHz)");
+    let slope = pn_10k - pn_100k;
+    assert!(
+        (slope - 20.0).abs() < 1.0,
+        "La pendiente del ruido de fase térmico debe ser de ~20 dB/década (Leeson), obtenida: {:.2} dB",
+        slope
+    );
+}
+
+#[test]
+fn test_ring_oscillator_cmos_pss() {
+    // Oscilador en anillo CMOS (3 etapas de inversor en lazo cerrado)
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "VDD".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 3.3,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            // Etapa 1: Inversor CMOS 1 (entrada en nodo 4, salida en nodo 2)
+            ComponentData {
+                id: "M1_P".to_string(),
+                comp_type: "pmos".to_string(),
+                value: 0.7,
+                pins: vec!["4".to_string(), "2".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "M1_N".to_string(),
+                comp_type: "nmos".to_string(),
+                value: 0.7,
+                pins: vec!["4".to_string(), "2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 10.0e-12,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            // Etapa 2: Inversor CMOS 2 (entrada en nodo 2, salida en nodo 3)
+            ComponentData {
+                id: "M2_P".to_string(),
+                comp_type: "pmos".to_string(),
+                value: 0.7,
+                pins: vec!["2".to_string(), "3".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "M2_N".to_string(),
+                comp_type: "nmos".to_string(),
+                value: 0.7,
+                pins: vec!["2".to_string(), "3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C2".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 10.0e-12,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            // Etapa 3: Inversor CMOS 3 (entrada en nodo 3, salida en nodo 4)
+            ComponentData {
+                id: "M3_P".to_string(),
+                comp_type: "pmos".to_string(),
+                value: 0.7,
+                pins: vec!["3".to_string(), "4".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "M3_N".to_string(),
+                comp_type: "nmos".to_string(),
+                value: 0.7,
+                pins: vec!["3".to_string(), "4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C3".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 10.0e-12,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let osc_data = solve_oscillator_pss_and_phase_noise(&netlist, Some(10.0e6), None)
+        .expect("El oscilador en anillo debe converger en PSS");
+    assert!(
+        osc_data.fundamental_frequency_hz > 10.0e3,
+        "La frecuencia fundamental debe ser > 10 kHz"
+    );
+    assert!(
+        osc_data.phase_noise.points.len() >= 4,
+        "Debe contener puntos de ruido de fase"
+    );
+}
+
+#[test]
+fn test_vco_frequency_tuning() {
+    // Oscilador con modulación por tensión (VCO)
+    let build_vco_netlist = |v_ctrl: f64| -> CircuitNetlist {
+        CircuitNetlist {
+            mutual_inductances: None,
+            thermal_config: None,
+            components: vec![
+                ComponentData {
+                    id: "V_CTRL".to_string(),
+                    comp_type: "vsource".to_string(),
+                    value: v_ctrl,
+                    pins: vec!["1".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "R_CHG".to_string(),
+                    comp_type: "resistor".to_string(),
+                    value: 2000.0,
+                    pins: vec!["1".to_string(), "2".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "C_VAR".to_string(),
+                    comp_type: "capacitor".to_string(),
+                    value: 5.0e-9,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+                ComponentData {
+                    id: "L_TANK".to_string(),
+                    comp_type: "inductor".to_string(),
+                    value: 20.0e-6,
+                    pins: vec!["2".to_string(), "0".to_string()],
+                    ..Default::default()
+                },
+            ],
+            wires: vec![],
+            temperature: Some(300.15),
+            fixed_step: None,
+            subcircuit_definitions: None,
+            triggers: None,
+        }
+    };
+
+    let netlist_low = build_vco_netlist(2.5);
+    let netlist_high = build_vco_netlist(5.0);
+
+    let res_low = solve_oscillator_pss_and_phase_noise(&netlist_low, Some(500.0e3), None).unwrap();
+    let res_high = solve_oscillator_pss_and_phase_noise(&netlist_high, Some(500.0e3), None).unwrap();
+
+    assert!(res_low.fundamental_frequency_hz > 0.0);
+    assert!(res_high.fundamental_frequency_hz > 0.0);
+}
