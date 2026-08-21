@@ -102,6 +102,7 @@ test.describe("Canvas Schematic Editor E2E Suite", () => {
   }) => {
     await placeComponent("resistor", 100, 100);
     const initialTransform = await getViewportTransform();
+    expect(initialTransform.zoom).toBeGreaterThan(0);
 
     // Wheel zoom
     const box = await canvas.boundingBox();
