@@ -19,6 +19,7 @@
 )]
 pub mod ad_value;
 mod advanced_ipc;
+pub mod cloud_offload_service;
 pub mod dual3;
 pub mod feedback;
 mod gpu_solver;

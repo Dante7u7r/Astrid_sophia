@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package astryd.simulation.v1;
+
+option go_package = "astryd/simulation/v1;simulationv1";
+option java_package = "com.astryd.simulation.v1";
+
+// ============================================================================
+// ASTRYD SOPHIA — CLOUD SIMULATION SERVICE (gRPC)
+// ============================================================================
+
+service SimulationService {
+  // Transmite resultados de simulación en tiempo real (Server Streaming RPC)
+  rpc RunSimulationStream (SimulationRequest) returns (stream SimulationFrame);
+
+  // Consulta el estado, capacidad y latencia del cluster de cómputo remoto
+  rpc CheckHealth (HealthRequest) returns (HealthResponse);
+
+  // Cancela una simulación en curso por su ID de ejecución
+  rpc CancelSimulation (CancelRequest) returns (CancelResponse);
+}
+
+enum AnalysisMode {
+  ANALYSIS_MODE_UNSPECIFIED = 0;
+  ANALYSIS_MODE_TRAN = 1;
+  ANALYSIS_MODE_DC = 2;
+  ANALYSIS_MODE_AC = 3;
+  ANALYSIS_MODE_MONTE_CARLO = 4;
+  ANALYSIS_MODE_PSS = 5;
+  ANALYSIS_MODE_SENSITIVITY = 6;
+  ANALYSIS_MODE_NOISE = 7;
+}
+
+message SimulationRequest {
+  string circuit_id = 1;
+  string netlist_json = 2;
+  string spice_netlist = 3;
+  AnalysisMode mode = 4;
+  
+  double dt = 5;
+  double t_max = 6;
+  double tolerance = 7;
+  int32 max_iterations = 8;
+  int32 monte_carlo_runs = 9;
+  
+  repeated double frequencies = 10;
+  map<string, double> parameters = 11;
+  string auth_token = 12;
+  bool disable_pacing = 13;
+}
+
+message SimulationFrame {
+  int64 run_id = 1;
+  int64 frame_index = 2;
+  double time = 3;
+  double progress_percent = 4;
+  
+  map<string, double> node_voltages = 5;
+  map<string, double> branch_currents = 6;
+  
+  bool is_final = 7;
+  string error_message = 8;
+  
+  ServerTelemetry telemetry = 9;
+}
+
+message ServerTelemetry {
+  double points_per_second = 1;
+  int32 solver_iterations = 2;
+  double memory_usage_mb = 3;
+  double compute_time_ms = 4;
+  int32 worker_threads = 5;
+}
+
+message HealthRequest {
+  string client_version = 1;
+}
+
+message HealthResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_HEALTHY = 1;
+    STATUS_DEGRADED = 2;
+    STATUS_MAINTENANCE = 3;
+  }
+  Status status = 1;
+  string server_version = 2;
+  int32 active_workers = 3;
+  int32 queue_depth = 4;
+  double cpu_load_percent = 5;
+  double memory_load_percent = 6;
+}
+
+message CancelRequest {
+  int64 run_id = 1;
+  string auth_token = 2;
+}
+
+message CancelResponse {
+  bool success = 1;
+  string message = 2;
+}
