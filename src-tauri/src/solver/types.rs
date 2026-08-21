@@ -174,6 +174,13 @@ pub struct ComponentData {
     // Nombre del subcircuito a instanciar (para componentes tipo 'x')
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subcircuit_name: Option<String>,
+    // Parámetros de correlación Monte Carlo (pellet matching / lot-to-lot)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matching_group: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lot_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lot_correlation: Option<f64>,
 }
 
 /// Configuración de simulación electro-térmica acoplada.
