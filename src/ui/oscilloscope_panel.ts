@@ -25,6 +25,7 @@ import {
   type OscilloscopeCursor,
 } from "./oscilloscope_cursor_model";
 import { ensureCanvasDpr } from "./canvas_dpr";
+import { evaluateWaveformMath } from "./waveform_math_parser";
 
 export interface PvtRunResult {
   readonly config: PvtConfig;
@@ -164,6 +165,7 @@ export class OscilloscopePanel {
   public invertCh4 = false;
 
   public isMathEnabled = false;
+  public mathExpression = "CH1 - CH2";
 
   public timeDivValue = 0.02; // seconds/div (default 20ms/div)
   public isXyMode = false;
@@ -226,6 +228,8 @@ export class OscilloscopePanel {
       timeDivValue: this.timeDivValue,
       isXyMode: this.isXyMode,
       isCursorsEnabled: this.isCursorsEnabled,
+      isMathEnabled: this.isMathEnabled,
+      mathExpression: this.mathExpression,
       triggerChannel: this.triggerChannel,
       triggerEdge: this.triggerEdge,
       triggerLevel: this.triggerLevel,
@@ -247,6 +251,13 @@ export class OscilloscopePanel {
     this.timeDivValue = state.timeDivValue;
     this.isXyMode = state.isXyMode;
     this.isCursorsEnabled = state.isCursorsEnabled;
+    if (typeof state.isMathEnabled === "boolean") {
+      this.isMathEnabled = state.isMathEnabled;
+      this.mathBtn?.classList.toggle("active", this.isMathEnabled);
+    }
+    if (typeof state.mathExpression === "string") {
+      this.mathExpression = state.mathExpression;
+    }
     this.triggerChannel = state.triggerChannel;
     this.triggerEdge = state.triggerEdge;
     this.triggerLevel = state.triggerLevel;
@@ -372,7 +383,7 @@ export class OscilloscopePanel {
         ch2: "CANAL 2 (CH2)",
         ch3: "CANAL 3 (CH3)",
         ch4: "CANAL 4 (CH4)",
-        math: "MATEMÁTICAS (CH1 - CH2)",
+        math: `MATEMÁTICAS (${this.mathExpression || "CH1 - CH2"})`,
       };
       this.focusedTitle.textContent = titles[ch];
     }
@@ -391,13 +402,15 @@ export class OscilloscopePanel {
       this.focusedToggleBtn.classList.toggle("active", active);
     }
 
-    // Node Input
+    // Node Input / Math Expression Input
     if (this.focusedNodeInput) {
       if (ch === "math") {
-        this.focusedNodeInput.value = "CH1 - CH2";
-        this.focusedNodeInput.disabled = true;
+        this.focusedNodeInput.disabled = false;
+        this.focusedNodeInput.value = this.mathExpression || "CH1 - CH2";
+        this.focusedNodeInput.placeholder = "Ej. CH1 - CH2, CH1 * CH2, DERIV(CH1), INTEG(CH1), FFT(CH1)";
       } else {
         this.focusedNodeInput.disabled = false;
+        this.focusedNodeInput.placeholder = "Ej. 1, out...";
         this.focusedNodeInput.value = this.getProbeNodeByChannel(ch) ?? "";
       }
     }
@@ -672,6 +685,8 @@ export class OscilloscopePanel {
       } else if (ch === "ch4") {
         this.ch4ProbeNode = val;
         if (val) this.oscCh4Btn?.classList.add("active");
+      } else if (ch === "math") {
+        this.mathExpression = this.focusedNodeInput?.value.trim() || "CH1 - CH2";
       }
       this.syncFocusedChannelUI();
       this.draw();
@@ -1066,32 +1081,46 @@ export class OscilloscopePanel {
           invert: this.invertCh4,
         });
 
-        // Render MATH channel (CH1 - CH2 differential) if enabled
-        if (this.isMathEnabled && this.ch1ProbeNode && this.ch2ProbeNode && isCh1Active && isCh2Active && this.transientResults.length > 1) {
-          ctx.strokeStyle = "#ec4899";
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([4, 2]);
-          ctx.beginPath();
+        // Render MATH channel (Arbitrary parsed expressions: CH1 - CH2, CH1 * CH2, DERIV(CH1), INTEG(CH1), FFT(CH1), etc.)
+        if (this.isMathEnabled && this.transientResults.length > 1) {
+          const bindings = {
+            ch1Node: this.ch1ProbeNode,
+            ch2Node: this.ch2ProbeNode,
+            ch3Node: this.ch3ProbeNode,
+            ch4Node: this.ch4ProbeNode,
+          };
+          const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
 
-          const windowDuration = this.timeDivValue * 10;
-          const firstTime = this.transientResults[triggerStartIdx]?.time ?? 0;
+          if (mathVals.length > 1) {
+            ctx.strokeStyle = "#ec4899";
+            ctx.lineWidth = 2.0;
+            ctx.setLineDash([4, 2]);
+            ctx.beginPath();
 
-          for (let i = triggerStartIdx; i < this.transientResults.length; i++) {
-            const pt = this.transientResults[i];
-            const relTime = pt.time - firstTime;
-            if (relTime > windowDuration) break;
-            const x = (relTime / windowDuration) * width;
+            const windowDuration = this.timeDivValue * 10;
+            const firstTime = this.transientResults[triggerStartIdx]?.time ?? 0;
+            const mathVoltsPerDiv = this.voltsPerDivCh1 || 1.0;
+            const mathOffsetPx = this.offsetCh1 * divHeight;
 
-            const v1 = pt.nodeVoltages[this.ch1ProbeNode] ?? 0;
-            const v2 = pt.nodeVoltages[this.ch2ProbeNode] ?? 0;
-            const vMath = v1 - v2;
-            const y = height / 2 - (vMath / this.voltsPerDivCh1) * divHeight;
+            let firstPoint = true;
+            for (let i = triggerStartIdx; i < this.transientResults.length; i++) {
+              const pt = this.transientResults[i];
+              const relTime = pt.time - firstTime;
+              if (relTime > windowDuration) break;
+              const x = (relTime / windowDuration) * width;
+              const vMath = mathVals[i] ?? 0;
+              const y = height / 2 - (vMath / mathVoltsPerDiv) * divHeight - mathOffsetPx;
 
-            if (i === triggerStartIdx) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+              if (firstPoint) {
+                ctx.moveTo(x, y);
+                firstPoint = false;
+              } else {
+                ctx.lineTo(x, y);
+              }
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
           }
-          ctx.stroke();
-          ctx.setLineDash([]);
         }
       }
 

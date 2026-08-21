@@ -44,6 +44,8 @@ export interface PersistedOscilloscopeState {
   timeDivValue: number;
   isXyMode: boolean;
   isCursorsEnabled: boolean;
+  isMathEnabled?: boolean;
+  mathExpression?: string;
   triggerChannel: "ch1" | "ch2" | "ch3" | "ch4";
   triggerEdge: "rising" | "falling";
   triggerLevel: number;
@@ -144,6 +146,8 @@ const DEFAULT_OSCILLOSCOPE: PersistedOscilloscopeState = {
   timeDivValue: 0.02,
   isXyMode: false,
   isCursorsEnabled: false,
+  isMathEnabled: false,
+  mathExpression: "CH1 - CH2",
   triggerChannel: "ch1",
   triggerEdge: "rising",
   triggerLevel: 0,
@@ -364,6 +368,8 @@ function parseOscilloscope(value: unknown): PersistedOscilloscopeState {
     timeDivValue: finiteNumber(value.timeDivValue, "oscilloscope.timeDivValue", DEFAULT_OSCILLOSCOPE.timeDivValue),
     isXyMode: typeof value.isXyMode === "boolean" ? value.isXyMode : DEFAULT_OSCILLOSCOPE.isXyMode,
     isCursorsEnabled: typeof value.isCursorsEnabled === "boolean" ? value.isCursorsEnabled : DEFAULT_OSCILLOSCOPE.isCursorsEnabled,
+    isMathEnabled: typeof value.isMathEnabled === "boolean" ? value.isMathEnabled : DEFAULT_OSCILLOSCOPE.isMathEnabled,
+    mathExpression: typeof value.mathExpression === "string" ? value.mathExpression : DEFAULT_OSCILLOSCOPE.mathExpression,
     triggerChannel: value.triggerChannel === "ch2" || value.triggerChannel === "ch3" || value.triggerChannel === "ch4"
       ? value.triggerChannel
       : "ch1",

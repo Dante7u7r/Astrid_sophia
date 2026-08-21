@@ -144,9 +144,36 @@ describe("OscilloscopePanel", () => {
       { time: 0.003, nodeVoltages: { "1": 3.3 }, branchCurrents: {} },
     ];
     panel.transientResults = mockResults;
-
     const fitted = panel.autoFit("ch1");
     expect(fitted).toBe(true);
     expect(panel.voltsPerDivCh1).toBeGreaterThan(0);
   });
+
+  it("configura y evalúa expresiones matemáticas arbitrarias (CH1 * CH2, DERIV, FFT)", () => {
+    const panel = new OscilloscopePanel();
+    const mockResults: TimeStepResult[] = [
+      { time: 0.0, nodeVoltages: { "1": 2.0, "2": 3.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "1": 4.0, "2": 5.0 }, branchCurrents: {} },
+      { time: 0.002, nodeVoltages: { "1": 6.0, "2": 2.0 }, branchCurrents: {} },
+    ];
+    panel.transientResults = mockResults;
+    panel.isMathEnabled = true;
+    panel.mathExpression = "CH1 * CH2 + DERIV(CH1)";
+
+    panel.setFocusedChannel("math");
+    const nodeInput = document.querySelector<HTMLInputElement>("#osc-focused-node");
+    expect(nodeInput?.value).toBe("CH1 * CH2 + DERIV(CH1)");
+
+    panel.draw();
+
+    const state = panel.getPersistentState();
+    expect(state.isMathEnabled).toBe(true);
+    expect(state.mathExpression).toBe("CH1 * CH2 + DERIV(CH1)");
+
+    const newPanel = new OscilloscopePanel();
+    newPanel.applyPersistentState(state);
+    expect(newPanel.isMathEnabled).toBe(true);
+    expect(newPanel.mathExpression).toBe("CH1 * CH2 + DERIV(CH1)");
+  });
 });
+
