@@ -24,12 +24,12 @@ use super::aging::KB_EV;
 /// Material de la pista / interconexión
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InterconnectMaterial {
-    CopperCu,       // Cobre con barrera TaN/TiN (Ea ≈ 0.90 eV, ρ ≈ 1.7e-8 Ω·m)
-    AluminumAl,     // Aluminio / Al-Cu (Ea ≈ 0.65 eV, ρ ≈ 2.8e-8 Ω·m)
-    TungstenW,      // Wolframio para vías y contactos (Ea ≈ 0.85 eV, ρ ≈ 5.6e-8 Ω·m)
-    GoldAu,         // Oro para wirebonding (Ea ≈ 0.80 eV, ρ ≈ 2.4e-8 Ω·m)
-    PcbCopper1Oz,   // Cobre PCB 1 oz (35 µm de espesor, ρ ≈ 1.72e-8 Ω·m)
-    PcbCopper2Oz,   // Cobre PCB 2 oz (70 µm de espesor, ρ ≈ 1.72e-8 Ω·m)
+    CopperCu,     // Cobre con barrera TaN/TiN (Ea ≈ 0.90 eV, ρ ≈ 1.7e-8 Ω·m)
+    AluminumAl,   // Aluminio / Al-Cu (Ea ≈ 0.65 eV, ρ ≈ 2.8e-8 Ω·m)
+    TungstenW,    // Wolframio para vías y contactos (Ea ≈ 0.85 eV, ρ ≈ 5.6e-8 Ω·m)
+    GoldAu,       // Oro para wirebonding (Ea ≈ 0.80 eV, ρ ≈ 2.4e-8 Ω·m)
+    PcbCopper1Oz, // Cobre PCB 1 oz (35 µm de espesor, ρ ≈ 1.72e-8 Ω·m)
+    PcbCopper2Oz, // Cobre PCB 2 oz (70 µm de espesor, ρ ≈ 1.72e-8 Ω·m)
 }
 
 impl InterconnectMaterial {
@@ -88,12 +88,12 @@ pub struct InterconnectSegmentSpec {
     pub segment_id: String,
     pub source_node: String,
     pub target_node: String,
-    pub length_um: f64,       // Longitud del segmento (µm)
-    pub width_um: f64,        // Ancho de la pista (µm)
-    pub thickness_nm: f64,    // Espesor de la capa de metal (nm)
+    pub length_um: f64,    // Longitud del segmento (µm)
+    pub width_um: f64,     // Ancho de la pista (µm)
+    pub thickness_nm: f64, // Espesor de la capa de metal (nm)
     pub material: InterconnectMaterial,
-    pub current_a: f64,       // Corriente que fluye por la pista (A)
-    pub temperature_k: f64,   // Temperatura del metal (K)
+    pub current_a: f64,     // Corriente que fluye por la pista (A)
+    pub temperature_k: f64, // Temperatura del metal (K)
 }
 
 /// Resultado del análisis de Electromigración (EM) en un segmento
@@ -111,9 +111,9 @@ pub struct SegmentEmAnalysisResult {
 /// Resultado del análisis de Caída de Tensión IR (IR Drop) en un segmento
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SegmentIrDropResult {
-    pub resistance_ohms: f64,       // Resistencia de la pista R = ρ * L / (W * t) (Ω)
-    pub voltage_drop_v: f64,        // Caída de tensión ΔV = I * R (V)
-    pub voltage_drop_percent: f64,  // Caída porcentual respecto a V_nominal
+    pub resistance_ohms: f64, // Resistencia de la pista R = ρ * L / (W * t) (Ω)
+    pub voltage_drop_v: f64,  // Caída de tensión ΔV = I * R (V)
+    pub voltage_drop_percent: f64, // Caída porcentual respecto a V_nominal
     pub is_ir_drop_violation: bool, // True si ΔV% supera el presupuesto (ej. > 3%)
 }
 
@@ -187,7 +187,8 @@ pub fn evaluate_segment_em(
     };
 
     let mttf_years = mttf_hours / 8766.0;
-    let em_violation = !is_blech_immortal && (j_ma_per_cm2 > max_allowed_density_ma_per_cm2 || mttf_years < 10.0);
+    let em_violation =
+        !is_blech_immortal && (j_ma_per_cm2 > max_allowed_density_ma_per_cm2 || mttf_years < 10.0);
 
     SegmentEmAnalysisResult {
         current_density_ma_per_cm2: j_ma_per_cm2,

@@ -21,7 +21,8 @@ pub(crate) fn update_device_junction_temperatures(
                 comp.rth.unwrap_or(OPTO_RTH_JA),
                 comp.cth.unwrap_or(OPTO_CTH),
             ),
-            "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "sic_mosfet" | "gan_hemt" => {
+            "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos"
+            | "sic_mosfet" | "gan_hemt" => {
                 (comp.rth.unwrap_or(MOS_RTH_JA), comp.cth.unwrap_or(MOS_CTH))
             }
             "npn" | "pnp" => (comp.rth.unwrap_or(BJT_RTH_JA), comp.cth.unwrap_or(BJT_CTH)),

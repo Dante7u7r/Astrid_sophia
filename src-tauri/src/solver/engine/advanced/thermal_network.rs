@@ -44,9 +44,9 @@ impl ThermalStage {
 pub struct MultiNodeThermalModel {
     pub network_type: ThermalNetworkType,
     pub stages: Vec<ThermalStage>,
-    pub delta_t_stages: Vec<f64>,      // Incrementos de temperatura en cada celda Foster
-    pub nodal_temperatures: Vec<f64>,  // Temperaturas absolutas en cada nodo Cauer
-    pub t_ambient: f64,                // Temperatura ambiente de referencia (K)
+    pub delta_t_stages: Vec<f64>, // Incrementos de temperatura en cada celda Foster
+    pub nodal_temperatures: Vec<f64>, // Temperaturas absolutas en cada nodo Cauer
+    pub t_ambient: f64,           // Temperatura ambiente de referencia (K)
 }
 
 impl MultiNodeThermalModel {
@@ -85,12 +85,11 @@ impl MultiNodeThermalModel {
             return 0.0;
         }
         match self.network_type {
-            ThermalNetworkType::Foster => {
-                self.stages
-                    .iter()
-                    .map(|s| s.rth * (1.0 - (-t / s.tau()).exp()))
-                    .sum()
-            }
+            ThermalNetworkType::Foster => self
+                .stages
+                .iter()
+                .map(|s| s.rth * (1.0 - (-t / s.tau()).exp()))
+                .sum(),
             ThermalNetworkType::Cauer => {
                 // Para Cauer, simulamos un escalón unitario de potencia P=1W
                 let mut sim = self.clone();

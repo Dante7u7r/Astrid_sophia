@@ -94,8 +94,14 @@ impl CloudOffloadService {
 
             // Simulación nodal
             node_voltages.insert("0".to_string(), 0.0);
-            node_voltages.insert("1".to_string(), 5.0 * (2.0 * std::f64::consts::PI * 1000.0 * t).sin());
-            node_voltages.insert("2".to_string(), 2.5 * (2.0 * std::f64::consts::PI * 1000.0 * t).sin());
+            node_voltages.insert(
+                "1".to_string(),
+                5.0 * (2.0 * std::f64::consts::PI * 1000.0 * t).sin(),
+            );
+            node_voltages.insert(
+                "2".to_string(),
+                2.5 * (2.0 * std::f64::consts::PI * 1000.0 * t).sin(),
+            );
             branch_currents.insert("V1".to_string(), -0.0025);
 
             let elapsed_ms = start_time.elapsed().as_secs_f64() * 1000.0;

@@ -435,8 +435,10 @@ pub fn evaluate_measures(
                             for i in 1..n {
                                 let dt = window_steps[i].time - window_steps[i - 1].time;
                                 let t_rel = window_steps[i].time - window_steps[0].time;
-                                let v = *window_steps[i].node_voltages.get(&dir.node).unwrap_or(&0.0);
-                                let theta = 2.0 * std::f64::consts::PI * (k as f64) * (t_rel / t_span);
+                                let v =
+                                    *window_steps[i].node_voltages.get(&dir.node).unwrap_or(&0.0);
+                                let theta =
+                                    2.0 * std::f64::consts::PI * (k as f64) * (t_rel / t_span);
                                 cos_sum += v * theta.cos() * dt;
                                 sin_sum += v * theta.sin() * dt;
                             }
@@ -446,10 +448,8 @@ pub fn evaluate_measures(
 
                         let fundamental = harmonic_amplitudes[1];
                         if fundamental > 1e-9 {
-                            let higher_harmonics_sum_sq: f64 = harmonic_amplitudes[2..=10]
-                                .iter()
-                                .map(|a| a * a)
-                                .sum();
+                            let higher_harmonics_sum_sq: f64 =
+                                harmonic_amplitudes[2..=10].iter().map(|a| a * a).sum();
                             let thd = (higher_harmonics_sum_sq.sqrt() / fundamental) * 100.0;
                             measurements.insert(dir.name.clone(), thd);
                         } else {
@@ -573,4 +573,3 @@ mod validation_tests {
         assert!(t_set > 0.0 && t_set < 0.01);
     }
 }
-

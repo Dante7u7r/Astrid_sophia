@@ -41,23 +41,23 @@ pub enum ProcessTechnologyNode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgingModelParameters {
     // NBTI (pMOS)
-    pub a_nbti: f64,      // Coeficiente pre-exponencial NBTI
-    pub gamma_nbti: f64,  // Exponente de aceleración por tensión de compuerta (~1.8 - 2.5)
-    pub ea_nbti: f64,     // Energía de activación térmica (eV) (~0.12 - 0.20 eV)
-    pub n_nbti: f64,      // Exponente temporal de difusión (~0.16 - 0.25)
+    pub a_nbti: f64,     // Coeficiente pre-exponencial NBTI
+    pub gamma_nbti: f64, // Exponente de aceleración por tensión de compuerta (~1.8 - 2.5)
+    pub ea_nbti: f64,    // Energía de activación térmica (eV) (~0.12 - 0.20 eV)
+    pub n_nbti: f64,     // Exponente temporal de difusión (~0.16 - 0.25)
     // PBTI (nMOS)
-    pub a_pbti: f64,      // Coeficiente pre-exponencial PBTI
-    pub gamma_pbti: f64,  // Exponente de aceleración de tensión
-    pub ea_pbti: f64,     // Energía de activación térmica (eV) (~0.08 - 0.15 eV)
-    pub n_pbti: f64,      // Exponente temporal (~0.12 - 0.20)
+    pub a_pbti: f64,     // Coeficiente pre-exponencial PBTI
+    pub gamma_pbti: f64, // Exponente de aceleración de tensión
+    pub ea_pbti: f64,    // Energía de activación térmica (eV) (~0.08 - 0.15 eV)
+    pub n_pbti: f64,     // Exponente temporal (~0.12 - 0.20)
     // HCI (nMOS / pMOS)
-    pub a_hci: f64,       // Coeficiente pre-exponencial HCI
-    pub gamma_hci: f64,   // Exponente de tensión de drenador
-    pub ea_hci: f64,      // Energía de activación HCI (eV) (~ -0.05 a 0.05 eV)
-    pub n_hci: f64,       // Exponente temporal HCI (~0.45 - 0.55)
+    pub a_hci: f64,     // Coeficiente pre-exponencial HCI
+    pub gamma_hci: f64, // Exponente de tensión de drenador
+    pub ea_hci: f64,    // Energía de activación HCI (eV) (~ -0.05 a 0.05 eV)
+    pub n_hci: f64,     // Exponente temporal HCI (~0.45 - 0.55)
     // Óxido y Movilidad
-    pub tox_nm: f64,      // Espesor de óxido de compuerta equivalente (nm)
-    pub mu_deg_coeff: f64,// Factor de acoplamiento de degradación de movilidad
+    pub tox_nm: f64,       // Espesor de óxido de compuerta equivalente (nm)
+    pub mu_deg_coeff: f64, // Factor de acoplamiento de degradación de movilidad
 }
 
 impl Default for AgingModelParameters {
@@ -156,11 +156,11 @@ impl AgingModelParameters {
 /// Perfil de estrés electrotérmico aplicado al dispositivo
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgingStressProfile {
-    pub vgs_stress: f64,   // Tensión compuerta-fuente de estrés (V)
-    pub vds_stress: f64,   // Tensión drenador-fuente de estrés (V)
-    pub temperature_k: f64,// Temperatura de unión durante el estrés (K)
-    pub duty_cycle: f64,   // Ciclo de trabajo AC α (0.0 = OFF, 1.0 = DC continuo)
-    pub is_pmos: bool,     // True si es pMOS (predomina NBTI), False si es nMOS (predominan PBTI / HCI)
+    pub vgs_stress: f64,    // Tensión compuerta-fuente de estrés (V)
+    pub vds_stress: f64,    // Tensión drenador-fuente de estrés (V)
+    pub temperature_k: f64, // Temperatura de unión durante el estrés (K)
+    pub duty_cycle: f64,    // Ciclo de trabajo AC α (0.0 = OFF, 1.0 = DC continuo)
+    pub is_pmos: bool, // True si es pMOS (predomina NBTI), False si es nMOS (predominan PBTI / HCI)
 }
 
 /// Resultado de la evaluación de envejecimiento
@@ -168,10 +168,10 @@ pub struct AgingStressProfile {
 pub struct AgingDegradationResult {
     pub time_seconds: f64,
     pub time_years: f64,
-    pub delta_vth_nbti: f64,  // Corrimiento Vth por NBTI (V)
-    pub delta_vth_pbti: f64,  // Corrimiento Vth por PBTI (V)
-    pub delta_vth_hci: f64,   // Corrimiento Vth por HCI (V)
-    pub delta_vth_total: f64, // Corrimiento Vth total (V)
+    pub delta_vth_nbti: f64,    // Corrimiento Vth por NBTI (V)
+    pub delta_vth_pbti: f64,    // Corrimiento Vth por PBTI (V)
+    pub delta_vth_hci: f64,     // Corrimiento Vth por HCI (V)
+    pub delta_vth_total: f64,   // Corrimiento Vth total (V)
     pub delta_ids_percent: f64, // Reducción de corriente de drenador (%)
     pub delta_gm_percent: f64,  // Reducción de transconductancia (%)
 }
@@ -187,7 +187,11 @@ pub struct LifetimeEstimationResult {
 }
 
 /// Evalúa el corrimiento de Vth por NBTI (pMOS)
-pub fn evaluate_nbti(stress: &AgingStressProfile, params: &AgingModelParameters, time_s: f64) -> f64 {
+pub fn evaluate_nbti(
+    stress: &AgingStressProfile,
+    params: &AgingModelParameters,
+    time_s: f64,
+) -> f64 {
     if time_s <= 0.0 || !stress.is_pmos {
         return 0.0;
     }
@@ -196,12 +200,19 @@ pub fn evaluate_nbti(stress: &AgingStressProfile, params: &AgingModelParameters,
     let thermal_factor = (-params.ea_nbti / (KB_EV * stress.temperature_k)).exp();
     let ac_recovery_factor = stress.duty_cycle.max(0.01).powf(params.n_nbti);
 
-    let delta_vth_dc = params.a_nbti * e_field.powf(params.gamma_nbti) * thermal_factor * time_s.powf(params.n_nbti);
+    let delta_vth_dc = params.a_nbti
+        * e_field.powf(params.gamma_nbti)
+        * thermal_factor
+        * time_s.powf(params.n_nbti);
     delta_vth_dc * ac_recovery_factor
 }
 
 /// Evalúa el corrimiento de Vth por PBTI (nMOS High-κ)
-pub fn evaluate_pbti(stress: &AgingStressProfile, params: &AgingModelParameters, time_s: f64) -> f64 {
+pub fn evaluate_pbti(
+    stress: &AgingStressProfile,
+    params: &AgingModelParameters,
+    time_s: f64,
+) -> f64 {
     if time_s <= 0.0 || stress.is_pmos {
         return 0.0;
     }
@@ -210,12 +221,19 @@ pub fn evaluate_pbti(stress: &AgingStressProfile, params: &AgingModelParameters,
     let thermal_factor = (-params.ea_pbti / (KB_EV * stress.temperature_k)).exp();
     let ac_recovery_factor = stress.duty_cycle.max(0.01).powf(params.n_pbti);
 
-    let delta_vth_dc = params.a_pbti * e_field.powf(params.gamma_pbti) * thermal_factor * time_s.powf(params.n_pbti);
+    let delta_vth_dc = params.a_pbti
+        * e_field.powf(params.gamma_pbti)
+        * thermal_factor
+        * time_s.powf(params.n_pbti);
     delta_vth_dc * ac_recovery_factor
 }
 
 /// Evalúa el corrimiento de Vth por Hot Carrier Injection (HCI)
-pub fn evaluate_hci(stress: &AgingStressProfile, params: &AgingModelParameters, time_s: f64) -> f64 {
+pub fn evaluate_hci(
+    stress: &AgingStressProfile,
+    params: &AgingModelParameters,
+    time_s: f64,
+) -> f64 {
     if time_s <= 0.0 {
         return 0.0;
     }
@@ -235,7 +253,12 @@ pub fn evaluate_hci(stress: &AgingStressProfile, params: &AgingModelParameters, 
     let thermal_factor = (-params.ea_hci / (KB_EV * stress.temperature_k)).exp();
     let duty_factor = stress.duty_cycle.max(0.01).powf(params.n_hci);
 
-    params.a_hci * pmos_factor * (vds_eff * vgs_factor).powf(params.gamma_hci) * thermal_factor * duty_factor * time_s.powf(params.n_hci)
+    params.a_hci
+        * pmos_factor
+        * (vds_eff * vgs_factor).powf(params.gamma_hci)
+        * thermal_factor
+        * duty_factor
+        * time_s.powf(params.n_hci)
 }
 
 /// Calcula la degradación electrotérmica acumulada total a un tiempo determinado
@@ -256,7 +279,8 @@ pub fn calculate_cumulative_aging(
     let mobility_factor = 1.0 + 0.3 * params.mu_deg_coeff;
 
     let delta_ids_percent = ((vth_impact_ratio * mobility_factor) * 100.0).min(90.0);
-    let delta_gm_percent = ((vth_impact_ratio * (0.8 + 0.2 * params.mu_deg_coeff)) * 100.0).min(90.0);
+    let delta_gm_percent =
+        ((vth_impact_ratio * (0.8 + 0.2 * params.mu_deg_coeff)) * 100.0).min(90.0);
 
     AgingDegradationResult {
         time_seconds: time_s,
@@ -298,7 +322,9 @@ pub fn estimate_device_lifetime(
     let ttf_s = (t_low * t_high).sqrt();
     let ttf_years = ttf_s / (365.25 * 86400.0);
 
-    let dominant_mechanism = if deg_10y.delta_vth_nbti > deg_10y.delta_vth_pbti && deg_10y.delta_vth_nbti > deg_10y.delta_vth_hci {
+    let dominant_mechanism = if deg_10y.delta_vth_nbti > deg_10y.delta_vth_pbti
+        && deg_10y.delta_vth_nbti > deg_10y.delta_vth_hci
+    {
         AgingMechanism::NBTI
     } else if deg_10y.delta_vth_pbti > deg_10y.delta_vth_hci {
         AgingMechanism::PBTI

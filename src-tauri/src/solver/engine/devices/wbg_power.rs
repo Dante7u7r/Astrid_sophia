@@ -17,21 +17,21 @@
 /// Parámetros físicos para SiC MOSFET (ej: C3M0065090D, NVH4L020N120SC1)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SicMosfetParams {
-    pub vth: f64,         // Tensión de umbral Vth (V) a T0 (~2.5 - 3.5 V)
-    pub rds_on: f64,      // Resistencia ON nominal (Ω) (~0.02 - 0.08 Ω)
-    pub lambda: f64,      // Modulación de longitud de canal (1/V) (~0.01)
-    pub theta: f64,       // Coeficiente de saturación de velocidad (1/V) (~0.05)
-    pub is_body: f64,     // Corriente de saturación del body diode (A) (~1e-16)
-    pub n_body: f64,      // Factor de idealidad del body diode (~1.2 - 1.5)
-    pub v_knee_body: f64, // Tensión de codo del body diode SiC (~3.2 V)
-    pub cgd0: f64,        // Capacidad Gate-Drain a Vds=0 (F) (~100 - 300 pF)
-    pub cds0: f64,        // Capacidad Drain-Source a Vds=0 (F) (~500 - 1500 pF)
-    pub cgs0: f64,        // Capacidad Gate-Source (F) (~1000 - 3000 pF)
-    pub v0_gd: f64,       // Tensión de escala para colapso Cgd (V) (~10.0 V)
-    pub v0_ds: f64,       // Tensión de escala para colapso Cds (V) (~25.0 V)
-    pub m_gd: f64,        // Exponente de graduación Cgd (~0.5 - 0.8)
-    pub m_ds: f64,        // Exponente de graduación Cds (~0.5)
-    pub temp_coeff_r: f64,// Coeficiente térmico de Rds_on (~2.3 para SiC)
+    pub vth: f64,            // Tensión de umbral Vth (V) a T0 (~2.5 - 3.5 V)
+    pub rds_on: f64,         // Resistencia ON nominal (Ω) (~0.02 - 0.08 Ω)
+    pub lambda: f64,         // Modulación de longitud de canal (1/V) (~0.01)
+    pub theta: f64,          // Coeficiente de saturación de velocidad (1/V) (~0.05)
+    pub is_body: f64,        // Corriente de saturación del body diode (A) (~1e-16)
+    pub n_body: f64,         // Factor de idealidad del body diode (~1.2 - 1.5)
+    pub v_knee_body: f64,    // Tensión de codo del body diode SiC (~3.2 V)
+    pub cgd0: f64,           // Capacidad Gate-Drain a Vds=0 (F) (~100 - 300 pF)
+    pub cds0: f64,           // Capacidad Drain-Source a Vds=0 (F) (~500 - 1500 pF)
+    pub cgs0: f64,           // Capacidad Gate-Source (F) (~1000 - 3000 pF)
+    pub v0_gd: f64,          // Tensión de escala para colapso Cgd (V) (~10.0 V)
+    pub v0_ds: f64,          // Tensión de escala para colapso Cds (V) (~25.0 V)
+    pub m_gd: f64,           // Exponente de graduación Cgd (~0.5 - 0.8)
+    pub m_ds: f64,           // Exponente de graduación Cds (~0.5)
+    pub temp_coeff_r: f64,   // Coeficiente térmico de Rds_on (~2.3 para SiC)
     pub temp_coeff_vth: f64, // Coeficiente térmico de Vth (V/K) (~ -0.003)
 }
 
@@ -61,18 +61,18 @@ impl Default for SicMosfetParams {
 /// Parámetros físicos para GaN E-HEMT (ej: GS66508T, EPC2001C)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GanHemtParams {
-    pub vth: f64,         // Tensión de umbral Vth (V) (~1.3 - 1.7 V)
-    pub rds_on: f64,      // Resistencia ON nominal (Ω) (~0.015 - 0.050 Ω)
-    pub beta: f64,        // Parámetro de transconductancia 2DEG (A/V^2) (~15.0)
-    pub lambda: f64,      // Modulación de canal (1/V) (~0.008)
-    pub cgd0: f64,        // Capacidad Gate-Drain ultra-baja (F) (~10 - 30 pF)
-    pub cds0: f64,        // Capacidad Drain-Source (F) (~100 - 300 pF)
-    pub cgs0: f64,        // Capacidad Gate-Source (F) (~200 - 500 pF)
-    pub v0_gd: f64,       // Tensión de colapso Cgd (V) (~5.0 V)
-    pub v0_ds: f64,       // Tensión de colapso Cds (V) (~15.0 V)
-    pub m_gd: f64,        // Exponente Cgd (~0.85)
-    pub m_ds: f64,        // Exponente Cds (~0.6)
-    pub temp_coeff_r: f64,// Coeficiente térmico de Rds_on (~1.8 para GaN)
+    pub vth: f64,          // Tensión de umbral Vth (V) (~1.3 - 1.7 V)
+    pub rds_on: f64,       // Resistencia ON nominal (Ω) (~0.015 - 0.050 Ω)
+    pub beta: f64,         // Parámetro de transconductancia 2DEG (A/V^2) (~15.0)
+    pub lambda: f64,       // Modulación de canal (1/V) (~0.008)
+    pub cgd0: f64,         // Capacidad Gate-Drain ultra-baja (F) (~10 - 30 pF)
+    pub cds0: f64,         // Capacidad Drain-Source (F) (~100 - 300 pF)
+    pub cgs0: f64,         // Capacidad Gate-Source (F) (~200 - 500 pF)
+    pub v0_gd: f64,        // Tensión de colapso Cgd (V) (~5.0 V)
+    pub v0_ds: f64,        // Tensión de colapso Cds (V) (~15.0 V)
+    pub m_gd: f64,         // Exponente Cgd (~0.85)
+    pub m_ds: f64,         // Exponente Cds (~0.6)
+    pub temp_coeff_r: f64, // Coeficiente térmico de Rds_on (~1.8 para GaN)
 }
 
 impl Default for GanHemtParams {
@@ -138,7 +138,8 @@ pub fn evaluate_sic_mosfet(
         } else if vds < vov {
             // Región lineal / Óhmica
             let denom = 1.0 + params.theta * vov;
-            let ids_lin = g_on * (vov * vds - 0.5 * vds * vds) / (vov * denom) * (1.0 + params.lambda * vds);
+            let ids_lin =
+                g_on * (vov * vds - 0.5 * vds * vds) / (vov * denom) * (1.0 + params.lambda * vds);
             let gds_lin = g_on * (vov - vds) / (vov * denom) * (1.0 + params.lambda * vds)
                 + ids_lin * params.lambda / (1.0 + params.lambda * vds);
             let gm_lin = g_on * vds / (vov * denom);
@@ -229,7 +230,8 @@ pub fn evaluate_gan_hemt(
         } else if vds < vov {
             // Región lineal
             let ids_lin = params.beta * (vov * vds - 0.5 * vds * vds) * (1.0 + params.lambda * vds);
-            let gds_lin = params.beta * (vov - vds) * (1.0 + params.lambda * vds) + ids_lin * params.lambda;
+            let gds_lin =
+                params.beta * (vov - vds) * (1.0 + params.lambda * vds) + ids_lin * params.lambda;
             let gm_lin = params.beta * vds * (1.0 + params.lambda * vds);
             (ids_lin, gm_lin.max(1e-12), gds_lin.max(1e-12))
         } else {
@@ -289,17 +291,30 @@ mod tests {
 
         // 1. Primer cuadrante: Vgs=15V, Vds=5V -> Conducción ON
         let fwd = evaluate_sic_mosfet(15.0, 5.0, 300.0, &params);
-        assert!(fwd.ids > 10.0, "Corriente directa debe ser alta (>10A), obtenido: {}", fwd.ids);
+        assert!(
+            fwd.ids > 10.0,
+            "Corriente directa debe ser alta (>10A), obtenido: {}",
+            fwd.ids
+        );
         assert!(fwd.gds > 0.0);
 
         // 2. Tercer cuadrante con canal abierto (Vgs=15V, Vds=-1V)
         let rev_on = evaluate_sic_mosfet(15.0, -1.0, 300.0, &params);
-        assert!(rev_on.ids < 0.0, "Corriente de 3er cuadrante debe ser negativa");
-        assert!(rev_on.ids < -10.0, "En modo síncrono Rds_on conduce alta corriente negativa");
+        assert!(
+            rev_on.ids < 0.0,
+            "Corriente de 3er cuadrante debe ser negativa"
+        );
+        assert!(
+            rev_on.ids < -10.0,
+            "En modo síncrono Rds_on conduce alta corriente negativa"
+        );
 
         // 3. Tercer cuadrante con canal cerrado (Vgs=0V, Vds=-4.0V) -> Body diode conduce
         let rev_body = evaluate_sic_mosfet(0.0, -4.0, 300.0, &params);
-        assert!(rev_body.ids < 0.0, "Body diode debe conducir a Vds=-4V (por encima de Vknee=3.2V)");
+        assert!(
+            rev_body.ids < 0.0,
+            "Body diode debe conducir a Vds=-4V (por encima de Vknee=3.2V)"
+        );
     }
 
     #[test]
@@ -310,7 +325,12 @@ mod tests {
         let at_100v = evaluate_sic_mosfet(0.0, 100.0, 300.0, &params);
 
         // Colapso de capacitancia Miller Cgd a alta tensión
-        assert!(at_100v.cgd < at_0v.cgd * 0.2, "Cgd debe colapsar a 100V, 0V: {}, 100V: {}", at_0v.cgd, at_100v.cgd);
+        assert!(
+            at_100v.cgd < at_0v.cgd * 0.2,
+            "Cgd debe colapsar a 100V, 0V: {}, 100V: {}",
+            at_0v.cgd,
+            at_100v.cgd
+        );
         assert!(at_100v.cds < at_0v.cds * 0.5, "Cds debe decrecer con Vds");
     }
 
@@ -324,10 +344,16 @@ mod tests {
 
         // 2. Tercer cuadrante OFF (Vgs=0V, Vds=-2.5V): Conducción 2DEG inversa con Vdrop
         let rev_off = evaluate_gan_hemt(0.0, -2.5, 300.0, &params);
-        assert!(rev_off.ids < 0.0, "GaN debe conducir en 3er cuadrante cuando Vgd > Vth");
+        assert!(
+            rev_off.ids < 0.0,
+            "GaN debe conducir en 3er cuadrante cuando Vgd > Vth"
+        );
 
         // 3. Capacitancias ultra-bajas GaN
         let cap_gan = evaluate_gan_hemt(0.0, 50.0, 300.0, &params);
-        assert!(cap_gan.cgd < 5e-12, "Capacidad Miller GaN debe ser inferior a 5 pF a 50V");
+        assert!(
+            cap_gan.cgd < 5e-12,
+            "Capacidad Miller GaN debe ser inferior a 5 pF a 50V"
+        );
     }
 }

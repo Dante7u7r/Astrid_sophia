@@ -25,32 +25,32 @@ pub const LET_TO_CHARGE_PC_PER_UM: f64 = 0.01036;
 /// Perfiles estándar de entorno de radiación
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpaceMissionProfile {
-    LeoLowAltitude,     // LEO 500 km (baja radiación, ~5-15 krad/5 años)
-    LeoPolarSat,        // LEO Polar / Auroral (~20-50 krad)
-    Geo15Year,          // Geoestacionario cinturón Van Allen (~100 krad con blindaje)
-    DeepSpaceEuropa,    // Cinturón de radiación severo de Júpiter (>300 krad)
-    MilStd883RadHard,   // Calificación militar rad-hard (>1000 krad / 1 Mrad)
-    CommercialCots,     // COTS sin blindaje (<5 krad)
+    LeoLowAltitude,   // LEO 500 km (baja radiación, ~5-15 krad/5 años)
+    LeoPolarSat,      // LEO Polar / Auroral (~20-50 krad)
+    Geo15Year,        // Geoestacionario cinturón Van Allen (~100 krad con blindaje)
+    DeepSpaceEuropa,  // Cinturón de radiación severo de Júpiter (>300 krad)
+    MilStd883RadHard, // Calificación militar rad-hard (>1000 krad / 1 Mrad)
+    CommercialCots,   // COTS sin blindaje (<5 krad)
 }
 
 /// Nivel de endurecimiento a radiación (Rad-Hard Design)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RadiationHardeningLevel {
-    UnmitigatedCots,      // Comercial estándar
-    EnclosedShielding,    // Blindaje mecánico Spot Shielding (Ta/Al)
-    RadTolerant,          // Procesos con óxido fino y anillos de guarda (Guard Rings)
-    RadHardByDesignRhbd,  // RHBD (ELT - Enclosed Layout Transistors + Dual Interlocked Cells)
+    UnmitigatedCots,     // Comercial estándar
+    EnclosedShielding,   // Blindaje mecánico Spot Shielding (Ta/Al)
+    RadTolerant,         // Procesos con óxido fino y anillos de guarda (Guard Rings)
+    RadHardByDesignRhbd, // RHBD (ELT - Enclosed Layout Transistors + Dual Interlocked Cells)
 }
 
 /// Parámetros tecnológicos de respuesta a TID
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TidTechnologyParameters {
-    pub a_not: f64,          // Coeficiente de atrapamiento de huecos Not (V/krad^alpha)
-    pub alpha_not: f64,      // Exponente de dosis de carga de óxido (~0.6 - 0.9)
-    pub a_nit: f64,          // Coeficiente de generación de trampas de interfaz Nit
-    pub alpha_nit: f64,      // Exponente de dosis de trampas de interfaz (~0.5 - 0.7)
-    pub sti_leak_sat: f64,   // Corriente de fuga máxima por borde STI (A)
-    pub d_crit_sti_krad: f64,// Dosis característica de activación de canal STI (krad)
+    pub a_not: f64,           // Coeficiente de atrapamiento de huecos Not (V/krad^alpha)
+    pub alpha_not: f64,       // Exponente de dosis de carga de óxido (~0.6 - 0.9)
+    pub a_nit: f64,           // Coeficiente de generación de trampas de interfaz Nit
+    pub alpha_nit: f64,       // Exponente de dosis de trampas de interfaz (~0.5 - 0.7)
+    pub sti_leak_sat: f64,    // Corriente de fuga máxima por borde STI (A)
+    pub d_crit_sti_krad: f64, // Dosis característica de activación de canal STI (krad)
     pub s_degradation_factor: f64, // Factor de ensanchamiento de pendiente subumbral (mV/dec/krad)
 }
 
@@ -119,7 +119,7 @@ impl Default for SingleEventTransientSpec {
             strike_time_s: 1.0e-6,
             let_mev_cm2_mg: 40.0, // Típico ion pesado galáctico (GCR)
             collection_depth_um: 2.0,
-            tau_rise_s: 10.0e-12, // 10 ps
+            tau_rise_s: 10.0e-12,  // 10 ps
             tau_fall_s: 200.0e-12, // 200 ps
         }
     }
@@ -129,22 +129,22 @@ impl Default for SingleEventTransientSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TidDegradationResult {
     pub total_dose_krad: f64,
-    pub delta_vth_nmos: f64,      // Corrimiento neto de Vth en nMOS (V)
-    pub delta_vth_pmos: f64,      // Corrimiento neto de Vth en pMOS (V)
-    pub delta_vth_not: f64,       // Contribución de carga de óxido (V)
-    pub delta_vth_nit: f64,       // Contribución de trampas de interfaz (V)
-    pub sti_leakage_current_a: f64, // Fuga parasitaria de borde STI (A)
+    pub delta_vth_nmos: f64,            // Corrimiento neto de Vth en nMOS (V)
+    pub delta_vth_pmos: f64,            // Corrimiento neto de Vth en pMOS (V)
+    pub delta_vth_not: f64,             // Contribución de carga de óxido (V)
+    pub delta_vth_nit: f64,             // Contribución de trampas de interfaz (V)
+    pub sti_leakage_current_a: f64,     // Fuga parasitaria de borde STI (A)
     pub subthreshold_swing_mv_dec: f64, // Pendiente subumbral degradada (mV/dec)
-    pub functional_status_ok: bool, // True si el dispositivo mantiene márgenes de ruido
+    pub functional_status_ok: bool,     // True si el dispositivo mantiene márgenes de ruido
 }
 
 /// Resultado del análisis de vulnerabilidad a Single-Event Upset (SEU)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeuVulnerabilityResult {
-    pub critical_charge_fc: f64,  // Carga crítica Qcrit para invertir el estado lógico (fC)
+    pub critical_charge_fc: f64, // Carga crítica Qcrit para invertir el estado lógico (fC)
     pub collected_charge_fc: f64, // Carga total inyectada por el impacto Qcoll (fC)
-    pub upset_occurred: bool,     // True si Qcoll >= Qcrit
-    pub safety_margin: f64,       // Qcrit / Qcoll
+    pub upset_occurred: bool,    // True si Qcoll >= Qcrit
+    pub safety_margin: f64,      // Qcrit / Qcoll
 }
 
 /// Evalúa la degradación de un dispositivo ante una dosis acumulada TID
@@ -185,9 +185,8 @@ pub fn evaluate_tid_degradation(
     let subthreshold_swing = nominal_subthreshold_swing + params.s_degradation_factor * dose_krad;
 
     // Criterio de funcionalidad: pérdida de funcionalidad si |ΔVth| > 250 mV o fuga > 100 nA
-    let functional_status_ok = delta_vth_nmos.abs() < 0.250
-        && delta_vth_pmos.abs() < 0.250
-        && sti_leakage < 1.0e-7;
+    let functional_status_ok =
+        delta_vth_nmos.abs() < 0.250 && delta_vth_pmos.abs() < 0.250 && sti_leakage < 1.0e-7;
 
     TidDegradationResult {
         total_dose_krad: dose_krad,
@@ -210,7 +209,8 @@ pub fn calculate_set_current_instant(spec: &SingleEventTransientSpec, time_s: f6
     let dt = time_s - spec.strike_time_s;
 
     // Carga total depositada Q = LET * L_collection * Factor (en Coulombs)
-    let q_total_c = spec.let_mev_cm2_mg * spec.collection_depth_um * LET_TO_CHARGE_PC_PER_UM * 1.0e-12;
+    let q_total_c =
+        spec.let_mev_cm2_mg * spec.collection_depth_um * LET_TO_CHARGE_PC_PER_UM * 1.0e-12;
 
     // Amplitud pico I0 para satisfacer la integral Q = I0 * (tau_fall - tau_rise)
     let delta_tau = (spec.tau_fall_s - spec.tau_rise_s).max(1.0e-15);
@@ -233,7 +233,8 @@ pub fn evaluate_seu_vulnerability(
     let q_crit_fc = q_crit_c * 1.0e15;
 
     // Carga total inyectada
-    let q_coll_c = spec.let_mev_cm2_mg * spec.collection_depth_um * LET_TO_CHARGE_PC_PER_UM * 1.0e-12;
+    let q_coll_c =
+        spec.let_mev_cm2_mg * spec.collection_depth_um * LET_TO_CHARGE_PC_PER_UM * 1.0e-12;
     let q_coll_fc = q_coll_c * 1.0e15;
 
     let upset_occurred = q_coll_fc >= q_crit_fc;
