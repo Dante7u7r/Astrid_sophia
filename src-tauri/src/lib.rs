@@ -22,7 +22,7 @@ mod advanced_ipc;
 pub mod dual3;
 pub mod feedback;
 mod gpu_solver;
-mod krylov;
+pub mod krylov;
 pub mod parser;
 pub mod solver;
 mod sparse_csc;

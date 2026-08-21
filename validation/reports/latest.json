@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "suiteId": "phase4-external-correlation",
   "title": "Correlación científica externa de Astryd Sophia — Fase 4",
-  "generatedAtUnixSeconds": 1787290661,
+  "generatedAtUnixSeconds": 1787291088,
   "solverVersion": "0.1.0",
-  "gitHead": "ca9b3b5fc07d",
+  "gitHead": "67a39a8e8d82",
   "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {

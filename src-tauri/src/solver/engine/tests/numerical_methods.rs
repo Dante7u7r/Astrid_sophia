@@ -9,3 +9,7 @@ mod sparse_factorization {
 mod parallel_schur {
     include!("numerical_methods/parallel_schur.rs");
 }
+
+mod gmres_preconditioning {
+    include!("numerical_methods/gmres_preconditioning.rs");
+}
