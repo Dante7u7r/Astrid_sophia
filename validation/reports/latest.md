@@ -5,7 +5,7 @@ Observaciones: **50/50** dentro de tolerancia.
 
 - Suite: `phase4-external-correlation`
 - Solver: `0.1.0`
-- Git: `424adb9e35af` (`dirty`)
+- Git: `3e488639add0` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-47 : Circuit level simulation program`
 
@@ -34,7 +34,7 @@ Observaciones: **50/50** dentro de tolerancia.
 | ac-rlc-band-pass-resonance | AC | phase_at_resonance | 0.0000000000e0 deg | 0.0000000000e0 deg | 0.000e0 | 2.000e-2 | PASS |
 | ac-rlc-band-pass-resonance | AC | kcl_at_resonance | 2.8177377798e-18 A | 0.0000000000e0 A | 2.818e-18 | 1.000e-10 | PASS |
 | transient-rc-step-tau | TRAN | vc_at_tau | 3.1514439384e0 V | 3.1606027941e0 V | 9.159e-3 | 3.000e-2 | PASS |
-| transient-rc-step-tau | TRAN | kcl_at_tau | 2.3852447795e-18 A | 0.0000000000e0 A | 2.385e-18 | 1.000e-9 | PASS |
+| transient-rc-step-tau | TRAN | kcl_at_tau | 6.5052130349e-18 A | 0.0000000000e0 A | 6.505e-18 | 1.000e-9 | PASS |
 | transient-rc-step-trap | TRAN | vc_at_0_25tau | 1.1058104565e0 V | 1.1059960846e0 V | 1.856e-4 | 1.106e-3 | PASS |
 | transient-rc-step-trap | TRAN | vc_at_1tau | 3.1605266065e0 V | 3.1606027941e0 V | 7.619e-5 | 3.161e-3 | PASS |
 | transient-rc-step-trap | TRAN | vc_at_2tau | 4.3233011952e0 V | 4.3233235838e0 V | 2.239e-5 | 4.323e-3 | PASS |
@@ -57,7 +57,7 @@ Observaciones: **50/50** dentro de tolerancia.
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_3v | -1.0959113160e-7 A | -1.0959156327e-7 A | 4.317e-13 | 1.096e-11 | PASS |
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_4v | -5.2445013003e-6 A | -5.2445288435e-6 A | 2.754e-11 | 5.245e-10 | PASS |
 | external-dc-diode-shockley-sweep | DC SWEEP | source_current_0_5v | -2.5097491050e-4 A | -2.5097655809e-4 A | 1.648e-9 | 2.510e-8 | PASS |
-| pss-rc-sine-steady-state | PSS | output_peak_to_peak | 1.5678268900e0 V | 1.5717672548e0 V | 3.940e-3 | 3.144e-2 | PASS |
+| pss-rc-sine-steady-state | PSS | output_peak_to_peak | 1.5678268901e0 V | 1.5717672548e0 V | 3.940e-3 | 3.144e-2 | PASS |
 | stability-rc-pole-zero | STABILITY | dominant_pole_real | -2.0000000000e3 rad/s | -2.0000000000e3 rad/s | 2.274e-13 | 1.000e1 | PASS |
 | stability-rc-pole-zero | STABILITY | transmission_zero_real | -1.0000000000e3 rad/s | -1.0000000000e3 rad/s | 0.000e0 | 1.000e1 | PASS |
 | stability-rc-pole-zero | STABILITY | stable_flag | 1.0000000000e0 boolean | 1.0000000000e0 boolean | 0.000e0 | 0.000e0 | PASS |

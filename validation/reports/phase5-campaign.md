@@ -2,18 +2,18 @@
 
 Resultado: **PASS** — 500/500 ejecuciones dentro de tolerancia.
 
-- Dataset SHA-256: `086132188230ce12b5fdb3f8c558e925bb75794dce6d5c5a0f06b432ffa74479`
+- Dataset SHA-256: `2a8066c2dbd779dfdcaee82253988f9682d5343fc80ff17db6d0dc771c05a09f`
 - Parámetros únicos: 500
 - Sesiones cronológicas: 20
 - Familias: 5
 - Modos de análisis: AC, DC, TRAN
-- Tiempo: 214 ms
+- Tiempo: 1036 ms
 
 | Familia | Análisis | Ejecuciones | Aprobadas | Error absoluto máximo |
 |---|---:|---:|---:|---:|
 | ac-rc-cutoff | AC | 100 | 100 | 3.552714e-15 |
 | ac-rl-cutoff | AC | 100 | 100 | 1.421085e-14 |
-| dc-loaded-bridge | DC | 100 | 100 | 1.776357e-15 |
+| dc-loaded-bridge | DC | 100 | 100 | 3.552714e-15 |
 | dc-resistive-divider | DC | 100 | 100 | 1.776357e-15 |
 | transient-rc-tau | TRAN | 100 | 100 | 9.752014e-5 |
 

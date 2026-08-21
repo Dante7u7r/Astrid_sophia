@@ -856,6 +856,9 @@ fn find_ngspice_executable() -> Option<PathBuf> {
         candidates.push(PathBuf::from(
             "validation/.tools/Spice64/bin/ngspice_con.exe",
         ));
+        candidates.push(PathBuf::from(
+            "../validation/.tools/Spice64/bin/ngspice_con.exe",
+        ));
     }
     candidates.into_iter().find(|candidate| {
         Command::new(candidate)
