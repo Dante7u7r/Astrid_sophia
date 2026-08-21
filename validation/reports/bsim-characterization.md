@@ -1,21 +1,21 @@
 # Caracterización no bloqueante de la brecha BSIM3
 
-Resultado: **FAIL** — 0/1 casos aprobados.
-Observaciones: **0/5** dentro de tolerancia.
+Resultado: **PASS** — 1/1 casos aprobados.
+Observaciones: **5/5** dentro de tolerancia.
 
 - Suite: `bsim3-gap-characterization`
 - Solver: `0.1.0`
-- Git: `55ae4f26e6bf` (`dirty`)
+- Git: `ff636b14c46b` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-47 : Circuit level simulation program`
 
 | Caso | Análisis | Observación | Actual | Esperado | Error absoluto | Límite | Estado |
 |---|---:|---|---:|---:|---:|---:|:---:|
-| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_0_8v | -1.3903708279e-5 A | -6.5262837801e-4 A | 6.387e-4 | 1.632e-4 | FAIL |
-| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_0v | -2.0140804926e-5 A | -1.5112781977e-3 A | 1.491e-3 | 3.778e-4 | FAIL |
-| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_2v | -2.5483653511e-5 A | -2.6203834459e-3 A | 2.595e-3 | 6.551e-4 | FAIL |
-| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_4v | -3.0799437896e-5 A | -3.9241936876e-3 A | 3.893e-3 | 9.810e-4 | FAIL |
-| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_6v | -3.5079156876e-5 A | -5.3388786922e-3 A | 5.304e-3 | 1.335e-3 | FAIL |
+| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_0_8v | -6.4402003407e-4 A | -6.5262837801e-4 A | 8.608e-6 | 1.632e-4 | PASS |
+| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_0v | -1.5708388049e-3 A | -1.5112781977e-3 A | 5.956e-5 | 3.778e-4 | PASS |
+| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_2v | -2.6535594850e-3 A | -2.6203834459e-3 A | 3.318e-5 | 6.551e-4 | PASS |
+| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_4v | -3.8013166884e-3 A | -3.9241936876e-3 A | 1.229e-4 | 9.810e-4 | PASS |
+| external-dc-bsim3-nmos-transfer | DC SWEEP | drain_current_1_6v | -4.9711150933e-3 A | -5.3388786922e-3 A | 3.678e-4 | 1.335e-3 | PASS |
 
 ## Referencias y derivaciones
 

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "suiteId": "phase4-external-correlation",
   "title": "Correlación científica externa de Astryd Sophia — Fase 4",
-  "generatedAtUnixSeconds": 1787284069,
+  "generatedAtUnixSeconds": 1787287513,
   "solverVersion": "0.1.0",
-  "gitHead": "55ae4f26e6bf",
-  "gitWorktree": "clean",
+  "gitHead": "ff636b14c46b",
+  "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {
     "ngspice": "** ngspice-47 : Circuit level simulation program"
