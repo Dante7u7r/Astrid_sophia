@@ -7,6 +7,7 @@ import { type AnalysisMode } from "./ui/simulation_controls";
 import { OscilloscopePanel, TimeStepResult } from "./ui/oscilloscope_panel";
 import {
   extractElectricalNetlist,
+  invalidateTopologicalCache,
   type CircuitNetlist,
 } from "./simulation/netlist_extractor";
 import { McuDebugPanel } from "./ui/mcu_debug_panel";
@@ -171,6 +172,7 @@ function updateOscilloscopeRendering(immediate = false): void {
 }
 
 function resetPerformanceCaches(): void {
+  invalidateTopologicalCache();
   renderController?.resetPerformanceCaches();
 }
 // Instancia global del runner de simulación interactiva

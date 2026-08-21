@@ -24,7 +24,7 @@ import { safeInvoke as invoke, safeListen as listen } from "./tauri_mock";
 import { TelemetryPanel } from "../ui/telemetry_panel";
 import { type McuRuntime } from "./mcu-runtime";
 import { type AnalogEventTrigger } from "./mcu-types";
-import { type CircuitNetlist } from "./netlist_extractor";
+import { type CircuitNetlist, invalidateTopologicalCache } from "./netlist_extractor";
 import {
   cancelFeedbackRun,
   completeFeedbackRun,
@@ -362,6 +362,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       field: InteractiveMutationField,
       value: number,
     ): Promise<void> {
+      invalidateTopologicalCache();
       if (!activeContext) return;
       try {
         await invoke("mutate_interactive_component", {

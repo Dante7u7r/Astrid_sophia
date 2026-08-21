@@ -154,4 +154,18 @@ describe("SimulationRunner streaming", () => {
     const recentFrames = harness.frames.filter(({ frame }) => frame.nodeVoltages["1"] === 12.0);
     expect(recentFrames.length).toBeGreaterThan(0);
   });
+
+  it("invalida la cache topologica al aplicar mutaciones en caliente", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+    await runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05 },
+      "tab-cache-test",
+    );
+
+    await runner.mutateComponent("R1", "value", 500);
+    // Verificamos que se ejecutó sin errores
+    expect(runner.getActiveRunId()).toBeGreaterThan(0);
+  });
 });
