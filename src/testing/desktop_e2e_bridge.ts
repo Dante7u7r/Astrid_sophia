@@ -51,6 +51,8 @@ interface DesktopE2eBridge {
 declare global {
   interface Window {
     __ASTRYD_E2E__?: DesktopE2eBridge;
+    orchestrator?: CanvasOrchestrator | null;
+    oscilloscopePanel?: OscilloscopePanel | null;
   }
 }
 
@@ -71,6 +73,15 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
 
   // The Tauri service compares the native title with document.title exactly.
   document.title = "Astryd Sophia";
+
+  Object.defineProperty(window, "orchestrator", {
+    get: () => dependencies.getOrchestrator(),
+    configurable: true,
+  });
+  Object.defineProperty(window, "oscilloscopePanel", {
+    get: () => dependencies.getOscilloscopePanel(),
+    configurable: true,
+  });
 
   window.__ASTRYD_E2E__ = {
     snapshot(): DesktopE2eSnapshot {

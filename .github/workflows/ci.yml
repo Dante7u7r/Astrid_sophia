@@ -48,6 +48,9 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Playwright Canvas E2E Test Suite
+        run: npx playwright test
+
       - name: Playwright Canvas E2E & Frontend Flow
         run: npm run test:e2e:canvas
 

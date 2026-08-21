@@ -459,6 +459,10 @@ export class CanvasOrchestrator {
     return runCircuitDRC(this.components, this.wires, rules);
   }
 
+  public get drcViolations() {
+    return this.validateDRC().violations;
+  }
+
   public getComponentPins(comp: ComponentInstance): PinInstance[] {
     return resolveComponentPins(comp);
   }
@@ -790,6 +794,22 @@ export class CanvasOrchestrator {
       (component) => this.getComponentPins(component),
       (start, end, fromId, toId) => this.generateOrthogonalPath(start, end, fromId, toId),
     );
+  }
+
+  public updateWireConnections(): void {
+    this.syncWireConnections();
+  }
+
+  public addWire(points: Point2D[], from?: WireEndpoint, to?: WireEndpoint): WireInstance {
+    const wire: WireInstance = {
+      id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      points,
+      from: from ?? { componentId: "", pinIndex: 0 },
+      to: to ?? { componentId: "", pinIndex: 0 },
+    };
+    this.wires.push(wire);
+    this.syncWireConnections();
+    return wire;
   }
 
   public connectPins(from: PinInstance, to: PinInstance): void {

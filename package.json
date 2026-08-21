@@ -38,7 +38,8 @@
     "test:integration": "vitest run tests/integration.test.ts",
     "test:e2e:frontend": "npm run build:audit && node tests/e2e/frontend_flow.spec.mjs",
     "test:e2e:canvas": "npm run build:audit && node tests/e2e/frontend_flow.spec.mjs",
-    "test:e2e:playwright": "npm run build:audit && node tests/e2e/frontend_flow.spec.mjs",
+    "test:e2e:pw": "playwright test",
+    "test:e2e:playwright": "playwright test",
     "release:check": "npm run version:check && npm run feedback:contracts:check && npm run test:coverage && npm run build",
     "setup:ngspice:windows": "powershell -NoProfile -File validation/bootstrap-ngspice.ps1",
     "validate:scientific": "cargo run --quiet --manifest-path src-tauri/Cargo.toml --example scientific_validation -- validation/manifest.json",
@@ -59,6 +60,7 @@
     "serialize-javascript": "7.0.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2",
     "@vitest/coverage-v8": "4.1.9",
     "@wdio/cli": "^9.30.0",
