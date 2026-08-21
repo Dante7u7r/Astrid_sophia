@@ -41,7 +41,9 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         -15.0
     };
 
-    let a_ol = comp.opamp_aol.unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
+    let a_ol = comp
+        .opamp_aol
+        .unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
     let r_in = comp.opamp_rin.unwrap_or(1e7);
     let r_out = comp.opamp_rout.unwrap_or(75.0);
     let v_os = comp.opamp_vos.unwrap_or(0.0);
@@ -106,7 +108,11 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     };
 
     let is_rail_clamped = v_target >= v_max || v_target <= v_min;
-    let d_vtarget = if is_rail_clamped { 0.0 } else { d_vtarget_dvdiff };
+    let d_vtarget = if is_rail_clamped {
+        0.0
+    } else {
+        d_vtarget_dvdiff
+    };
 
     let g_m_opamp = g_out * d_vtarget;
     let ieq = g_out * v_target - g_m_opamp * v_diff;

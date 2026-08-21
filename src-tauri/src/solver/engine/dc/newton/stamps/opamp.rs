@@ -49,7 +49,9 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         v_mid = 0.0;
     }
 
-    let a_ol = comp.opamp_aol.unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
+    let a_ol = comp
+        .opamp_aol
+        .unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
     let r_in = comp.opamp_rin.unwrap_or(1e7);
     let r_out = comp.opamp_rout.unwrap_or(75.0);
     let v_os = comp.opamp_vos.unwrap_or(0.0);

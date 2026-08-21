@@ -123,7 +123,8 @@ fn evaluate_waveform(
             offset + amp * (2.0 * (t_mod / period) - 1.0)
         }
         "am" => {
-            let mod_freq = override_or(overrides, "modFrequency", comp.mod_frequency).unwrap_or(freq / 10.0);
+            let mod_freq =
+                override_or(overrides, "modFrequency", comp.mod_frequency).unwrap_or(freq / 10.0);
             let mod_index = override_or(overrides, "modIndex", comp.mod_index).unwrap_or(0.8);
             let carrier = (2.0 * std::f64::consts::PI * freq * t + phase_rad).sin();
             let modulation = 1.0 + mod_index * (2.0 * std::f64::consts::PI * mod_freq * t).sin();

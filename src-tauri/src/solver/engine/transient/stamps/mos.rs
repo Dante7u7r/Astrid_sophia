@@ -1,4 +1,4 @@
-﻿use super::super::super::devices::*;
+use super::super::super::devices::*;
 use super::super::super::transient_companions::stamp_companion_conductance;
 use super::StampContext;
 use crate::solver::types::ComponentData;
@@ -102,7 +102,8 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let ieq_g = igs - gg * vgs;
 
     // Estampar capacidades parásitas (Fase 13)
-    let (c_gs, c_gd, c_ds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+    let (c_gs, c_gd, c_ds) =
+        get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
     let g_eq_gs = c_gs / dt;
     let g_eq_gd = c_gd / dt;
     let g_eq_ds = c_ds / dt;
@@ -265,8 +266,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
 
         let isd_val = triode_curr * factor_early;
         let gm_sd_val = (2.0 * kp * vsd) * factor_early;
-        let gds_cond_val =
-            (2.0 * kp * (vsg - vth_abs - vsd)) * factor_early + triode_curr * lambda;
+        let gds_cond_val = (2.0 * kp * (vsg - vth_abs - vsd)) * factor_early + triode_curr * lambda;
 
         (isd_val, gm_sd_val, gds_cond_val.max(1e-9), 0.0, 1e-12)
     } else {
@@ -285,7 +285,15 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let ieq_g = igs - gg * vsg;
 
     // Estampar capacidades parásitas (Fase 13)
-    let (c_sg, c_sd, c_gd) = get_pmos_capacitances(vsg, vsd, vth_abs, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+    let (c_sg, c_sd, c_gd) = get_pmos_capacitances(
+        vsg,
+        vsd,
+        vth_abs,
+        comp.w,
+        comp.l,
+        comp.mos_cgs,
+        comp.mos_cgd,
+    );
     let g_eq_sg = c_sg / dt;
     let g_eq_sd = c_sd / dt;
     let g_eq_gd = c_gd / dt;

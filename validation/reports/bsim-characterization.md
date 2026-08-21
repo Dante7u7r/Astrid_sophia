@@ -5,7 +5,7 @@ Observaciones: **0/5** dentro de tolerancia.
 
 - Suite: `bsim3-gap-characterization`
 - Solver: `0.1.0`
-- Git: `424adb9e35af` (`dirty`)
+- Git: `55ae4f26e6bf` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-47 : Circuit level simulation program`
 

@@ -10,10 +10,7 @@ pub(crate) fn initialize_mixed_signal_scheduler(netlist: &CircuitNetlist) -> Mix
             let output_pin = if is_not { 1 } else { 2 };
             scheduler.set_state(&comp.id, output_pin, false);
 
-            let entry = scheduler
-                .last_analog_v
-                .entry(comp.id.clone())
-                .or_default();
+            let entry = scheduler.last_analog_v.entry(comp.id.clone()).or_default();
             entry.insert(0, 0.0);
             if !is_not {
                 entry.insert(1, 0.0);

@@ -26,8 +26,16 @@ pub(crate) fn stamp_transient_companions(
     for comp in &netlist.components {
         match comp.comp_type.as_str() {
             "capacitor" => {
-                let node_pos = comp.pins.first().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-                let node_neg = comp.pins.get(1).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
+                let node_pos = comp
+                    .pins
+                    .first()
+                    .and_then(|p| p.parse::<usize>().ok())
+                    .unwrap_or(0);
+                let node_neg = comp
+                    .pins
+                    .get(1)
+                    .and_then(|p| p.parse::<usize>().ok())
+                    .unwrap_or(0);
                 let prev_vc = *state.cap_states.get(&comp.id).unwrap_or(&0.0);
                 let dt_safe = params.dt.max(1e-18);
                 let cap_val_safe = comp.value.max(1e-18);
@@ -35,7 +43,8 @@ pub(crate) fn stamp_transient_companions(
                 let (g_eq, i_eq) = if params.gear2_active_this_step {
                     let prev_prev_vc = *state.cap_states_prev.get(&comp.id).unwrap_or(&prev_vc);
                     let g = params.gear_a * cap_val_safe;
-                    let i = -cap_val_safe * (params.gear_b * prev_vc + params.gear_c * prev_prev_vc);
+                    let i =
+                        -cap_val_safe * (params.gear_b * prev_vc + params.gear_c * prev_prev_vc);
                     (g, i)
                 } else if params.trap_active_this_step {
                     let prev_ic = *state.cap_currents.get(&comp.id).unwrap_or(&0.0);
@@ -65,8 +74,16 @@ pub(crate) fn stamp_transient_companions(
                     continue;
                 }
 
-                let node_pos = comp.pins.first().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-                let node_neg = comp.pins.get(1).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
+                let node_pos = comp
+                    .pins
+                    .first()
+                    .and_then(|p| p.parse::<usize>().ok())
+                    .unwrap_or(0);
+                let node_neg = comp
+                    .pins
+                    .get(1)
+                    .and_then(|p| p.parse::<usize>().ok())
+                    .unwrap_or(0);
                 let prev_il = *state.ind_states.get(&comp.id).unwrap_or(&0.0);
                 let dt_safe = params.dt.max(1e-18);
                 let l_nominal = comp.value.max(1e-18);
@@ -79,7 +96,8 @@ pub(crate) fn stamp_transient_companions(
                     }
                 } else {
                     l_nominal
-                }.max(1e-18);
+                }
+                .max(1e-18);
 
                 let (g_eq, i_eq) = if params.gear2_active_this_step {
                     let prev_prev_il = *state.ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
@@ -113,8 +131,16 @@ pub(crate) fn stamp_transient_companions(
             }
             "switch" => {
                 let overrides = state.local_overrides.get(&comp.id);
-                let node_a = comp.pins.first().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-                let node_b = comp.pins.get(1).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
+                let node_a = comp
+                    .pins
+                    .first()
+                    .and_then(|p| p.parse::<usize>().ok())
+                    .unwrap_or(0);
+                let node_b = comp
+                    .pins
+                    .get(1)
+                    .and_then(|p| p.parse::<usize>().ok())
+                    .unwrap_or(0);
                 let ron = overrides
                     .and_then(|fields| fields.get("switch_ron").copied())
                     .unwrap_or(comp.switch_ron.unwrap_or(0.01))
@@ -163,10 +189,26 @@ fn stamp_coupled_inductors(
             continue;
         };
 
-        let node_1pos = l1.pins.first().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-        let node_1neg = l1.pins.get(1).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-        let node_2pos = l2.pins.first().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
-        let node_2neg = l2.pins.get(1).and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
+        let node_1pos = l1
+            .pins
+            .first()
+            .and_then(|p| p.parse::<usize>().ok())
+            .unwrap_or(0);
+        let node_1neg = l1
+            .pins
+            .get(1)
+            .and_then(|p| p.parse::<usize>().ok())
+            .unwrap_or(0);
+        let node_2pos = l2
+            .pins
+            .first()
+            .and_then(|p| p.parse::<usize>().ok())
+            .unwrap_or(0);
+        let node_2neg = l2
+            .pins
+            .get(1)
+            .and_then(|p| p.parse::<usize>().ok())
+            .unwrap_or(0);
         let mutual_inductance = mutual.k_coeff * (l1.value * l2.value).sqrt();
         let determinant = l1.value * l2.value - mutual_inductance * mutual_inductance;
 

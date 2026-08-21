@@ -116,7 +116,8 @@ pub(crate) fn update_trapezoidal_history(
                 }
             } else {
                 l_nominal
-            }.max(1e-18);
+            }
+            .max(1e-18);
 
             let current = if trap_active_this_step {
                 previous_current + (dt / (2.0 * ind_val_safe)) * (voltage + previous_voltage)

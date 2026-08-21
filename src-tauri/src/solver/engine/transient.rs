@@ -214,8 +214,7 @@ where
     let mut current_solution = DVector::<f64>::zeros(size);
     if let Some(ref dc_result) = dc_op_result {
         for i in 1..=n {
-            current_solution[i - 1] =
-                *dc_result.node_voltages.get(&i.to_string()).unwrap_or(&0.0);
+            current_solution[i - 1] = *dc_result.node_voltages.get(&i.to_string()).unwrap_or(&0.0);
         }
         for (source_id, source_index) in &vsource_map {
             current_solution[n + source_index] =

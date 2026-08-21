@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ComponentInstance } from "../canvas_orchestrator";
 import {
   formatComponentValue,
+  formatFreq,
+  formatWaveLabel,
   getComponentLabelLayout,
   getComponentVisualState,
   shouldDrawStandardLeads,
@@ -47,12 +49,72 @@ describe("component_render_model", () => {
     expect(getComponentLabelLayout({ ...component("x"), pinCount: 8 })).toEqual({ idY: -90, valueY: 94 });
   });
 
+  it("formatea etiquetas de onda y frecuencias", () => {
+    expect(formatWaveLabel("sine")).toBe("∿");
+    expect(formatWaveLabel("square")).toBe("⊓");
+    expect(formatWaveLabel("triangle")).toBe("△");
+    expect(formatWaveLabel("sawtooth")).toBe("⩘");
+    expect(formatWaveLabel("pulse")).toBe("⊓");
+    expect(formatWaveLabel("am")).toBe("AM");
+    expect(formatWaveLabel("custom")).toBe("CUSTOM");
+
+    expect(formatFreq(1e6)).toBe("1 MHz");
+    expect(formatFreq(2.5e6)).toBe("2.5 MHz");
+    expect(formatFreq(1e3)).toBe("1 kHz");
+    expect(formatFreq(440)).toBe("440 Hz");
+  });
+
+  it("calcula layout de labels para componentes diversos", () => {
+    expect(getComponentLabelLayout(component("ground"))).toEqual({ idY: 24, valueY: 32 });
+    expect(getComponentLabelLayout(component("dmm"))).toEqual({ idY: -44, valueY: 32 });
+    expect(getComponentLabelLayout(component("mcu_8051"))).toEqual({ idY: -230, valueY: 215 });
+    expect(getComponentLabelLayout(component("mcu_avr"))).toEqual({ idY: -170, valueY: 155 });
+    expect(getComponentLabelLayout(component("esp32"))).toEqual({ idY: -70, valueY: 75 });
+    expect(getComponentLabelLayout(component("arduino_uno"))).toEqual({ idY: -70, valueY: 75 });
+    expect(getComponentLabelLayout(component("raspberry_pi_pico"))).toEqual({ idY: -70, valueY: 75 });
+    expect(getComponentLabelLayout({ ...component("x"), pinCount: 8 })).toEqual({ idY: -90, valueY: 94 });
+    expect(getComponentLabelLayout(component("resistor"))).toEqual({ idY: -24, valueY: 32 });
+  });
+
   it("formatea valores visibles sin mojibake", () => {
     expect(formatComponentValue(component("resistor", 2200))).toBe("2.2 kOhm");
+    expect(formatComponentValue({ ...component("resistor", 100), tolerance: 5 })).toBe("100 Ohm ±5%");
     expect(formatComponentValue(component("capacitor", 1e-7))).toBe("100 nF");
-    expect(formatComponentValue(component("arduino_uno", 1))).toBe("Modo integrado: Blink · USB 5 V");
+    expect(formatComponentValue({ ...component("capacitor", 1e-5), voltageRating: 50 })).toBe("10 uF 50V");
     expect(formatComponentValue(component("inductor", 2e-6))).toBe("2 uH");
-    expect(formatComponentValue({ ...component("switch"), switchState: true })).toBe("Cerrado");
+    expect(formatComponentValue({ ...component("inductor", 2e-2), currentRating: 2 })).toBe("20 mH 2A");
+
+    // VSource & ISource
+    expect(formatComponentValue(component("vsource", 12))).toBe("12 V");
+    expect(formatComponentValue({ ...component("vsource", 5), waveType: "sine", amplitude: 5, frequency: 1000 })).toBe("∿ 5Vp 1 kHz");
+    expect(formatComponentValue({ ...component("vsource", 5), waveType: "am", amplitude: 5, frequency: 1000, modIndex: 0.5 })).toBe("AM 5Vp 1 kHz (m=50%)");
+    expect(formatComponentValue(component("isource", 2))).toBe("2 A");
+    expect(formatComponentValue({ ...component("isource", 1), waveType: "square", amplitude: 1, frequency: 500 })).toBe("⊓ 1Ap 500 Hz");
+    expect(formatComponentValue({ ...component("isource", 1), waveType: "am", amplitude: 1, frequency: 1000 })).toBe("AM 1Ap 1 kHz (m=80%)");
+
+    // Sensores y semiconductores
+    expect(formatComponentValue({ ...component("led"), ledColor: "red" })).toBe("LED RED");
+    expect(formatComponentValue(component("led"))).toBe("LED");
+    expect(formatComponentValue({ ...component("potentiometer", 10000), wiperPosition: 0.75 })).toBe("10 kOhm (75%)");
+    expect(formatComponentValue({ ...component("ldr"), lux: 250 })).toBe("250 Lx");
+    expect(formatComponentValue({ ...component("thermistor"), temperatureCelsius: 40 })).toBe("40 º C");
+    expect(formatComponentValue(component("npn", 150))).toBe("β=150");
+    expect(formatComponentValue(component("pnp", 200))).toBe("β=200");
+    expect(formatComponentValue(component("relay", "12V;10A"))).toBe("12V");
+
+    // MCUs
+    expect(formatComponentValue(component("mcu_8051"))).toBe("Sin firmware");
     expect(formatComponentValue({ ...component("mcu_avr"), firmwareHex: ":00" })).toBe("Firmware cargado");
+    expect(formatComponentValue(component("arduino_uno", 1))).toBe("Modo integrado: Blink · USB 5 V");
+    expect(formatComponentValue(component("esp32", 2))).toBe("Modo integrado: Umbral · USB 3.3 V");
+    expect(formatComponentValue(component("esp32", 3))).toBe("Modo integrado: PWM · USB 3.3 V");
+    expect(formatComponentValue(component("esp32", 4))).toBe("Modo integrado: Seguidor · USB 3.3 V");
+    expect(formatComponentValue({ ...component("arduino_uno", 1), firmwareHex: ":00" })).toBe("Firmware cargado · USB 5 V");
+
+    // Switches y transformadores
+    expect(formatComponentValue({ ...component("switch"), switchState: true })).toBe("Cerrado");
+    expect(formatComponentValue({ ...component("switch"), switchState: false })).toBe("Abierto");
+    expect(formatComponentValue({ ...component("transformer"), primaryInductance: 1e-3, secondaryInductance: 2e-3, couplingCoefficient: 0.95 }))
+      .toBe("0.001 H / 0.002 H (k=0.95)");
   });
 });

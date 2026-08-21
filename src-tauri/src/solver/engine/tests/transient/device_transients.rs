@@ -571,7 +571,7 @@ fn test_opamp_slew_rate_limiting_transient() {
         .unwrap();
 
     assert!(
-        v_out_10us >= 3.5 && v_out_10us <= 7.0,
+        (3.5..=7.0).contains(&v_out_10us),
         "La salida debe estar limitada por Slew Rate (0.5 V/µs): Vout(10µs)={:.2}V",
         v_out_10us
     );

@@ -53,7 +53,8 @@ pub(crate) fn update_passive_storage_states(
                     }
                 } else {
                     l_nominal
-                }.max(1e-18);
+                }
+                .max(1e-18);
 
                 let new_il = if params.gear2_active_this_step {
                     let g_eq = 1.0 / (params.gear_a * ind_val_safe);

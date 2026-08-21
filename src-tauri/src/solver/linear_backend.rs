@@ -135,7 +135,9 @@ impl LinearSolverBackend for FaerLinearSolver {
             let re = sol_2n[i];
             let im = sol_2n[i + n];
             if !re.is_finite() || !im.is_finite() {
-                return Err("Error numérico complejo en FaerLinearSolver: NaN/Inf detectado".to_string());
+                return Err(
+                    "Error numérico complejo en FaerLinearSolver: NaN/Inf detectado".to_string(),
+                );
             }
             solution.push(Complex::new(re, im));
         }
@@ -228,7 +230,9 @@ mod tests {
         let rhs = vec![0.0, 0.0, 10.0];
 
         let solver = FaerLinearSolver;
-        let sol = solver.solve_real(&mat, &rhs).expect("Resolución con faer fallida");
+        let sol = solver
+            .solve_real(&mat, &rhs)
+            .expect("Resolución con faer fallida");
 
         assert_eq!(sol.len(), 3);
         assert!((sol[0] - 10.0).abs() < 1e-9, "V1 debe ser 10V");
@@ -252,7 +256,9 @@ mod tests {
         let rhs = vec![Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)];
 
         let solver = FaerLinearSolver;
-        let sol = solver.solve_complex(&mat, &rhs).expect("Resolución compleja faer fallida");
+        let sol = solver
+            .solve_complex(&mat, &rhs)
+            .expect("Resolución compleja faer fallida");
 
         assert!((sol[0].re - 1.0).abs() < 1e-9);
         assert!((sol[0].im).abs() < 1e-9);

@@ -170,8 +170,7 @@ fn interactive_transient_sample_period(t_max: f64, dt: f64) -> f64 {
     if dt >= INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD {
         return dt;
     }
-    (t_max / INTERACTIVE_TRANSIENT_FRAME_BUDGET)
-        .clamp(dt, INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD)
+    (t_max / INTERACTIVE_TRANSIENT_FRAME_BUDGET).clamp(dt, INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD)
 }
 
 /// Espera hasta que el reloj de pared alcance el instante físico calculado.
