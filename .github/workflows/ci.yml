@@ -45,6 +45,12 @@ jobs:
       - name: Unit tests and coverage floor
         run: npm run test:coverage
 
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Frontend E2E and Visual Layout Audit
+        run: npm run test:e2e:frontend
+
   check-backend:
     name: Check Backend (Rust)
     runs-on: ubuntu-22.04

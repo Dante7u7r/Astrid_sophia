@@ -2368,8 +2368,9 @@ select.btn-text-only.sim-locked {
     letter-spacing: 0;
   }
 
-  .canvas-help-tip {
-    display: none;
+  .canvas-help-tip,
+  #canvas-help-tip {
+    display: none !important;
   }
 
   .main-footer {
