@@ -40,6 +40,8 @@ pub struct ComponentData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub voltage_rating: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub ron: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub w: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l: Option<f64>,

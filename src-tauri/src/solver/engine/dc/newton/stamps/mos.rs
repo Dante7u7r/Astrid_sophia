@@ -2,6 +2,7 @@ use crate::solver::types::ComponentData;
 
 use super::super::super::super::devices::{
     evaluate_bsim3_nmos, evaluate_bsim3_pmos, evaluate_bsim4_nmos, evaluate_bsim4_pmos,
+    evaluate_gan_hemt, evaluate_sic_mosfet, GanHemtParams, SicMosfetParams,
 };
 use super::StampContext;
 
@@ -41,8 +42,9 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     };
 
     let vgs = v_gate - v_source;
-    let mut vds = v_drain - v_source;
-    if vds < 0.0 {
+    let raw_vds = v_drain - v_source;
+    let mut vds = raw_vds;
+    if vds < 0.0 && comp.comp_type != "sic_mosfet" && comp.comp_type != "gan_hemt" {
         vds = 0.0;
     }
     let vbs = v_bulk - v_source;
@@ -50,8 +52,24 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vth = comp.value; // Tensión de umbral
     let kn = 0.02; // transconductancia 20 mA/V^2
 
-    // Ecuaciones Shichman-Hodges y derivadas para linealización Taylor
-    let (ids, gm, gds, igs, gg) = if comp.comp_type == "bsim4nmos" {
+    // Ecuaciones físicas y derivadas para linealización Taylor
+    let (ids, gm, gds, igs, gg) = if comp.comp_type == "sic_mosfet" {
+        let params = SicMosfetParams {
+            vth: if comp.value > 0.0 { comp.value } else { 3.0 },
+            rds_on: comp.ron.unwrap_or(0.065),
+            ..SicMosfetParams::default()
+        };
+        let res = evaluate_sic_mosfet(vgs, raw_vds, 300.0, &params);
+        (res.ids, res.gm, res.gds, 0.0, 1e-12)
+    } else if comp.comp_type == "gan_hemt" {
+        let params = GanHemtParams {
+            vth: if comp.value > 0.0 { comp.value } else { 1.5 },
+            rds_on: comp.ron.unwrap_or(0.035),
+            ..GanHemtParams::default()
+        };
+        let res = evaluate_gan_hemt(vgs, raw_vds, 300.0, &params);
+        (res.ids, res.gm, res.gds, 0.0, 1e-12)
+    } else if comp.comp_type == "bsim4nmos" {
         evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l)
     } else if comp.comp_type == "bsim3nmos" {
         let (ids_v, gm_v, gds_v) =

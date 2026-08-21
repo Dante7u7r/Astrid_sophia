@@ -37,7 +37,7 @@ pub(super) fn stamp_component(comp: &ComponentData, ctx: &mut StampContext<'_>) 
         "diode" | "led" => junctions::stamp_diode(comp, ctx),
         "opto" => junctions::stamp_opto(comp, ctx),
         "verilog_a" => behavioral::stamp_verilog_a(comp, ctx),
-        "nmos" | "bsim3nmos" | "bsim4nmos" => mos::stamp_nmos(comp, ctx),
+        "nmos" | "bsim3nmos" | "bsim4nmos" | "sic_mosfet" | "gan_hemt" => mos::stamp_nmos(comp, ctx),
         "pmos" | "bsim3pmos" | "bsim4pmos" => mos::stamp_pmos(comp, ctx),
         "npn" | "pnp" => bipolar::stamp_bipolar(comp, ctx),
         "njf" | "pjf" => jfet::stamp_jfet(comp, ctx),

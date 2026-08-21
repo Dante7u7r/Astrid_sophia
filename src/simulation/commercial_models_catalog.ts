@@ -300,6 +300,47 @@ export const COMMERCIAL_MOSFETS: Record<string, MosfetCommercialModel> = {
     cgs: 1.4e-9,
     cgd: 250e-12,
   },
+  // Semiconductores de Banda Ancha WBG (SiC & GaN)
+  "C3M0065090D": {
+    name: "C3M0065090D",
+    polarity: "nmos",
+    description: "SiC MOSFET Wolfspeed (900V, 36A, RDSon 65mΩ, Body Diode 3.2V, 3rd Quadrant)",
+    vth: 3.0,
+    ron: 0.065,
+    wOverL: 2000.0,
+    cgs: 1.1e-9,
+    cgd: 15e-12,
+  },
+  "NVH4L020N120SC1": {
+    name: "NVH4L020N120SC1",
+    polarity: "nmos",
+    description: "SiC MOSFET onsemi EliteSiC (1200V, 103A, RDSon 20mΩ, Alta Temperatura)",
+    vth: 2.7,
+    ron: 0.020,
+    wOverL: 5000.0,
+    cgs: 3.2e-9,
+    cgd: 25e-12,
+  },
+  "GS66508T": {
+    name: "GS66508T",
+    polarity: "nmos",
+    description: "GaN E-HEMT GaN Systems (650V, 30A, RDSon 50mΩ, 2DEG Qrr=0, 3rd Quadrant)",
+    vth: 1.4,
+    ron: 0.050,
+    wOverL: 3000.0,
+    cgs: 260e-12,
+    cgd: 6e-12,
+  },
+  "EPC2001C": {
+    name: "EPC2001C",
+    polarity: "nmos",
+    description: "GaN FET EPC (100V, 36A, RDSon 5.6mΩ, Alta Frecuencia MHz, Qrr=0)",
+    vth: 1.4,
+    ron: 0.0056,
+    wOverL: 8000.0,
+    cgs: 420e-12,
+    cgd: 12e-12,
+  },
 };
 
 export const COMMERCIAL_JFETS: Record<string, JfetCommercialModel> = {

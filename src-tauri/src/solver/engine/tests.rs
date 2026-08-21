@@ -65,4 +65,8 @@ mod core_tests {
     mod behavioral_sources {
         include!("tests/behavioral_sources.rs");
     }
+
+    mod wbg_power {
+        include!("tests/wbg_power_tests.rs");
+    }
 }
