@@ -17,7 +17,17 @@ import {
   worldToScreen,
   zoomAt,
 } from "./canvas/viewport_camera";
-import { generateSmartOrthogonalPath } from "./canvas/smart_wire_router";
+import {
+  autoRouteCircuitWires,
+  generateSmartOrthogonalPath,
+  runCircuitDRC,
+  type DRCRulesConfig,
+  type DRCReport,
+  type MultiNetRouteOptions,
+  type RoutedSegment,
+  type RoutingLayer,
+  type Via,
+} from "./canvas/smart_wire_router";
 import {
   computeSmartAlignment,
   type AlignmentGuide,
@@ -296,6 +306,9 @@ export interface WireInstance {
   label?: string;
   color?: string;
   customPath?: boolean;
+  layer?: RoutingLayer;
+  vias?: Via[];
+  routedSegments?: RoutedSegment[];
 }
 
 export interface WireDragState {
@@ -420,6 +433,24 @@ export class CanvasOrchestrator {
       .map((comp) => globalComponentRegistry.getBounds(comp));
 
     return generateSmartOrthogonalPath(start, end, this.gridSize, obstacles);
+  }
+
+  /**
+   * Ejecuta el auto-enrutamiento multi-red ortogonal con asignación de capas y vías para todos los cables.
+   */
+  public autoRouteAllWires(options?: MultiNetRouteOptions): WireInstance[] {
+    this.wires = autoRouteCircuitWires(this.components, this.wires, {
+      gridSize: this.gridSize,
+      ...options,
+    });
+    return this.wires;
+  }
+
+  /**
+   * Ejecuta la verificación de reglas de diseño (DRC) en el circuito esquemático actual.
+   */
+  public validateDRC(rules?: Partial<DRCRulesConfig>): DRCReport {
+    return runCircuitDRC(this.components, this.wires, rules);
   }
 
   public getComponentPins(comp: ComponentInstance): PinInstance[] {
