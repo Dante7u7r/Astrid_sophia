@@ -4,6 +4,8 @@ import {
   type ExportSnapshot,
   buildBomExport,
   buildCsvExport,
+  buildMeasurementsCsvExport,
+  buildMeasurementsJsonExport,
   buildSvgExport,
   buildTouchstoneExport,
 } from "./exporter_model";
@@ -102,5 +104,24 @@ describe("exporter_model", () => {
     expect(bom.content).toContain('"R3",1,"RESISTOR","4700"');
     expect(bom.content).toContain('"D1",1,"DIODE","1N4148 (0)"');
     expect(bom.content).not.toContain("GND1"); // Excluye tierra de la lista de compra
+  });
+
+  it("construye exportaciones CSV y JSON de mediciones automáticas", () => {
+    const s = snapshot({
+      activeAnalysisMode: "TRAN",
+      transientResults: transientResults(),
+    });
+
+    const csv = buildMeasurementsCsvExport(s, "Amplificador BJT");
+    expect(csv.filename).toBe("mediciones_amplificador_bjt.csv");
+    expect(csv.content).toContain("# Mediciones Automáticas .MEAS - Astryd Sophia");
+    expect(csv.content).toContain("# Circuito: Amplificador BJT");
+    expect(csv.content).toContain("meas-1-vpp");
+
+    const json = buildMeasurementsJsonExport(s, "Amplificador BJT");
+    expect(json.filename).toBe("mediciones_amplificador_bjt.json");
+    const parsed = JSON.parse(json.content);
+    expect(parsed.circuitName).toBe("Amplificador BJT");
+    expect(parsed.measurements.length).toBeGreaterThan(0);
   });
 });

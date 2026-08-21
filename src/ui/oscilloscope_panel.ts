@@ -26,6 +26,12 @@ import {
 } from "./oscilloscope_cursor_model";
 import { ensureCanvasDpr } from "./canvas_dpr";
 import { evaluateWaveformMath } from "./waveform_math_parser";
+import {
+  calculateAutomatedMeasurements,
+  exportMeasurementsToCsv,
+  exportMeasurementsToJson,
+  type AutomatedMeasurementItem,
+} from "../simulation/automated_measurements";
 
 export interface PvtRunResult {
   readonly config: PvtConfig;
@@ -1244,6 +1250,44 @@ export class OscilloscopePanel {
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", `osciloscopio_datos_${Date.now()}.csv`);
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  public getAutomatedMeasurements(): AutomatedMeasurementItem[] {
+    const activeNodes: string[] = [];
+    if (this.ch1ProbeNode && this.oscCh1Btn?.classList.contains("active")) activeNodes.push(this.ch1ProbeNode);
+    if (this.ch2ProbeNode && this.oscCh2Btn?.classList.contains("active")) activeNodes.push(this.ch2ProbeNode);
+    if (this.ch3ProbeNode && this.oscCh3Btn?.classList.contains("active")) activeNodes.push(this.ch3ProbeNode);
+    if (this.ch4ProbeNode && this.oscCh4Btn?.classList.contains("active")) activeNodes.push(this.ch4ProbeNode);
+
+    return calculateAutomatedMeasurements(
+      this.transientResults,
+      this.acSweepResults,
+      activeNodes.length > 0 ? activeNodes : ["1", "2", "out"],
+    );
+  }
+
+  public exportMeasurementsCsv(circuitName = "Circuito Astryd"): void {
+    const measurements = this.getAutomatedMeasurements();
+    const csv = exportMeasurementsToCsv(measurements, { circuitName });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `mediciones_${circuitName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${Date.now()}.csv`);
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  public exportMeasurementsJson(circuitName = "Circuito Astryd"): void {
+    const measurements = this.getAutomatedMeasurements();
+    const json = exportMeasurementsToJson(measurements, { circuitName });
+    const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `mediciones_${circuitName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${Date.now()}.json`);
     link.click();
     URL.revokeObjectURL(url);
   }

@@ -107,4 +107,47 @@ describe("ExporterPanel", () => {
       "receive",
     );
   });
+
+  it("exporta mediciones automáticas a CSV y JSON", () => {
+    const createObjectUrl = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-meas");
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const addLog = vi.fn();
+
+    const oscilloscopePanel = {
+      transientResults: [
+        { time: 0, nodeVoltages: { "1": 0 }, branchCurrents: {} },
+        { time: 0.001, nodeVoltages: { "1": 3.3 }, branchCurrents: {} },
+      ],
+      acSweepResults: null,
+      ch1ProbeNode: "1",
+      ch2ProbeNode: null,
+    } as unknown as OscilloscopePanel;
+
+    const panel = new ExporterPanel({
+      getOscilloscopePanel: () => oscilloscopePanel,
+      getActiveAnalysisMode: () => "TRAN",
+      getProbeNodes: () => ({ ch1: "1", ch2: null }),
+      getVoltageMap: () => ({}),
+      addLog,
+      getCircuitTitle: () => "Filtro RC",
+    });
+
+    panel.exportarMedicionesCSV();
+    expect(createObjectUrl).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(addLog).toHaveBeenCalledWith(
+      expect.stringContaining("Mediciones automáticas exportadas a mediciones_filtro_rc.csv"),
+      "receive",
+    );
+
+    panel.exportarMedicionesJSON();
+    expect(createObjectUrl).toHaveBeenCalledTimes(2);
+    expect(clickSpy).toHaveBeenCalledTimes(2);
+    expect(addLog).toHaveBeenCalledWith(
+      expect.stringContaining("Mediciones automáticas exportadas a mediciones_filtro_rc.json"),
+      "receive",
+    );
+  });
 });

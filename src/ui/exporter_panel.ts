@@ -3,6 +3,8 @@ import {
   type ExportSnapshot,
   buildBomExport,
   buildCsvExport,
+  buildMeasurementsCsvExport,
+  buildMeasurementsJsonExport,
   buildSvgExport,
   buildTouchstoneExport,
 } from "./exporter_model";
@@ -52,6 +54,24 @@ export class ExporterPanel {
     this.downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8;' }), filename);
     this.callbacks.addLog(`Datos exportados exitosamente a ${filename}`, "receive");
     recordExport("csv", this.exportItemCount(snapshot));
+  }
+
+  public exportarMedicionesCSV(): void {
+    const snapshot = this.createExportSnapshot();
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+    const { filename, content } = buildMeasurementsCsvExport(snapshot, title);
+    this.downloadBlob(new Blob([content], { type: "text/csv;charset=utf-8;" }), filename);
+    this.callbacks.addLog(`Mediciones automáticas exportadas a ${filename}`, "receive");
+    recordExport("csv", this.exportItemCount(snapshot));
+  }
+
+  public exportarMedicionesJSON(): void {
+    const snapshot = this.createExportSnapshot();
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+    const { filename, content } = buildMeasurementsJsonExport(snapshot, title);
+    this.downloadBlob(new Blob([content], { type: "application/json;charset=utf-8;" }), filename);
+    this.callbacks.addLog(`Mediciones automáticas exportadas a ${filename}`, "receive");
+    recordExport("json", this.exportItemCount(snapshot));
   }
 
   public exportarDatosSVG(): void {

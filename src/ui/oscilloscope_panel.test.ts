@@ -175,5 +175,34 @@ describe("OscilloscopePanel", () => {
     expect(newPanel.isMathEnabled).toBe(true);
     expect(newPanel.mathExpression).toBe("CH1 * CH2 + DERIV(CH1)");
   });
+
+  it("calcula y exporta mediciones automáticas (.meas) desde el osciloscopio", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.setChannelActive("ch1", true);
+
+    const mockResults: TimeStepResult[] = [];
+    for (let i = 0; i < 50; i++) {
+      const t = i * 0.0001;
+      const v = i === 0 ? 0 : 3.3 * (1 - Math.exp(-t / 0.001));
+      mockResults.push({
+        time: t,
+        nodeVoltages: { "1": v },
+        branchCurrents: {},
+      });
+    }
+    panel.transientResults = mockResults;
+
+    const measurements = panel.getAutomatedMeasurements();
+    expect(measurements.length).toBeGreaterThan(0);
+    const riseTime = measurements.find((m) => m.id === "meas-1-risetime");
+    expect(riseTime).toBeDefined();
+    expect(riseTime!.value).toBeGreaterThan(0);
+
+    // Test export helpers
+    expect(() => panel.exportMeasurementsCsv("Circuito Test")).not.toThrow();
+    expect(() => panel.exportMeasurementsJson("Circuito Test")).not.toThrow();
+  });
 });
+
 

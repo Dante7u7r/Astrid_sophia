@@ -1,5 +1,10 @@
 import type { AcSweepResult, TimeStepResult } from "./oscilloscope_panel";
 import type { AnalysisMode } from "./simulation_controls";
+import {
+  calculateAutomatedMeasurements,
+  exportMeasurementsToCsv,
+  exportMeasurementsToJson,
+} from "../simulation/automated_measurements";
 
 export interface ExportSnapshot {
   activeAnalysisMode: AnalysisMode;
@@ -206,4 +211,46 @@ export function buildBomExport(
     content,
   };
 }
+
+export function buildMeasurementsCsvExport(
+  snapshot: ExportSnapshot,
+  circuitTitle = "Circuito Astryd Sophia",
+): TextExport {
+  const activeNodes = [snapshot.ch1Node, snapshot.ch2Node].filter(Boolean) as string[];
+  const items = calculateAutomatedMeasurements(
+    snapshot.transientResults,
+    snapshot.acResults,
+    activeNodes.length > 0 ? activeNodes : ["1", "2", "out"],
+  );
+
+  const content = exportMeasurementsToCsv(items, { circuitName: circuitTitle });
+  const safeTitle = circuitTitle.toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return {
+    filename: `mediciones_${safeTitle}.csv`,
+    content,
+  };
+}
+
+export function buildMeasurementsJsonExport(
+  snapshot: ExportSnapshot,
+  circuitTitle = "Circuito Astryd Sophia",
+): TextExport {
+  const activeNodes = [snapshot.ch1Node, snapshot.ch2Node].filter(Boolean) as string[];
+  const items = calculateAutomatedMeasurements(
+    snapshot.transientResults,
+    snapshot.acResults,
+    activeNodes.length > 0 ? activeNodes : ["1", "2", "out"],
+  );
+
+  const content = exportMeasurementsToJson(items, {
+    circuitName: circuitTitle,
+    analysisModes: [snapshot.activeAnalysisMode],
+  });
+  const safeTitle = circuitTitle.toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return {
+    filename: `mediciones_${safeTitle}.json`,
+    content,
+  };
+}
+
 

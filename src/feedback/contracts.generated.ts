@@ -192,7 +192,7 @@ export interface ValidationCaseCompletedPayloadV1 {
 }
 
 export interface ExportCreatedPayloadV1 {
-  readonly exportKind: "support-bundle" | "touchstone" | "csv" | "svg" | "hdf5" | "pdf";
+  readonly exportKind: "support-bundle" | "touchstone" | "csv" | "svg" | "hdf5" | "pdf" | "json";
   readonly itemCount: number;
   readonly redactionCount: number;
 }

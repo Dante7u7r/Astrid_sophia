@@ -364,6 +364,100 @@ pub fn evaluate_measures(
                     measurements.insert(dir.name.clone(), (integral_sq / t_total).sqrt());
                 }
             }
+            "overshoot" => {
+                let (v_min, v_max) = get_signal_range(results, &dir.node, t_start, t_end);
+                let v_initial = results
+                    .iter()
+                    .find(|s| s.time >= t_start)
+                    .and_then(|s| s.node_voltages.get(&dir.node).copied())
+                    .unwrap_or(0.0);
+                let v_final = results
+                    .iter()
+                    .rev()
+                    .find(|s| s.time <= t_end)
+                    .and_then(|s| s.node_voltages.get(&dir.node).copied())
+                    .unwrap_or(0.0);
+
+                let step_height = (v_final - v_initial).abs();
+                if step_height > 1e-9 {
+                    let os = if v_final >= v_initial {
+                        ((v_max - v_final) / step_height) * 100.0
+                    } else {
+                        ((v_final - v_min) / step_height) * 100.0
+                    };
+                    measurements.insert(dir.name.clone(), os.max(0.0));
+                } else {
+                    measurements.insert(dir.name.clone(), 0.0);
+                }
+            }
+            "settlingtime" | "settling" => {
+                let v_initial = results
+                    .iter()
+                    .find(|s| s.time >= t_start)
+                    .and_then(|s| s.node_voltages.get(&dir.node).copied())
+                    .unwrap_or(0.0);
+                let v_final = results
+                    .iter()
+                    .rev()
+                    .find(|s| s.time <= t_end)
+                    .and_then(|s| s.node_voltages.get(&dir.node).copied())
+                    .unwrap_or(0.0);
+
+                let tol_fraction = dir.threshold.unwrap_or(0.02);
+                let band = (tol_fraction * (v_final - v_initial).abs()).max(1e-6);
+
+                let mut last_out_of_band_time = t_start;
+                for step in results {
+                    if step.time < t_start || step.time > t_end {
+                        continue;
+                    }
+                    let v = *step.node_voltages.get(&dir.node).unwrap_or(&0.0);
+                    if (v - v_final).abs() > band {
+                        last_out_of_band_time = step.time;
+                    }
+                }
+                measurements.insert(dir.name.clone(), (last_out_of_band_time - t_start).max(0.0));
+            }
+            "thd" => {
+                let window_steps: Vec<&TimeStepResult> = results
+                    .iter()
+                    .filter(|s| s.time >= t_start && s.time <= t_end)
+                    .collect();
+
+                if window_steps.len() >= 8 {
+                    let n = window_steps.len();
+                    let t_span = window_steps.last().unwrap().time - window_steps[0].time;
+                    if t_span > 0.0 {
+                        let mut harmonic_amplitudes = [0.0; 11];
+                        for k in 1..=10 {
+                            let mut cos_sum = 0.0;
+                            let mut sin_sum = 0.0;
+                            for i in 1..n {
+                                let dt = window_steps[i].time - window_steps[i - 1].time;
+                                let t_rel = window_steps[i].time - window_steps[0].time;
+                                let v = *window_steps[i].node_voltages.get(&dir.node).unwrap_or(&0.0);
+                                let theta = 2.0 * std::f64::consts::PI * (k as f64) * (t_rel / t_span);
+                                cos_sum += v * theta.cos() * dt;
+                                sin_sum += v * theta.sin() * dt;
+                            }
+                            let a_k = (2.0 / t_span) * (cos_sum.powi(2) + sin_sum.powi(2)).sqrt();
+                            harmonic_amplitudes[k] = a_k;
+                        }
+
+                        let fundamental = harmonic_amplitudes[1];
+                        if fundamental > 1e-9 {
+                            let higher_harmonics_sum_sq: f64 = harmonic_amplitudes[2..=10]
+                                .iter()
+                                .map(|a| a * a)
+                                .sum();
+                            let thd = (higher_harmonics_sum_sq.sqrt() / fundamental) * 100.0;
+                            measurements.insert(dir.name.clone(), thd);
+                        } else {
+                            measurements.insert(dir.name.clone(), 0.0);
+                        }
+                    }
+                }
+            }
             _ => {
                 errors.push(format!(
                     "MEASURE {}: Tipo de medición '{}' no reconocido.",
@@ -424,4 +518,59 @@ mod validation_tests {
         assert!(error.contains("falta en alguna muestra"));
         assert!(error.contains("duplicada"));
     }
+
+    #[test]
+    fn test_overshoot_settling_and_thd_measurements() {
+        // Respuesta al escalón subamortiguada: V(t) = 1.0 - exp(-t/0.002)*cos(2*pi*500*t)
+        // Pico a t ≈ 0.001 s, V ≈ 1.25 V => Overshoot ≈ 25%
+        let mut steps = Vec::new();
+        for i in 0..100 {
+            let t = (i as f64) * 0.0001;
+            let v = if i == 0 {
+                0.0
+            } else {
+                1.0 - (-t / 0.002).exp() * (2.0 * std::f64::consts::PI * 500.0 * t).cos()
+            };
+            steps.push(step(t, Some(v)));
+        }
+
+        let directives = vec![
+            MeasureDirective {
+                name: "os_pct".to_string(),
+                measure_type: "overshoot".to_string(),
+                node: "1".to_string(),
+                trig_node: None,
+                threshold: None,
+                t_start: Some(0.0),
+                t_end: Some(0.01),
+            },
+            MeasureDirective {
+                name: "t_settle".to_string(),
+                measure_type: "settlingtime".to_string(),
+                node: "1".to_string(),
+                trig_node: None,
+                threshold: Some(0.05),
+                t_start: Some(0.0),
+                t_end: Some(0.01),
+            },
+            MeasureDirective {
+                name: "thd_val".to_string(),
+                measure_type: "thd".to_string(),
+                node: "1".to_string(),
+                trig_node: None,
+                threshold: None,
+                t_start: Some(0.0),
+                t_end: Some(0.01),
+            },
+        ];
+
+        let res = evaluate_measures(&steps, &directives);
+        assert!(res.error_log.is_none());
+        let os = res.measurements.get("os_pct").copied().unwrap_or(0.0);
+        assert!(os > 10.0 && os <= 70.0);
+
+        let t_set = res.measurements.get("t_settle").copied().unwrap_or(0.0);
+        assert!(t_set > 0.0 && t_set < 0.01);
+    }
 }
+
