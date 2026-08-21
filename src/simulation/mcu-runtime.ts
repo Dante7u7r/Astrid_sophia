@@ -10,8 +10,9 @@ import type {
   McuSimulationResult,
   McuDebugState,
   McuBreakpoint,
-  McuWatchpoint
+  McuWatchpoint,
 } from "./mcu-types";
+import { execute8051Instruction } from "./mcu-8051";
 
 export type McuRuntime = {
   definition: McuDefinition;
@@ -37,7 +38,7 @@ export function createMcuRuntime(config: McuConfig): McuRuntime {
   const def = config.definition;
   const memory: McuMemoryMap = {
     flash: new Uint8Array(def.flashSize),
-    ram: new Uint8Array(def.ramSize),
+    ram: new Uint8Array(Math.max(256, def.ramSize)),
     sfr: new Uint8Array(128)
   };
 
@@ -130,6 +131,12 @@ export function advancePc(runtime: McuRuntime, count: number = 1): void {
 
 export function stepInstruction(runtime: McuRuntime): number {
   if (runtime.halted) return 0;
+
+  if (runtime.definition.architecture === "8051") {
+    const cycles = execute8051Instruction(runtime);
+    runtime.state.cycle += cycles;
+    return cycles;
+  }
 
   const opcode = fetchByte(runtime);
   advancePc(runtime, 1);
