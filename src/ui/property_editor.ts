@@ -345,9 +345,14 @@ export class PropertyEditor {
         const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement | null;
         const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement | null;
 
+        const powerNotice = document.querySelector("#terminal-power-notice") as HTMLElement | null;
+        const generatorNotice = document.querySelector("#terminal-generator-notice") as HTMLElement | null;
+
         if (tType === "power") {
           if (terminalPowerGroup) terminalPowerGroup.style.display = "flex";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "flex";
+          if (powerNotice) powerNotice.style.display = "block";
+          if (generatorNotice) generatorNotice.style.display = "none";
           if (waveContainer) waveContainer.style.display = "none";
           const v = parsePowerRailVoltage(comp);
           if (terminalVoltageInput) terminalVoltageInput.value = v.toString();
@@ -358,6 +363,8 @@ export class PropertyEditor {
         } else if (tType === "generator") {
           if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (powerNotice) powerNotice.style.display = "none";
+          if (generatorNotice) generatorNotice.style.display = "block";
           if (waveContainer) {
             waveContainer.style.display = "flex";
             if (waveTypeSelect) waveTypeSelect.value = comp.waveType || "square";
@@ -370,6 +377,8 @@ export class PropertyEditor {
         } else {
           if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (powerNotice) powerNotice.style.display = "none";
+          if (generatorNotice) generatorNotice.style.display = "none";
           if (waveContainer) waveContainer.style.display = "none";
         }
       } else {

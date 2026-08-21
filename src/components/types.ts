@@ -46,6 +46,7 @@ export interface ComponentSpiceDefinition {
 export interface ComponentDefinition {
   readonly type: ComponentInstance["type"];
   readonly name: string;
+  readonly description?: string;
   readonly category: ComponentCategory;
   readonly prefix: string;
   readonly defaultProperties?: Partial<ComponentInstance>;

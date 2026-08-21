@@ -723,7 +723,7 @@
               </div>
               <div class="category-content" id="cat-anotaciones">
                 <!-- Terminal de Alimentación (+5V VCC) -->
-                <div class="component-card" draggable="true" id="comp-power_5v" data-type="net_label" data-default="+5V">
+                <div class="component-card" draggable="true" id="comp-power_5v" data-type="net_label" data-default="+5V" data-tooltip="Terminal +5V: Inyecta una fuente de tensión virtual constante de +5V referenciada a GND (0V) en todos los nodos con esta etiqueta sin trazar cables.">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="20" y1="32" x2="20" y2="16" />
@@ -734,12 +734,12 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Terminal +5V (VCC)</span>
-                    <span class="comp-desc">Alimentación DC sin cables</span>
+                    <span class="comp-desc">Fuente V-source virtual (+5V)</span>
                   </div>
                 </div>
 
                 <!-- Terminal de Alimentación (+3.3V VDD) -->
-                <div class="component-card" draggable="true" id="comp-power_3v3" data-type="net_label" data-default="+3.3V">
+                <div class="component-card" draggable="true" id="comp-power_3v3" data-type="net_label" data-default="+3.3V" data-tooltip="Terminal +3.3V: Inyecta una fuente de tensión virtual constante de +3.3V referenciada a GND (0V) en todos los nodos con esta etiqueta sin trazar cables.">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="20" y1="32" x2="20" y2="16" />
@@ -750,12 +750,12 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Terminal +3.3V (VDD)</span>
-                    <span class="comp-desc">Alimentación Lógica 3.3V</span>
+                    <span class="comp-desc">Fuente V-source virtual (+3.3V)</span>
                   </div>
                 </div>
 
                 <!-- Terminal de Tierra (GND / 0V) -->
-                <div class="component-card" draggable="true" id="comp-ground_term" data-type="net_label" data-default="GND">
+                <div class="component-card" draggable="true" id="comp-ground_term" data-type="net_label" data-default="GND" data-tooltip="Terminal GND: Fija el potencial del nodo a Tierra de referencia SPICE (Nodo 0).">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="20" y1="8" x2="20" y2="18" />
@@ -767,12 +767,12 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Terminal de Tierra (GND)</span>
-                    <span class="comp-desc">Referencia 0V directa</span>
+                    <span class="comp-desc">Referencia 0V directa (Nodo 0)</span>
                   </div>
                 </div>
 
                 <!-- Terminal de Reloj / Pulso (CLK) -->
-                <div class="component-card" draggable="true" id="comp-clk_gen" data-type="net_label" data-default="CLK">
+                <div class="component-card" draggable="true" id="comp-clk_gen" data-type="net_label" data-default="CLK" data-tooltip="Terminal CLK: Inyecta un generador de señal de reloj/pulsos virtual (V_SIG) referenciado a GND.">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#FBBF24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#FBBF24" fill-opacity="0.15" />
@@ -782,12 +782,12 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Terminal Reloj (CLK)</span>
-                    <span class="comp-desc">Generador de Onda Cuadrada</span>
+                    <span class="comp-desc">Generador virtual de pulsos</span>
                   </div>
                 </div>
 
                 <!-- Puerto de Red (Net Label) -->
-                <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A">
+                <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A" data-tooltip="Puerto de Red: Conecta de forma virtual e invisible todos los terminales que compartan el mismo nombre de red (sin fuente de tensión).">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#38BDF8" fill-opacity="0.15" />
@@ -797,7 +797,7 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Puerto de Red</span>
-                    <span class="comp-desc">Conexión Virtual SPICE</span>
+                    <span class="comp-desc">Unión virtual (sin fuente)</span>
                   </div>
                 </div>
 
@@ -1296,6 +1296,14 @@
                 <div id="terminal-voltage-group" class="property-group" style="display: none;">
                   <label class="property-label" for="prop-terminal-voltage">Tensión DC (Voltios)</label>
                   <input id="prop-terminal-voltage" class="prop-input" type="number" step="0.1" value="5" placeholder="5.0" />
+                </div>
+
+                <div id="terminal-power-notice" class="property-notice-box" style="display: none; font-size: 0.74rem; line-height: 1.35; color: #f59e0b; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 8px;">
+                  ⚡ <strong>Fuente Virtual SPICE:</strong> Los terminales de alimentación inyectan automáticamente una fuente de tensión ideal (<code style="color: #fbbf24;">V_PWR_*</code>) conectada entre este nodo y Tierra (GND / Nodo 0) sin necesidad de trazar cables.
+                </div>
+
+                <div id="terminal-generator-notice" class="property-notice-box" style="display: none; font-size: 0.74rem; line-height: 1.35; color: #38bdf8; background: rgba(56, 189, 248, 0.10); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 8px;">
+                  ⚡ <strong>Generador Virtual SPICE:</strong> Inyecta una fuente de señal dependiente del tiempo (<code style="color: #38bdf8;">V_SIG_*</code>) entre este nodo y Tierra (GND / Nodo 0).
                 </div>
               </div>
 

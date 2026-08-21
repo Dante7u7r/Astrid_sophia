@@ -116,6 +116,12 @@ export function drawNetLabel(
     ctx.fillStyle = isSelected ? "#F0F9FF" : "#FDE68A";
     ctx.fillText(displayLabel, 0, dir * 24);
 
+    if (isSelected || isHovered) {
+      ctx.font = "600 7px 'Inter', sans-serif";
+      ctx.fillStyle = isSelected ? "#38BDF8" : "rgba(245, 158, 11, 0.90)";
+      ctx.fillText("⚡ V-SRC VIRTUAL", 0, dir * (24 + 9));
+    }
+
   } else if (terminalType === "ground") {
     // =========================================================================
     // TERMINAL DE TIERRA / GND (Estilo Proteus Ground Port)

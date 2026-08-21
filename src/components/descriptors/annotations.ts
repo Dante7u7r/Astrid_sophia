@@ -11,6 +11,7 @@ import type { ComponentDefinition } from "../types";
 export const NetLabelDefinition: ComponentDefinition = {
   type: "net_label",
   name: "Puerto / Etiqueta de Red (Terminal)",
+  description: "Conexión de red virtual. Los terminales de Alimentación (VCC/VDD/+5V) inyectan automáticamente una fuente de tensión virtual referenciada a GND (0V) en el motor SPICE.",
   category: "anotaciones",
   prefix: "NET",
   defaultProperties: { value: "NET", label: "NET", terminalType: "signal" },
