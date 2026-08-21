@@ -182,7 +182,12 @@ fn pace_interactive_transient(
     is_running: &AtomicBool,
     active_run_id: &AtomicU64,
     run_id: u64,
+    disable_pacing: bool,
 ) -> bool {
+    if disable_pacing {
+        return is_running.load(Ordering::SeqCst) && active_run_id.load(Ordering::SeqCst) == run_id;
+    }
+
     let target_elapsed = std::time::Duration::from_secs_f64(simulation_time.max(0.0));
     let max_sleep = std::time::Duration::from_millis(5);
     while let Some(remaining) = target_elapsed.checked_sub(started_at.elapsed()) {
@@ -484,15 +489,14 @@ async fn start_interactive_transient(
                         return false;
                     }
                     if step.time >= next_sample_time {
-                        if !disable_pacing_flag
-                            && !pace_interactive_transient(
-                                started_at,
-                                step.time,
-                                &is_running_inner,
-                                &active_run_id_inner,
-                                run_id,
-                            )
-                        {
+                        if !pace_interactive_transient(
+                            started_at,
+                            step.time,
+                            &is_running_inner,
+                            &active_run_id_inner,
+                            run_id,
+                            disable_pacing_flag,
+                        ) {
                             return false;
                         }
                         let packet = SimulationFrame {
@@ -518,15 +522,14 @@ async fn start_interactive_transient(
             {
                 if let Ok((ref results, _, _)) = result {
                     if let Some(last) = results.last() {
-                        if !disable_pacing_flag
-                            && !pace_interactive_transient(
-                                started_at,
-                                last.time,
-                                &final_is_running,
-                                &final_active_run_id,
-                                run_id,
-                            )
-                        {
+                        if !pace_interactive_transient(
+                            started_at,
+                            last.time,
+                            &final_is_running,
+                            &final_active_run_id,
+                            run_id,
+                            disable_pacing_flag,
+                        ) {
                             return;
                         }
                         let packet = SimulationFrame {
