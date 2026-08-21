@@ -26,6 +26,7 @@ import {
   wirePathIntersects,
 } from "./wiring_model";
 import { getActiveNetHighlight, type NetHighlightResult } from "./net_highlight";
+import { drawBusSlash, getBusWidth, isBusLabel } from "./bus_wiring";
 import { CurrentAnimationRenderer } from "./current_animation_renderer";
 import { ThermalHeatmapRenderer } from "./thermal_heatmap_renderer";
 import { renderPinTelemetryHud, renderWireTelemetryHud } from "./hud_inspector";
@@ -331,36 +332,59 @@ export class CanvasSceneRenderer {
       const isSelected = selectedWireIds.has(wire.id);
       const isHovered = this.host.hoveredWire?.id === wire.id;
       const isNetHighlighted = netWireIds.has(wire.id);
+      const isBus = wire.isBus || (wire.label ? isBusLabel(wire.label) : false);
+      const busWidth = wire.busWidth ?? (wire.label ? getBusWidth(wire.label) : 1);
 
-      let strokeColor = "#5B9FD6";
+      let strokeColor = isBus ? "#818CF8" : "#5B9FD6";
       this.ctx.shadowBlur = 0;
       if (isSelected) {
         strokeColor = "#38BDF8";
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2.8;
+        this.ctx.lineWidth = isBus ? 4.8 : 2.8;
         this.ctx.shadowColor = "rgba(56, 189, 248, 0.4)";
         this.ctx.shadowBlur = 6;
       } else if (isHovered) {
-        strokeColor = "#78C8F0";
+        strokeColor = isBus ? "#A5B4FC" : "#78C8F0";
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2.4;
+        this.ctx.lineWidth = isBus ? 4.4 : 2.4;
       } else if (isNetHighlighted) {
         strokeColor = "#38BDF8";
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2.4;
+        this.ctx.lineWidth = isBus ? 4.4 : 2.4;
         this.ctx.shadowColor = "rgba(56, 189, 248, 0.35)";
         this.ctx.shadowBlur = 5;
       } else if (wire.color) {
         strokeColor = wire.color;
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = isBus ? 3.8 : 2;
       } else {
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = isBus ? 3.8 : 2;
       }
 
       this.ctx.stroke();
       this.ctx.shadowBlur = 0;
+
+      // Si es un cable de bus / vector, dibujar el slash diagonal /N en el segmento central
+      if (isBus && busWidth > 1 && pts.length >= 2) {
+        let maxSegLen = -1;
+        let longestMid: { point: Point2D; angle: number } | null = null;
+        for (let s = 0; s < pts.length - 1; s++) {
+          const p1 = pts[s];
+          const p2 = pts[s + 1];
+          const segLen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          if (segLen > maxSegLen) {
+            maxSegLen = segLen;
+            longestMid = {
+              point: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 },
+              angle: Math.atan2(p2.y - p1.y, p2.x - p1.x),
+            };
+          }
+        }
+        if (longestMid) {
+          drawBusSlash(this.ctx, longestMid.point, busWidth, strokeColor, longestMid.angle);
+        }
+      }
 
       // Dibujar arcos de cruce (Jumper Arcs) sobre la ruta si existen
       const jumperPoints = crossingsByWire.get(wire.id);

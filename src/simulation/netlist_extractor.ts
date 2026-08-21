@@ -24,6 +24,9 @@ import {
 } from "./netlist_node_model";
 import { allowsFloatingPins } from "./component_pin_rules";
 import {
+  parseBusLabel,
+} from "../canvas/bus_wiring";
+import {
   COMMERCIAL_BJTS,
   COMMERCIAL_DIODES,
   COMMERCIAL_MOSFETS,
@@ -348,16 +351,30 @@ export function extractElectricalNetlist(
         : pinKey(wire.to.componentId, wire.to.pinIndex);
       dsu!.union(keyFrom, keyTo);
 
-      // Unión virtual por etiqueta de red en cable (Named Net Tie)
+      // Unión virtual por etiqueta de red en cable (Named Net Tie / Bus)
       if (wire.label && wire.label.trim().length > 0) {
-        const netKey = `net_virtual:${wire.label.trim().toUpperCase()}`;
-        dsu!.union(keyFrom, netKey);
+        const parsed = parseBusLabel(wire.label);
+        if (parsed.isBus) {
+          const busKey = `net_virtual:${parsed.baseName}[${parsed.start}:${parsed.end}]`;
+          dsu!.union(keyFrom, busKey);
+          dsu!.union(keyTo, busKey);
+          for (const member of parsed.members) {
+            dsu!.union(`net_virtual:${member}`, `net_virtual:${member}`);
+          }
+        } else if (parsed.isBusMember) {
+          const canonicalKey = `net_virtual:${parsed.baseName}[${parsed.index}]`;
+          dsu!.union(keyFrom, canonicalKey);
+          dsu!.union(keyTo, canonicalKey);
+        } else {
+          const netKey = `net_virtual:${wire.label.trim().toUpperCase()}`;
+          dsu!.union(keyFrom, netKey);
+        }
       }
     }
 
     const GND_ALIASES = ["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"];
 
-    // Unión virtual para componentes net_label (Puertos de Red, Alimentación, Tierra y Señales EDA)
+    // Unión virtual para componentes net_label (Puertos de Red, Alimentación, Tierra, Buses y Señales EDA)
     for (const comp of components) {
       if (comp.type === 'net_label') {
         const tType = getTerminalType(comp);
@@ -366,11 +383,24 @@ export function extractElectricalNetlist(
         if (tType === "ground") {
           dsu!.union(compPin, "net_virtual:GND");
         } else {
-          const netName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
-          if (netName.length > 0) {
+          const rawNetName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
+          if (rawNetName.length > 0) {
+            const parsed = parseBusLabel(rawNetName);
             const prefix = tType === "power" ? "net_pwr" : "net_virtual";
-            const netKey = `${prefix}:${netName}`;
-            dsu!.union(compPin, netKey);
+
+            if (parsed.isBus) {
+              const busRootKey = `${prefix}:${parsed.baseName}[${parsed.start}:${parsed.end}]`;
+              dsu!.union(compPin, busRootKey);
+              for (const member of parsed.members) {
+                dsu!.union(`${prefix}:${member}`, `${prefix}:${member}`);
+              }
+            } else if (parsed.isBusMember) {
+              const canonicalKey = `${prefix}:${parsed.baseName}[${parsed.index}]`;
+              dsu!.union(compPin, canonicalKey);
+            } else {
+              const netKey = `${prefix}:${rawNetName}`;
+              dsu!.union(compPin, netKey);
+            }
           }
         }
       }

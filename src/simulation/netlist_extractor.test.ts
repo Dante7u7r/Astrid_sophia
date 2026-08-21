@@ -707,4 +707,81 @@ describe("extractElectricalNetlist", () => {
     expect(v1?.pins[0]).toBe(r1?.pins[0]);
     expect(v1?.pins[0]).not.toBe("0");
   });
+
+  test("expande net_label con rango de vector DATA[0:7] y conecta componentes correspondientes", () => {
+    const components: ComponentInstance[] = [
+      { id: "V_IN", type: "vsource", value: 3.3, x: 0, y: 0, rotation: 0 },
+      { id: "BUS_OUT", type: "net_label", value: "DATA[0:7]", label: "DATA[0:7]", terminalType: "signal", x: 20, y: 0, rotation: 0 },
+      { id: "BUS_IN", type: "net_label", value: "DATA[0:7]", label: "DATA[0:7]", terminalType: "signal", x: 100, y: 0, rotation: 0 },
+      { id: "R_LOAD", type: "resistor", value: 470, x: 120, y: 0, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 50, y: 50, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "net_label" || c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V_IN", pinIndex: 0 }, to: { componentId: "BUS_OUT", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V_IN", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "BUS_IN", pinIndex: 0 }, to: { componentId: "R_LOAD", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "R_LOAD", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    const vIn = res.netlist.components.find(c => c.id === "V_IN");
+    const rLoad = res.netlist.components.find(c => c.id === "R_LOAD");
+
+    expect(vIn).toBeDefined();
+    expect(rLoad).toBeDefined();
+    expect(vIn?.pins[0]).toBe(rLoad?.pins[0]);
+    expect(vIn?.pins[0]).not.toBe("0");
+  });
+
+  test("une tap de bus individual DATA[3] con el bus correspondiente en DSU", () => {
+    const components: ComponentInstance[] = [
+      { id: "V_BIT3", type: "vsource", value: 5, x: 0, y: 0, rotation: 0 },
+      { id: "TAP_OUT", type: "net_label", value: "DATA[3]", label: "DATA[3]", terminalType: "signal", x: 20, y: 0, rotation: 0 },
+      { id: "TAP_IN", type: "net_label", value: "DATA_3", label: "DATA_3", terminalType: "signal", x: 100, y: 0, rotation: 0 },
+      { id: "R_BIT3", type: "resistor", value: 1000, x: 120, y: 0, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 50, y: 50, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "net_label" || c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V_BIT3", pinIndex: 0 }, to: { componentId: "TAP_OUT", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V_BIT3", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "TAP_IN", pinIndex: 0 }, to: { componentId: "R_BIT3", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "R_BIT3", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    const vBit3 = res.netlist.components.find(c => c.id === "V_BIT3");
+    const rBit3 = res.netlist.components.find(c => c.id === "R_BIT3");
+
+    expect(vBit3).toBeDefined();
+    expect(rBit3).toBeDefined();
+    // DATA[3] y DATA_3 deben mapearse canónicamente al mismo nodo SPICE
+    expect(vBit3?.pins[0]).toBe(rBit3?.pins[0]);
+    expect(vBit3?.pins[0]).not.toBe("0");
+  });
 });

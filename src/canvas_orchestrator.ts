@@ -309,6 +309,8 @@ export interface WireInstance {
   layer?: RoutingLayer;
   vias?: Via[];
   routedSegments?: RoutedSegment[];
+  isBus?: boolean;
+  busWidth?: number;
 }
 
 export interface WireDragState {
