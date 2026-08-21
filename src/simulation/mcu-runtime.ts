@@ -13,6 +13,7 @@ import type {
   McuWatchpoint,
 } from "./mcu-types";
 import { execute8051Instruction } from "./mcu-8051";
+import { executeAvrInstruction } from "./mcu-avr";
 
 export type McuRuntime = {
   definition: McuDefinition;
@@ -36,9 +37,12 @@ export type McuRuntime = {
 
 export function createMcuRuntime(config: McuConfig): McuRuntime {
   const def = config.definition;
+  const ramSize = def.architecture === "avr"
+    ? Math.max(0x1000, def.ramSize + 0x0100)
+    : Math.max(256, def.ramSize);
   const memory: McuMemoryMap = {
     flash: new Uint8Array(def.flashSize),
-    ram: new Uint8Array(Math.max(256, def.ramSize)),
+    ram: new Uint8Array(ramSize),
     sfr: new Uint8Array(128)
   };
 
@@ -134,6 +138,12 @@ export function stepInstruction(runtime: McuRuntime): number {
 
   if (runtime.definition.architecture === "8051") {
     const cycles = execute8051Instruction(runtime);
+    runtime.state.cycle += cycles;
+    return cycles;
+  }
+
+  if (runtime.definition.architecture === "avr") {
+    const cycles = executeAvrInstruction(runtime);
     runtime.state.cycle += cycles;
     return cycles;
   }
