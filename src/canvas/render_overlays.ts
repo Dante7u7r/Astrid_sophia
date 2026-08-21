@@ -1,4 +1,4 @@
-import type { PinInstance, Point2D } from "../canvas_orchestrator";
+import type { ComponentInstance, PinInstance, Point2D } from "../canvas_orchestrator";
 
 export type ProbeBadges = {
   ch1?: Point2D;
@@ -186,4 +186,138 @@ export function drawAlignmentGuides(
 
   ctx.restore();
 }
+
+export interface ErcIssueOverlayItem {
+  componentId: string;
+  type: "error" | "warning";
+  message: string;
+  pinIndex?: number;
+  location?: Point2D;
+}
+
+export function drawErcAndDrcOverlays(
+  ctx: CanvasRenderingContext2D,
+  issues: readonly ErcIssueOverlayItem[],
+  components: readonly ComponentInstance[],
+  getPins: (comp: ComponentInstance) => readonly PinInstance[],
+  now: number,
+  hoveredPin?: PinInstance | null,
+  hoveredComp?: ComponentInstance | null,
+): void {
+  if (!issues || issues.length === 0) return;
+
+  const compMap = new Map<string, ComponentInstance>(components.map((c) => [c.id, c]));
+  const pulseScale = 1 + Math.sin(now / 160) * 0.15;
+  const pulseRadius = 10 + Math.sin(now / 160) * 3;
+
+  for (const issue of issues) {
+    const isError = issue.type === "error";
+    const strokeColor = isError ? "hsl(0, 84%, 60%)" : "hsl(38, 96%, 52%)";
+    const fillColor = isError ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)";
+    const glowColor = isError ? "rgba(239, 68, 68, 0.6)" : "rgba(245, 158, 11, 0.6)";
+
+    let anchorX = 0;
+    let anchorY = 0;
+    let isPinIssue = false;
+
+    if (issue.location) {
+      anchorX = issue.location.x;
+      anchorY = issue.location.y;
+    } else if (issue.componentId) {
+      const comp = compMap.get(issue.componentId);
+      if (!comp) continue;
+
+      if (issue.pinIndex !== undefined) {
+        const pins = getPins(comp);
+        const pin = pins.find((p) => p.pinIndex === issue.pinIndex);
+        if (!pin) continue;
+        anchorX = pin.x;
+        anchorY = pin.y;
+        isPinIssue = true;
+      } else {
+        anchorX = comp.x;
+        anchorY = comp.y;
+      }
+    }
+
+    ctx.save();
+
+    // 1. Halo circular pulsante con Glow
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = fillColor;
+    ctx.lineWidth = isPinIssue ? 1.8 : 2.2;
+
+    const r = isPinIssue ? pulseRadius : 24 * pulseScale;
+
+    ctx.beginPath();
+    ctx.arc(anchorX, anchorY, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 2. Icono central de advertencia o error
+    ctx.shadowBlur = 0;
+    if (isPinIssue) {
+      ctx.fillStyle = strokeColor;
+      ctx.beginPath();
+      ctx.arc(anchorX, anchorY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Badge circular para componentes con icono
+      const badgeX = anchorX + 16;
+      const badgeY = anchorY - 16;
+      ctx.fillStyle = isError ? "#EF4444" : "#F59E0B";
+      ctx.strokeStyle = "#0F172A";
+      ctx.lineWidth = 1.5;
+
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 10px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(isError ? "!" : "▲", badgeX, badgeY + (isError ? 0.5 : -0.5));
+    }
+
+    // 3. Tooltip badge interactivo en hover
+    const isHovered =
+      (isPinIssue && hoveredPin && hoveredPin.x === anchorX && hoveredPin.y === anchorY) ||
+      (!isPinIssue && hoveredComp && hoveredComp.id === issue.componentId);
+
+    if (isHovered && issue.message) {
+      const tipText = issue.message;
+      ctx.font = "10px 'Inter', sans-serif";
+      const textWidth = ctx.measureText(tipText).width;
+      const boxW = textWidth + 16;
+      const boxH = 22;
+      const boxX = anchorX - boxW / 2;
+      const boxY = anchorY - (isPinIssue ? 32 : 44);
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 1.2;
+
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+      } else {
+        ctx.rect(boxX, boxY, boxW, boxH);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = strokeColor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(tipText, anchorX, boxY + boxH / 2);
+    }
+
+    ctx.restore();
+  }
+}
+
 

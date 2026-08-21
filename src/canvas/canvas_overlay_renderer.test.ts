@@ -94,4 +94,45 @@ describe("CanvasOverlayRenderer", () => {
     renderer.renderOverlay({}, {});
     expect(canvas.width).toBe(800);
   });
+
+  it("renderiza overlays de errores ERC fatales (rojo) y advertencias (amarillo)", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const host = createMockHost({
+      showCurrentAnimation: false,
+      showThermalHeatmap: false,
+      components: [
+        { id: "V1", type: "vsource", value: 5, x: 100, y: 100, rotation: 0 },
+        { id: "R1", type: "resistor", value: 1000, x: 200, y: 100, rotation: 0 },
+      ],
+      ercIssues: [
+        {
+          componentId: "V1",
+          type: "error",
+          message: "Cortocircuito detectado entre terminales",
+          pinIndex: 0,
+        },
+        {
+          componentId: "R1",
+          type: "warning",
+          message: "Terminal flotante no conectado",
+          pinIndex: 1,
+        },
+      ],
+      getComponentPins: (c) => [
+        { componentId: c.id, pinIndex: 0, x: c.x - 20, y: c.y },
+        { componentId: c.id, pinIndex: 1, x: c.x + 20, y: c.y },
+      ],
+    });
+
+    const renderer = new CanvasOverlayRenderer(canvas, host);
+    renderer.renderOverlay({}, {}, 2000);
+
+    expect(host.ercIssues).toHaveLength(2);
+    expect(host.ercIssues?.[0]?.type).toBe("error");
+    expect(host.ercIssues?.[1]?.type).toBe("warning");
+  });
 });
+

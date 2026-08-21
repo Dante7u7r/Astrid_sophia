@@ -9,6 +9,7 @@ import { CurrentAnimationRenderer } from "./current_animation_renderer";
 import { ThermalHeatmapRenderer } from "./thermal_heatmap_renderer";
 import {
   drawAlignmentGuides,
+  drawErcAndDrcOverlays,
   drawSelectionBox,
   drawTemporaryWire,
 } from "./render_overlays";
@@ -38,6 +39,8 @@ export interface CanvasOverlayHost {
   currentFlowMode?: "conventional" | "electron";
   currentAnimationSpeed?: number;
   showThermalHeatmap?: boolean;
+  ercIssues?: CanvasOrchestrator["ercIssues"];
+  getComponentPins?(comp: ComponentInstance): import("../canvas_orchestrator").PinInstance[];
   generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[];
 }
 
@@ -81,8 +84,9 @@ export class CanvasOverlayRenderer {
     const hasTempWire = Boolean(this.host.activePinForWire && this.host.tempWireEnd);
     const hasSelectionBox = Boolean(this.host.selectionStart && this.host.selectionEnd);
     const hasGuides = Boolean(this.host.activeAlignmentGuides && this.host.activeAlignmentGuides.length > 0);
+    const hasErcIssues = Boolean(this.host.ercIssues && this.host.ercIssues.length > 0);
 
-    if (!hasCurrentAnimation && !hasThermalHeatmap && !hasTempWire && !hasSelectionBox && !hasGuides) {
+    if (!hasCurrentAnimation && !hasThermalHeatmap && !hasTempWire && !hasSelectionBox && !hasGuides && !hasErcIssues) {
       return;
     }
 
@@ -131,7 +135,20 @@ export class CanvasOverlayRenderer {
       );
     }
 
-    // 6. Cable temporal mientras el usuario conecta pines
+    // 6. Overlays de ERC/DRC (fatal: rojo, advertencia: amarillo) en tiempo real
+    if (hasErcIssues) {
+      drawErcAndDrcOverlays(
+        this.ctx,
+        this.host.ercIssues ?? [],
+        this.host.components,
+        (c) => (this.host.getComponentPins ? this.host.getComponentPins(c) : []),
+        now,
+        this.host.hoveredPin,
+        this.host.hoveredComponent,
+      );
+    }
+
+    // 7. Cable temporal mientras el usuario conecta pines
     if (hasTempWire) {
       drawTemporaryWire(
         this.ctx,
@@ -141,12 +158,12 @@ export class CanvasOverlayRenderer {
       );
     }
 
-    // 7. Caja de selección interactiva
+    // 8. Caja de selección interactiva
     if (hasSelectionBox) {
       drawSelectionBox(this.ctx, this.host.selectionStart, this.host.selectionEnd);
     }
 
-    // 8. Guías de alineación magnéticas
+    // 9. Guías de alineación magnéticas
     if (hasGuides) {
       drawAlignmentGuides(this.ctx, this.host.activeAlignmentGuides ?? []);
     }

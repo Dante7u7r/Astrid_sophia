@@ -154,6 +154,7 @@ export function attachCanvasInput(
       } else {
         orchestrator.tempWireEnd = orchestrator.snapPointToGrid(worldPt);
       }
+      orchestrator.updateRealtimeErc();
     }
 
     if (isRightClickPanning) {
