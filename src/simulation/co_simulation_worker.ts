@@ -1,6 +1,7 @@
 import { solveTransientCircuitTS } from "./fallback_solver";
 import { createMcuRuntime, runCycles, type McuRuntime } from "./mcu-runtime";
 import { dispatchAnalogTrigger } from "./mcu-spice-bridge";
+import { McuClockSynchronizer } from "./co_simulation_sync";
 import { STANDARD_8051_DEFINITION } from "./mcu-8051";
 import { ATMEGA328P_DEFINITIONS } from "./mcu-avr";
 import { type CircuitNetlist } from "./netlist_extractor";
@@ -16,7 +17,7 @@ export interface SimulationFrame {
   readonly triggerEvent: AnalogEventTrigger | null;
 }
 
-let interactiveMcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> | null = null;
+let interactiveMcuRuntimes: Record<string, { runtime: McuRuntime; type: string; pins: string[]; sync: McuClockSynchronizer }> | null = null;
 
 self.onmessage = (e: MessageEvent) => {
   const data = e.data;
@@ -25,7 +26,7 @@ self.onmessage = (e: MessageEvent) => {
     const netlist = data.netlist as CircuitNetlist;
     const componentFirmware = data.firmware as Record<string, Uint8Array>;
     
-    const runtimes: Record<string, { runtime: McuRuntime; type: string; pins: string[] }> = {};
+    const runtimes: Record<string, { runtime: McuRuntime; type: string; pins: string[]; sync: McuClockSynchronizer }> = {};
     for (const comp of netlist.components) {
       if (
         comp.type === 'mcu_8051'
@@ -48,7 +49,8 @@ self.onmessage = (e: MessageEvent) => {
         });
         runtime.pendingInterruptVector = null;
         runtime.globalInterruptEnable = true;
-        runtimes[comp.id] = { runtime, type: comp.type, pins: [...comp.pins] };
+        const sync = new McuClockSynchronizer(definition.clockSpeed);
+        runtimes[comp.id] = { runtime, type: comp.type, pins: [...comp.pins], sync };
       }
     }
     interactiveMcuRuntimes = runtimes;
@@ -68,11 +70,12 @@ self.onmessage = (e: MessageEvent) => {
           dispatchAnalogTrigger(frame.triggerEvent, interactiveMcuRuntimes);
         }
 
-        // 2. Avanzar el contador temporal del runtime MCU experimental
+        // 2. Avanzar el contador temporal del runtime MCU con sincronización cycle-accurate
         for (const [compId, entry] of Object.entries(interactiveMcuRuntimes)) {
-          const clockSpeed = entry.runtime.definition.clockSpeed;
-          const cyclesToRun = Math.round(dt * clockSpeed);
-          runCycles(entry.runtime, Math.min(cyclesToRun, 200_000));
+          const cyclesToRun = entry.sync.calculateCyclesForTimestep(dt);
+          if (cyclesToRun > 0) {
+            runCycles(entry.runtime, Math.min(cyclesToRun, 200_000));
+          }
 
           mcuTelemetry[compId] = {
             pc: entry.runtime.state.pc,
