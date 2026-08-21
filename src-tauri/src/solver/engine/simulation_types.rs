@@ -30,9 +30,12 @@ impl TransientSettings {
         }
 
         if let Some(method) = self.integration_method.as_deref() {
-            if !matches!(method, "euler" | "BE" | "gear2" | "trap" | "trapezoidal") {
+            if !matches!(
+                method,
+                "auto" | "euler" | "BE" | "gear2" | "trap" | "trapezoidal"
+            ) {
                 return Err(format!(
-                    "Método de integración no compatible: {method}. Use euler, BE, gear2, trap o trapezoidal."
+                    "Método de integración no compatible: {method}. Use auto, euler, BE, gear2, trap o trapezoidal."
                 ));
             }
         }

@@ -9,3 +9,7 @@ mod integration_methods {
 mod device_transients {
     include!("transient/device_transients.rs");
 }
+
+mod adaptive_order {
+    include!("transient/adaptive_order.rs");
+}

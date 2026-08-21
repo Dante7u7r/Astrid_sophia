@@ -141,7 +141,7 @@ fn test_bjt_transient_delay() {
     let settings = TransientSettings {
         dt: 1e-6,
         t_max: 1e-4,
-        fixed_step: None,
+        fixed_step: Some(true),
         integration_method: None,
     };
 
@@ -407,7 +407,7 @@ fn test_mosfet_switching_with_commercial_cgs_cgd_miller() {
     let settings = TransientSettings {
         dt: 5e-8,    // 50 ns
         t_max: 10e-6, // 10 µs
-        fixed_step: None,
+        fixed_step: Some(true),
         integration_method: None,
     };
 
@@ -480,7 +480,7 @@ fn test_jfet_dynamic_gate_transient() {
     let settings = TransientSettings {
         dt: 1e-6,
         t_max: 1e-4,
-        fixed_step: None,
+        fixed_step: Some(true),
         integration_method: None,
     };
 
@@ -557,7 +557,7 @@ fn test_opamp_slew_rate_limiting_transient() {
     let settings = TransientSettings {
         dt: 1e-7,    // 100 ns
         t_max: 30e-6, // 30 µs
-        fixed_step: None,
+        fixed_step: Some(true),
         integration_method: None,
     };
 

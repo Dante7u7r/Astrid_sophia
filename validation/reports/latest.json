@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "suiteId": "phase4-external-correlation",
   "title": "Correlación científica externa de Astryd Sophia — Fase 4",
-  "generatedAtUnixSeconds": 1787291088,
+  "generatedAtUnixSeconds": 1787292762,
   "solverVersion": "0.1.0",
-  "gitHead": "67a39a8e8d82",
+  "gitHead": "0d1e5d43b2f5",
   "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {
@@ -951,10 +951,10 @@
       "observations": [
         {
           "id": "output_peak_to_peak",
-          "actual": 1.567826889479576,
+          "actual": 1.5717886091333273,
           "expected": 1.5717672548,
-          "absoluteError": 0.003940365320423966,
-          "relativeError": 0.0025069648883386106,
+          "absoluteError": 0.00002135433332739467,
+          "relativeError": 0.000013586193033466593,
           "allowedError": 0.031435345095999996,
           "units": "V",
           "expression": "10/sqrt(1+(2*pi*1000*1000*1e-6)^2)",

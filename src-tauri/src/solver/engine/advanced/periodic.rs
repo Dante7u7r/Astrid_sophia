@@ -65,7 +65,7 @@ pub fn solve_pss(
         dt: settings.period / 200.0,
         t_max: settings.period,
         fixed_step: Some(true),
-        integration_method: None,
+        integration_method: Some("auto".to_string()),
     };
 
     if d == 0 {
@@ -245,8 +245,8 @@ pub fn solve_oscillator_pss_and_phase_noise(
     let trans_warmup = TransientSettings {
         dt: period_est / 100.0,
         t_max: period_est * warmup_cycles,
-        fixed_step: Some(false),
-        integration_method: None,
+        fixed_step: Some(true),
+        integration_method: Some("gear2".to_string()),
     };
 
     // Perturbación inicial de arranque para romper simetrías en osciladores autónomos (anillo, etc.)

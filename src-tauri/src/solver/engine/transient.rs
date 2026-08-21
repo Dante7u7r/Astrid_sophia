@@ -31,7 +31,10 @@ use super::transient_sources::stamp_dynamic_transient_sources;
 use super::transient_state_updates::{
     update_coupled_inductor_states, update_passive_storage_states, IntegrationHistoryParams,
 };
-use super::transient_step_control::{estimate_local_truncation_error, update_trapezoidal_history};
+use super::transient_step_control::{
+    predict_variable_order_step, update_trapezoidal_history, IntegrationMethodType,
+    VariableOrderController,
+};
 use super::transient_switches::update_switch_states;
 use super::transient_thermal::update_device_junction_temperatures;
 use stamps::{stamp_behavioral_sources, stamp_component, StampContext};
@@ -136,11 +139,12 @@ where
     let n = crate::topology::validate_netlist_topology(netlist, false)?;
     let (vt, _is_temp) = get_thermal_parameters(netlist.temperature, None);
     let is_fixed = settings.fixed_step.unwrap_or(false) || netlist.fixed_step.unwrap_or(false);
-    let integration_method = match settings.integration_method.as_deref().unwrap_or("euler") {
+    let integration_method_str = match settings.integration_method.as_deref().unwrap_or("auto") {
         "BE" => "euler",
         "trapezoidal" => "trap",
         method => method,
     };
+    let mut order_controller = VariableOrderController::new(integration_method_str);
     let v_sources: Vec<&ComponentData> = netlist
         .components
         .iter()
@@ -228,10 +232,10 @@ where
     let mut sol_n2 = current_solution.clone(); // Solución en n-2
     let mut steps_completed = 0;
 
-    // Tolerancia LTE y límites de paso
-    let lte_tol = 2e-4; // 200 uV de tolerancia de truncamiento
-                        // El mínimo adaptativo nunca puede ser mayor que el paso nominal solicitado.
-    let dt_min = settings.dt.min(1e-7);
+    // Tolerancia LTE normalizada: lte_max <= 1.0 cumple reltol y vntol
+    let lte_tol = 1.0;
+    // El mínimo adaptativo permite reducir el paso hasta 1000x en transiciones rápidas
+    let dt_min = (settings.dt * 1e-3).max(1e-12);
     let dt_max = settings.dt * 2.5;
 
     let mut results = Vec::new();
@@ -246,8 +250,11 @@ where
         dt = dt.min(t_max - t);
         drain_live_overrides(&mut local_overrides, &live_overrides, live_run_id);
 
-        let trap_active_this_step = integration_method == "trap" && steps_completed >= 1;
-        let gear2_active_this_step = integration_method == "gear2" && steps_completed >= 2;
+        let active_method = order_controller.active_method;
+        let trap_active_this_step = active_method == IntegrationMethodType::Trap
+            && order_controller.steps_with_current_method >= 1;
+        let gear2_active_this_step = active_method == IntegrationMethodType::Gear2
+            && order_controller.steps_with_current_method >= 2;
 
         // Respaldar estados antes de intentar resolver el paso
         let cap_states_backup = cap_states.clone();
@@ -311,7 +318,7 @@ where
             (0.0, 0.0, 0.0)
         };
         let companion_params = IntegrationHistoryParams {
-            integration_method,
+            integration_method: active_method.as_str(),
             trap_active_this_step,
             gear2_active_this_step,
             gear_a,
@@ -461,9 +468,10 @@ where
                 .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())
         };
 
-        // Si convergió, evaluamos el LTE (Error de Truncamiento Local)
+        // Si convergió, evaluamos el LTE y predecimos método y timestep
         if let Ok(ref step_solution) = step_solution_res {
-            let lte = estimate_local_truncation_error(
+            let decision = predict_variable_order_step(
+                &mut order_controller,
                 step_solution,
                 &sol_n,
                 &sol_n1,
@@ -473,16 +481,16 @@ where
                 prev_dt,
                 is_fixed,
                 steps_completed,
-                integration_method,
-                Some(numerical_settings.tolerance),
-                None,
+                lte_tol,
+                dt_min,
+                dt_max,
+                numerical_settings.tolerance,
+                1e-6,
             );
-            let lte_max = lte.maximum;
-            let integrator_order = lte.integrator_order;
 
             // Decidir si aceptamos o rechazamos el paso temporal
-            if !is_fixed && lte_max > lte_tol && dt > dt_min {
-                // RECHAZAR PASO: Restaurar estados del backup y reducir dt asintóticamente
+            if !is_fixed && !decision.step_accepted {
+                // RECHAZAR PASO: Restaurar estados del backup y reducir dt
                 cap_states = cap_states_backup;
                 ind_states = ind_states_backup;
                 cap_states_prev = cap_states_prev_backup;
@@ -494,16 +502,13 @@ where
                 device_tjunc = device_tjunc_backup;
                 ms_scheduler = ms_scheduler_backup;
 
-                let ratio = lte_tol / lte_max;
-                let factor = 0.9 * ratio.powf(1.0 / (integrator_order + 1.0));
-                let bounded_factor = factor.clamp(0.1, 0.5);
-                dt = (dt * bounded_factor).max(dt_min);
+                order_controller.active_method = decision.next_method;
+                dt = decision.next_dt;
                 continue; // Volver a intentar la misma iteración temporal con el dt reducido
             } else {
                 // ACEPTAR PASO: Guardar resultado y avanzar
                 let accepted_dt = dt;
                 let accepted_time = step_time;
-                let completed_before_accept = steps_completed;
                 current_solution = step_solution.clone();
                 prev_dt = accepted_dt;
 
@@ -514,7 +519,7 @@ where
                 steps_completed += 1;
 
                 // Actualizar corrientes de capacitores y voltajes de inductores para TRAP
-                if integration_method == "trap" {
+                if active_method == IntegrationMethodType::Trap {
                     update_trapezoidal_history(
                         netlist,
                         step_solution,
@@ -558,7 +563,7 @@ where
                 process_mixed_signal_events(netlist, &mut ms_scheduler, accepted_time);
 
                 let integration_history = IntegrationHistoryParams {
-                    integration_method,
+                    integration_method: active_method.as_str(),
                     trap_active_this_step,
                     gear2_active_this_step,
                     gear_a,
@@ -606,26 +611,16 @@ where
 
                 // Avanzar exclusivamente con el paso que produjo esta solución.
                 t = accepted_time;
+                order_controller.active_method = decision.next_method;
 
-                // Calcular por separado el paso candidato de la siguiente iteración.
-                let mut next_dt = if event_intercepted {
+                // Calcular el paso candidato de la siguiente iteración.
+                let next_dt = if event_intercepted {
                     original_dt
                 } else if is_fixed {
                     settings.dt
-                } else if completed_before_accept >= 2 {
-                    if lte_max > 1e-15 {
-                        let ratio = lte_tol / lte_max;
-                        let factor = 0.9 * ratio.powf(1.0 / (integrator_order + 1.0));
-                        accepted_dt * factor.clamp(1.0, 2.0)
-                    } else {
-                        accepted_dt * 2.0
-                    }
                 } else {
-                    accepted_dt
+                    decision.next_dt
                 };
-                if !is_fixed && lte_max < 0.1 * lte_tol {
-                    next_dt *= 1.5;
-                }
                 dt = next_dt.clamp(dt_min, dt_max);
 
                 // El callback observa un estado ya aceptado y con historiales coherentes.
@@ -650,6 +645,9 @@ where
                 mcu_vdaceff = mcu_vdaceff_backup;
                 device_tjunc = device_tjunc_backup;
                 ms_scheduler = ms_scheduler_backup;
+                if order_controller.is_auto() {
+                    order_controller.active_method = IntegrationMethodType::Euler;
+                }
                 dt = (dt / 2.0).max(dt_min);
                 continue;
             } else {
