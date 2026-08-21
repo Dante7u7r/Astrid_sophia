@@ -130,6 +130,33 @@ fn evaluate_waveform(
             let modulation = 1.0 + mod_index * (2.0 * std::f64::consts::PI * mod_freq * t).sin();
             offset + amp * modulation * carrier
         }
+        "pwl" => {
+            if let Some(ref pts) = comp.pwl_points {
+                if pts.is_empty() {
+                    fallback
+                } else if t <= pts[0].0 {
+                    pts[0].1
+                } else if t >= pts[pts.len() - 1].0 {
+                    pts[pts.len() - 1].1
+                } else {
+                    let idx = match pts.binary_search_by(|p| p.0.total_cmp(&t)) {
+                        Ok(i) => i,
+                        Err(i) => i.saturating_sub(1),
+                    };
+                    let (t0, v0) = pts[idx];
+                    let (t1, v1) = pts[(idx + 1).min(pts.len() - 1)];
+                    let dt = t1 - t0;
+                    if dt.abs() < 1e-18 {
+                        v0
+                    } else {
+                        let alpha = (t - t0) / dt;
+                        v0 + alpha * (v1 - v0)
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
         _ => fallback,
     }
 }

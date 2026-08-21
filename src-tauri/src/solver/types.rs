@@ -181,6 +181,8 @@ pub struct ComponentData {
     pub lot_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lot_correlation: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pwl_points: Option<Vec<(f64, f64)>>,
 }
 
 /// Configuración de simulación electro-térmica acoplada.

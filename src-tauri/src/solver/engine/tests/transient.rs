@@ -13,3 +13,7 @@ mod device_transients {
 mod adaptive_order {
     include!("transient/adaptive_order.rs");
 }
+
+mod waveform_relaxation {
+    include!("transient/waveform_relaxation.rs");
+}

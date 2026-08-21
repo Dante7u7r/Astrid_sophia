@@ -224,6 +224,24 @@ where
             current_solution[n + source_index] =
                 *dc_result.branch_currents.get(source_id).unwrap_or(&0.0);
         }
+    } else {
+        for comp in &netlist.components {
+            if comp.comp_type == "capacitor" {
+                if let Some(&v_c) = cap_init.get(&comp.id) {
+                    let n_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                    let n_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
+                    if n_pos > 0 && n_neg == 0 {
+                        current_solution[n_pos - 1] = v_c;
+                    }
+                }
+            } else if comp.comp_type == "vsource" {
+                let n_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let n_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
+                if n_pos > 0 && n_neg == 0 {
+                    current_solution[n_pos - 1] = comp.value;
+                }
+            }
+        }
     }
 
     // Histórico de soluciones para cálculo de la segunda derivada (Euler/Gear2) y tercera derivada (TRAP) del LTE
