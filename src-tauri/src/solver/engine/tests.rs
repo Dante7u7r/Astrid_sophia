@@ -81,4 +81,8 @@ mod core_tests {
     mod radiation {
         include!("tests/radiation_tests.rs");
     }
+
+    mod electromigration {
+        include!("tests/electromigration_tests.rs");
+    }
 }

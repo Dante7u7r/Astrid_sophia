@@ -1,4 +1,5 @@
 pub mod aging;
+pub mod electromigration;
 mod measurements;
 mod monte_carlo;
 mod periodic;
@@ -12,6 +13,7 @@ mod transmission;
 pub mod waveform_relaxation;
 
 pub use aging::*;
+pub use electromigration::*;
 pub use measurements::*;
 pub use monte_carlo::*;
 pub use periodic::*;
