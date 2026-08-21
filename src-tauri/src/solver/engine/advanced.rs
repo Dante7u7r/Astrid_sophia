@@ -5,6 +5,7 @@ mod sensitivity;
 mod spectral;
 mod stability;
 mod thermal;
+pub mod thermal_network;
 mod transmission;
 pub mod waveform_relaxation;
 
@@ -15,5 +16,6 @@ pub use sensitivity::*;
 pub use spectral::*;
 pub use stability::*;
 pub use thermal::*;
+pub use thermal_network::*;
 pub use transmission::*;
 pub use waveform_relaxation::*;

@@ -21,7 +21,7 @@ pub(crate) fn update_device_junction_temperatures(
                 comp.rth.unwrap_or(OPTO_RTH_JA),
                 comp.cth.unwrap_or(OPTO_CTH),
             ),
-            "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => {
+            "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "sic_mosfet" | "gan_hemt" => {
                 (comp.rth.unwrap_or(MOS_RTH_JA), comp.cth.unwrap_or(MOS_CTH))
             }
             "npn" | "pnp" => (comp.rth.unwrap_or(BJT_RTH_JA), comp.cth.unwrap_or(BJT_CTH)),
@@ -172,6 +172,42 @@ pub(crate) fn update_device_junction_temperatures(
                 let (vt_b, is_b) = get_thermal_parameters_junction(tj, None);
                 let ic = is_b * ((vbe / vt_b).exp() - 1.0) * comp.value.max(100.0);
                 (vce * ic.abs()).min(50.0)
+            }
+            "sic_mosfet" => {
+                let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let nd = comp.pins[1].parse::<usize>().unwrap_or(0);
+                let ns = comp.pins[2].parse::<usize>().unwrap_or(0);
+                let vg = if ng > 0 { step_solution[ng - 1] } else { 0.0 };
+                let vd_pin = if nd > 0 { step_solution[nd - 1] } else { 0.0 };
+                let vs = if ns > 0 { step_solution[ns - 1] } else { 0.0 };
+                let vgs = vg - vs;
+                let vds = vd_pin - vs;
+                let tj = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
+                let params = SicMosfetParams {
+                    vth: if comp.value > 0.0 { comp.value } else { 3.0 },
+                    rds_on: comp.ron.unwrap_or(0.065),
+                    ..SicMosfetParams::default()
+                };
+                let res = evaluate_sic_mosfet(vgs, vds, tj, &params);
+                (vds * res.ids).abs()
+            }
+            "gan_hemt" => {
+                let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let nd = comp.pins[1].parse::<usize>().unwrap_or(0);
+                let ns = comp.pins[2].parse::<usize>().unwrap_or(0);
+                let vg = if ng > 0 { step_solution[ng - 1] } else { 0.0 };
+                let vd_pin = if nd > 0 { step_solution[nd - 1] } else { 0.0 };
+                let vs = if ns > 0 { step_solution[ns - 1] } else { 0.0 };
+                let vgs = vg - vs;
+                let vds = vd_pin - vs;
+                let tj = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
+                let params = GanHemtParams {
+                    vth: if comp.value > 0.0 { comp.value } else { 1.5 },
+                    rds_on: comp.ron.unwrap_or(0.035),
+                    ..GanHemtParams::default()
+                };
+                let res = evaluate_gan_hemt(vgs, vds, tj, &params);
+                (vds * res.ids).abs()
             }
             _ => 0.0,
         };

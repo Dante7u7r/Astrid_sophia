@@ -69,4 +69,8 @@ mod core_tests {
     mod wbg_power {
         include!("tests/wbg_power_tests.rs");
     }
+
+    mod thermal_network {
+        include!("tests/thermal_network_tests.rs");
+    }
 }
