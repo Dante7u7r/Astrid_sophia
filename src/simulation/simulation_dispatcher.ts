@@ -476,6 +476,15 @@ export async function dispatchSimulation(
             }
             return;
           }
+          const hasNonLinear = netlist.components.some(c =>
+            ['diode', 'led', 'npn', 'pnp', 'nmos', 'pmos', 'jfet'].includes(c.type),
+          );
+          if (hasNonLinear) {
+            callbacks.addLog(
+              "⚠️ MODO FALLBACK (SOLO LINEAL): El solver Rust no está conectado. Los semiconductores se linealizan con resistencias fijas (50Ω / 1MΩ). Para curvas no lineales exactas ejecute en la app de escritorio Tauri.",
+              "error",
+            );
+          }
           const tsRes = await config.solveTransientCircuitLocal(netlist, config.simSettings.dt, config.transientDuration);
           if (typeof tsRes === "string") {
             if (config.feedbackRun) failFeedbackRun(config.feedbackRun, tsRes, "iteration");
@@ -483,7 +492,7 @@ export async function dispatchSimulation(
           } else {
             if (config.feedbackRun) completeFeedbackRun(config.feedbackRun, { pointCount: tsRes.length, converged: true });
             callbacks.onResultsReady(mode, tsRes);
-            callbacks.onIpcStatusUpdate("Respaldo Transitorio local", "var(--warning)");
+            callbacks.onIpcStatusUpdate("FALLBACK: SOLO LINEAL", "var(--warning)");
             callbacks.updateCanvasRendering();
           }
           if (callbacks.onSimulationFinished) {
@@ -497,6 +506,15 @@ export async function dispatchSimulation(
               callbacks.onSimulationFinished();
             }
             return;
+          }
+          const hasNonLinear = netlist.components.some(c =>
+            ['diode', 'led', 'npn', 'pnp', 'nmos', 'pmos', 'jfet'].includes(c.type),
+          );
+          if (hasNonLinear) {
+            callbacks.addLog(
+              "⚠️ MODO FALLBACK (SOLO LINEAL): El solver Rust no está conectado. Los semiconductores se linealizan con resistencias fijas (50Ω / 1MΩ). Para curvas no lineales exactas ejecute en la app de escritorio Tauri.",
+              "error",
+            );
           }
           const tsRes = config.solveCircuitTS(netlist);
           if (typeof tsRes === "string") {
@@ -512,7 +530,7 @@ export async function dispatchSimulation(
             }
             callbacks.addLog("----------------------------------------------------------------", "system");
             callbacks.onResultsReady(mode, tsRes);
-            callbacks.onIpcStatusUpdate("Respaldo local Activo", "var(--warning)");
+            callbacks.onIpcStatusUpdate("FALLBACK: SOLO LINEAL", "var(--warning)");
             callbacks.updateCanvasRendering();
           }
           if (callbacks.onSimulationFinished) {

@@ -103,6 +103,20 @@
   border-left-color: #ef4444;
 }
 
+.badge-fallback-linear {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
 /* Controles de análisis */
 .simulation-controls {
   display: flex;
