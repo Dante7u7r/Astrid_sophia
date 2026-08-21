@@ -7,8 +7,12 @@ export interface CanvasHelpers {
   zoom(factor: number, centerX?: number, centerY?: number): Promise<void>;
   pan(dx: number, dy: number): Promise<void>;
   placeComponent(type: string, x: number, y: number): Promise<void>;
+  dragComponentFromPalette(type: string, targetWorldX: number, targetWorldY: number): Promise<void>;
   wire(fromComp: string, fromPin: number, toComp: string, toPin: number): Promise<void>;
   selectComponent(id: string): Promise<void>;
+  deleteSelected(): Promise<void>;
+  undo(): Promise<void>;
+  redo(): Promise<void>;
   getViewportTransform(): Promise<{ zoom: number; offsetX: number; offsetY: number }>;
 }
 
@@ -128,6 +132,32 @@ export const test = base.extend<CanvasHelpers>({
     });
   },
 
+  dragComponentFromPalette: async ({ page, canvas }, use) => {
+    await use(async (type: string, targetWorldX: number, targetWorldY: number) => {
+      const card = page.locator(`.component-card[data-type="${type}"]`).first();
+      const cardBox = await card.boundingBox();
+      if (!cardBox) throw new Error(`Card for component ${type} not found`);
+
+      const transform = await page.evaluate(() => {
+        const orch = (window as any).orchestrator;
+        return orch ? { zoom: orch.zoom, offsetX: orch.offsetX, offsetY: orch.offsetY } : null;
+      });
+      if (!transform) throw new Error("CanvasOrchestrator not ready");
+
+      const canvasBox = await canvas.boundingBox();
+      if (!canvasBox) throw new Error("Canvas bounding box not found");
+
+      const screenX = canvasBox.x + transform.offsetX + targetWorldX * transform.zoom;
+      const screenY = canvasBox.y + transform.offsetY + targetWorldY * transform.zoom;
+
+      await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(screenX, screenY, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(100);
+    });
+  },
+
   wire: async ({ page }, use) => {
     await use(async (fromComp: string, fromPin: number, toComp: string, toPin: number) => {
       await page.evaluate(
@@ -163,6 +193,37 @@ export const test = base.extend<CanvasHelpers>({
           orch.requestRender?.(true);
         }
       }, id);
+    });
+  },
+
+  deleteSelected: async ({ page }, use) => {
+    await use(async () => {
+      await page.keyboard.press("Delete");
+      await page.waitForTimeout(100);
+    });
+  },
+
+  undo: async ({ page }, use) => {
+    await use(async () => {
+      const undoBtn = page.locator("#btn-undo-action");
+      if (await undoBtn.isVisible()) {
+        await undoBtn.click();
+      } else {
+        await page.keyboard.press("Control+z");
+      }
+      await page.waitForTimeout(100);
+    });
+  },
+
+  redo: async ({ page }, use) => {
+    await use(async () => {
+      const redoBtn = page.locator("#btn-redo-action");
+      if (await redoBtn.isVisible()) {
+        await redoBtn.click();
+      } else {
+        await page.keyboard.press("Control+y");
+      }
+      await page.waitForTimeout(100);
     });
   },
 });

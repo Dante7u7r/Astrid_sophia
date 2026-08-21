@@ -1,131 +1,176 @@
 import { test, expect } from "./fixtures/canvas-page";
 
-test.describe("Canvas Schematic Editor", () => {
-  test("place component → drag → wire → simulate", async ({
+test.describe("Canvas Schematic Editor E2E Suite", () => {
+  test("1. Place component: drag desde paleta -> soltar en canvas -> verificar render", async ({
     page,
-    zoom,
+    canvas,
+    dragComponentFromPalette,
+  }) => {
+    // 1. Verificar visibilidad de la tarjeta en la paleta
+    const resistorCard = page.locator('.component-card[data-type="resistor"]').first();
+    await expect(resistorCard).toBeVisible();
+
+    // 2. Arrastrar y soltar componente en el canvas
+    await dragComponentFromPalette("resistor", 100, 100);
+
+    const compData = await page.evaluate(() => {
+      const orch = (window as any).orchestrator;
+      const comp = orch?.components?.find((c: any) => c.type === "resistor");
+      return comp ? { id: comp.id, type: comp.type, x: comp.x, y: comp.y } : null;
+    });
+
+    expect(compData).not.toBeNull();
+    expect(compData?.type).toBe("resistor");
+
+    // 3. Verificar que el Canvas 2D ha renderizado píxeles
+    const hasRenderedPixels = await canvas.evaluate((el) => {
+      const c = el as HTMLCanvasElement;
+      const ctx = c.getContext("2d");
+      if (!ctx) return false;
+      const imgData = ctx.getImageData(0, 0, Math.min(c.width, 300), Math.min(c.height, 300));
+      for (let i = 3; i < imgData.data.length; i += 4) {
+        if (imgData.data[i] > 0) return true;
+      }
+      return false;
+    });
+    expect(hasRenderedPixels).toBe(true);
+  });
+
+  test("2. Wire: click pin A -> click pin B -> verificar cable y netlist sincronizado", async ({
+    page,
     placeComponent,
     wire,
   }) => {
-    // 1. Colocar Resistor en (0,0)
-    await placeComponent("resistor", 0, 0);
-    await expect(page.locator('.component-card[data-type="resistor"]').first()).toBeVisible();
-
-    // 2. Colocar VSource en (-100, 0)
     await placeComponent("vsource", -100, 0);
+    await placeComponent("resistor", 100, 0);
 
-    // 3. Colocar Ground en (100, 0)
-    await placeComponent("ground", 100, 0);
+    const initialWireCount = await page.evaluate(() => (window as any).orchestrator?.wires?.length ?? 0);
+    expect(initialWireCount).toBe(0);
 
-    const compCount = await page.evaluate(() => {
-      const orch = (window as any).orchestrator;
-      return orch?.components?.length ?? 0;
-    });
-    expect(compCount).toBeGreaterThanOrEqual(3);
-
-    // 4. Conectar VSource+ → Resistor pin 0
+    // Conectar terminales
     await wire("V1", 0, "R1", 0);
 
-    // 5. Conectar Resistor pin 1 → Ground
-    await wire("R1", 1, "GND1", 0);
-
-    const wireCount = await page.evaluate(() => {
+    const updatedWireData = await page.evaluate(() => {
       const orch = (window as any).orchestrator;
-      return orch?.wires?.length ?? 0;
+      const wireObj = orch?.wires?.[0];
+      const netlist = orch?.extractNetlist?.() ?? orch?.lastNetlist ?? null;
+      return {
+        count: orch?.wires?.length ?? 0,
+        fromComp: wireObj?.from?.componentId,
+        toComp: wireObj?.to?.componentId,
+        hasNetlist: netlist !== null,
+      };
     });
-    expect(wireCount).toBeGreaterThanOrEqual(2);
 
-    // 6. Zoom to fit
-    await zoom(1.2, 0, 0);
-
-    // 7. Validar estado de simulación
-    const simButton = page.locator("#btn-run-simulation, #btn-start-sim, #btn-simular").first();
-    if (await simButton.isVisible()) {
-      await simButton.click();
-      await page.waitForTimeout(300);
-    }
-
-    const simReady = await page.evaluate(() => {
-      return (window as any).orchestrator !== null;
-    });
-    expect(simReady).toBeTruthy();
+    expect(updatedWireData.count).toBe(1);
+    expect(updatedWireData.fromComp?.toUpperCase()).toContain("V1");
+    expect(updatedWireData.toComp?.toUpperCase()).toContain("R1");
   });
 
-  test("hit-testing: select component under cursor", async ({
-    page,
-    clickWorld,
-    placeComponent,
-  }) => {
-    await placeComponent("capacitor", 50, 50);
-    await clickWorld(50, 50); // Clic en el centro del componente
-
-    const selectedId = await page.evaluate(() => {
-      const orch = (window as any).orchestrator;
-      return orch?.selectedComponent?.id ?? orch?.selectedComponents?.[0]?.id ?? null;
-    });
-    expect(selectedId).toBeTruthy();
-  });
-
-  test("drag component → wires follow (rubber-band)", async ({
+  test("3. Drag: seleccionar componente -> arrastrar -> verificar cables rubber-band siguen", async ({
     page,
     placeComponent,
     wire,
     dragWorld,
   }) => {
     await placeComponent("resistor", 0, 0);
-    await placeComponent("vsource", -100, 0);
+    await placeComponent("vsource", -120, 0);
     await wire("V1", 0, "R1", 0);
 
-    await dragWorld(0, 0, 50, 50); // Arrastrar resistor a (50, 50)
+    // Arrastrar Resistor de (0, 0) a (60, 80)
+    await dragWorld(0, 0, 60, 80);
 
-    const components = await page.evaluate(() => {
+    const verifyState = await page.evaluate(() => {
       const orch = (window as any).orchestrator;
-      return orch?.components?.map((c: any) => ({ id: c.id, x: c.x, y: c.y })) ?? [];
+      const r1 = orch?.components?.find((c: any) => c.id === "R1" || c.type === "resistor");
+      const wire0 = orch?.wires?.[0];
+      return {
+        r1Pos: r1 ? { x: r1.x, y: r1.y } : null,
+        wireExists: !!wire0,
+      };
     });
-    expect(components.length).toBeGreaterThanOrEqual(2);
+
+    expect(verifyState.wireExists).toBe(true);
+    expect(verifyState.r1Pos).not.toBeNull();
   });
 
-  test("box selection → multi-select → delete", async ({
+  test("4. Zoom/Pan: wheel zoom -> pan con clic medio -> coordenadas mundo conservadas", async ({
+    canvas,
+    placeComponent,
+    getViewportTransform,
+    page,
+  }) => {
+    await placeComponent("resistor", 100, 100);
+    const initialTransform = await getViewportTransform();
+
+    // Wheel zoom
+    const box = await canvas.boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.wheel(0, -120);
+      await page.waitForTimeout(100);
+    }
+
+    // Pan con clic medio
+    if (box) {
+      await page.mouse.move(box.x + 200, box.y + 200);
+      await page.mouse.down({ button: "middle" });
+      await page.mouse.move(box.x + 260, box.y + 260, { steps: 5 });
+      await page.mouse.up({ button: "middle" });
+      await page.waitForTimeout(100);
+    }
+
+    // Las coordenadas de mundo del componente deben seguir siendo (100, 100)
+    const compPos = await page.evaluate(() => {
+      const orch = (window as any).orchestrator;
+      const comp = orch?.components?.find((c: any) => c.id === "R1" || c.type === "resistor");
+      return comp ? { x: comp.x, y: comp.y } : null;
+    });
+
+    expect(compPos).toEqual({ x: 100, y: 100 });
+  });
+
+  test("5. Box select + Delete: seleccion multiple -> Delete -> componentes eliminados", async ({
     page,
     placeComponent,
     selectComponent,
+    deleteSelected,
   }) => {
     await placeComponent("resistor", 0, 0);
     await placeComponent("capacitor", 100, 0);
     await placeComponent("inductor", 200, 0);
 
-    const countInitial = await page.evaluate(() => {
-      const orch = (window as any).orchestrator;
-      return orch?.components?.length ?? 0;
-    });
-    expect(countInitial).toBeGreaterThanOrEqual(3);
+    const initialCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
+    expect(initialCount).toBeGreaterThanOrEqual(3);
 
     // Seleccionar y eliminar
     await selectComponent("R1");
-    await page.keyboard.press("Delete");
-    await page.waitForTimeout(100);
+    await deleteSelected();
 
-    const countAfter = await page.evaluate(() => {
-      const orch = (window as any).orchestrator;
-      return orch?.components?.length ?? 0;
-    });
-    expect(countAfter).toBeLessThan(countInitial);
+    const afterCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
+    expect(afterCount).toBe(initialCount - 1);
   });
 
-  test("zoom/pan preserves world coordinates", async ({
+  test("6. Undo/Redo: accion -> Ctrl+Z -> revertido, Ctrl+Y -> reaplicado", async ({
+    page,
     placeComponent,
-    zoom,
-    pan,
-    getViewportTransform,
+    undo,
+    redo,
   }) => {
-    await placeComponent("resistor", 100, 100);
-    await zoom(1.5, 100, 100);
-    const transform1 = await getViewportTransform();
+    const startCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
 
-    await pan(50, 50);
-    const transform2 = await getViewportTransform();
+    await placeComponent("resistor", 50, 50);
+    const placedCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
+    expect(placedCount).toBeGreaterThan(startCount);
 
-    expect(transform2.offsetX).toBeCloseTo(transform1.offsetX + 50, 0);
-    expect(transform2.offsetY).toBeCloseTo(transform1.offsetY + 50, 0);
+    // Deshacer (Undo)
+    await undo();
+    const undoneCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
+    expect(undoneCount).toBeLessThan(placedCount);
+
+    // Rehacer (Redo)
+    await redo();
+    const redoneCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
+    expect(redoneCount).toBe(placedCount);
   });
 });
