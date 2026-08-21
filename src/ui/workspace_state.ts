@@ -46,6 +46,10 @@ export interface Tab {
   ch3ProbeNode: string | null;
   ch4ProbeNode: string | null;
   activeAnalysisMode: AnalysisMode;
+  isSubcircuitSheet?: boolean;
+  subcircuitName?: string;
+  parentTabId?: string;
+  parentComponentId?: string;
 }
 
 export interface InitialTabData {

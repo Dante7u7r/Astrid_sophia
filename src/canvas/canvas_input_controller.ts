@@ -31,6 +31,7 @@ export interface CanvasInputCallbacks {
   getActiveAnalysisMode: () => AnalysisMode;
   onSparPortAssign: (nodeId: string) => boolean;
   onSwitchDoubleClick: (comp: ComponentInstance) => Promise<void>;
+  onSubcircuitDoubleClick?: (comp: ComponentInstance) => Promise<void> | void;
   onHideMcuDebug: () => void;
   onComponentPlaced: (comp: ComponentInstance) => void;
   onUndo: () => void;
@@ -234,6 +235,9 @@ export function attachCanvasInput(
       await callbacks.onSwitchDoubleClick(comp);
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
+    } else if (comp?.type === "x" || comp?.subcircuitTabId || comp?.subcircuitName) {
+      await callbacks.onSubcircuitDoubleClick?.(comp);
+      callbacks.requestRender(true);
     }
   };
 

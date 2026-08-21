@@ -166,6 +166,74 @@ export class TabManager {
     return newTab;
   }
 
+  /**
+   * Abre la hoja esquemática hija correspondiente al subcircuito, o crea una nueva pestaña vinculada.
+   */
+  public openOrCreateSubcircuitTab(subcircuitName: string, parentComp?: any): Tab | null {
+    const cleanName = (subcircuitName || "SUBCKT").trim();
+
+    // 1. Buscar si ya existe una pestaña hija con ese ID vinculado o nombre
+    if (parentComp?.subcircuitTabId) {
+      const existing = this.store.findTab(parentComp.subcircuitTabId);
+      if (existing) {
+        this.switchTab(existing.id);
+        return existing;
+      }
+    }
+
+    const matchingByName = this.tabs.find(
+      t => (t.subcircuitName && t.subcircuitName.toUpperCase() === cleanName.toUpperCase()) ||
+           t.name.toUpperCase() === cleanName.toUpperCase()
+    );
+    if (matchingByName) {
+      if (parentComp) {
+        parentComp.subcircuitTabId = matchingByName.id;
+      }
+      this.switchTab(matchingByName.id);
+      return matchingByName;
+    }
+
+    // 2. Pre-poblar puertos de interfaz si el componente tiene pines definidos
+    const initialComponents: any[] = [];
+    if (parentComp) {
+      const pinCount = parentComp.pinCount ?? 4;
+      const pinLabels = parentComp.pinLabels ?? {};
+      for (let i = 0; i < pinCount; i++) {
+        const pLabel = (typeof pinLabels === "object" ? pinLabels[i] : undefined) ?? `P${i + 1}`;
+        const isLeft = i % 2 === 0;
+        const row = Math.floor(i / 2);
+        initialComponents.push({
+          id: `PORT_${pLabel}`,
+          type: "net_label",
+          label: pLabel,
+          value: pLabel,
+          terminalType: "signal",
+          x: isLeft ? -120 : 120,
+          y: -40 + row * 40,
+          rotation: isLeft ? 180 : 0,
+        });
+      }
+    }
+
+    const newTab = this.createNewTab(cleanName, {
+      components: initialComponents,
+      wires: [],
+      filePath: null,
+    });
+
+    if (newTab) {
+      newTab.isSubcircuitSheet = true;
+      newTab.subcircuitName = cleanName;
+      newTab.parentTabId = this.activeTabId ?? undefined;
+      newTab.parentComponentId = parentComp?.id;
+      if (parentComp) {
+        parentComp.subcircuitTabId = newTab.id;
+      }
+    }
+
+    return newTab;
+  }
+
   public switchTab(tabId: string): boolean {
     if (this.activeTabId === tabId) return true;
     if (!this.store.hasTab(tabId)) return false;

@@ -117,4 +117,50 @@ describe("canvas_input_controller", () => {
     canvas.dispatchEvent(new MouseEvent("mouseup", { clientX: 250, clientY: 200, button: 0, bubbles: true }));
     expect(completeBoxSelection).toHaveBeenCalledOnce();
   });
+
+  it("despacha onSubcircuitDoubleClick al hacer doble clic sobre un subcircuito (tipo x)", async () => {
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 200,
+      right: 400,
+      bottom: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }));
+    document.body.appendChild(canvas);
+
+    const subcircuitComp = {
+      id: "X1",
+      type: "x",
+      subcircuitName: "Filtro_RC",
+      x: 50,
+      y: 50,
+      rotation: 0,
+    };
+
+    const orchestrator = {
+      screenToWorld: (x: number, y: number) => ({ x, y }),
+      selectComponentAt: vi.fn(() => subcircuitComp),
+      selectedComponents: [],
+      selectedWires: [],
+    } as unknown as CanvasOrchestrator;
+
+    const onSubcircuitDoubleClick = vi.fn(async () => undefined);
+    const inputCallbacks = {
+      ...callbacks(),
+      onSubcircuitDoubleClick,
+    };
+
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    canvas.dispatchEvent(new MouseEvent("dblclick", { clientX: 50, clientY: 50, bubbles: true }));
+
+    expect(orchestrator.selectComponentAt).toHaveBeenCalledWith(50, 50);
+    expect(onSubcircuitDoubleClick).toHaveBeenCalledWith(subcircuitComp);
+  });
 });
+

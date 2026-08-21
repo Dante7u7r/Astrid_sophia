@@ -449,6 +449,17 @@ function initCanvasCAD() {
         }
       }
     },
+    onSubcircuitDoubleClick: async (comp) => {
+      if (!tabManager) return;
+      const subName = comp.subcircuitName || String(comp.value || "SUBCKT");
+      const targetTab = tabManager.openOrCreateSubcircuitTab(subName, comp);
+      if (targetTab) {
+        addLog(
+          `Abriendo hoja jerárquica del subcircuito [${comp.id}: ${targetTab.name}]...`,
+          "system",
+        );
+      }
+    },
     onHideMcuDebug: () => mcuDebugPanel?.hide(),
     onComponentPlaced: (comp) => {
       updatePropertiesPanel(comp);

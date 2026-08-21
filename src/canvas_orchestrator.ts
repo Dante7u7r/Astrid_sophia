@@ -209,6 +209,10 @@ export interface ComponentInstance {
   // Macromodelo SPICE (subcircuito definido por el usuario)
   spiceMacro?: string;
   spiceNetlist?: string;
+  subcircuitTabId?: string;
+  subcircuitName?: string;
+  isSubcircuitBlock?: boolean;
+  params?: Record<string, number | string>;
   // Nombre del modelo comercial o subcircuito
   modelName?: string;
   // Etiquetas personalizadas de pines
