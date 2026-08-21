@@ -79,6 +79,30 @@
   white-space: nowrap;
 }
 
+.badge-no-sim {
+  display: inline-block;
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.component-card.comp-disabled {
+  opacity: 0.72;
+  border-left: 2px solid rgba(239, 68, 68, 0.5);
+}
+
+.component-card.comp-disabled:hover {
+  opacity: 1;
+  border-left-color: #ef4444;
+}
+
 /* Controles de análisis */
 .simulation-controls {
   display: flex;

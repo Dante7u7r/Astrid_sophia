@@ -130,7 +130,7 @@ export function runElectricalRuleCheck(
   );
   if (temporalMcu) {
     errors.push(
-      `MCU temporal no simulable [${temporalMcu.id}]: el runtime actual no ejecuta firmware. Use un modelo funcional de placa o retire el componente.`,
+      `Microcontrolador no simulable [${temporalMcu.id}]: El solver físico MNA no soporta ejecución de firmware de microcontroladores en esta versión. Para prototipado funcional interactivo use los modelos de desarrollo (Arduino/ESP32) o retire este componente del esquema.`,
     );
   }
 

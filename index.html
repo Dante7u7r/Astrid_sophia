@@ -644,7 +644,7 @@
                 </div>
                 <div class="category-content" id="cat-digitales-mcus">
                   <!-- Intel 8051 -->
-                  <div class="component-card" draggable="true" id="comp-mcu-8051" data-type="mcu_8051" data-default="12000000">
+                  <div class="component-card comp-disabled" draggable="true" id="comp-mcu-8051" data-type="mcu_8051" data-default="12000000" data-tooltip="⛔ NO SIMULABLE: El solver físico MNA no ejecuta firmware de microcontroladores. El ERC bloqueará la simulación si se incluye en el esquema.">
                     <div class="comp-icon-box">
                       <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="8" y="12" width="24" height="16" rx="2" fill="currentColor" fill-opacity="0.15" />
@@ -653,12 +653,12 @@
                       </svg>
                     </div>
                     <div class="comp-details">
-                      <span class="comp-name">Intel 8051</span>
-                      <span class="comp-desc">Runtime incompleto (experimental)</span>
+                      <span class="comp-name">Intel 8051 <span class="badge-no-sim">NO SIMULABLE</span></span>
+                      <span class="comp-desc">Runtime en desarrollo (bloqueado por ERC)</span>
                     </div>
                   </div>
                   <!-- AVR ATmega328P -->
-                  <div class="component-card" draggable="true" id="comp-mcu-avr" data-type="mcu_avr" data-default="16000000">
+                  <div class="component-card comp-disabled" draggable="true" id="comp-mcu-avr" data-type="mcu_avr" data-default="16000000" data-tooltip="⛔ NO SIMULABLE: El solver físico MNA no ejecuta firmware de microcontroladores. El ERC bloqueará la simulación si se incluye en el esquema.">
                     <div class="comp-icon-box">
                       <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="10" y="10" width="20" height="20" rx="3" fill="currentColor" fill-opacity="0.1" />
@@ -667,8 +667,8 @@
                       </svg>
                     </div>
                     <div class="comp-details">
-                      <span class="comp-name">ATmega328P</span>
-                      <span class="comp-desc">Runtime incompleto (experimental)</span>
+                      <span class="comp-name">ATmega328P <span class="badge-no-sim">NO SIMULABLE</span></span>
+                      <span class="comp-desc">Runtime en desarrollo (bloqueado por ERC)</span>
                     </div>
                   </div>
                   <!-- Arduino Uno -->
