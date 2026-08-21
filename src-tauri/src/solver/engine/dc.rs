@@ -1,4 +1,4 @@
-use crate::solver::matrix::{SparseLU, SparseMatrix};
+use crate::solver::matrix::SparseMatrix;
 use crate::solver::types::{CircuitNetlist, ComponentData, SimulationResult};
 use crate::solver::SolverNumericalSettings;
 use nalgebra::DVector;
@@ -116,12 +116,10 @@ pub fn solve_dc_circuit_with_guess_and_numerical_settings(
 
     stamp_linear_components_sparse(netlist, n, &vsource_map, &mut matrix_a, &mut vector_z)?;
 
-    // Resolver A * x = z de forma directa dispersa con Markowitz
-    let lu = SparseLU::factorize(matrix_a)
+    // Resolver A * x = z de forma directa con backend faer / fallback
+    let sol_vec = crate::solver::linear_backend::solve_linear_real(&matrix_a, vector_z.as_slice())
         .map_err(|_| "Error de convergencia o circuito mal condicionado".to_string())?;
-    let solution = lu
-        .solve(&vector_z)
-        .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())?;
+    let solution = DVector::from_vec(sol_vec);
 
     // Desempaquetar voltajes de nodos
     let mut node_voltages = HashMap::new();

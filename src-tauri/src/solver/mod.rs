@@ -12,9 +12,11 @@
 //! `evaluate_measures`, `expand_transmission_line`, `apply_thermal_drift`, `solve_dc_circuit_thermal`.
 
 mod engine;
+pub mod linear_backend;
 pub mod matrix;
 pub mod types;
 
 pub use engine::*;
+pub use linear_backend::*;
 pub use matrix::*;
 pub use types::*;

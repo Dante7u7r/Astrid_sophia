@@ -524,8 +524,13 @@ pub fn solve_sparse(matrix: &DMatrix<f64>, b: &DVector<f64>) -> Option<DVector<f
         return None;
     }
     let sparse = SparseMatrix::from_dense(matrix);
-    let lu = SparseLU::factorize(sparse).ok()?;
-    lu.solve(b)
+    match crate::solver::linear_backend::solve_linear_real(&sparse, b.as_slice()) {
+        Ok(sol) => Some(DVector::from_vec(sol)),
+        Err(_) => {
+            let lu = SparseLU::factorize(sparse).ok()?;
+            lu.solve(b)
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -537,8 +542,13 @@ pub fn solve_complex_sparse(
         return None;
     }
     let sparse = ComplexSparseMatrix::from_dense(matrix);
-    let lu = ComplexSparseLU::factorize(sparse).ok()?;
-    lu.solve(b)
+    match crate::solver::linear_backend::solve_linear_complex(&sparse, b.as_slice()) {
+        Ok(sol) => Some(DVector::from_vec(sol)),
+        Err(_) => {
+            let lu = ComplexSparseLU::factorize(sparse).ok()?;
+            lu.solve(b)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

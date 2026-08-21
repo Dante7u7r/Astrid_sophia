@@ -38,6 +38,7 @@ rayon = "1.10"
 wgpu = "0.19"
 pollster = "0.3"
 bytemuck = { version = "1.16", features = ["derive"] }
+faer = { version = "0.20", features = ["rayon"] }
 
 [dev-dependencies]
 sha2 = "0.10"
