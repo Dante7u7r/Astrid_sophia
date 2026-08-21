@@ -135,6 +135,9 @@ export function formatComponentValue(comp: ComponentInstance): string {
     } else {
       formattedVal = `${comp.value} A`;
     }
+  } else if (comp.type === "power_port") {
+    const v = comp.value ?? comp.voltage ?? 5;
+    formattedVal = `${v} V`;
   } else if (comp.type === "led") {
     formattedVal = comp.ledColor ? `LED ${comp.ledColor.toUpperCase()}` : "LED";
   } else if (comp.type === "potentiometer") {

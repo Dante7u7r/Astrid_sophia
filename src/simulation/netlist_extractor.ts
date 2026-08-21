@@ -685,6 +685,21 @@ export function extractElectricalNetlist(
         opampVos,
         opampIb,
       });
+    } else if (comp.type === 'power_port') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      const posNode = pinsMapped[0] || "1";
+      const negNode = pinsMapped[1] || "0";
+      const voltage = typeof comp.value === 'number'
+        ? comp.value
+        : (parseFloat(String(comp.value)) || (typeof comp.voltage === 'number' ? comp.voltage : 5.0));
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'vsource',
+        value: voltage,
+        pins: [posNode, negNode],
+        waveType: 'dc',
+      });
     } else if (comp.type === 'net_label') {
       const tType = getTerminalType(comp);
       const pinsMapped = getComponentNodes(pinsKeys);

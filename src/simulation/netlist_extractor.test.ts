@@ -626,6 +626,44 @@ describe("extractElectricalNetlist", () => {
     expect(r1?.pins[1]).toBe("0");
   });
 
+  test("power_port explicito emite fuente de tension vsource visible y auditable en el netlist", () => {
+    const components: ComponentInstance[] = [
+      { id: "VPORT1", type: "power_port", value: 3.3, label: "+3.3V", x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 470, x: 50, y: 50, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 100, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "VPORT1", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "VPORT1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    // Debe existir la fuente explícita VPORT1 de tipo vsource con valor 3.3V
+    const explicitPort = res.netlist.components.find(c => c.id === "VPORT1" && c.type === "vsource");
+    expect(explicitPort).toBeDefined();
+    expect(explicitPort?.value).toBe(3.3);
+    expect(explicitPort?.pins[1]).toBe("0");
+
+    const r1 = res.netlist.components.find(c => c.id === "R1");
+    expect(r1).toBeDefined();
+    expect(r1?.pins[0]).toBe(explicitPort?.pins[0]);
+    expect(r1?.pins[1]).toBe("0");
+  });
+
   test("terminal de generador CLK inyecta fuente de onda cuadrada", () => {
     const components: ComponentInstance[] = [
       {

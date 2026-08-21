@@ -729,6 +729,21 @@
                 <span class="category-arrow">▲</span>
               </div>
               <div class="category-content" id="cat-anotaciones">
+                <!-- Terminal de Alimentación Explícito (Power Port) -->
+                <div class="component-card" draggable="true" id="comp-power-port" data-type="power_port" data-default="5" data-tooltip="Terminal de alimentación explícito. Genera una fuente de tensión visible en el netlist (auditable). Preferir sobre net_label 'power'.">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="20" cy="18" r="10" stroke="currentColor" fill="none"/>
+                      <text x="20" y="21" text-anchor="middle" font-size="8" font-family="monospace" fill="#F59E0B">5V</text>
+                      <path d="M 20 8 L 20 2 M 16 6 L 20 2 L 24 6" stroke="currentColor" fill="none"/>
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Terminal de Alimentación</span>
+                    <span class="comp-desc">Fuente visible en netlist (auditable)</span>
+                  </div>
+                </div>
+
                 <!-- Terminal de Alimentación (+5V VCC) -->
                 <div class="component-card" draggable="true" id="comp-power_5v" data-type="net_label" data-default="+5V" data-tooltip="Terminal +5V: Inyecta una fuente de tensión virtual constante de +5V referenciada a GND (0V) en todos los nodos con esta etiqueta sin trazar cables.">
                   <div class="comp-icon-box">

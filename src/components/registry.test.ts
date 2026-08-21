@@ -8,10 +8,10 @@ import { ALL_COMPONENT_DEFINITIONS } from "./descriptors/index";
 import type { ComponentDefinition } from "./types";
 
 describe("ComponentRegistry & ComponentDescriptor System", () => {
-  it("contiene registrados todos los 44 componentes del catálogo estándar", () => {
+  it("contiene registrados todos los 45 componentes del catálogo estándar", () => {
     const all = globalComponentRegistry.getAll();
-    expect(all.length).toBe(44);
-    expect(ALL_COMPONENT_DEFINITIONS.length).toBe(44);
+    expect(all.length).toBe(45);
+    expect(ALL_COMPONENT_DEFINITIONS.length).toBe(45);
 
     const expectedTypes: ComponentInstance["type"][] = [
       "resistor",
@@ -56,6 +56,7 @@ describe("ComponentRegistry & ComponentDescriptor System", () => {
       "esp32",
       "raspberry_pi_pico",
       "net_label",
+      "power_port",
       "text_note",
       "x",
     ];

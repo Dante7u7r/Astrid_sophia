@@ -65,6 +65,7 @@ import {
 
 import {
   NetLabelDefinition,
+  PowerPortDefinition,
   TextNoteDefinition,
 } from "./annotations";
 
@@ -128,6 +129,7 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
 
   // Anotaciones y Documentación
   NetLabelDefinition,
+  PowerPortDefinition,
   TextNoteDefinition,
 
   // Macromodelos

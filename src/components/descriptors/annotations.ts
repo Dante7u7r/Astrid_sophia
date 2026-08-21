@@ -43,3 +43,60 @@ export const TextNoteDefinition: ComponentDefinition = {
     drawTextNote(ctx, comp, isSelected, isHovered);
   },
 };
+
+export const PowerPortDefinition: ComponentDefinition = {
+  type: "power_port",
+  name: "Terminal de Alimentación (Power Port)",
+  description: "Terminal de alimentación explícito. Emite una fuente de tensión (vsource) visible y auditable en el netlist SPICE.",
+  category: "anotaciones",
+  prefix: "VPORT",
+  defaultProperties: {
+    value: 5,
+    label: "+5V",
+    voltage: 5,
+  },
+  halfExtents: { halfW: 24, halfH: 24 },
+  hasStandardLeads: false,
+  hasValueLabel: true,
+  optionalFloatingPins: [1],
+  getPins: () => [
+    { index: 0, x: 0, y: -20, label: "+", name: "POS" },
+    { index: 1, x: 0, y: 20, label: "−", name: "NEG" },
+  ],
+  render: (ctx, comp, state) => {
+    const voltage = typeof comp.value === "number" ? comp.value : (typeof comp.voltage === "number" ? comp.voltage : 5);
+    ctx.strokeStyle = state.color;
+    ctx.lineWidth = state.lineWidth;
+
+    // Círculo central
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Texto de tensión
+    ctx.fillStyle = state.color;
+    ctx.font = "bold 10px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${voltage}V`, 0, 1);
+
+    // Terminal superior (+) y flecha
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.lineTo(0, -20);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-4, -16);
+    ctx.lineTo(0, -20);
+    ctx.lineTo(4, -16);
+    ctx.stroke();
+
+    // Terminal inferior (-) hacia tierra / referencia
+    ctx.beginPath();
+    ctx.moveTo(0, 12);
+    ctx.lineTo(0, 20);
+    ctx.stroke();
+  },
+};
+

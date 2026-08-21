@@ -92,6 +92,11 @@ export function createComponent(
     } else {
       newComp.terminalType = "signal";
     }
+  } else if (type === "power_port") {
+    const numVal = typeof value === "number" ? value : (parseFloat(String(value)) || 5.0);
+    newComp.value = numVal;
+    newComp.voltage = numVal;
+    newComp.label = `${numVal >= 0 ? "+" : ""}${numVal}V`;
   }
 
   return newComp;

@@ -175,6 +175,7 @@ export function hasIdealVoltageSourceCycle(netlist: CircuitNetlist): boolean {
 
 import type { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
 import { allowsFloatingPins } from "./component_pin_rules";
+import { globalComponentRegistry } from "../components/registry";
 
 export interface ErcIssue {
   componentId: string;
@@ -202,6 +203,7 @@ export function evaluateRealtimeErcIssues(
       if (
         comp.type === "vsource" ||
         comp.type === "isource" ||
+        comp.type === "power_port" ||
         (comp.type === "net_label" && (comp.terminalType === "power" || comp.terminalType === "generator"))
       ) {
         issues.push({
@@ -224,8 +226,10 @@ export function evaluateRealtimeErcIssues(
   // 3. Verificación de pines flotantes en componentes que requieren conexión
   for (const comp of components) {
     if (allowsFloatingPins(comp.type) || comp.type === "ground") continue;
+    const def = globalComponentRegistry.get(comp.type);
     const pins = getPins(comp);
     for (const pin of pins) {
+      if (def?.optionalFloatingPins?.includes(pin.pinIndex)) continue;
       const key = `${comp.id}:${pin.pinIndex}`;
       if (!connectedPinKeys.has(key)) {
         issues.push({
