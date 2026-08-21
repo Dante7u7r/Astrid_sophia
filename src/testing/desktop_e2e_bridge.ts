@@ -19,11 +19,17 @@ interface DesktopE2eSnapshot {
   readonly transientSampleCount: number;
   readonly pvtMode: boolean;
   readonly pvtTraceCount: number;
+  readonly zoom: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly selectedComponentId: string | null;
   readonly components: Array<{
     readonly id: string;
     readonly type: string;
     readonly clientX: number;
     readonly clientY: number;
+    readonly worldX: number;
+    readonly worldY: number;
     readonly pins: Array<{ readonly clientX: number; readonly clientY: number }>;
   }>;
 }
@@ -54,7 +60,10 @@ interface DesktopE2eBridgeDependencies {
 }
 
 export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependencies): void {
-  if (import.meta.env.MODE !== "wdio") return;
+  const isAuditOrE2e = import.meta.env.MODE === "wdio"
+    || import.meta.env.MODE === "audit"
+    || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("audit"));
+  if (!isAuditOrE2e) return;
 
   // The Tauri service compares the native title with document.title exactly.
   document.title = "Astryd Sophia";
@@ -74,6 +83,10 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
           transientSampleCount: oscilloscope?.transientResults.length ?? 0,
           pvtMode: oscilloscope?.pvtMode ?? false,
           pvtTraceCount: oscilloscope?.pvtTraces.length ?? 0,
+          zoom: 1.0,
+          offsetX: 0,
+          offsetY: 0,
+          selectedComponentId: null,
           components: [],
         };
       }
@@ -88,6 +101,10 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
         transientSampleCount: oscilloscope?.transientResults.length ?? 0,
         pvtMode: oscilloscope?.pvtMode ?? false,
         pvtTraceCount: oscilloscope?.pvtTraces.length ?? 0,
+        zoom: orchestrator.zoom,
+        offsetX: orchestrator.offsetX,
+        offsetY: orchestrator.offsetY,
+        selectedComponentId: orchestrator.selectedComponent?.id ?? null,
         components: orchestrator.components.map((component) => {
           const center = orchestrator.worldToScreen(component.x, component.y);
           return {
@@ -95,6 +112,8 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
             type: component.type,
             clientX: rect.left + center.x,
             clientY: rect.top + center.y,
+            worldX: component.x,
+            worldY: component.y,
             pins: orchestrator.getComponentPins(component).map((pin) => {
               const point = orchestrator.worldToScreen(pin.x, pin.y);
               return { clientX: rect.left + point.x, clientY: rect.top + point.y };
