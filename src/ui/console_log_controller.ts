@@ -1,9 +1,16 @@
 export type ConsoleLogType = "system" | "send" | "receive" | "error";
 
+export interface ConsoleLogEntry {
+  time: string;
+  text: string;
+  type: ConsoleLogType;
+}
+
 export interface ConsoleLogController {
   init(): void;
   addLog(text: string, type?: ConsoleLogType): void;
   bindClearButton(): void;
+  getLogs(): ConsoleLogEntry[];
 }
 
 export interface ConsoleLogControllerDeps {
@@ -19,6 +26,8 @@ function formatTimestamp(now: Date): string {
 export function createConsoleLogController(deps: ConsoleLogControllerDeps): ConsoleLogController {
   let consoleOutput: HTMLElement | null = null;
   let clearConsoleBtn: HTMLButtonElement | null = null;
+  const recentLogs: ConsoleLogEntry[] = [];
+  const MAX_LOGS = 50;
 
   return {
     init: () => {
@@ -27,20 +36,28 @@ export function createConsoleLogController(deps: ConsoleLogControllerDeps): Cons
     },
     addLog: (text, type = "system") => {
       deps.recordQaLog(text, type);
+      const timeStr = formatTimestamp(deps.now());
+      recentLogs.push({ time: timeStr, text, type });
+      if (recentLogs.length > MAX_LOGS) {
+        recentLogs.shift();
+      }
+
       if (!consoleOutput) return;
 
       const line = document.createElement("div");
       line.className = `log-line ${type}`;
-      line.textContent = `[${formatTimestamp(deps.now())}] ${text}`;
+      line.textContent = `[${timeStr}] ${text}`;
       consoleOutput.appendChild(line);
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     },
     bindClearButton: () => {
       clearConsoleBtn?.addEventListener("click", () => {
+        recentLogs.length = 0;
         if (consoleOutput) {
           consoleOutput.innerHTML = `<div class="log-line system-msg">> Limpieza de registros. Consola limpia.</div>`;
         }
       });
     },
+    getLogs: () => [...recentLogs],
   };
 }

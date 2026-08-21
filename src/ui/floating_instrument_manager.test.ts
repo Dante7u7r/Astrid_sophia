@@ -57,4 +57,22 @@ describe("FloatingInstrumentManager", () => {
     manager.togglePin("oscilloscope");
     expect(winEl.classList.contains("pinned-to-canvas")).toBe(false);
   });
+
+  it("configura atributos ARIA y responde a la tecla Escape para cerrar", () => {
+    setupDom();
+    const manager = new FloatingInstrumentManager();
+    const winEl = manager.popOut("oscilloscope")!;
+
+    expect(winEl.getAttribute("role")).toBe("dialog");
+    expect(winEl.getAttribute("aria-label")).toBe("Osciloscopio Digital");
+    expect(winEl.getAttribute("aria-modal")).toBe("false");
+
+    const closeBtn = winEl.querySelector('button[aria-label="Cerrar ventana flotante"]');
+    expect(closeBtn).not.toBeNull();
+
+    // Presionar Escape en la ventana flotante
+    winEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(manager.isPoppedOut("oscilloscope")).toBe(false);
+    expect(document.querySelector("#floating-win-oscilloscope")).toBeNull();
+  });
 });

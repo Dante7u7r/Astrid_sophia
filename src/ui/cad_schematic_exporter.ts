@@ -198,10 +198,23 @@ export function buildCadSchematicSvg(
     svg += `  <g id="layer-annotations">\n`;
     for (const comp of components) {
       if (comp.type === "net_label") {
-        const netName = String(comp.value || comp.label || "NET");
+        const tType = comp.terminalType || (["GND", "0", "0V", "TIERRA", "GROUND"].includes(String(comp.label || comp.value || "").toUpperCase()) ? "ground" : (comp.voltage !== undefined || /^[+-]?\d+(\.\d+)?V?$/i.test(String(comp.label || comp.value || "")) ? "power" : "signal"));
+        const netName = String(comp.label || comp.value || "NET");
         svg += `    <g transform="translate(${comp.x}, ${comp.y})">\n`;
-        svg += `      <rect x="-35" y="-12" width="70" height="24" rx="4" fill="${palette.netLabelBg}" stroke="${palette.netLabelBorder}" stroke-width="1.2" />\n`;
-        svg += `      <text x="0" y="3.5" text-anchor="middle" font-weight="bold" font-size="10" fill="${palette.netLabelText}">${netName}</text>\n`;
+        if (tType === "power") {
+          svg += `      <line x1="0" y1="0" x2="0" y2="-14" stroke="#F59E0B" stroke-width="1.8" />\n`;
+          svg += `      <polygon points="-6,-14 0,-22 6,-14" fill="#F59E0B" stroke="#F59E0B" stroke-width="1.2" />\n`;
+          svg += `      <text x="0" y="-25" text-anchor="middle" font-weight="bold" font-size="10" fill="#F59E0B">${netName}</text>\n`;
+        } else if (tType === "ground") {
+          svg += `      <line x1="0" y1="0" x2="0" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
+          svg += `      <line x1="-11" y1="10" x2="11" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
+          svg += `      <line x1="-7" y1="14" x2="7" y2="14" stroke="#10B981" stroke-width="1.8" />\n`;
+          svg += `      <line x1="-3" y1="18" x2="3" y2="18" stroke="#10B981" stroke-width="1.8" />\n`;
+          svg += `      <text x="0" y="28" text-anchor="middle" font-weight="bold" font-size="9" fill="#10B981">${netName}</text>\n`;
+        } else {
+          svg += `      <polygon points="0,0 8,-10 40,-10 40,10 8,10" fill="${palette.netLabelBg}" stroke="${palette.netLabelBorder}" stroke-width="1.2" />\n`;
+          svg += `      <text x="24" y="3.5" text-anchor="middle" font-weight="bold" font-size="10" fill="${palette.netLabelText}">${netName}</text>\n`;
+        }
         svg += `    </g>\n`;
       } else if (comp.type === "text_note") {
         const noteText = String(comp.value || comp.label || "Nota");
@@ -315,6 +328,7 @@ function renderComponentSvgSymbol(comp: ComponentInstance, palette: ColorPalette
       break;
 
     case "opamp":
+    case "opamp_ideal":
       s += `      <polygon points="-24,-24 -24,24 24,0" fill="${palette.componentBody}" stroke="${palette.componentStroke}" stroke-width="1.8" />\n`;
       s += `      <line x1="-34" y1="-12" x2="-24" y2="-12" stroke="${palette.componentStroke}" stroke-width="1.8" />\n`;
       s += `      <line x1="-34" y1="12" x2="-24" y2="12" stroke="${palette.componentStroke}" stroke-width="1.8" />\n`;

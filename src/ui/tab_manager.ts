@@ -8,6 +8,10 @@ import type { McuDebugPanel } from "./mcu_debug_panel";
 import { TabsView } from "./tabs_view";
 import { WorkspaceStore } from "./workspace_store";
 import {
+  saveWorkspaceSession,
+  restoreWorkspaceSession,
+} from "./workspace_session_persister";
+import {
   captureRuntimeIntoTab,
   restoreTabIntoRuntime,
   type InitialTabData,
@@ -21,6 +25,7 @@ export class TabManager {
   private readonly store = new WorkspaceStore();
   private readonly tabsView = new TabsView();
   private readonly fileActions: TabFileActions;
+  private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private callbacks: {
@@ -140,6 +145,7 @@ export class TabManager {
     tab.filePath = metadata.filePath;
     tab.unsaved = metadata.unsaved ?? false;
     this.renderTabsBar();
+    this.scheduleAutoSave(100);
     return tab;
   }
 
@@ -215,6 +221,7 @@ export class TabManager {
 
     this.renderTabsBar();
     this.callbacks.onActiveTabChanged(tabId);
+    this.scheduleAutoSave(100);
     return true;
   }
 
@@ -257,6 +264,7 @@ export class TabManager {
       }
     } else {
       this.renderTabsBar();
+      this.scheduleAutoSave(100);
     }
   }
 
@@ -278,9 +286,46 @@ export class TabManager {
     });
   }
 
+  public scheduleAutoSave(delayMs = 300): void {
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+    }
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSaveTimer = null;
+      this.flushAutoSaveNow();
+    }, delayMs);
+  }
+
+  public flushAutoSaveNow(): void {
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
+
+    const orchestrator = this.callbacks.getOrchestrator();
+    const activeTabId = this.store.getActiveTabId();
+
+    if (activeTabId && orchestrator) {
+      const currentTab = this.store.findTab(activeTabId);
+      if (currentTab) {
+        captureRuntimeIntoTab(currentTab, {
+          orchestrator,
+          oscilloscopePanel: this.callbacks.getOscilloscopePanel(),
+          activeAnalysisMode: this.callbacks.getActiveAnalysisMode(),
+          probes: this.callbacks.getProbes(),
+          sparPorts: this.callbacks.getSparPorts(),
+          voltageSnapshot: this.callbacks.getVoltageSnapshot(),
+        });
+      }
+    }
+
+    saveWorkspaceSession(this.store.getTabs(), activeTabId);
+  }
+
   public markCurrentTabAsModified() {
     if (this.store.markActiveTabAsModified()) {
       this.renderTabsBar();
+      this.scheduleAutoSave();
     }
   }
 
@@ -289,6 +334,7 @@ export class TabManager {
     if (!currentTab) return;
 
     await this.fileActions.saveDirect(currentTab, () => this.saveCircuitAs());
+    this.scheduleAutoSave(100);
   }
 
   public async saveCircuitAs() {
@@ -296,6 +342,7 @@ export class TabManager {
     if (!currentTab) return;
 
     await this.fileActions.saveAs(currentTab);
+    this.scheduleAutoSave(100);
   }
 
   public init(onAddTabShortcut: () => void) {
@@ -306,7 +353,49 @@ export class TabManager {
       });
     }
 
-    this.createNewTab("Circuito 1", undefined, this.callbacks.getActiveAnalysisMode());
+    const savedSession = restoreWorkspaceSession(this.callbacks.getActiveAnalysisMode());
+    const hasRestorableContent = savedSession
+      && savedSession.tabs.length > 0
+      && savedSession.tabs.some(t => t.components.length > 0 || t.wires.length > 0 || t.filePath !== null || t.unsaved);
+
+    if (hasRestorableContent && savedSession) {
+      this.store.loadTabs(savedSession.tabs, savedSession.activeTabId);
+      const activeId = this.store.getActiveTabId();
+      const orchestrator = this.callbacks.getOrchestrator();
+      if (activeId && orchestrator) {
+        const targetTab = this.store.findTab(activeId);
+        if (targetTab) {
+          restoreTabIntoRuntime(targetTab, {
+            orchestrator,
+            oscilloscopePanel: this.callbacks.getOscilloscopePanel(),
+            simulationControls: this.callbacks.getSimulationControls(),
+            setActiveAnalysisMode: this.callbacks.setActiveAnalysisMode,
+            setProbes: this.callbacks.setProbes,
+            setSparPorts: this.callbacks.setSparPorts,
+            setVoltageSnapshot: this.callbacks.setVoltageSnapshot,
+            resetRuntimeState: this.callbacks.resetRuntimeState,
+          });
+        }
+      }
+      this.renderTabsBar();
+      this.callbacks.extractNetlist();
+      this.callbacks.updateCanvasRendering();
+      this.callbacks.addLog("Sesión de trabajo previa restaurada automáticamente.", "system");
+    } else {
+      this.createNewTab("Circuito 1", undefined, this.callbacks.getActiveAnalysisMode());
+    }
+
     onAddTabShortcut();
+
+    // Guardado preventivo en eventos de ciclo de vida del navegador / WebView
+    if (typeof window !== "undefined") {
+      window.addEventListener("beforeunload", () => this.flushAutoSaveNow());
+      window.addEventListener("pagehide", () => this.flushAutoSaveNow());
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+          this.flushAutoSaveNow();
+        }
+      });
+    }
   }
 }

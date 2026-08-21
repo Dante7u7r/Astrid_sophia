@@ -100,6 +100,10 @@ export class FloatingInstrumentManager {
     win.className = "floating-instrument-window active-focus";
     win.id = `floating-win-${tabId}`;
     win.style.zIndex = String(++this.zIndexCounter);
+    win.setAttribute("role", "dialog");
+    win.setAttribute("aria-label", info.title);
+    win.setAttribute("aria-modal", "false");
+    win.tabIndex = -1;
 
     const windowRecord: FloatingWindowInfo = {
       tabId,
@@ -127,6 +131,7 @@ export class FloatingInstrumentManager {
     const pinBtn = document.createElement("button");
     pinBtn.className = "floating-window-btn pin-btn";
     pinBtn.type = "button";
+    pinBtn.setAttribute("aria-label", windowRecord.isPinned ? "Desfijar de lienzo" : "Fijar al lienzo");
     this.updatePinButton(pinBtn, windowRecord.isPinned);
     pinBtn.addEventListener("click", () => this.togglePin(tabId));
 
@@ -135,6 +140,7 @@ export class FloatingInstrumentManager {
     maxBtn.className = "floating-window-btn max-btn";
     maxBtn.type = "button";
     maxBtn.title = "Maximizar / Restaurar ventana";
+    maxBtn.setAttribute("aria-label", "Maximizar o restaurar ventana");
     maxBtn.innerHTML = "⛶";
     let isMaximized = false;
     let savedPlacement: { top: string; left: string; width: string; height: string } | null = null;
@@ -178,6 +184,7 @@ export class FloatingInstrumentManager {
     popinBtn.className = "floating-window-btn";
     popinBtn.type = "button";
     popinBtn.title = "Reacoplar al centro de instrumentos";
+    popinBtn.setAttribute("aria-label", "Reacoplar instrumento al centro");
     popinBtn.innerHTML = "📥 Reacoplar";
     popinBtn.addEventListener("click", () => this.popIn(tabId));
 
@@ -185,6 +192,7 @@ export class FloatingInstrumentManager {
     closeBtn.className = "floating-window-btn";
     closeBtn.type = "button";
     closeBtn.title = "Cerrar ventana flotante";
+    closeBtn.setAttribute("aria-label", "Cerrar ventana flotante");
     closeBtn.innerHTML = "✕";
     closeBtn.addEventListener("click", () => this.popIn(tabId));
 
@@ -206,6 +214,14 @@ export class FloatingInstrumentManager {
 
     win.appendChild(header);
     win.appendChild(bodyEl);
+
+    // Atajo de teclado Escape para cerrar/reacoplar ventana activa
+    win.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        this.popIn(tabId);
+      }
+    });
 
     // Activar arrastre y elevación al enfocar
     this.makeDraggable(win, header, windowRecord);
@@ -270,6 +286,7 @@ export class FloatingInstrumentManager {
     btn.title = isPinned
       ? "📌 Fijada en el lienzo (Clic para desfijar y mover libremente)"
       : "🔓 Flotante libre (Clic para fijar en lienzo)";
+    btn.setAttribute("aria-label", isPinned ? "Desfijar de lienzo" : "Fijar al lienzo");
     btn.classList.toggle("is-pinned", isPinned);
   }
 

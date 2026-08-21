@@ -31,6 +31,7 @@ import {
 import {
   IsourceDefinition,
   OpampDefinition,
+  OpampIdealDefinition,
   VsourceDefinition,
 } from "./analog";
 
@@ -92,6 +93,7 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
 
   // Analógicos
   OpampDefinition,
+  OpampIdealDefinition,
   VsourceDefinition,
   IsourceDefinition,
 

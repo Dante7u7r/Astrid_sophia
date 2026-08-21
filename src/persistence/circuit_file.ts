@@ -76,7 +76,7 @@ export type CircuitFileParseResult =
 
 const COMPONENT_TYPES = new Set<ComponentInstance["type"]>([
   "resistor", "capacitor", "inductor", "diode", "vsource", "ground",
-  "nmos", "opamp", "pmos", "npn", "pnp", "lamp", "relay", "buzzer",
+  "nmos", "opamp", "opamp_ideal", "pmos", "npn", "pnp", "lamp", "relay", "buzzer",
   "mcu_8051", "mcu_avr", "arduino_uno", "esp32", "raspberry_pi_pico",
   "isource", "led", "transformer", "switch", "x", "potentiometer",
   "ldr", "thermistor", "dmm",
@@ -105,6 +105,7 @@ const NUMERIC_COMPONENT_FIELDS = [
   "switchVth",
   "switchVh",
   "pinCount",
+  "voltage",
 ] as const;
 
 const BOOLEAN_COMPONENT_FIELDS = [
@@ -118,6 +119,15 @@ const STRING_COMPONENT_FIELDS = [
   "firmwareHex",
   "spiceMacro",
 ] as const;
+
+const VALID_TERMINAL_TYPES = new Set<string>([
+  "signal",
+  "power",
+  "ground",
+  "input",
+  "output",
+  "generator",
+]);
 
 type NumericComponentField = (typeof NUMERIC_COMPONENT_FIELDS)[number];
 type BooleanComponentField = (typeof BOOLEAN_COMPONENT_FIELDS)[number];
@@ -218,6 +228,13 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
       }
       writable[field] = value[field];
     }
+  }
+
+  if (value.terminalType !== undefined) {
+    if (typeof value.terminalType !== "string" || !VALID_TERMINAL_TYPES.has(value.terminalType)) {
+      throw new CircuitFileValidationError(`${path}.terminalType no es valido.`);
+    }
+    component.terminalType = value.terminalType as any;
   }
 
   if (value.firmwareBytes !== undefined) {

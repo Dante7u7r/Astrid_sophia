@@ -62,4 +62,15 @@ export class WorkspaceStore {
     currentTab.unsaved = true;
     return true;
   }
+
+  public loadTabs(tabs: Tab[], activeTabId?: string | null): void {
+    this.workspaceTabs.length = 0;
+    this.workspaceTabs.push(...tabs);
+    this.currentTabId = activeTabId ?? (tabs[0]?.id ?? null);
+  }
+
+  public clearTabs(): void {
+    this.workspaceTabs.length = 0;
+    this.currentTabId = null;
+  }
 }

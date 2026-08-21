@@ -386,16 +386,23 @@ function populateCanvasMenu(
 
   // Circuitos Integrados y MCUs
   const { wrapper: icWrapper, submenu: icSubmenu } = createSubmenu("Circuitos Integrados", "🎛️");
+  icSubmenu.appendChild(createMenuItem("Op-Amp Ideal (3 pines)", "", () => addComp("opamp_ideal", 0)));
   icSubmenu.appendChild(createMenuItem("Amplificador Op-Amp (LM741)", "", () => addComp("opamp", "LM741")));
   icSubmenu.appendChild(createMenuItem("Temporizador NE555", "", () => addComp("x", "NE555")));
   icSubmenu.appendChild(createMenuItem("Microcontrolador 8051", "", () => addComp("mcu_8051", 0)));
   icSubmenu.appendChild(createMenuItem("Microcontrolador AVR (ATmega328P)", "", () => addComp("mcu_avr", 0)));
   addSubmenu.appendChild(icWrapper);
 
-  // Anotaciones
-  const { wrapper: noteWrapper, submenu: noteSubmenu } = createSubmenu("Anotaciones y Texto", "📝");
-  noteSubmenu.appendChild(createMenuItem("Etiqueta de Red (Net Label)", "", () => addComp("net_label", "NET_A")));
-  noteSubmenu.appendChild(createMenuItem("Nota de Texto Técnica", "", () => addComp("text_note", "Nota técnica")));
+  // Puertos y Terminales EDA (Proteus)
+  const { wrapper: noteWrapper, submenu: noteSubmenu } = createSubmenu("Puertos y Terminales (EDA)", "🏷️");
+  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (+5V VCC)", "", () => addComp("net_label", "+5V")));
+  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (+3.3V VDD)", "", () => addComp("net_label", "+3.3V")));
+  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (+12V)", "", () => addComp("net_label", "+12V")));
+  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (-12V)", "", () => addComp("net_label", "-12V")));
+  noteSubmenu.appendChild(createMenuItem("Terminal de Tierra (GND / 0V)", "", () => addComp("net_label", "GND")));
+  noteSubmenu.appendChild(createMenuItem("Terminal de Reloj / Pulso (CLK)", "", () => addComp("net_label", "CLK")));
+  noteSubmenu.appendChild(createMenuItem("Puerto de Red (Net Label)", "", () => addComp("net_label", "NET_A")));
+  noteSubmenu.appendChild(createMenuItem("Nota de Documentación Técnica", "", () => addComp("text_note", "Nota técnica")));
   addSubmenu.appendChild(noteWrapper);
 
   menu.appendChild(addWrapper);

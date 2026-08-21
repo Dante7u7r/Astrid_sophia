@@ -67,12 +67,17 @@ export function attachCanvasInput(
     if (e.button === 0) {
       const probeMode = callbacks.getProbePlacementMode();
       if (probeMode) {
+        let targetNode: string | undefined;
         if (orchestrator.hoveredPin) {
           const pinKey = `${orchestrator.hoveredPin.componentId}:${orchestrator.hoveredPin.pinIndex}`;
-          const nodeId = callbacks.getPinNode(pinKey);
-          if (nodeId !== undefined) {
-            callbacks.onProbePlaced(probeMode, nodeId);
-          }
+          targetNode = callbacks.getPinNode(pinKey);
+        } else if (orchestrator.hoveredWire) {
+          const pinKey = `${orchestrator.hoveredWire.from.componentId}:${orchestrator.hoveredWire.from.pinIndex}`;
+          targetNode = callbacks.getPinNode(pinKey);
+        }
+
+        if (targetNode !== undefined) {
+          callbacks.onProbePlaced(probeMode, targetNode);
         }
         callbacks.clearProbePlacementMode();
         callbacks.requestRender(true);

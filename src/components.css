@@ -344,6 +344,7 @@
 .component-card[data-type="nmos"]:hover,
 .component-card[data-type="pmos"]:hover,
 .component-card[data-type="opamp"]:hover,
+.component-card[data-type="opamp_ideal"]:hover,
 .component-card[data-type="vsource"]:hover,
 .component-card[data-type="isource"]:hover {
   border-color: rgba(91, 243, 228, 0.35);
@@ -356,6 +357,7 @@
 .component-card[data-type="nmos"]:hover .comp-icon-box,
 .component-card[data-type="pmos"]:hover .comp-icon-box,
 .component-card[data-type="opamp"]:hover .comp-icon-box,
+.component-card[data-type="opamp_ideal"]:hover .comp-icon-box,
 .component-card[data-type="vsource"]:hover .comp-icon-box,
 .component-card[data-type="isource"]:hover .comp-icon-box {
   background: rgba(91, 243, 228, 0.1);
@@ -410,6 +412,20 @@
   border-color: rgba(245, 158, 11, 0.35);
   color: var(--amber);
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+}
+
+.component-card[data-type="net_label"]:hover,
+.component-card[data-type="text_note"]:hover {
+  border-color: rgba(56, 189, 248, 0.40);
+  background: rgba(14, 116, 144, 0.20);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 16px rgba(56, 189, 248, 0.15);
+}
+.component-card[data-type="net_label"]:hover .comp-icon-box,
+.component-card[data-type="text_note"]:hover .comp-icon-box {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38BDF8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
 }
 
 .component-card:active {

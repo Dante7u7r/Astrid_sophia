@@ -5,6 +5,7 @@ export const DEDICATED_VALUE_EDITORS = new Set<ComponentInstance["type"]>([
   "ldr",
   "thermistor",
   "opamp",
+  "opamp_ideal",
   "switch",
   "transformer",
   "x",
@@ -160,6 +161,8 @@ export function supportsLiveMutation(type: ComponentInstance["type"]): boolean {
     "isource",
     "switch",
     "opamp",
+    "opamp_ideal",
+    "net_label",
     "and_gate",
     "or_gate",
     "not_gate",
@@ -206,20 +209,34 @@ export function buildLiveMutations(
 ): LiveMutation[] {
   const mutations: LiveMutation[] = [];
 
-  if (component.type !== "switch" && component.type !== "opamp") {
+  if (component.type !== "switch" && component.type !== "opamp" && component.type !== "opamp_ideal" && component.type !== "net_label") {
     mutations.push({ componentId: component.id, field: "value", value: nominalValue });
   }
+  if (component.type === "net_label") {
+    const netName = String(component.label || component.value || component.id).trim().toUpperCase();
+    if (component.terminalType === "power" || component.voltage !== undefined) {
+      const sourceId = `V_PWR_${netName.replace(/[^A-Z0-9_]/gi, "_")}`;
+      mutations.push({ componentId: sourceId, field: "value", value: component.voltage ?? nominalValue });
+    } else if (component.terminalType === "generator") {
+      const sourceId = `V_SIG_${component.id}`;
+      mutations.push({ componentId: sourceId, field: "value", value: component.amplitude ?? nominalValue });
+    }
+  }
   if (component.amplitude !== undefined) {
-    mutations.push({ componentId: component.id, field: "amplitude", value: component.amplitude });
+    const sourceId = component.type === "net_label" ? `V_SIG_${component.id}` : component.id;
+    mutations.push({ componentId: sourceId, field: "amplitude", value: component.amplitude });
   }
   if (component.frequency !== undefined) {
-    mutations.push({ componentId: component.id, field: "frequency", value: component.frequency });
+    const sourceId = component.type === "net_label" ? `V_SIG_${component.id}` : component.id;
+    mutations.push({ componentId: sourceId, field: "frequency", value: component.frequency });
   }
   if (component.offset !== undefined) {
-    mutations.push({ componentId: component.id, field: "offset", value: component.offset });
+    const sourceId = component.type === "net_label" ? `V_SIG_${component.id}` : component.id;
+    mutations.push({ componentId: sourceId, field: "offset", value: component.offset });
   }
   if (component.dutyCycle !== undefined) {
-    mutations.push({ componentId: component.id, field: "duty_cycle", value: component.dutyCycle });
+    const sourceId = component.type === "net_label" ? `V_SIG_${component.id}` : component.id;
+    mutations.push({ componentId: sourceId, field: "duty_cycle", value: component.dutyCycle });
   }
   if (component.switchRon !== undefined) {
     mutations.push({ componentId: component.id, field: "switch_ron", value: component.switchRon });
@@ -240,7 +257,7 @@ export function buildLiveMutations(
       value: component.switchState ? 1 : 0,
     });
   }
-  if (component.type === "opamp") {
+  if (component.type === "opamp" || component.type === "opamp_ideal") {
     mutations.push({ componentId: `${component.id}__vos`, field: "value", value: component.offsetVoltage ?? 0.002 });
     mutations.push({ componentId: component.id, field: "value", value: component.openLoopGain ?? 100000.0 });
   }

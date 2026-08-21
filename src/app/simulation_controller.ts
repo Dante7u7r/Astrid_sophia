@@ -88,7 +88,9 @@ export class SimulationController {
   async runSimulation(mode: AnalysisMode): Promise<void> {
     const orchestrator = this.dependencies.getOrchestrator();
     const simulationSettings = this.dependencies.getSimulationSettings();
-    const transientDuration = simulationSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS;
+    const oscPanel = this.dependencies.getOscilloscopePanel();
+    const desiredDuration = oscPanel ? oscPanel.timeDivValue * 10 : DEFAULT_TRANSIENT_DURATION_SECONDS;
+    const transientDuration = simulationSettings.transientDuration ?? Math.max(DEFAULT_TRANSIENT_DURATION_SECONDS, desiredDuration);
     this.dependencies.addLog(
       `Iniciando simulación física de análisis [${ANALYSIS_LABELS[mode]}]...`,
       "system",

@@ -427,6 +427,24 @@
                   <span class="category-arrow">▲</span>
                 </div>
                 <div class="category-content" id="cat-analogicos">
+                  <!-- Op-Amp Ideal (3 pines) -->
+                  <div class="component-card" draggable="true" id="comp-opamp-ideal" data-type="opamp_ideal" data-default="0">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 12 10 L 12 30 L 28 20 Z" fill="currentColor" fill-opacity="0.15" />
+                        <path d="M 4 15 L 12 15" />
+                        <path d="M 4 25 L 12 25" />
+                        <path d="M 28 20 L 36 20" />
+                        <path d="M 14 15 L 18 15" stroke-width="1.5" />
+                        <path d="M 16 13 L 16 17" stroke-width="1.5" />
+                        <path d="M 14 25 L 18 25" stroke-width="1.5" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">Op-Amp Ideal</span>
+                      <span class="comp-desc">3 pines (+, -, OUT)</span>
+                    </div>
+                  </div>
                   <!-- Amplificador Operacional (Op-Amp) -->
                   <div class="component-card" draggable="true" id="comp-opamp" data-type="opamp" data-default="0">
                     <div class="comp-icon-box">
@@ -441,7 +459,7 @@
                     </div>
                     <div class="comp-details">
                       <span class="comp-name">Op-Amp</span>
-                      <span class="comp-desc">Amplificador Operacional</span>
+                      <span class="comp-desc">Amplificador Operacional (5 pines)</span>
                     </div>
                   </div>
                 </div>
@@ -697,25 +715,89 @@
               </div>
             </div>
 
-            <!-- CATEGORÍA: ANOTACIONES Y REDES EDA -->
+            <!-- CATEGORÍA: PUERTOS Y TERMINALES EDA (PROTEUS) -->
             <div class="category-group">
               <div class="category-header" data-category="anotaciones">
-                <span>Anotaciones y Redes</span>
+                <span>Puertos y Terminales EDA</span>
                 <span class="category-arrow">▲</span>
               </div>
               <div class="category-content" id="cat-anotaciones">
+                <!-- Terminal de Alimentación (+5V VCC) -->
+                <div class="component-card" draggable="true" id="comp-power_5v" data-type="net_label" data-default="+5V">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="20" y1="32" x2="20" y2="16" />
+                      <line x1="10" y1="16" x2="30" y2="16" />
+                      <polygon points="14,16 20,8 26,16" fill="#F59E0B" fill-opacity="0.35" />
+                      <circle cx="20" cy="32" r="2.5" fill="#F59E0B" />
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Terminal +5V (VCC)</span>
+                    <span class="comp-desc">Alimentación DC sin cables</span>
+                  </div>
+                </div>
+
+                <!-- Terminal de Alimentación (+3.3V VDD) -->
+                <div class="component-card" draggable="true" id="comp-power_3v3" data-type="net_label" data-default="+3.3V">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="20" y1="32" x2="20" y2="16" />
+                      <line x1="10" y1="16" x2="30" y2="16" />
+                      <polygon points="14,16 20,8 26,16" fill="#F59E0B" fill-opacity="0.35" />
+                      <circle cx="20" cy="32" r="2.5" fill="#F59E0B" />
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Terminal +3.3V (VDD)</span>
+                    <span class="comp-desc">Alimentación Lógica 3.3V</span>
+                  </div>
+                </div>
+
+                <!-- Terminal de Tierra (GND / 0V) -->
+                <div class="component-card" draggable="true" id="comp-ground_term" data-type="net_label" data-default="GND">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="20" y1="8" x2="20" y2="18" />
+                      <line x1="10" y1="18" x2="30" y2="18" />
+                      <line x1="14" y1="23" x2="26" y2="23" />
+                      <line x1="17" y1="28" x2="23" y2="28" />
+                      <circle cx="20" cy="8" r="2.5" fill="#10B981" />
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Terminal de Tierra (GND)</span>
+                    <span class="comp-desc">Referencia 0V directa</span>
+                  </div>
+                </div>
+
+                <!-- Terminal de Reloj / Pulso (CLK) -->
+                <div class="component-card" draggable="true" id="comp-clk_gen" data-type="net_label" data-default="CLK">
+                  <div class="comp-icon-box">
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#FBBF24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#FBBF24" fill-opacity="0.15" />
+                      <polyline points="15,22 15,16 19,16 19,22 23,22 23,16" stroke-width="1.8" />
+                      <circle cx="6" cy="20" r="2.5" fill="#FBBF24" />
+                    </svg>
+                  </div>
+                  <div class="comp-details">
+                    <span class="comp-name">Terminal Reloj (CLK)</span>
+                    <span class="comp-desc">Generador de Onda Cuadrada</span>
+                  </div>
+                </div>
+
                 <!-- Puerto de Red (Net Label) -->
                 <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A">
                   <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polygon points="6,20 14,10 34,10 34,30 14,30" fill="currentColor" fill-opacity="0.15" />
-                      <circle cx="6" cy="20" r="2.5" fill="currentColor" />
-                      <text x="22" y="23" text-anchor="middle" font-size="8" font-family="monospace" font-weight="bold" fill="currentColor">NET</text>
+                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#38BDF8" fill-opacity="0.15" />
+                      <circle cx="6" cy="20" r="2.5" fill="#38BDF8" />
+                      <text x="22" y="23" text-anchor="middle" font-size="8" font-family="monospace" font-weight="bold" fill="#38BDF8">NET</text>
                     </svg>
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Puerto de Red</span>
-                    <span class="comp-desc">Conexión Virtual SPICE (Net Tie)</span>
+                    <span class="comp-desc">Conexión Virtual SPICE</span>
                   </div>
                 </div>
 
@@ -1176,6 +1258,44 @@
                     <option value="warning">Aviso / Advertencia</option>
                     <option value="outline">Contorno Punteado</option>
                   </select>
+                </div>
+              </div>
+
+              <!-- Contenedor de Propiedades de Terminal / Etiqueta EDA (Proteus) -->
+              <div id="terminal-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
+                <div class="property-group">
+                  <label class="property-label" for="prop-terminal-type">Tipo de Terminal</label>
+                  <select id="prop-terminal-type" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="signal">Etiqueta de Señal / Red (Net Label)</option>
+                    <option value="power">Alimentación / Tensión DC (Power Port)</option>
+                    <option value="ground">Terminal de Tierra (GND / 0V)</option>
+                    <option value="input">Puerto de Entrada (Input)</option>
+                    <option value="output">Puerto de Salida (Output)</option>
+                    <option value="generator">Generador de Señal / Reloj (CLK)</option>
+                  </select>
+                </div>
+                
+                <!-- Opciones para Terminal de Alimentación (Power Port) -->
+                <div id="terminal-power-group" class="property-group" style="display: none;">
+                  <label class="property-label" for="prop-terminal-preset">Tensión Predefinida (Presets)</label>
+                  <select id="prop-terminal-preset" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                    <option value="custom">-- Tensión Personalizada --</option>
+                    <option value="+5V">+5 V (VCC TTL / Arduino)</option>
+                    <option value="+3.3V">+3.3 V (VDD Lógica 3.3V / ESP32)</option>
+                    <option value="+12V">+12 V (Alimentación Analógica / Motores)</option>
+                    <option value="-12V">-12 V (Riel Negativo Op-Amps)</option>
+                    <option value="+15V">+15 V (Riel Positivo Op-Amps)</option>
+                    <option value="-15V">-15 V (Riel Negativo Op-Amps)</option>
+                    <option value="+24V">+24 V (Industrial / PLC)</option>
+                    <option value="+1.8V">+1.8 V (Núcleos Digitales / FPGA)</option>
+                    <option value="+9V">+9 V (Batería 9V)</option>
+                    <option value="+3.7V">+3.7 V (Batería LiPo)</option>
+                  </select>
+                </div>
+
+                <div id="terminal-voltage-group" class="property-group" style="display: none;">
+                  <label class="property-label" for="prop-terminal-voltage">Tensión DC (Voltios)</label>
+                  <input id="prop-terminal-voltage" class="prop-input" type="number" step="0.1" value="5" placeholder="5.0" />
                 </div>
               </div>
 

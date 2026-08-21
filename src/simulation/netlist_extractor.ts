@@ -30,6 +30,10 @@ import {
   COMMERCIAL_JFETS,
   COMMERCIAL_OPAMPS,
 } from "./commercial_models_catalog";
+import {
+  getTerminalType,
+  parsePowerRailVoltage,
+} from "../canvas/component_annotation_renderer";
 
 // ==========================================================================
 // INTERFACES DE LA NETLIST ELÉCTRICA
@@ -351,14 +355,23 @@ export function extractElectricalNetlist(
       }
     }
 
-    // Unión virtual para componentes net_label (Puertos de Red Banderola EDA)
+    const GND_ALIASES = ["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"];
+
+    // Unión virtual para componentes net_label (Puertos de Red, Alimentación, Tierra y Señales EDA)
     for (const comp of components) {
       if (comp.type === 'net_label') {
-        const netName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
-        if (netName.length > 0) {
-          const compPin = pinKey(comp.id, 0);
-          const netKey = `net_virtual:${netName}`;
-          dsu!.union(compPin, netKey);
+        const tType = getTerminalType(comp);
+        const compPin = pinKey(comp.id, 0);
+
+        if (tType === "ground") {
+          dsu!.union(compPin, "net_virtual:GND");
+        } else {
+          const netName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
+          if (netName.length > 0) {
+            const prefix = tType === "power" ? "net_pwr" : "net_virtual";
+            const netKey = `${prefix}:${netName}`;
+            dsu!.union(compPin, netKey);
+          }
         }
       }
     }
@@ -371,10 +384,15 @@ export function extractElectricalNetlist(
         gndRoot = dsu!.find(gndPinKey);
         break;
       }
+      if (comp.type === 'net_label' && getTerminalType(comp) === 'ground') {
+        const gndPinKey = `${comp.id}:0`;
+        gndRoot = dsu!.find(gndPinKey);
+        break;
+      }
     }
 
     if (!gndRoot) {
-      for (const gndAlias of ["GND", "0", "TIERRA", "GROUND"]) {
+      for (const gndAlias of GND_ALIASES) {
         const gndKey = `net_virtual:${gndAlias}`;
         if (dsu!.has(gndKey)) {
           gndRoot = dsu!.find(gndKey);
@@ -582,14 +600,26 @@ export function extractElectricalNetlist(
         l2_id: `${comp.id}__L2`,
         k_coeff: k,
       });
-    } else if (comp.type === 'opamp') {
+    } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal') {
       const pinsMapped = getComponentNodes(pinsKeys);
 
-      const pin0Node = pinsMapped[0] || "0"; // In+
-      const pin1Node = pinsMapped[1] || "0"; // In-
-      const pin2Node = pinsMapped[2] || "0"; // V+
-      const pin3Node = pinsMapped[3] || "0"; // V-
-      const pin4Node = pinsMapped[4] || "0"; // Out
+      let pin0Node = "0"; // In+
+      let pin1Node = "0"; // In-
+      let pin2Node = "0"; // V+
+      let pin3Node = "0"; // V-
+      let pin4Node = "0"; // Out
+
+      if (comp.type === 'opamp_ideal') {
+        pin0Node = pinsMapped[0] || "0"; // In+
+        pin1Node = pinsMapped[1] || "0"; // In-
+        pin4Node = pinsMapped[2] || "0"; // Out
+      } else {
+        pin0Node = pinsMapped[0] || "0";
+        pin1Node = pinsMapped[1] || "0";
+        pin2Node = pinsMapped[2] || "0";
+        pin3Node = pinsMapped[3] || "0";
+        pin4Node = pinsMapped[4] || "0";
+      }
 
       const modelKey = comp.modelName;
       let opampAol = comp.opampAol ?? (comp.openLoopGain !== undefined ? Number(comp.openLoopGain) : 100000.0);
@@ -625,8 +655,49 @@ export function extractElectricalNetlist(
         opampVos,
         opampIb,
       });
+    } else if (comp.type === 'net_label') {
+      const tType = getTerminalType(comp);
+      const pinsMapped = getComponentNodes(pinsKeys);
+      const node = pinsMapped[0] || "0";
+
+      // Si es un terminal de alimentación (Power Port) y no está en nodo 0, emitir la fuente de tensión virtual
+      if (tType === "power" && node !== "0") {
+        const voltage = parsePowerRailVoltage(comp);
+        const netName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
+        const sourceId = `V_PWR_${netName.replace(/[^A-Z0-9_]/gi, "_")}`;
+        
+        // Evitar duplicar fuentes en el mismo nodo
+        if (!extractedComponents.some(c => c.id === sourceId || (c.type === "vsource" && c.pins[0] === node && c.pins[1] === "0" && c.id.startsWith("V_PWR_")))) {
+          extractedComponents.push({
+            id: sourceId,
+            type: 'vsource',
+            value: voltage,
+            pins: [node, "0"],
+            waveType: 'dc',
+          });
+        }
+      } else if (tType === "generator" && node !== "0") {
+        // Generador de señal / reloj
+        const wave = comp.waveType || "square";
+        const amp = comp.amplitude ?? (typeof comp.value === 'number' && comp.value > 0 ? comp.value : 5.0);
+        const freq = comp.frequency ?? 1000.0;
+        const offset = comp.offset ?? 0.0;
+        const duty = comp.dutyCycle ?? 0.5;
+
+        extractedComponents.push({
+          id: `V_SIG_${comp.id}`,
+          type: 'vsource',
+          value: amp,
+          pins: [node, "0"],
+          waveType: wave,
+          amplitude: amp,
+          frequency: freq,
+          offset,
+          dutyCycle: duty,
+        });
+      }
     } else {
-      if (comp.type === 'net_label' || comp.type === 'text_note') {
+      if (comp.type === 'text_note') {
         continue;
       }
 

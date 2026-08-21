@@ -36,7 +36,7 @@ export class TooltipManager {
     const text = trigger.getAttribute('data-tooltip');
     if (!text) return;
 
-    if (!this.tooltipEl) {
+    if (!this.tooltipEl || !this.tooltipEl.isConnected) {
       this.tooltipEl = document.createElement('div');
       this.tooltipEl.className = 'premium-tooltip';
       document.body.appendChild(this.tooltipEl);

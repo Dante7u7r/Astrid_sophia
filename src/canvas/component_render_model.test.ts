@@ -37,6 +37,7 @@ describe("component_render_model", () => {
   it("identifica componentes con leads estandar y labels de valor", () => {
     expect(shouldDrawStandardLeads("resistor")).toBe(true);
     expect(shouldDrawStandardLeads("opamp")).toBe(false);
+    expect(shouldDrawStandardLeads("opamp_ideal")).toBe(false);
     expect(shouldDrawValueLabel("resistor")).toBe(true);
     expect(shouldDrawValueLabel("dmm")).toBe(false);
   });

@@ -1,12 +1,12 @@
 $ErrorActionPreference = "Stop"
 
-$ngspiceVersion = "46"
-$archiveSha256 = "7ED713CD8D401DB724FFE99087C3122BF05A9CFA99DE02C6EEED44EE44785A33"
+$ngspiceVersion = "47"
+$archiveSha256 = "59225971BD68CDD1199443649AA4615A9E6D684933F205AB49006A3942518F5A"
 $validationRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $toolsRoot = Join-Path $validationRoot ".tools"
 $archivePath = Join-Path $toolsRoot "ngspice-$($ngspiceVersion)_64.7z"
 $executablePath = Join-Path $toolsRoot "Spice64\bin\ngspice_con.exe"
-$downloadUrl = "https://downloads.sourceforge.net/project/ngspice/ng-spice-rework/$ngspiceVersion/ngspice-$($ngspiceVersion)_64.7z"
+$downloadUrl = "https://sourceforge.net/projects/ngspice/files/ng-spice-rework/$ngspiceVersion/ngspice-$($ngspiceVersion)_64.7z/download"
 
 if ($env:OS -ne "Windows_NT") {
     throw "Este bootstrap es sólo para Windows. En Linux instala ngspice con el gestor de paquetes."

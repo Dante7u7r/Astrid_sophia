@@ -418,10 +418,14 @@ pub fn solve_noise_sweep(
                             }
                         }
                     }
-                    "opamp" => {
+                    "opamp" | "opamp_ideal" => {
                         let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
                         let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
-                        let pin_out = comp.pins[4].parse::<usize>().unwrap();
+                        let pin_out = if comp.pins.len() >= 5 {
+                            comp.pins[4].parse::<usize>().unwrap()
+                        } else {
+                            comp.pins[2].parse::<usize>().unwrap()
+                        };
 
                         let r_in = 1e7;
                         let r_out = 100.0;

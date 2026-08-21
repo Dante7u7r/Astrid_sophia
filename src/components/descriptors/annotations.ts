@@ -10,11 +10,11 @@ import type { ComponentDefinition } from "../types";
 
 export const NetLabelDefinition: ComponentDefinition = {
   type: "net_label",
-  name: "Etiqueta de Red (Net Label)",
+  name: "Puerto / Etiqueta de Red (Terminal)",
   category: "anotaciones",
   prefix: "NET",
-  defaultProperties: { value: "NET", label: "NET" },
-  halfExtents: { halfW: 30, halfH: 15 },
+  defaultProperties: { value: "NET", label: "NET", terminalType: "signal" },
+  halfExtents: { halfW: 35, halfH: 20 },
   hasStandardLeads: false,
   hasValueLabel: false,
   getPins: () => [{ index: 0, x: 0, y: 0, label: "NET" }],

@@ -41,7 +41,7 @@ pub(super) fn stamp_component(comp: &ComponentData, ctx: &mut StampContext<'_>) 
         "pmos" | "bsim3pmos" | "bsim4pmos" => mos::stamp_pmos(comp, ctx),
         "npn" | "pnp" => bipolar::stamp_bipolar(comp, ctx),
         "njf" | "pjf" => jfet::stamp_jfet(comp, ctx),
-        "opamp" => opamp::stamp_opamp(comp, ctx),
+        "opamp" | "opamp_ideal" => opamp::stamp_opamp(comp, ctx),
         kind if kind.ends_with("_gate") => logic::stamp_logic_gate(comp, ctx),
         "arduino_uno" | "esp32" | "raspberry_pi_pico" => mcu::stamp_mcu(comp, ctx),
         "switch" => switches::stamp_switch(comp, ctx),

@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
+import { solveTransientCircuitTS } from "./fallback_solver";
+import type { CircuitNetlist } from "./netlist_extractor";
+import type { TimeStepResult } from "../ui/oscilloscope_panel";
 
 type WebEventHandler = (event: Event<unknown>) => void;
 
@@ -69,7 +72,18 @@ function startWebTransient(args?: Record<string, unknown>): void {
   const runId = typeof args?.runId === "number" ? args.runId : cancellationId;
   webActiveExternalRunId = runId;
   const settings = args?.settings as { dt?: number; tMax?: number } | undefined;
+  const netlist = args?.netlist as CircuitNetlist | undefined;
   const tMax = Math.max(settings?.tMax ?? 0.05, settings?.dt ?? 1e-4);
+  const dt = Math.max(settings?.dt ?? 1e-4, 1e-6);
+
+  let solvedResults: TimeStepResult[] | null = null;
+  if (netlist && Array.isArray(netlist.components) && netlist.components.length > 0) {
+    const res = solveTransientCircuitTS(netlist, dt, tMax, {});
+    if (Array.isArray(res) && res.length > 0) {
+      solvedResults = res;
+    }
+  }
+
   const frameCount = 60;
 
   for (let index = 0; index < frameCount; index += 1) {
@@ -79,30 +93,53 @@ function startWebTransient(args?: Record<string, unknown>): void {
       const time = tMax * (index / (frameCount - 1));
       const isFinal = index === frameCount - 1;
 
-      // Consultar mutaciones activas en caliente
-      const vSourceVal = webActiveMutations.get("V1:value") ?? 5.0;
-      const swState = webActiveMutations.get("SW1:switch_state") ?? 1.0;
-      const v2 = swState > 0 ? vSourceVal * (1 - Math.exp(-time / 0.001)) : 0.0;
-      const iV1 = swState > 0 ? -(vSourceVal / 1000) * Math.exp(-time / 0.001) : 0.0;
+      let nodeVoltages: Record<string, number> = { "0": 0 };
+      let branchCurrents: Record<string, number> = {};
+
+      if (solvedResults && solvedResults.length > 0) {
+        const stepIdx = Math.min(
+          solvedResults.length - 1,
+          Math.floor((index / (frameCount - 1)) * (solvedResults.length - 1)),
+        );
+        const sample = solvedResults[stepIdx];
+        nodeVoltages = { ...sample.nodeVoltages };
+        branchCurrents = { ...sample.branchCurrents };
+      } else {
+        // Fallback para pruebas unitarias sin netlist
+        const vSourceVal = webActiveMutations.get("V1:value") ?? 5.0;
+        const swState = webActiveMutations.get("SW1:switch_state") ?? 1.0;
+        const v2 = swState > 0 ? vSourceVal * (1 - Math.exp(-time / 0.001)) : 0.0;
+        const iV1 = swState > 0 ? -(vSourceVal / 1000) * Math.exp(-time / 0.001) : 0.0;
+        nodeVoltages = {
+          "0": 0,
+          "1": vSourceVal,
+          "2": v2,
+        };
+        branchCurrents = {
+          V1: iV1,
+        };
+      }
+
+      // Aplicar mutaciones activas en caliente
+      for (const [key, val] of webActiveMutations.entries()) {
+        const [comp, field] = key.split(":");
+        if (field === "value" && comp === "V1" && !solvedResults) {
+          nodeVoltages["1"] = val;
+        }
+      }
 
       emitWebEvent("sim-frame-update", {
         runId,
         time,
-        nodeVoltages: {
-          "0": 0,
-          "1": vSourceVal,
-          "2": v2,
-        },
-        branchCurrents: {
-          V1: iV1,
-        },
+        nodeVoltages,
+        branchCurrents,
         frameIndex: index,
         isFinal,
         triggerEvent: null,
       }, index);
 
       if (isFinal) webTransientTimers = [];
-    }, 40 * (index + 1));
+    }, 16 * (index + 1));
     webTransientTimers.push(timer);
   }
 }
@@ -257,6 +294,12 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
       mutateWebTransient(mutation);
       return undefined as T;
     }
+
+    case "update_live_inspection_state":
+      return undefined as T;
+
+    case "get_live_inspection_state":
+      return "{}" as T;
 
     default:
       throw new Error(`No existe un mock web explícito para el comando Tauri '${cmd}'.`);

@@ -28,7 +28,8 @@ describe("identidad global de componentes", () => {
     expect(orchestrator.addComponent("npn", 0, 0, 1).id).toBe("Q1");
     expect(orchestrator.addComponent("pnp", 0, 0, 1).id).toBe("Q2");
     expect(orchestrator.addComponent("opamp", 0, 0, 1).id).toBe("U1");
-    expect(orchestrator.addComponent("mcu_8051", 0, 0, 1).id).toBe("U2");
+    expect(orchestrator.addComponent("opamp_ideal", 0, 0, 1).id).toBe("U2");
+    expect(orchestrator.addComponent("mcu_8051", 0, 0, 1).id).toBe("U3");
   });
 
   test("componentes especiales no caen en el prefijo R", () => {

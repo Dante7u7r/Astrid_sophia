@@ -10,23 +10,34 @@ import {
   ACTUATOR_MODEL_EDITORS,
   DEDICATED_VALUE_EDITORS,
   buildLiveMutations,
-  clampSwitchProperties,
-  clampTransformerProperties,
   getUnitDisplayConfig,
   getValueEditorPresentation,
   supportsLiveMutation,
 } from "./property_model";
 import {
-  COMMERCIAL_BJTS,
-  COMMERCIAL_DIODES,
-  COMMERCIAL_MOSFETS,
-  COMMERCIAL_JFETS,
-  COMMERCIAL_OPAMPS,
-} from "../simulation/commercial_models_catalog";
-import {
   COMPONENT_PRESETS,
   snapToStandardValue,
 } from "./engineering_standards";
+import {
+  getTerminalType,
+  parsePowerRailVoltage,
+  type TerminalType,
+} from "../canvas/component_annotation_renderer";
+import {
+  bindActuatorsSubformEvents,
+  updateActuatorsSubform,
+  applyActuatorsSubform,
+} from "./property_subforms_actuators";
+import {
+  bindWaveSubformEvents,
+  updateWaveSubform,
+  applyWaveSubform,
+  toggleWaveFieldsVisibility,
+} from "./property_subforms_wave";
+import {
+  updateSemiconductorsSubform,
+  applySemiconductorsSubform,
+} from "./property_subforms_semiconductors";
 
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
@@ -73,6 +84,7 @@ export class PropertyEditor {
     for (const id of [
       "wire-properties-container",
       "text-note-properties-container",
+      "terminal-properties-container",
       "wave-properties-container",
       "resistor-properties-container",
       "capacitor-properties-container",
@@ -135,6 +147,7 @@ export class PropertyEditor {
 
     for (const id of [
       "text-note-properties-container",
+      "terminal-properties-container",
       "wave-properties-container",
       "resistor-properties-container",
       "capacitor-properties-container",
@@ -168,69 +181,7 @@ export class PropertyEditor {
   }
 
   public toggleWaveFieldsVisibility(waveType: string) {
-    const gAmp = document.querySelector("#group-wave-amp") as HTMLElement;
-    const gFreq = document.querySelector("#group-wave-freq") as HTMLElement;
-    const gModFreq = document.querySelector("#group-wave-mod-freq") as HTMLElement;
-    const gModIdx = document.querySelector("#group-wave-mod-index") as HTMLElement;
-    const gPhase = document.querySelector("#group-wave-phase") as HTMLElement;
-    const gOffset = document.querySelector("#group-wave-offset") as HTMLElement;
-    const gDuty = document.querySelector("#group-wave-duty") as HTMLElement;
-    const gRs = document.querySelector("#group-wave-rs") as HTMLElement;
-    const lFreq = document.querySelector("#label-wave-freq") as HTMLElement;
-    const gNomVal = document.querySelector("#group-comp-val") as HTMLElement;
-    const gNomUnit = document.querySelector("#group-comp-unit") as HTMLElement;
-
-    if (!gAmp || !gFreq) return;
-
-    if (gRs) gRs.style.display = "flex";
-
-    if (waveType === "dc") {
-      gAmp.style.display = "none";
-      gFreq.style.display = "none";
-      if (gModFreq) gModFreq.style.display = "none";
-      if (gModIdx) gModIdx.style.display = "none";
-      if (gPhase) gPhase.style.display = "none";
-      if (gOffset) gOffset.style.display = "none";
-      if (gDuty) gDuty.style.display = "none";
-      if (gNomVal) gNomVal.style.display = "flex";
-      if (gNomUnit) gNomUnit.style.display = "flex";
-    } else if (waveType === "am") {
-      gAmp.style.display = "flex";
-      gFreq.style.display = "flex";
-      if (lFreq) lFreq.textContent = "Frecuencia Portadora fc (Hz)";
-      if (gModFreq) gModFreq.style.display = "flex";
-      if (gModIdx) gModIdx.style.display = "flex";
-      if (gPhase) gPhase.style.display = "flex";
-      if (gOffset) gOffset.style.display = "flex";
-      if (gDuty) gDuty.style.display = "none";
-    } else if (waveType === "sine" || waveType === "triangle") {
-      gAmp.style.display = "flex";
-      gFreq.style.display = "flex";
-      if (lFreq) lFreq.textContent = "Frecuencia (Hz)";
-      if (gModFreq) gModFreq.style.display = "none";
-      if (gModIdx) gModIdx.style.display = "none";
-      if (gPhase) gPhase.style.display = "flex";
-      if (gOffset) gOffset.style.display = "flex";
-      if (gDuty) gDuty.style.display = "none";
-    } else if (waveType === "square" || waveType === "pulse") {
-      gAmp.style.display = "flex";
-      gFreq.style.display = "flex";
-      if (lFreq) lFreq.textContent = "Frecuencia (Hz)";
-      if (gModFreq) gModFreq.style.display = "none";
-      if (gModIdx) gModIdx.style.display = "none";
-      if (gPhase) gPhase.style.display = "none";
-      if (gOffset) gOffset.style.display = "flex";
-      if (gDuty) gDuty.style.display = "flex";
-    } else if (waveType === "sawtooth") {
-      gAmp.style.display = "flex";
-      gFreq.style.display = "flex";
-      if (lFreq) lFreq.textContent = "Frecuencia (Hz)";
-      if (gModFreq) gModFreq.style.display = "none";
-      if (gModIdx) gModIdx.style.display = "none";
-      if (gPhase) gPhase.style.display = "none";
-      if (gOffset) gOffset.style.display = "flex";
-      if (gDuty) gDuty.style.display = "none";
-    }
+    toggleWaveFieldsVisibility(waveType);
   }
 
   public updatePropertiesPanel(comp: ComponentInstance) {
@@ -282,39 +233,7 @@ export class PropertyEditor {
     }
 
     // 1. Fuentes (V, I)
-    const waveContainer = document.querySelector("#wave-properties-container") as HTMLElement;
-    const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
-    const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
-    const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
-    const waveModFreqInput = document.querySelector("#prop-wave-mod-freq") as HTMLInputElement;
-    const waveModIndexInput = document.querySelector("#prop-wave-mod-index") as HTMLInputElement;
-    const wavePhaseInput = document.querySelector("#prop-wave-phase") as HTMLInputElement;
-    const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement;
-    const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
-    const waveRsInput = document.querySelector("#prop-wave-rs") as HTMLInputElement;
-    const waveAcMagInput = document.querySelector("#prop-wave-ac-mag") as HTMLInputElement;
-    const waveAcPhaseInput = document.querySelector("#prop-wave-ac-phase") as HTMLInputElement;
-
-    if (waveContainer) {
-      if (comp.type === 'vsource' || comp.type === 'isource') {
-        waveContainer.style.display = "flex";
-        if (waveTypeSelect) waveTypeSelect.value = comp.waveType || "dc";
-        if (waveAmpInput) waveAmpInput.value = (comp.amplitude ?? 5).toString();
-        if (waveFreqInput) waveFreqInput.value = (comp.frequency ?? 1000).toString();
-        if (waveModFreqInput) waveModFreqInput.value = (comp.modFrequency ?? 100).toString();
-        if (waveModIndexInput) waveModIndexInput.value = (comp.modIndex ?? 0.8).toString();
-        if (wavePhaseInput) wavePhaseInput.value = (comp.phase ?? 0).toString();
-        if (waveOffsetInput) waveOffsetInput.value = (comp.offset ?? 0).toString();
-        if (waveDutyInput) waveDutyInput.value = (comp.dutyCycle ?? 0.5).toString();
-        if (waveRsInput) waveRsInput.value = (comp.sourceResistance ?? 0).toString();
-        if (waveAcMagInput) waveAcMagInput.value = (comp.acMag ?? 1.0).toString();
-        if (waveAcPhaseInput) waveAcPhaseInput.value = (comp.acPhase ?? 0).toString();
-        
-        this.toggleWaveFieldsVisibility(waveTypeSelect ? waveTypeSelect.value : (comp.waveType || "dc"));
-      } else {
-        waveContainer.style.display = "none";
-      }
-    }
+    updateWaveSubform(comp);
 
     // 2. Resistor
     const resistorContainer = document.querySelector("#resistor-properties-container") as HTMLElement;
@@ -387,168 +306,9 @@ export class PropertyEditor {
       }
     }
 
-    const potentiometerContainer = document.querySelector("#potentiometer-container") as HTMLElement;
-    const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
-    const wiperDisplay = document.querySelector("#prop-wiper-display") as HTMLElement;
-    if (potentiometerContainer && wiperSlider && wiperDisplay) {
-      if (comp.type === 'potentiometer') {
-        potentiometerContainer.style.display = "flex";
-        const wPos = comp.wiperPosition ?? 0.5;
-        wiperSlider.value = wPos.toString();
-        wiperDisplay.textContent = `${Math.round(wPos * 100)}%`;
-      } else {
-        potentiometerContainer.style.display = "none";
-      }
-    }
-
-    const ldrContainer = document.querySelector("#ldr-container") as HTMLElement;
-    const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
-    const luxDisplay = document.querySelector("#prop-lux-display") as HTMLElement;
-    if (ldrContainer && luxSlider && luxDisplay) {
-      if (comp.type === 'ldr') {
-        ldrContainer.style.display = "flex";
-        const luxVal = comp.lux ?? 100;
-        luxSlider.value = luxVal.toString();
-        luxDisplay.textContent = `${luxVal} Lx`;
-      } else {
-        ldrContainer.style.display = "none";
-      }
-    }
-
-    const thermistorContainer = document.querySelector("#thermistor-container") as HTMLElement;
-    const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
-    const tempDisplay = document.querySelector("#prop-temp-display") as HTMLElement;
-    if (thermistorContainer && tempSlider && tempDisplay) {
-      if (comp.type === 'thermistor') {
-        thermistorContainer.style.display = "flex";
-        const tempVal = comp.temperatureCelsius ?? 25;
-        tempSlider.value = tempVal.toString();
-        tempDisplay.textContent = `${tempVal} ºC`;
-      } else {
-        thermistorContainer.style.display = "none";
-      }
-    }
-
-    const dmmContainer = document.querySelector("#dmm-properties-container") as HTMLElement;
-    const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
-    if (dmmContainer && dmmModeSelect) {
-      if (comp.type === 'dmm') {
-        dmmContainer.style.display = "flex";
-        dmmModeSelect.value = normalizeDmmMode(comp.value);
-      } else {
-        dmmContainer.style.display = "none";
-      }
-    }
-
-    const switchContainer = document.querySelector("#switch-properties-container") as HTMLElement;
-    const switchState = document.querySelector("#prop-switch-state") as HTMLInputElement;
-    const switchRon = document.querySelector("#prop-switch-ron") as HTMLInputElement;
-    const switchRoff = document.querySelector("#prop-switch-roff") as HTMLInputElement;
-    const switchVth = document.querySelector("#prop-switch-vth") as HTMLInputElement;
-    const switchVh = document.querySelector("#prop-switch-vh") as HTMLInputElement;
-    if (switchContainer && switchState && switchRon && switchRoff && switchVth && switchVh) {
-      switchContainer.style.display = comp.type === "switch" ? "flex" : "none";
-      if (comp.type === "switch") {
-        switchState.checked = comp.switchState ?? false;
-        switchRon.value = (comp.switchRon ?? 0.01).toString();
-        switchRoff.value = (comp.switchRoff ?? 1e9).toString();
-        switchVth.value = (comp.switchVth ?? 0.5).toString();
-        switchVh.value = (comp.switchVh ?? 0.05).toString();
-      }
-    }
-
-    const transformerContainer = document.querySelector("#transformer-properties-container") as HTMLElement;
-    const transformerL1 = document.querySelector("#prop-transformer-l1") as HTMLInputElement;
-    const transformerL2 = document.querySelector("#prop-transformer-l2") as HTMLInputElement;
-    const transformerK = document.querySelector("#prop-transformer-k") as HTMLInputElement;
-    if (transformerContainer && transformerL1 && transformerL2 && transformerK) {
-      transformerContainer.style.display = comp.type === "transformer" ? "flex" : "none";
-      if (comp.type === "transformer") {
-        transformerL1.value = (comp.primaryInductance ?? 1e-3).toString();
-        transformerL2.value = (comp.secondaryInductance ?? 1e-3).toString();
-        transformerK.value = (comp.couplingCoefficient ?? 0.9).toString();
-      }
-    }
-
-    const opampContainer = document.querySelector("#opamp-properties-container") as HTMLElement;
-    const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
-    const opampVosDisplay = document.querySelector("#prop-opamp-vos-display") as HTMLElement;
-    const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
-
-    if (opampContainer && opampVosSlider && opampVosDisplay && opampGainSelect) {
-      if (comp.type === 'opamp') {
-        opampContainer.style.display = "flex";
-        const vosMilli = (comp.offsetVoltage !== undefined ? comp.offsetVoltage : 0.002) * 1000;
-        opampVosSlider.value = vosMilli.toString();
-        opampVosDisplay.textContent = `${vosMilli.toFixed(1)} mV`;
-        opampGainSelect.value = (comp.openLoopGain !== undefined ? comp.openLoopGain : 100000).toString();
-      } else {
-        opampContainer.style.display = "none";
-      }
-    }
-
-    const semiContainer = document.querySelector("#semiconductor-properties-container") as HTMLElement;
-    const semiModelSelect = document.querySelector("#prop-semi-model") as HTMLSelectElement;
-    const semiDesc = document.querySelector("#prop-semi-desc") as HTMLElement;
-    if (semiContainer && semiModelSelect && semiDesc) {
-      const isSemiconductor = ["diode", "npn", "pnp", "nmos", "pmos", "njf", "pjf", "led", "opamp"].includes(comp.type);
-      if (isSemiconductor) {
-        semiContainer.style.display = "flex";
-        semiModelSelect.innerHTML = `<option value="custom">-- Modelo Genérico / Personalizado --</option>`;
-        
-        let models: Record<string, { description: string }> = {};
-        if (comp.type === "diode") models = COMMERCIAL_DIODES;
-        else if (comp.type === "led") models = Object.fromEntries(Object.entries(COMMERCIAL_DIODES).filter(([k]) => k.startsWith("LED_")));
-        else if (comp.type === "npn") models = Object.fromEntries(Object.entries(COMMERCIAL_BJTS).filter(([, m]) => m.polarity === "npn"));
-        else if (comp.type === "pnp") models = Object.fromEntries(Object.entries(COMMERCIAL_BJTS).filter(([, m]) => m.polarity === "pnp"));
-        else if (comp.type === "nmos") models = Object.fromEntries(Object.entries(COMMERCIAL_MOSFETS).filter(([, m]) => m.polarity === "nmos"));
-        else if (comp.type === "pmos") models = Object.fromEntries(Object.entries(COMMERCIAL_MOSFETS).filter(([, m]) => m.polarity === "pmos"));
-        else if (comp.type === "njf") models = Object.fromEntries(Object.entries(COMMERCIAL_JFETS).filter(([, m]) => m.polarity === "njf"));
-        else if (comp.type === "pjf") models = Object.fromEntries(Object.entries(COMMERCIAL_JFETS).filter(([, m]) => m.polarity === "pjf"));
-        else if (comp.type === "opamp") models = COMMERCIAL_OPAMPS;
-
-        for (const [modelKey, modelData] of Object.entries(models)) {
-          const opt = document.createElement("option");
-          opt.value = modelKey;
-          opt.textContent = `${modelKey} - ${modelData.description}`;
-          semiModelSelect.appendChild(opt);
-        }
-
-        const currentModel = comp.modelName || "custom";
-        semiModelSelect.value = currentModel;
-        if (currentModel !== "custom" && models[currentModel]) {
-          semiDesc.textContent = models[currentModel].description;
-          semiDesc.style.display = "block";
-        } else {
-          semiDesc.style.display = "none";
-        }
-
-        const diodeBvGroup = document.querySelector("#group-diode-bv") as HTMLElement;
-        const diodeBvInput = document.querySelector("#prop-diode-bv") as HTMLInputElement;
-        if (diodeBvGroup && diodeBvInput) {
-          diodeBvGroup.style.display = comp.type === "diode" ? "flex" : "none";
-          if (comp.type === "diode") {
-            diodeBvInput.value = (comp.diodeBv ?? 0).toString();
-          }
-        }
-      } else {
-        semiContainer.style.display = "none";
-      }
-    }
-
-    const logicContainer = document.querySelector("#logic-properties-container") as HTMLElement;
-    const logicVohSelect = document.querySelector("#prop-logic-voh") as HTMLSelectElement;
-    const logicVthInput = document.querySelector("#prop-logic-vth") as HTMLInputElement;
-    if (logicContainer && logicVohSelect && logicVthInput) {
-      const isLogicGate = ["and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate"].includes(comp.type);
-      if (isLogicGate) {
-        logicContainer.style.display = "flex";
-        logicVohSelect.value = (comp.value || 5.0).toString();
-        logicVthInput.value = (comp.offset !== undefined ? comp.offset : 2.5).toString();
-      } else {
-        logicContainer.style.display = "none";
-      }
-    }
+    // 6. Actuadores, Sensores Especiales y Semiconductores
+    updateActuatorsSubform(comp);
+    updateSemiconductorsSubform(comp);
 
     const textNoteContainer = document.querySelector("#text-note-properties-container") as HTMLElement;
     const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement;
@@ -562,6 +322,58 @@ export class PropertyEditor {
         noteThemeSelect.value = comp.noteTheme || "card";
       } else {
         textNoteContainer.style.display = "none";
+      }
+    }
+
+    const terminalContainer = document.querySelector("#terminal-properties-container") as HTMLElement;
+    const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+    const terminalPowerGroup = document.querySelector("#terminal-power-group") as HTMLElement;
+    const terminalPresetSelect = document.querySelector("#prop-terminal-preset") as HTMLSelectElement;
+    const terminalVoltageGroup = document.querySelector("#terminal-voltage-group") as HTMLElement;
+    const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
+
+    if (terminalContainer && terminalTypeSelect) {
+      if (comp.type === 'net_label') {
+        terminalContainer.style.display = "flex";
+        const tType = getTerminalType(comp);
+        terminalTypeSelect.value = tType;
+
+        const waveContainer = document.querySelector("#wave-properties-container") as HTMLElement | null;
+        const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement | null;
+        const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement | null;
+        const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement | null;
+        const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement | null;
+        const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement | null;
+
+        if (tType === "power") {
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "flex";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "flex";
+          if (waveContainer) waveContainer.style.display = "none";
+          const v = parsePowerRailVoltage(comp);
+          if (terminalVoltageInput) terminalVoltageInput.value = v.toString();
+          if (terminalPresetSelect) {
+            const label = String(comp.label || comp.value || "");
+            terminalPresetSelect.value = ["+5V", "+3.3V", "+12V", "-12V", "+15V", "-15V", "+24V", "+1.8V", "+9V", "+3.7V"].includes(label) ? label : "custom";
+          }
+        } else if (tType === "generator") {
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (waveContainer) {
+            waveContainer.style.display = "flex";
+            if (waveTypeSelect) waveTypeSelect.value = comp.waveType || "square";
+            if (waveAmpInput) waveAmpInput.value = (comp.amplitude ?? 5).toString();
+            if (waveFreqInput) waveFreqInput.value = (comp.frequency ?? 1000).toString();
+            if (waveOffsetInput) waveOffsetInput.value = (comp.offset ?? 0).toString();
+            if (waveDutyInput) waveDutyInput.value = (comp.dutyCycle ?? 0.5).toString();
+            this.toggleWaveFieldsVisibility(waveTypeSelect ? waveTypeSelect.value : (comp.waveType || "square"));
+          }
+        } else {
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (waveContainer) waveContainer.style.display = "none";
+        }
+      } else {
+        terminalContainer.style.display = "none";
       }
     }
 
@@ -587,12 +399,50 @@ export class PropertyEditor {
     this.propIdInput = document.querySelector("#prop-id-input");
     this.propUnitInput = document.querySelector("#prop-unit-input");
 
-    const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
-    if (waveTypeSelect) {
-      waveTypeSelect.addEventListener("change", () => {
-        this.toggleWaveFieldsVisibility(waveTypeSelect.value);
+    const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+    const terminalPresetSelect = document.querySelector("#prop-terminal-preset") as HTMLSelectElement;
+    const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
+    const terminalPowerGroup = document.querySelector("#terminal-power-group") as HTMLElement;
+    const terminalVoltageGroup = document.querySelector("#terminal-voltage-group") as HTMLElement;
+    const waveContainer = document.querySelector("#wave-properties-container") as HTMLElement;
+
+    if (terminalTypeSelect) {
+      terminalTypeSelect.addEventListener("change", () => {
+        const val = terminalTypeSelect.value;
+        if (val === "power") {
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "flex";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "flex";
+          if (waveContainer) waveContainer.style.display = "none";
+        } else if (val === "generator") {
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (waveContainer) {
+            waveContainer.style.display = "flex";
+            const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
+            this.toggleWaveFieldsVisibility(waveTypeSelect ? waveTypeSelect.value : "square");
+          }
+        } else {
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (waveContainer) waveContainer.style.display = "none";
+        }
       });
     }
+
+    if (terminalPresetSelect && terminalVoltageInput) {
+      terminalPresetSelect.addEventListener("change", () => {
+        const preset = terminalPresetSelect.value;
+        if (preset !== "custom") {
+          const v = parseFloat(preset.replace("V", "").replace("+", ""));
+          if (!isNaN(v)) {
+            terminalVoltageInput.value = v.toString();
+            if (this.propValInput) this.propValInput.value = preset;
+          }
+        }
+      });
+    }
+
+    bindWaveSubformEvents();
 
     const wireLabelInput = document.querySelector("#prop-wire-label") as HTMLInputElement;
     const wireColorInput = document.querySelector("#prop-wire-color") as HTMLInputElement;
@@ -631,79 +481,8 @@ export class PropertyEditor {
         }
       });
     }
-    const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
-    const wiperDisplay = document.querySelector("#prop-wiper-display") as HTMLElement;
-    if (wiperSlider && wiperDisplay) {
-      wiperSlider.addEventListener("input", (e) => {
-        const val = parseFloat((e.target as HTMLInputElement).value) || 0.5;
-        wiperDisplay.textContent = `${Math.round(val * 100)}%`;
-      });
-    }
 
-    const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
-    const luxDisplay = document.querySelector("#prop-lux-display") as HTMLElement;
-    if (luxSlider && luxDisplay) {
-      luxSlider.addEventListener("input", (e) => {
-        const val = parseInt((e.target as HTMLInputElement).value) || 100;
-        luxDisplay.textContent = `${val} Lx`;
-      });
-    }
-
-    const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
-    const tempDisplay = document.querySelector("#prop-temp-display") as HTMLElement;
-    if (tempSlider && tempDisplay) {
-      tempSlider.addEventListener("input", (e) => {
-        const parsed = parseInt((e.target as HTMLInputElement).value);
-        const val = Number.isFinite(parsed) ? parsed : 25;
-        tempDisplay.textContent = `${val} ºC`;
-      });
-    }
-
-    const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement | null;
-    if (dmmModeSelect) {
-      dmmModeSelect.addEventListener("change", () => {
-        const orchestrator = this.callbacks.getOrchestrator();
-        const selected = orchestrator ? orchestrator.selectedComponent : null;
-        if (selected && selected.type === 'dmm') {
-          selected.value = normalizeDmmMode(dmmModeSelect.value);
-          selected.dmmValue = DMM_INITIAL_DISPLAY;
-          this.callbacks.updateCanvasRendering();
-          this.callbacks.markCurrentTabAsModified();
-        }
-      });
-    }
-
-    const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
-    const opampVosDisplay = document.querySelector("#prop-opamp-vos-display") as HTMLElement;
-    const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
-
-    if (opampVosSlider && opampVosDisplay) {
-      opampVosSlider.addEventListener("input", (e) => {
-        const parsed = parseFloat((e.target as HTMLInputElement).value);
-        const val = Number.isFinite(parsed) ? parsed : 2.0;
-        opampVosDisplay.textContent = `${val.toFixed(1)} mV`;
-        const orchestrator = this.callbacks.getOrchestrator();
-        const selected = orchestrator ? orchestrator.selectedComponent : null;
-        if (selected && selected.type === 'opamp') {
-          selected.offsetVoltage = val / 1000.0;
-          this.callbacks.updateCanvasRendering();
-          this.callbacks.markCurrentTabAsModified();
-        }
-      });
-    }
-
-    if (opampGainSelect) {
-      opampGainSelect.addEventListener("change", () => {
-        const val = parseFloat(opampGainSelect.value) || 100000.0;
-        const orchestrator = this.callbacks.getOrchestrator();
-        const selected = orchestrator ? orchestrator.selectedComponent : null;
-        if (selected && selected.type === 'opamp') {
-          selected.openLoopGain = val;
-          this.callbacks.updateCanvasRendering();
-          this.callbacks.markCurrentTabAsModified();
-        }
-      });
-    }
+    bindActuatorsSubformEvents(this.callbacks);
 
     if (this.propValInput && this.propValSlider) {
       this.propValSlider.addEventListener("input", (e) => {
@@ -814,41 +593,7 @@ export class PropertyEditor {
             this.propValInput!.value = formatSpiceValue(newVal);
           }
 
-          if (selected.type === 'vsource' || selected.type === 'isource') {
-            const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
-            const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
-            const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
-            const waveModFreqInput = document.querySelector("#prop-wave-mod-freq") as HTMLInputElement;
-            const waveModIndexInput = document.querySelector("#prop-wave-mod-index") as HTMLInputElement;
-            const wavePhaseInput = document.querySelector("#prop-wave-phase") as HTMLInputElement;
-            const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement;
-            const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
-            const waveRsInput = document.querySelector("#prop-wave-rs") as HTMLInputElement;
-            const waveAcMagInput = document.querySelector("#prop-wave-ac-mag") as HTMLInputElement;
-            const waveAcPhaseInput = document.querySelector("#prop-wave-ac-phase") as HTMLInputElement;
-
-            if (waveTypeSelect) selected.waveType = waveTypeSelect.value;
-            if (waveAmpInput) selected.amplitude = parseFloat(waveAmpInput.value) || 0;
-            if (waveFreqInput) selected.frequency = parseFloat(waveFreqInput.value) || 1000;
-            if (waveModFreqInput) selected.modFrequency = parseFloat(waveModFreqInput.value) || 100;
-            if (waveModIndexInput) selected.modIndex = Math.max(0, Math.min(1, parseFloat(waveModIndexInput.value) || 0.8));
-            if (wavePhaseInput) selected.phase = parseFloat(wavePhaseInput.value) || 0;
-            if (waveOffsetInput) selected.offset = parseFloat(waveOffsetInput.value) || 0;
-            if (waveDutyInput) selected.dutyCycle = parseFloat(waveDutyInput.value) || 0.5;
-            if (waveRsInput) selected.sourceResistance = Math.max(0, parseFloat(waveRsInput.value) || 0);
-            if (waveAcMagInput) selected.acMag = parseFloat(waveAcMagInput.value) || 0;
-            if (waveAcPhaseInput) selected.acPhase = parseFloat(waveAcPhaseInput.value) || 0;
-
-            // En CC el valor nominal es la excitación efectiva. Para formas
-            // de onda conserva el valor nominal editado y usa los parámetros
-            // explícitos de la forma de onda durante el análisis transitorio.
-            if (selected.waveType === "dc") {
-              selected.value = newVal;
-              selected.offset = newVal;
-            }
-            this.propValInput!.value = formatSpiceValue(Number(selected.value) || 0);
-            this.propValSlider!.value = selected.value.toString();
-          }
+          applyWaveSubform(selected, newVal, this.propValInput, this.propValSlider);
 
           if (selected.type === "resistor") {
             const resistorTolSelect = document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement;
@@ -884,33 +629,8 @@ export class PropertyEditor {
             if (ledImaxInput) selected.maxCurrent = Math.max(1, parseFloat(ledImaxInput.value) || 20);
           }
 
-          if (selected.type === 'potentiometer') {
-            const wiperSlider = document.querySelector("#prop-wiper-slider") as HTMLInputElement;
-            const potTaperSelect = document.querySelector("#prop-pot-taper") as HTMLSelectElement;
-            if (wiperSlider) {
-              selected.wiperPosition = parseFloat(wiperSlider.value) || 0.5;
-            }
-            if (potTaperSelect) {
-              selected.potTaper = potTaperSelect.value as any;
-            }
-          }
-
-          if (selected.type === 'ldr') {
-            const luxSlider = document.querySelector("#prop-lux-slider") as HTMLInputElement;
-            if (luxSlider) {
-              selected.lux = parseInt(luxSlider.value) || 100;
-            }
-          }
-
-          if (selected.type === 'thermistor') {
-            const tempSlider = document.querySelector("#prop-temp-slider") as HTMLInputElement;
-            if (tempSlider) {
-              const parsedTemperature = parseInt(tempSlider.value);
-              selected.temperatureCelsius = Number.isFinite(parsedTemperature)
-                ? parsedTemperature
-                : 25;
-            }
-          }
+          applyActuatorsSubform(selected);
+          applySemiconductorsSubform(selected);
 
           if (selected.type === 'x') {
             const macroTextarea = document.querySelector("#prop-spice-macro") as HTMLTextAreaElement;
@@ -922,103 +642,6 @@ export class PropertyEditor {
               const newPinCount = parseInt(pinCountInput.value) || 4;
               selected.pinCount = Math.max(2, Math.min(64, newPinCount));
             }
-          }
-
-          if (selected.type === 'opamp') {
-            const opampVosSlider = document.querySelector("#prop-opamp-vos") as HTMLInputElement;
-            const opampGainSelect = document.querySelector("#prop-opamp-gain") as HTMLSelectElement;
-            if (opampVosSlider) {
-              const parsedOffsetMillivolts = parseFloat(opampVosSlider.value);
-              selected.offsetVoltage = (
-                Number.isFinite(parsedOffsetMillivolts) ? parsedOffsetMillivolts : 2.0
-              ) / 1000.0;
-            }
-            if (opampGainSelect) {
-              selected.openLoopGain = parseFloat(opampGainSelect.value) || 100000.0;
-            }
-          }
-
-          if (["diode", "npn", "pnp", "nmos", "pmos", "njf", "pjf", "led", "opamp"].includes(selected.type)) {
-            const semiModelSelect = document.querySelector("#prop-semi-model") as HTMLSelectElement;
-            if (semiModelSelect && semiModelSelect.value !== "custom") {
-              selected.modelName = semiModelSelect.value;
-              const modelKey = semiModelSelect.value;
-              if (selected.type === "diode" || selected.type === "led") {
-                const dm = COMMERCIAL_DIODES[modelKey];
-                if (dm) {
-                  if (dm.bv !== undefined) selected.diodeBv = dm.bv;
-                  if (dm.forwardVoltage !== undefined) selected.forwardVoltage = dm.forwardVoltage;
-                }
-              } else if (selected.type === "npn" || selected.type === "pnp") {
-                const bm = COMMERCIAL_BJTS[modelKey];
-                if (bm) {
-                  selected.value = bm.bf;
-                }
-              } else if (selected.type === "nmos" || selected.type === "pmos") {
-                const mm = COMMERCIAL_MOSFETS[modelKey];
-                if (mm) {
-                  selected.value = mm.vth;
-                }
-              } else if (selected.type === "njf" || selected.type === "pjf") {
-                const jm = COMMERCIAL_JFETS[modelKey];
-                if (jm) {
-                  selected.value = jm.vto;
-                }
-              } else if (selected.type === "opamp") {
-                const om = COMMERCIAL_OPAMPS[modelKey];
-                if (om) {
-                  selected.openLoopGain = om.aol;
-                  selected.offsetVoltage = om.vos;
-                }
-              }
-            } else if (semiModelSelect) {
-              delete selected.modelName;
-            }
-
-            if (selected.type === "diode") {
-              const diodeBvInput = document.querySelector("#prop-diode-bv") as HTMLInputElement;
-              if (diodeBvInput) {
-                const bvVal = parseFloat(diodeBvInput.value) || 0;
-                selected.diodeBv = bvVal > 0 ? bvVal : undefined;
-              }
-            }
-          }
-
-          if (["and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate"].includes(selected.type)) {
-            const logicVohSelect = document.querySelector("#prop-logic-voh") as HTMLSelectElement;
-            const logicVthInput = document.querySelector("#prop-logic-vth") as HTMLInputElement;
-            if (logicVohSelect) {
-              selected.value = parseFloat(logicVohSelect.value) || 5.0;
-            }
-            if (logicVthInput) {
-              selected.offset = parseFloat(logicVthInput.value) || 2.5;
-            }
-          }
-
-          if (selected.type === "switch") {
-            const state = document.querySelector("#prop-switch-state") as HTMLInputElement;
-            const ron = document.querySelector("#prop-switch-ron") as HTMLInputElement;
-            const roff = document.querySelector("#prop-switch-roff") as HTMLInputElement;
-            const vth = document.querySelector("#prop-switch-vth") as HTMLInputElement;
-            const vh = document.querySelector("#prop-switch-vh") as HTMLInputElement;
-            clampSwitchProperties(selected, {
-              stateChecked: state?.checked,
-              ron: ron?.value,
-              roff: roff?.value,
-              vth: vth?.value,
-              vh: vh?.value,
-            });
-          }
-
-          if (selected.type === "transformer") {
-            const l1 = document.querySelector("#prop-transformer-l1") as HTMLInputElement;
-            const l2 = document.querySelector("#prop-transformer-l2") as HTMLInputElement;
-            const k = document.querySelector("#prop-transformer-k") as HTMLInputElement;
-            clampTransformerProperties(selected, {
-              l1: l1?.value,
-              l2: l2?.value,
-              k: k?.value,
-            });
           }
 
           if (selected.type === "text_note") {
@@ -1038,9 +661,40 @@ export class PropertyEditor {
           }
 
           if (selected.type === "net_label") {
-            const rawVal = String(newVal || selected.id).trim().toUpperCase();
-            selected.value = rawVal || "NET";
-            selected.label = selected.value as string;
+            const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+            const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
+            const tType = (terminalTypeSelect?.value as TerminalType) || "signal";
+            selected.terminalType = tType;
+
+            if (tType === "power") {
+              const volt = parseFloat(terminalVoltageInput?.value || "5") || 5;
+              selected.voltage = volt;
+              const rawVal = String(newVal || selected.label || (volt >= 0 ? `+${volt}V` : `${volt}V`)).trim().toUpperCase();
+              selected.value = rawVal;
+              selected.label = rawVal;
+            } else if (tType === "ground") {
+              const rawVal = String(newVal || selected.label || "GND").trim().toUpperCase();
+              selected.value = rawVal;
+              selected.label = rawVal;
+            } else if (tType === "generator") {
+              const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
+              const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
+              const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
+              const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement;
+              const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
+              selected.waveType = waveTypeSelect ? waveTypeSelect.value : "square";
+              selected.amplitude = waveAmpInput ? (parseFloat(waveAmpInput.value) || 5) : 5;
+              selected.frequency = waveFreqInput ? (parseFloat(waveFreqInput.value) || 1000) : 1000;
+              selected.offset = waveOffsetInput ? (parseFloat(waveOffsetInput.value) || 0) : 0;
+              selected.dutyCycle = waveDutyInput ? (parseFloat(waveDutyInput.value) || 0.5) : 0.5;
+              const rawVal = String(newVal || selected.label || "CLK").trim().toUpperCase();
+              selected.value = rawVal;
+              selected.label = rawVal;
+            } else {
+              const rawVal = String(newVal || selected.label || selected.id).trim().toUpperCase();
+              selected.value = rawVal || "NET";
+              selected.label = selected.value as string;
+            }
           }
 
           const simulationRunner = this.callbacks.getSimulationRunner();

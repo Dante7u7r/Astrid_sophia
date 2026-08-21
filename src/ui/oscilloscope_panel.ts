@@ -3,6 +3,7 @@ import type { PersistedOscilloscopeState } from "../persistence/circuit_file";
 import {
   calculateOscilloscopeMetrics,
   calculateAutoFitSettings,
+  type AutoFitSettings,
   buildTyTracePoints,
   findTriggerStartIndex,
   normalizeTriggerChannel,
@@ -337,6 +338,15 @@ export class OscilloscopePanel {
     this.syncFocusedChannelUI();
   }
 
+  public setChannelActive(ch: "ch1" | "ch2" | "ch3" | "ch4", active = true): void {
+    if (ch === "ch1") this.oscCh1Btn?.classList.toggle("active", active);
+    else if (ch === "ch2") this.oscCh2Btn?.classList.toggle("active", active);
+    else if (ch === "ch3") this.oscCh3Btn?.classList.toggle("active", active);
+    else if (ch === "ch4") this.oscCh4Btn?.classList.toggle("active", active);
+    this.syncFocusedChannelUI();
+    this.draw();
+  }
+
   public syncFocusedChannelUI(): void {
     const ch = this.focusedChannel;
 
@@ -650,10 +660,20 @@ export class OscilloscopePanel {
     this.focusedNodeInput?.addEventListener("input", () => {
       const val = this.focusedNodeInput?.value.trim() || null;
       const ch = this.focusedChannel;
-      if (ch === "ch1") this.ch1ProbeNode = val;
-      else if (ch === "ch2") this.ch2ProbeNode = val;
-      else if (ch === "ch3") this.ch3ProbeNode = val;
-      else if (ch === "ch4") this.ch4ProbeNode = val;
+      if (ch === "ch1") {
+        this.ch1ProbeNode = val;
+        if (val) this.oscCh1Btn?.classList.add("active");
+      } else if (ch === "ch2") {
+        this.ch2ProbeNode = val;
+        if (val) this.oscCh2Btn?.classList.add("active");
+      } else if (ch === "ch3") {
+        this.ch3ProbeNode = val;
+        if (val) this.oscCh3Btn?.classList.add("active");
+      } else if (ch === "ch4") {
+        this.ch4ProbeNode = val;
+        if (val) this.oscCh4Btn?.classList.add("active");
+      }
+      this.syncFocusedChannelUI();
       this.draw();
     });
 
@@ -1235,31 +1255,69 @@ export class OscilloscopePanel {
   }
 
   public autoFit(channel: OscilloscopeChannel | null = null): boolean {
-    const selectedChannel = channel ?? this.getAutoFitChannel();
-    const probeNode = selectedChannel ? this.getProbeNodeByChannel(selectedChannel) : null;
-    if (!selectedChannel || !probeNode || this.transientResults.length === 0) return false;
+    if (this.transientResults.length === 0) return false;
 
-    const fit = calculateAutoFitSettings(this.transientResults, probeNode);
-    this.timeDivValue = fit.timeDivValue;
-    if (this.timeDivSelect) this.timeDivSelect.value = fit.timeDivValue.toString();
+    const channelsToFit: Array<{ ch: OscilloscopeChannel; node: string }> = [];
 
-    const minOffset = -4;
-    const maxOffset = 4;
-    const voltsPerDiv = fit.voltsPerDiv;
-    const offsetDivs = Math.min(
-      maxOffset,
-      Math.max(minOffset, -(fit.centerVoltage / voltsPerDiv)),
-    );
+    if (channel) {
+      const node = this.getProbeNodeByChannel(channel);
+      if (node) channelsToFit.push({ ch: channel, node });
+    } else {
+      const activeList: readonly [OscilloscopeChannel, boolean][] = [
+        ["ch1", this.oscCh1Btn?.classList.contains("active") ?? false],
+        ["ch2", this.oscCh2Btn?.classList.contains("active") ?? false],
+        ["ch3", this.oscCh3Btn?.classList.contains("active") ?? false],
+        ["ch4", this.oscCh4Btn?.classList.contains("active") ?? false],
+      ];
+      for (const [ch, isActive] of activeList) {
+        if (!isActive) continue;
+        const node = this.getProbeNodeByChannel(ch);
+        if (node) channelsToFit.push({ ch, node });
+      }
+      if (channelsToFit.length === 0) {
+        const fallbackCh = this.getAutoFitChannel() || "ch1";
+        const node = this.getProbeNodeByChannel(fallbackCh);
+        if (node) channelsToFit.push({ ch: fallbackCh, node });
+      }
+    }
 
-    if (selectedChannel === "ch1") this.voltsPerDivCh1 = voltsPerDiv;
-    else if (selectedChannel === "ch2") this.voltsPerDivCh2 = voltsPerDiv;
-    else if (selectedChannel === "ch3") this.voltsPerDivCh3 = voltsPerDiv;
-    else this.voltsPerDivCh4 = voltsPerDiv;
+    if (channelsToFit.length === 0) return false;
 
-    if (selectedChannel === "ch1") this.offsetCh1 = offsetDivs;
-    else if (selectedChannel === "ch2") this.offsetCh2 = offsetDivs;
-    else if (selectedChannel === "ch3") this.offsetCh3 = offsetDivs;
-    else this.offsetCh4 = offsetDivs;
+    let primaryFit: AutoFitSettings | null = null;
+
+    for (const { ch, node } of channelsToFit) {
+      const fit = calculateAutoFitSettings(this.transientResults, node);
+      if (!primaryFit || ch === (this.triggerChannel || "ch1")) {
+        primaryFit = fit;
+      }
+
+      const minOffset = -4;
+      const maxOffset = 4;
+      const voltsPerDiv = fit.voltsPerDiv;
+      const offsetDivs = Math.min(
+        maxOffset,
+        Math.max(minOffset, -(fit.centerVoltage / voltsPerDiv)),
+      );
+
+      if (ch === "ch1") {
+        this.voltsPerDivCh1 = voltsPerDiv;
+        this.offsetCh1 = offsetDivs;
+      } else if (ch === "ch2") {
+        this.voltsPerDivCh2 = voltsPerDiv;
+        this.offsetCh2 = offsetDivs;
+      } else if (ch === "ch3") {
+        this.voltsPerDivCh3 = voltsPerDiv;
+        this.offsetCh3 = offsetDivs;
+      } else if (ch === "ch4") {
+        this.voltsPerDivCh4 = voltsPerDiv;
+        this.offsetCh4 = offsetDivs;
+      }
+    }
+
+    if (primaryFit) {
+      this.timeDivValue = primaryFit.timeDivValue;
+      if (this.timeDivSelect) this.timeDivSelect.value = primaryFit.timeDivValue.toString();
+    }
 
     this.syncFocusedChannelUI();
     this.updateHud();

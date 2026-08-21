@@ -536,4 +536,175 @@ describe("extractElectricalNetlist", () => {
     expect(emittedTypes).not.toContain("text_note");
     expect(emittedTypes).not.toContain("net_label");
   });
+
+  test("extrae correctamente un opamp_ideal de 3 pines mapeando a entradas y salida", () => {
+    const components: ComponentInstance[] = [
+      { id: "U1", type: "opamp_ideal", value: 100000, x: 100, y: 100, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 50, y: 150, rotation: 0 },
+      { id: "V1", type: "vsource", value: 2.5, x: 50, y: 100, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 150, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "opamp_ideal") {
+        return [
+          { componentId: c.id, pinIndex: 0, x: c.x - 40, y: c.y - 15 }, // In+
+          { componentId: c.id, pinIndex: 1, x: c.x - 40, y: c.y + 15 }, // In-
+          { componentId: c.id, pinIndex: 2, x: c.x + 40, y: c.y },      // OUT
+        ];
+      }
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "U1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "U1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "U1", pinIndex: 2 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w5", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+    const opamp = res.netlist.components.find(c => c.id === "U1");
+    expect(opamp).toBeDefined();
+    expect(opamp?.type).toBe("opamp");
+    expect(opamp?.pins).toHaveLength(5);
+    // Pin 0 (In+) conectado a V1:0 (nodo > 0)
+    expect(opamp?.pins[0]).not.toBe("0");
+    // Pin 1 (In-) conectado a GND (nodo 0)
+    expect(opamp?.pins[1]).toBe("0");
+    // Pin 2 (V+) y Pin 3 (V-) virtuales ("0")
+    expect(opamp?.pins[2]).toBe("0");
+    expect(opamp?.pins[3]).toBe("0");
+    // Pin 4 (OUT) conectado a R1:0 (nodo > 0)
+    expect(opamp?.pins[4]).not.toBe("0");
+  });
+
+  test("terminal de alimentacion +5V y terminal de tierra GND inyectan fuente virtual de potencia", () => {
+    const components: ComponentInstance[] = [
+      { id: "PWR1", type: "net_label", value: "+5V", label: "+5V", terminalType: "power", voltage: 5, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 50, y: 50, rotation: 0 },
+      { id: "GND1", type: "net_label", value: "GND", label: "GND", terminalType: "ground", x: 100, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "net_label") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "PWR1", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    // Debe existir la fuente virtual de alimentación V_PWR__5V entre el nodo de R1:0 y nodo 0
+    const pwrSource = res.netlist.components.find(c => c.type === "vsource" && c.id.startsWith("V_PWR_"));
+    expect(pwrSource).toBeDefined();
+    expect(pwrSource?.value).toBe(5);
+    expect(pwrSource?.pins[1]).toBe("0");
+
+    const r1 = res.netlist.components.find(c => c.id === "R1");
+    expect(r1).toBeDefined();
+    // Pin 0 conectado al rail de potencia
+    expect(r1?.pins[0]).toBe(pwrSource?.pins[0]);
+    // Pin 1 conectado a tierra (nodo 0)
+    expect(r1?.pins[1]).toBe("0");
+  });
+
+  test("terminal de generador CLK inyecta fuente de onda cuadrada", () => {
+    const components: ComponentInstance[] = [
+      {
+        id: "CLK1",
+        type: "net_label",
+        value: "CLK",
+        label: "CLK",
+        terminalType: "generator",
+        waveType: "square",
+        frequency: 2500,
+        amplitude: 3.3,
+        x: 0,
+        y: 0,
+        rotation: 0,
+      },
+      { id: "R1", type: "resistor", value: 1000, x: 50, y: 50, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 100, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "net_label" || c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "CLK1", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    const sigSource = res.netlist.components.find(c => c.id === "V_SIG_CLK1");
+    expect(sigSource).toBeDefined();
+    expect(sigSource?.waveType).toBe("square");
+    expect(sigSource?.frequency).toBe(2500);
+    expect(sigSource?.amplitude).toBe(3.3);
+  });
+
+  test("etiquetas de senal conectan componentes separados al mismo nodo virtual DSU", () => {
+    const components: ComponentInstance[] = [
+      { id: "V1", type: "vsource", value: 5, x: 0, y: 0, rotation: 0 },
+      { id: "NET1", type: "net_label", value: "BUS_DATA", label: "BUS_DATA", terminalType: "signal", x: 10, y: 0, rotation: 0 },
+      { id: "NET2", type: "net_label", value: "BUS_DATA", label: "BUS_DATA", terminalType: "signal", x: 200, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 210, y: 0, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 50, y: 50, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "net_label" || c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "NET1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "NET2", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    const v1 = res.netlist.components.find(c => c.id === "V1");
+    const r1 = res.netlist.components.find(c => c.id === "R1");
+    expect(v1).toBeDefined();
+    expect(r1).toBeDefined();
+    // V1:0 y R1:0 deben compartir el mismo nodo no-cero gracias a BUS_DATA
+    expect(v1?.pins[0]).toBe(r1?.pins[0]);
+    expect(v1?.pins[0]).not.toBe("0");
+  });
 });

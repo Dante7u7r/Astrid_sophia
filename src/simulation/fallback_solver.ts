@@ -35,14 +35,18 @@ export interface TSResult {
   readonly convergenceIterations: number;
 }
 
-const FALLBACK_COMPONENT_TYPES = new Set([
-  "ground",
-  "resistor",
-  "vsource",
-  "isource",
-  "capacitor",
-  "inductor",
-]);
+const FALLBACK_COMPONENT_PINS: Readonly<Record<string, number | readonly number[]>> = {
+  ground: 1,
+  resistor: 2,
+  vsource: 2,
+  isource: 2,
+  capacitor: 2,
+  inductor: 2,
+  switch: 2,
+  potentiometer: 3,
+  opamp: [3, 5],
+  opamp_ideal: [3, 5],
+};
 
 function validateFallbackNetlist(netlist: CircuitNetlist): string | null {
   if (netlist.components.length > 10_000) {
@@ -51,16 +55,20 @@ function validateFallbackNetlist(netlist: CircuitNetlist): string | null {
   const ids = new Set<string>();
   let maxNode = 0;
   for (const comp of netlist.components) {
-    if (!FALLBACK_COMPONENT_TYPES.has(comp.type)) {
+    const allowedPins = FALLBACK_COMPONENT_PINS[comp.type];
+    if (!allowedPins) {
       return `El componente [${comp.id}] de tipo '${comp.type}' no tiene un modelo científico en el fallback local. Use la aplicación Tauri.`;
     }
     if (!comp.id.trim() || comp.id.length > 128 || ids.has(comp.id)) {
       return `El componente [${comp.id}] tiene un ID vacio, duplicado o demasiado largo.`;
     }
     ids.add(comp.id);
-    const expectedPins = comp.type === "ground" ? 1 : 2;
-    if (comp.pins.length !== expectedPins) {
-      return `El componente [${comp.id}] requiere ${expectedPins} pines y recibio ${comp.pins.length}.`;
+    const pinMatches = Array.isArray(allowedPins)
+      ? allowedPins.includes(comp.pins.length)
+      : comp.pins.length === allowedPins;
+    if (!pinMatches) {
+      const pinDesc = Array.isArray(allowedPins) ? allowedPins.join(" o ") : allowedPins.toString();
+      return `El componente [${comp.id}] requiere ${pinDesc} pines y recibio ${comp.pins.length}.`;
     }
     if (!Number.isFinite(comp.value)) {
       return `El componente [${comp.id}] tiene un valor no finito.`;
@@ -218,12 +226,23 @@ export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
       const roff = comp.switchRoff ?? 1e9;
       const G = 1.0 / (isClosed ? ron : roff);
       stampConductance(A, nodeA, nodeB, G);
-    } else if (comp.type === 'opamp') {
+    } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal') {
       const nodeInPos = parseInt(comp.pins[0]);
       const nodeInNeg = parseInt(comp.pins[1]);
-      const nodeOut = parseInt(comp.pins[4]);
-      stampConductance(A, nodeInPos, nodeInNeg, 1.0 / 1e7);
-      stampConductance(A, nodeOut, 0, 1.0 / 100.0);
+      const nodeOut = parseInt(comp.pins.length >= 5 ? comp.pins[4] : comp.pins[2]);
+      const aol = comp.opampAol ?? (comp.value > 0 ? comp.value : 100000.0);
+      const rout = comp.opampRout ?? 75.0;
+      const rin = comp.opampRin ?? 1e7;
+      const gIn = 1.0 / Math.max(1.0, rin);
+      const gOut = 1.0 / Math.max(0.1, rout);
+      const gm = aol * gOut;
+
+      stampConductance(A, nodeInPos, nodeInNeg, gIn);
+      if (nodeOut > 0) {
+        A[nodeOut - 1][nodeOut - 1] += gOut;
+        if (nodeInPos > 0) A[nodeOut - 1][nodeInPos - 1] -= gm;
+        if (nodeInNeg > 0) A[nodeOut - 1][nodeInNeg - 1] += gm;
+      }
     } else if (comp.type === 'capacitor') {
       const nodeA = parseInt(comp.pins[0]);
       const nodeB = parseInt(comp.pins[1]);
@@ -479,12 +498,23 @@ export function solveTransientCircuitTS(
         const roff = comp.switchRoff ?? 1e9;
         const G = 1.0 / (isClosed ? ron : roff);
         stampConductance(A, nodeA, nodeB, G);
-      } else if (comp.type === 'opamp') {
+      } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal') {
         const nodeInPos = parseInt(comp.pins[0]);
         const nodeInNeg = parseInt(comp.pins[1]);
-        const nodeOut = parseInt(comp.pins[4]);
-        stampConductance(A, nodeInPos, nodeInNeg, 1.0 / 1e7);
-        stampConductance(A, nodeOut, 0, 1.0 / 100.0);
+        const nodeOut = parseInt(comp.pins.length >= 5 ? comp.pins[4] : comp.pins[2]);
+        const aol = comp.opampAol ?? (comp.value > 0 ? comp.value : 100000.0);
+        const rout = comp.opampRout ?? 75.0;
+        const rin = comp.opampRin ?? 1e7;
+        const gIn = 1.0 / Math.max(1.0, rin);
+        const gOut = 1.0 / Math.max(0.1, rout);
+        const gm = aol * gOut;
+
+        stampConductance(A, nodeInPos, nodeInNeg, gIn);
+        if (nodeOut > 0) {
+          A[nodeOut - 1][nodeOut - 1] += gOut;
+          if (nodeInPos > 0) A[nodeOut - 1][nodeInPos - 1] -= gm;
+          if (nodeInNeg > 0) A[nodeOut - 1][nodeInNeg - 1] += gm;
+        }
       }
     }
 

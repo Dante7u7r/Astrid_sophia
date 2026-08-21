@@ -71,6 +71,58 @@ export const OpampDefinition: ComponentDefinition = {
   },
 };
 
+export const OpampIdealDefinition: ComponentDefinition = {
+  type: "opamp_ideal",
+  name: "Op-Amp Ideal (3 pines)",
+  category: "analogicos",
+  prefix: "U",
+  defaultProperties: { value: 0, openLoopGain: 100000 },
+  halfExtents: { halfW: 45, halfH: 35 },
+  hasStandardLeads: false,
+  getPins: () => [
+    { index: 0, x: -40, y: -15, label: "+", name: "In+" },
+    { index: 1, x: -40, y: 15, label: "-", name: "In-" },
+    { index: 2, x: 40, y: 0, label: "OUT", name: "Salida" },
+  ],
+  render: (ctx, comp, state, options) => {
+    if (options.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+    // Main triangle
+    ctx.moveTo(-25, -30);
+    ctx.lineTo(-25, 30);
+    ctx.lineTo(25, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Input terminals (+ and -) and output terminal (OUT)
+    ctx.beginPath();
+    ctx.moveTo(-40, -15);
+    ctx.lineTo(-25, -15);
+    ctx.moveTo(-40, 15);
+    ctx.lineTo(-25, 15);
+    ctx.moveTo(25, 0);
+    ctx.lineTo(40, 0);
+    ctx.stroke();
+
+    // Plus (+) at pin 0 (-15)
+    ctx.strokeStyle = state.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-21, -15);
+    ctx.lineTo(-15, -15);
+    ctx.moveTo(-18, -18);
+    ctx.lineTo(-18, -12);
+
+    // Minus (-) at pin 1 (+15)
+    ctx.moveTo(-21, 15);
+    ctx.lineTo(-15, 15);
+    ctx.stroke();
+  },
+};
+
 /**
  * Dibuja un glifo miniatura de la forma de onda dentro del círculo de la fuente.
  * Se invoca solo cuando waveType !== "dc" y !== undefined.

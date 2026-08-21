@@ -85,6 +85,10 @@ export function createProbePlacementController(
     getNode: (channel) => nodes[probeKey(channel)],
     placeProbe: (channel, nodeId) => {
       nodes = { ...nodes, [probeKey(channel)]: nodeId };
+      const panel = deps.getOscilloscopePanel();
+      if (panel) {
+        panel.setChannelActive?.(channel.toLowerCase() as "ch1" | "ch2" | "ch3" | "ch4", true);
+      }
       syncOscilloscopePanel();
       return `Sonda del Canal ${channelIndex(channel)} (${channelColor(channel)}) conectada al Nodo ${nodeId}.`;
     },

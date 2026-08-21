@@ -39,6 +39,8 @@ function dcConnectivityPairs(type: string, pinCount: number): readonly (readonly
       return [[0, 1], [2, 3]];
     case "opamp":
       return [[0, 1], [4, "0"]];
+    case "opamp_ideal":
+      return [[0, 1], [2, "0"]];
     case "not_gate":
       return [[1, "0"]];
     case "and_gate":
@@ -190,13 +192,18 @@ export function evaluateRealtimeErcIssues(
   if (components.length === 0) return issues;
 
   // 1. Verificación de presencia de Tierra (GND) en el esquema
+  const GND_ALIASES = ["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"];
   const hasGnd = components.some(c =>
     c.type === "ground" ||
-    (c.type === "net_label" && ["GND", "0", "TIERRA", "GROUND"].includes(String(c.label || c.value || "").trim().toUpperCase()))
-  ) || wires.some(w => ["GND", "0", "TIERRA", "GROUND"].includes((w.label || "").trim().toUpperCase()));
+    (c.type === "net_label" && (c.terminalType === "ground" || GND_ALIASES.includes(String(c.label || c.value || "").trim().toUpperCase())))
+  ) || wires.some(w => GND_ALIASES.includes((w.label || "").trim().toUpperCase()));
   if (!hasGnd) {
     for (const comp of components) {
-      if (comp.type === "vsource" || comp.type === "isource") {
+      if (
+        comp.type === "vsource" ||
+        comp.type === "isource" ||
+        (comp.type === "net_label" && (comp.terminalType === "power" || comp.terminalType === "generator"))
+      ) {
         issues.push({
           componentId: comp.id,
           type: "warning",

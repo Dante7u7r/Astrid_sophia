@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "campaignId": "phase5-local-solver-diversity-v1",
-  "generatedAtUnixSeconds": 1785820936,
+  "generatedAtUnixSeconds": 1787267727,
   "solverVersion": "0.1.0",
   "datasetSha256": "086132188230ce12b5fdb3f8c558e925bb75794dce6d5c5a0f06b432ffa74479",
   "executionCount": 500,
@@ -16,7 +16,7 @@
   "passed": true,
   "passedExecutions": 500,
   "failedExecutions": 0,
-  "elapsedMilliseconds": 429,
+  "elapsedMilliseconds": 214,
   "families": [
     {
       "family": "ac-rc-cutoff",

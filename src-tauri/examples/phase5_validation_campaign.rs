@@ -271,6 +271,13 @@ fn run_campaign() -> Result<Vec<CampaignRecord>, String> {
             component("V1", "vsource", vin, "1", "0"),
             component("R1", "resistor", resistance, "1", "2"),
             component("C1", "capacitor", capacitance, "2", "0"),
+            ComponentData {
+                id: "ic1".to_string(),
+                comp_type: "ic_directive".to_string(),
+                pins: vec!["2".to_string()],
+                value: 0.0,
+                ..Default::default()
+            },
         ]);
         let result = solve_transient_circuit(
             &circuit,

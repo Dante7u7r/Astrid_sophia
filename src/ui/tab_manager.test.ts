@@ -247,4 +247,42 @@ describe("TabManager", () => {
     expect(harness.manager.getActiveTabId()).toBe(first.id);
     expect(harness.manager.getTabById(second.id)).toBeUndefined();
   });
+
+  test("restaura automaticamente la sesion guardada si existen pestanas previas", () => {
+    localStorage.setItem("astryd_workspace_session_v1", JSON.stringify({
+      version: 1,
+      timestamp: Date.now(),
+      activeTabId: "restored-tab",
+      tabs: [{
+        id: "restored-tab",
+        name: "Circuito Guardado",
+        filePath: null,
+        unsaved: true,
+        activeAnalysisMode: "TRAN",
+        zoom: 1.2,
+        offsetX: 10,
+        offsetY: 20,
+        components: [{ id: "R1", type: "resistor", value: 2200, x: 50, y: 50, rotation: 0 }],
+        wires: [],
+        ch1ProbeNode: "1",
+        ch2ProbeNode: "2",
+        ch3ProbeNode: "3",
+        ch4ProbeNode: "4",
+        sparPorts: [],
+      }],
+    }));
+
+    const harness = createHarness();
+    const shortcutMock = vi.fn();
+    harness.manager.init(shortcutMock);
+
+    expect(shortcutMock).toHaveBeenCalled();
+    expect(harness.manager.getActiveTabId()).toBe("restored-tab");
+    expect(harness.manager.getTabs()).toHaveLength(1);
+    expect(harness.manager.getActiveTab()?.name).toBe("Circuito Guardado");
+    expect(harness.orchestrator.components).toHaveLength(1);
+    expect(harness.orchestrator.components[0]?.id).toBe("R1");
+
+    localStorage.removeItem("astryd_workspace_session_v1");
+  });
 });

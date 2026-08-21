@@ -26,6 +26,9 @@ export function createCanvasViewportController(
     const dpr = deps.devicePixelRatio();
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
+
+    if (width <= 0 || height <= 0) return;
+
     const bufW = Math.round(width * dpr);
     const bufH = Math.round(height * dpr);
 
@@ -42,9 +45,22 @@ export function createCanvasViewportController(
     deps.requestAnimationFrame(() => deps.requestRender());
   };
 
+  const onVisibilityOrFocus = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      syncCanvasDimensions();
+    }
+  };
+
   if (viewport) {
     resizeObserver = deps.createResizeObserver(() => syncCanvasDimensions());
     resizeObserver.observe(viewport);
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", syncCanvasDimensions);
+    window.addEventListener("focus", syncCanvasDimensions);
+    window.addEventListener("pageshow", syncCanvasDimensions);
+    document.addEventListener("visibilitychange", onVisibilityOrFocus);
   }
 
   syncCanvasDimensions();
@@ -54,6 +70,12 @@ export function createCanvasViewportController(
     dispose: () => {
       resizeObserver?.disconnect();
       resizeObserver = null;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("resize", syncCanvasDimensions);
+        window.removeEventListener("focus", syncCanvasDimensions);
+        window.removeEventListener("pageshow", syncCanvasDimensions);
+        document.removeEventListener("visibilitychange", onVisibilityOrFocus);
+      }
     },
   };
 }

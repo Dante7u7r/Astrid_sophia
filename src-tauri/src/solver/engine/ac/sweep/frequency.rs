@@ -292,10 +292,14 @@ pub(super) fn solve_ac_frequencies(
                             }
                         }
                     }
-                    "opamp" => {
+                    "opamp" | "opamp_ideal" => {
                         let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
                         let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
-                        let pin_out = comp.pins[4].parse::<usize>().unwrap();
+                        let pin_out = if comp.pins.len() >= 5 {
+                            comp.pins[4].parse::<usize>().unwrap()
+                        } else {
+                            comp.pins[2].parse::<usize>().unwrap()
+                        };
 
                         let a_ol = comp.opamp_aol.unwrap_or(if comp.value > 0.0 { comp.value } else { 1e5 });
                         let gbw = comp.opamp_gbw.unwrap_or(1e6);

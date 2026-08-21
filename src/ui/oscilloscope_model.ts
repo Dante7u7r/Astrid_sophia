@@ -195,29 +195,57 @@ export function findTriggerStartIndex(
 ): number {
   if (!nodeId || results.length <= 2) return 0;
 
-  // Search in recent window to lock onto the live periodic signal
   const windowDuration = timeDivValue ? timeDivValue * 10 : Infinity;
   const latestTime = results[results.length - 1].time;
-  const searchStartTime = Number.isFinite(windowDuration) ? Math.max(0, latestTime - windowDuration * 2.5) : 0;
+  const totalDuration = latestTime - results[0].time;
 
-  let searchStartIdx = 1;
-  if (searchStartTime > 0) {
-    for (let i = results.length - 1; i >= 1; i--) {
-      if (results[i].time <= searchStartTime) {
-        searchStartIdx = i;
-        break;
+  // Si la duración es corta o no hay ventana especificada, buscamos el primer cruce de trigger
+  if (!Number.isFinite(windowDuration) || totalDuration <= windowDuration) {
+    for (let i = 1; i < results.length; i++) {
+      const v0 = results[i - 1].nodeVoltages[nodeId] ?? 0;
+      const v1 = results[i].nodeVoltages[nodeId] ?? 0;
+      if (edge === "rising" && v0 <= level && v1 > level) {
+        return i;
+      } else if (edge === "falling" && v0 >= level && v1 < level) {
+        return i;
       }
+    }
+    return 0;
+  }
+
+  // Si la simulación sobrepasa la ventana, mostramos los datos más recientes anclados al trigger
+  const targetStartTime = latestTime - windowDuration;
+  const searchMinTime = Math.max(0, targetStartTime - windowDuration * 0.75);
+  const searchMaxTime = Math.min(latestTime - windowDuration * 0.1, targetStartTime + windowDuration * 0.25);
+
+  let searchMinIdx = 1;
+  let searchMaxIdx = results.length - 1;
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].time >= searchMinTime) {
+      searchMinIdx = Math.max(1, i);
+      break;
+    }
+  }
+  for (let i = searchMinIdx; i < results.length; i++) {
+    if (results[i].time > searchMaxTime) {
+      searchMaxIdx = i;
+      break;
     }
   }
 
   let bestTriggerIdx = -1;
-  for (let i = searchStartIdx; i < results.length; i++) {
+  let minDistance = Infinity;
+
+  for (let i = searchMinIdx; i <= searchMaxIdx; i++) {
     const v0 = results[i - 1].nodeVoltages[nodeId] ?? 0;
     const v1 = results[i].nodeVoltages[nodeId] ?? 0;
-    if (edge === "rising" && v0 <= level && v1 > level) {
-      bestTriggerIdx = i;
-    } else if (edge === "falling" && v0 >= level && v1 < level) {
-      bestTriggerIdx = i;
+    const isCrossing = edge === "rising" ? (v0 <= level && v1 > level) : (v0 >= level && v1 < level);
+    if (isCrossing) {
+      const dist = Math.abs(results[i].time - targetStartTime);
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestTriggerIdx = i;
+      }
     }
   }
 
@@ -225,13 +253,10 @@ export function findTriggerStartIndex(
     return bestTriggerIdx;
   }
 
-  // Fallback for flat DC or untriggered signal: display latest rolling window
-  if (Number.isFinite(windowDuration) && windowDuration > 0) {
-    const fallbackStartTime = Math.max(0, latestTime - windowDuration);
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].time >= fallbackStartTime) {
-        return i;
-      }
+  // Fallback: mostrar la ventana rodante más reciente
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].time >= targetStartTime) {
+      return i;
     }
   }
 
@@ -246,29 +271,41 @@ export function buildTyTracePoints(
   startIndex = 0,
   config?: TraceChannelConfig,
 ): TyTracePoint[] {
-  if (!nodeId || results.length === 0 || startIndex >= results.length) return [];
+  if (!nodeId || results.length === 0) return [];
 
   const windowDuration = scale.timeDivValue * 10;
   if (windowDuration <= 0 || !Number.isFinite(windowDuration)) return [];
 
+  let effectiveStartIndex = Math.max(0, Math.min(startIndex, results.length - 1));
+  let firstTime = results[effectiveStartIndex].time;
+  let endIndex = findVisibleEndIndex(results, effectiveStartIndex, firstTime + windowDuration);
+
+  // Si no hay suficientes muestras hacia adelante desde el trigger, rebobinamos para llenar la pantalla
+  if (endIndex - effectiveStartIndex < 2 && results.length >= 2) {
+    effectiveStartIndex = 0;
+    firstTime = results[0].time;
+    endIndex = findVisibleEndIndex(results, 0, firstTime + windowDuration);
+    if (endIndex < 2) {
+      endIndex = results.length;
+    }
+  }
+
   const divHeight = dimensions.height / 8;
-  const firstTime = results[startIndex].time;
-  const endIndex = findVisibleEndIndex(results, startIndex, firstTime + windowDuration);
   const maxPoints = Math.max(64, Math.min(2_000, Math.ceil(dimensions.width * 2)));
 
   // Calculate average for AC coupling if requested
   let acOffset = 0;
-  if (config?.coupling === "ac" && endIndex > startIndex) {
+  if (config?.coupling === "ac" && endIndex > effectiveStartIndex) {
     let sum = 0;
-    for (let i = startIndex; i < endIndex; i++) {
+    for (let i = effectiveStartIndex; i < endIndex; i++) {
       sum += results[i].nodeVoltages[nodeId] ?? 0;
     }
-    acOffset = sum / (endIndex - startIndex);
+    acOffset = sum / (endIndex - effectiveStartIndex);
   }
 
   const toPoint = (pt: TimeStepResult): TyTracePoint => {
     const relativeTime = pt.time - firstTime;
-    const x = Math.min(dimensions.width, (relativeTime / windowDuration) * dimensions.width);
+    const x = Math.max(0, Math.min(dimensions.width, (relativeTime / windowDuration) * dimensions.width));
     let v = pt.nodeVoltages[nodeId] ?? 0.0;
     if (config?.coupling === "gnd") {
       v = 0.0;
@@ -285,7 +322,7 @@ export function buildTyTracePoints(
   return buildMinMaxTrace(
     results,
     nodeId,
-    startIndex,
+    effectiveStartIndex,
     endIndex,
     maxPoints,
     toPoint,
@@ -334,10 +371,10 @@ export function calculateAutoFitSettings(
   const metrics = calculateOscilloscopeMetrics(results, nodeId);
   const totalDuration = Math.max(0, results[results.length - 1].time - results[0].time);
   const desiredTimePerDiv = metrics.freq > 0
-    ? 0.3 / metrics.freq
+    ? 0.2 / metrics.freq
     : totalDuration > 0
       ? totalDuration / 10
-      : 0.02;
+      : 0.005;
 
   return {
     voltsPerDiv,

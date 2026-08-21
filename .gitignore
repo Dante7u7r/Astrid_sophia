@@ -47,3 +47,5 @@ vite-*.log
 
 # Portable scientific-validation tools (downloaded locally, never versioned)
 validation/.tools/
+.astryd_live/
+src-tauri/.astryd_live/

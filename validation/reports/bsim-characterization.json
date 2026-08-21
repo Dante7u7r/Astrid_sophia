@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "suiteId": "bsim3-gap-characterization",
   "title": "Caracterización no bloqueante de la brecha BSIM3",
-  "generatedAtUnixSeconds": 1785820946,
+  "generatedAtUnixSeconds": 1787271347,
   "solverVersion": "0.1.0",
-  "gitHead": "237ed661c896",
-  "gitWorktree": "clean",
+  "gitHead": "424adb9e35af",
+  "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {
-    "ngspice": "** ngspice-46 : Circuit level simulation program"
+    "ngspice": "** ngspice-47 : Circuit level simulation program"
   },
   "passed": false,
   "passedCases": 0,

@@ -639,6 +639,40 @@ async fn save_circuit_to_path(
     write_file_atomically(&path, &content)
 }
 
+#[tauri::command]
+async fn update_live_inspection_state(
+    state_json: String,
+    svg_schematic: Option<String>,
+) -> Result<(), String> {
+    validate_circuit_file_content(&state_json)?;
+    let live_dir = PathBuf::from(".astryd_live");
+    if !live_dir.exists() {
+        std::fs::create_dir_all(&live_dir).map_err(|error| error.to_string())?;
+    }
+
+    let state_file = live_dir.join("state.json");
+    write_file_atomically(&state_file, &state_json)?;
+
+    if let Some(svg) = svg_schematic {
+        if !svg.is_empty() {
+            let svg_file = live_dir.join("schematic.svg");
+            write_file_atomically(&svg_file, &svg)?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_live_inspection_state() -> Result<String, String> {
+    let state_file = PathBuf::from(".astryd_live/state.json");
+    if state_file.exists() {
+        std::fs::read_to_string(&state_file).map_err(|error| error.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
+}
+
 #[cfg(feature = "wdio")]
 fn is_wdio_temporary_path(path: &Path) -> bool {
     let Some(parent) = path.parent() else {
@@ -889,6 +923,8 @@ pub fn run() {
             save_circuit_file,
             save_circuit_to_path,
             open_circuit_file,
+            update_live_inspection_state,
+            get_live_inspection_state,
             start_interactive_transient,
             stop_interactive_transient,
             inject_live_mutation,

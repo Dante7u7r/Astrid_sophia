@@ -5,9 +5,9 @@ Observaciones: **50/50** dentro de tolerancia.
 
 - Suite: `phase4-external-correlation`
 - Solver: `0.1.0`
-- Git: `aedab80dc9a6` (`clean`)
+- Git: `424adb9e35af` (`dirty`)
 - Plataforma: `windows-x86_64`
-- ngspice: `** ngspice-46 : Circuit level simulation program`
+- ngspice: `** ngspice-47 : Circuit level simulation program`
 
 | Caso | Análisis | Observación | Actual | Esperado | Error absoluto | Límite | Estado |
 |---|---:|---|---:|---:|---:|---:|:---:|

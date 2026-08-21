@@ -31,6 +31,12 @@
         "type": "capacitor",
         "value": 0.000001,
         "pins": ["2", "0"]
+      },
+      {
+        "id": "ic1",
+        "type": "ic_directive",
+        "value": 0.0,
+        "pins": ["2"]
       }
     ],
     "wires": [],

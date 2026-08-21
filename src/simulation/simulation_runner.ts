@@ -228,41 +228,49 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
 
       callbacks.onSimulationStateChanged(true, context);
 
-      // Crear el worker de co-simulación
-      coSimulationWorker = new Worker(
-        new URL('./co_simulation_worker.ts', import.meta.url),
-        { type: 'module' }
+      const hasMcus = netlist.components.some(
+        (c) => c.type.startsWith("mcu_") || c.type === "arduino_uno" || Boolean(c.firmware),
       );
 
-      // Mapear firmwares de componentes
-      const firmware: Record<string, Uint8Array> = {};
-      for (const comp of netlist.components) {
-        if (comp.firmware) {
-          firmware[comp.id] = comp.firmware;
-        }
-      }
+      if (hasMcus) {
+        // Crear el worker de co-simulación digital
+        coSimulationWorker = new Worker(
+          new URL('./co_simulation_worker.ts', import.meta.url),
+          { type: 'module' }
+        );
 
-      // Inicializar runtimes MCU en el worker
-      coSimulationWorker.postMessage({
-        type: "init_interactive",
-        netlist,
-        firmware
-      });
-
-      // Manejar respuestas del worker
-      coSimulationWorker.onmessage = (e) => {
-        const data = e.data;
-        if (
-          data.type === "frame_processed"
-          && data.frame.runId === context.runId
-          && activeContext?.runId === context.runId
-        ) {
-          callbacks.onFrameReceived(data.frame, context);
-          if (data.frame.isFinal) {
-            completeSimulation(data.frame.time, context);
+        // Mapear firmwares de componentes
+        const firmware: Record<string, Uint8Array> = {};
+        for (const comp of netlist.components) {
+          if (comp.firmware) {
+            firmware[comp.id] = comp.firmware;
           }
         }
-      };
+
+        // Inicializar runtimes MCU en el worker
+        coSimulationWorker.postMessage({
+          type: "init_interactive",
+          netlist,
+          firmware,
+        });
+
+        // Manejar respuestas del worker
+        coSimulationWorker.onmessage = (e) => {
+          const data = e.data;
+          if (
+            data.type === "frame_processed"
+            && data.frame.runId === context.runId
+            && activeContext?.runId === context.runId
+          ) {
+            callbacks.onFrameReceived(data.frame, context);
+            if (data.frame.isFinal) {
+              completeSimulation(data.frame.time, context);
+            }
+          }
+        };
+      } else {
+        coSimulationWorker = null;
+      }
 
       // Registrar listener IPC para frames analógicos entrantes
       unlistenStream = await listen<SimulationFrame>('sim-frame-update', (event) => {

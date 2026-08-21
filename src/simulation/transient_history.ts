@@ -10,6 +10,11 @@ export function appendLiveTransientSample(
 ): void {
   if (maxSamples < 2) throw new RangeError("maxSamples debe ser mayor o igual que 2");
 
+  // Si el tiempo retrocede (nueva corrida o reinicio del transitorio), reiniciar buffer para mantener monotonía
+  if (results.length > 0 && sample.time < results[results.length - 1]!.time) {
+    results.length = 0;
+  }
+
   if (results.length >= maxSamples) {
     const trimCount = Math.min(
       results.length,

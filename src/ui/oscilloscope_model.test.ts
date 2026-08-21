@@ -113,7 +113,7 @@ describe("oscilloscope_model", () => {
     ], "1");
 
     expect(settings.voltsPerDiv).toBe(20);
-    expect(settings.timeDivValue).toBe(0.2);
+    expect(settings.timeDivValue).toBe(0.1);
     expect(settings.centerVoltage).toBe(50);
   });
 

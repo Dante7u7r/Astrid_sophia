@@ -17,11 +17,12 @@ const probeBadgeStyles: Array<{
   key: keyof ProbeBadges;
   label: string;
   color: string;
+  bgFill: string;
 }> = [
-  { key: "ch1", label: "1", color: "hsl(174, 97%, 69%)" },
-  { key: "ch2", label: "2", color: "hsl(270, 89%, 65%)" },
-  { key: "ch3", label: "3", color: "hsl(25, 95%, 53%)" },
-  { key: "ch4", label: "4", color: "hsl(142, 70%, 45%)" },
+  { key: "ch1", label: "CH1", color: "#66fcf1", bgFill: "rgba(10, 30, 35, 0.92)" },
+  { key: "ch2", label: "CH2", color: "#a855f7", bgFill: "rgba(28, 12, 40, 0.92)" },
+  { key: "ch3", label: "CH3", color: "#f97316", bgFill: "rgba(35, 18, 10, 0.92)" },
+  { key: "ch4", label: "CH4", color: "#22c55e", bgFill: "rgba(10, 32, 18, 0.92)" },
 ];
 
 export function drawTemporaryWire(
@@ -55,18 +56,48 @@ export function drawProbeBadges(
     const point = probes[badge.key];
     if (!point) continue;
 
-    ctx.fillStyle = badge.color;
-    ctx.shadowColor = badge.color;
-    ctx.shadowBlur = 8;
+    ctx.save();
+
+    // 1. Aguja hacia el pin
+    ctx.strokeStyle = badge.color;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(point.x, point.y - 14, 8, 0, Math.PI * 2);
+    ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x, point.y - 8);
+    ctx.stroke();
+
+    // Punto de contacto
+    ctx.fillStyle = badge.color;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
     ctx.fill();
+
+    // 2. Insignia flotante redondeada
+    const badgeW = 28;
+    const badgeH = 15;
+    const badgeX = point.x - badgeW / 2;
+    const badgeY = point.y - 23;
+
+    ctx.shadowColor = badge.color;
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = badge.bgFill;
+    ctx.strokeStyle = badge.color;
+    ctx.lineWidth = 1.2;
+
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
+    ctx.fill();
+    ctx.stroke();
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = "#030508";
-    ctx.font = "bold 9px 'Inter', sans-serif";
+    // 3. Texto del canal
+    ctx.fillStyle = badge.color;
+    ctx.font = "bold 8.5px 'JetBrains Mono', 'Inter', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(badge.label, point.x, point.y - 11);
+    ctx.textBaseline = "middle";
+    ctx.fillText(badge.label, point.x, badgeY + badgeH / 2 + 0.5);
+
+    ctx.restore();
   }
 }
 

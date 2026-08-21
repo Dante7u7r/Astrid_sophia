@@ -56,6 +56,10 @@ import { createDesktopControllerRegistry } from "./app/desktop_controller_regist
 import { type SimulationController } from "./app/simulation_controller";
 import { initializeFeedbackRuntime } from "./feedback/runtime";
 import { configureAdvisorRuntime } from "./intelligence/advisor_runtime";
+import {
+  createLiveStateExporter,
+  type LiveStateExporter,
+} from "./app/live_state_exporter";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 const visualAudit = resolveVisualAuditConfig(window.location.search, {
@@ -155,6 +159,8 @@ let sparPorts: { nodeId: string; z0: number }[] = [];
 let sparFStart = 10.0;
 let sparFEnd = 100000.0;
 let sparPPD = 20;
+
+let liveStateExporter: LiveStateExporter | null = null;
 
 function updateCanvasRendering(immediate = false): void {
   renderController?.updateCanvasRendering(immediate);
@@ -564,6 +570,37 @@ window.addEventListener("DOMContentLoaded", () => {
   consoleLogController.bindClearButton();
   void initializeFeedbackRuntime(addLog);
 
+  // Recuperación automática de renderizado y estado tras suspensión del sistema o display sleep
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      updateCanvasRendering(true);
+      updateOscilloscopeRendering(true);
+      window.dispatchEvent(new Event("resize"));
+    } else {
+      tabManager?.flushAutoSaveNow();
+    }
+  });
+
+  window.addEventListener("focus", () => {
+    updateCanvasRendering(true);
+  });
+
+  window.addEventListener("pageshow", () => {
+    updateCanvasRendering(true);
+  });
+
+  liveStateExporter = createLiveStateExporter({
+    getOrchestrator: () => orchestrator,
+    getTabManager: () => tabManager,
+    getActiveAnalysisMode: () => activeAnalysisMode,
+    getVoltageMap: () => circuitState.getVoltageMap(),
+    getBranchCurrents: () => circuitState.getCurrentMap(),
+    isSimulationActive: () => Boolean(orchestrator?.simulationActive || simulationRunner?.isSimulationActive()),
+    getRecentLogs: () => consoleLogController.getLogs(),
+    invokeTauri: invoke,
+  });
+  liveStateExporter.scheduleExport(500);
+
   addLog("Entorno de escritorio cargado con telemetría de rendimiento activa.", "system");
   addLog("Colocación de sondas interactivas: Haz Shift+Click en Canal 1 o Canal 2 para conectar las sondas en el circuito.", "system");
 });
@@ -589,6 +626,7 @@ function initFilePersistence() {
 function markCurrentTabAsModified() {
   circuitHistory.recordCurrentState();
   tabManager?.markCurrentTabAsModified();
+  liveStateExporter?.scheduleExport(300);
 }
 
 function initTabManager() {

@@ -55,7 +55,7 @@ export function createComponent(
     newComp.switchVth = 0.5;
     newComp.switchVh = 0.05;
     newComp.switchState = false;
-  } else if (type === "opamp") {
+  } else if (type === "opamp" || type === "opamp_ideal") {
     newComp.offsetVoltage = 0.002;
     newComp.openLoopGain = 100_000;
   } else if (type === "mcu_8051" || type === "mcu_avr") {
@@ -65,6 +65,33 @@ export function createComponent(
       : defaultClock;
   } else if (type === "x") {
     newComp.pinCount = 4;
+  } else if (type === "net_label") {
+    const valStr = typeof value === "string" ? value : (typeof value === "number" ? `${value}V` : "NET_A");
+    newComp.label = valStr;
+    newComp.value = valStr;
+    const upper = valStr.toUpperCase();
+    if (["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"].includes(upper)) {
+      newComp.terminalType = "ground";
+    } else if (upper.includes("CLK") || upper.includes("PULSE")) {
+      newComp.terminalType = "generator";
+      newComp.waveType = "square";
+      newComp.frequency = 1000;
+      newComp.amplitude = 5;
+    } else if (/^[+-]?\d+(\.\d+)?V?$/i.test(upper) || ["VCC", "VDD", "VEE", "VBAT", "VBUS"].includes(upper)) {
+      newComp.terminalType = "power";
+      const match = upper.match(/^([+-]?\d+(?:\.\d+)?)/);
+      if (match) {
+        newComp.voltage = parseFloat(match[1]);
+      } else if (upper === "VCC") {
+        newComp.voltage = 5.0;
+      } else if (upper === "VDD") {
+        newComp.voltage = 3.3;
+      } else if (upper === "VEE") {
+        newComp.voltage = -5.0;
+      }
+    } else {
+      newComp.terminalType = "signal";
+    }
   }
 
   return newComp;

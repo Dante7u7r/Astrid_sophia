@@ -10,9 +10,15 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
     let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
-    let pin_vplus = comp.pins[2].parse::<usize>().unwrap();
-    let pin_vminus = comp.pins[3].parse::<usize>().unwrap();
-    let pin_out = comp.pins[4].parse::<usize>().unwrap();
+    let (pin_vplus, pin_vminus, pin_out) = if comp.pins.len() >= 5 {
+        (
+            comp.pins[2].parse::<usize>().unwrap_or(0),
+            comp.pins[3].parse::<usize>().unwrap_or(0),
+            comp.pins[4].parse::<usize>().unwrap(),
+        )
+    } else {
+        (0, 0, comp.pins[2].parse::<usize>().unwrap())
+    };
 
     let v_in_pos = if pin_in_pos > 0 {
         prev_v[pin_in_pos]
