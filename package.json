@@ -11,11 +11,13 @@
     "npm": "11.16.0"
   },
   "bin": {
-    "astryd-sophia": "./scripts/headless_cli.mjs"
+    "astryd-sophia": "./scripts/headless_cli.mjs",
+    "astryd-spice-lsp": "./scripts/spice_lsp_server.mjs"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "lsp": "node scripts/spice_lsp_server.mjs",
     "build:audit": "tsc && vite build --mode audit",
     "build:e2e": "tsc && vite build --mode wdio",
     "preview": "vite preview",
