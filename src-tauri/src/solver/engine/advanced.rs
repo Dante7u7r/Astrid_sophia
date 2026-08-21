@@ -1,3 +1,4 @@
+pub mod aging;
 mod measurements;
 mod monte_carlo;
 mod periodic;
@@ -9,6 +10,7 @@ pub mod thermal_network;
 mod transmission;
 pub mod waveform_relaxation;
 
+pub use aging::*;
 pub use measurements::*;
 pub use monte_carlo::*;
 pub use periodic::*;

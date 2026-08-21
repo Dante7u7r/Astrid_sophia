@@ -73,4 +73,8 @@ mod core_tests {
     mod thermal_network {
         include!("tests/thermal_network_tests.rs");
     }
+
+    mod aging {
+        include!("tests/aging_tests.rs");
+    }
 }
