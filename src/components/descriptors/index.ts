@@ -26,6 +26,10 @@ import {
   PjfDefinition,
   PmosDefinition,
   PnpDefinition,
+  Bsim3NmosDefinition,
+  Bsim3PmosDefinition,
+  Bsim4NmosDefinition,
+  Bsim4PmosDefinition,
 } from "./semiconductors";
 
 import {
@@ -90,6 +94,10 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   NjfDefinition,
   PjfDefinition,
   OptoDefinition,
+  Bsim3NmosDefinition,
+  Bsim3PmosDefinition,
+  Bsim4NmosDefinition,
+  Bsim4PmosDefinition,
 
   // Analógicos
   OpampDefinition,

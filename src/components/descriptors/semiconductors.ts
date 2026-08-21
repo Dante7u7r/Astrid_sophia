@@ -323,3 +323,83 @@ export const OptoDefinition: ComponentDefinition = {
     drawOptocoupler(ctx, comp, state.color);
   },
 };
+
+const FOUR_TERMINAL_MOS_PINS: readonly LocalPinDefinition[] = [
+  { index: 0, x: -40, y: 0, label: "G", name: "Puerta (Gate)" },
+  { index: 1, x: 20, y: -40, label: "D", name: "Drenaje (Drain)" },
+  { index: 2, x: 20, y: 40, label: "S", name: "Fuente (Source)" },
+  { index: 3, x: 20, y: 0, label: "B", name: "Sustrato (Bulk)" },
+];
+
+export const Bsim3NmosDefinition: ComponentDefinition = {
+  type: "bsim3nmos",
+  name: "BSIM3v3 NMOS (Experimental)",
+  description: "Modelo submicrónico BSIM3v3. Modelo experimental: requiere habilitar flag de físicas experimentales.",
+  category: "semiconductores",
+  prefix: "M",
+  defaultProperties: { value: 1.0, w: 10e-6, l: 0.18e-6 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  hasStandardLeads: false,
+  getPins: () => FOUR_TERMINAL_MOS_PINS,
+  render: (ctx, comp, state, options) => {
+    NmosDefinition.render(ctx, comp, state, options);
+    // Terminal Bulk adicional
+    ctx.moveTo(10, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+  },
+};
+
+export const Bsim3PmosDefinition: ComponentDefinition = {
+  type: "bsim3pmos",
+  name: "BSIM3v3 PMOS (Experimental)",
+  description: "Modelo submicrónico BSIM3v3 PMOS. Modelo experimental: requiere habilitar flag de físicas experimentales.",
+  category: "semiconductores",
+  prefix: "M",
+  defaultProperties: { value: -1.0, w: 20e-6, l: 0.18e-6 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  hasStandardLeads: false,
+  getPins: () => FOUR_TERMINAL_MOS_PINS,
+  render: (ctx, comp, state, options) => {
+    PmosDefinition.render(ctx, comp, state, options);
+    ctx.moveTo(10, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+  },
+};
+
+export const Bsim4NmosDefinition: ComponentDefinition = {
+  type: "bsim4nmos",
+  name: "BSIM4 NMOS (Experimental)",
+  description: "Modelo nanométrico BSIM4 NMOS. Modelo experimental: requiere habilitar flag de físicas experimentales.",
+  category: "semiconductores",
+  prefix: "M",
+  defaultProperties: { value: 1.0, w: 10e-6, l: 0.09e-6 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  hasStandardLeads: false,
+  getPins: () => FOUR_TERMINAL_MOS_PINS,
+  render: (ctx, comp, state, options) => {
+    NmosDefinition.render(ctx, comp, state, options);
+    ctx.moveTo(10, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+  },
+};
+
+export const Bsim4PmosDefinition: ComponentDefinition = {
+  type: "bsim4pmos",
+  name: "BSIM4 PMOS (Experimental)",
+  description: "Modelo nanométrico BSIM4 PMOS. Modelo experimental: requiere habilitar flag de físicas experimentales.",
+  category: "semiconductores",
+  prefix: "M",
+  defaultProperties: { value: -1.0, w: 20e-6, l: 0.09e-6 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  hasStandardLeads: false,
+  getPins: () => FOUR_TERMINAL_MOS_PINS,
+  render: (ctx, comp, state, options) => {
+    PmosDefinition.render(ctx, comp, state, options);
+    ctx.moveTo(10, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+  },
+};

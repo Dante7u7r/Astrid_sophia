@@ -417,6 +417,41 @@
                       <span class="comp-desc">Junction FET (P-Ch)</span>
                     </div>
                   </div>
+                  <!-- BSIM3 NMOS (Experimental) -->
+                  <div class="component-card" draggable="true" id="comp-bsim3nmos" data-type="bsim3nmos" data-default="1.0" data-tooltip="⚠️ EXPERIMENTAL: Modelo submicrónico BSIM3v3 NMOS (error ~98% vs ngspice). Requiere activar 'Habilitar análisis y modelos experimentales' en Ajustes.">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 23 10 L 23 30" />
+                        <path d="M 15 12 L 15 28" />
+                        <path d="M 15 20 L 4 20" />
+                        <path d="M 23 12 L 29 12 L 29 4" />
+                        <path d="M 23 28 L 29 28 L 29 36" />
+                        <path d="M 23 20 L 36 20" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">BSIM3 NMOS <span class="badge-experimental">EXPERIMENTAL</span></span>
+                      <span class="comp-desc">4 Term (G, D, S, B)</span>
+                    </div>
+                  </div>
+                  <!-- BSIM3 PMOS (Experimental) -->
+                  <div class="component-card" draggable="true" id="comp-bsim3pmos" data-type="bsim3pmos" data-default="-1.0" data-tooltip="⚠️ EXPERIMENTAL: Modelo submicrónico BSIM3v3 PMOS (error ~98% vs ngspice). Requiere activar 'Habilitar análisis y modelos experimentales' en Ajustes.">
+                    <div class="comp-icon-box">
+                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M 23 10 L 23 30" />
+                        <path d="M 17 12 L 17 28" />
+                        <path d="M 13 20 L 4 20" />
+                        <circle cx="15" cy="20" r="2" />
+                        <path d="M 23 12 L 29 12 L 29 4" />
+                        <path d="M 23 28 L 29 28 L 29 36" />
+                        <path d="M 23 20 L 36 20" />
+                      </svg>
+                    </div>
+                    <div class="comp-details">
+                      <span class="comp-name">BSIM3 PMOS <span class="badge-experimental">EXPERIMENTAL</span></span>
+                      <span class="comp-desc">4 Term (G, D, S, B)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -897,6 +932,9 @@
                       <div class="hud-item ch4"><span class="hud-lbl">CH4:</span> <span id="osc-hud-ch4-val">1.0 V/div</span></div>
                       <div class="hud-item time"><span class="hud-lbl">TIME:</span> <span id="osc-hud-time-val">20 ms/div</span></div>
                     </div>
+
+                    <!-- Floating Fallback Solver Warning Badge on Scope -->
+                    <div id="osc-fallback-badge" class="badge-fallback-linear" style="display: none; position: absolute; top: 8px; right: 8px; z-index: 10; font-size: 0.68rem; box-shadow: 0 2px 8px rgba(0,0,0,0.6);" data-tooltip="Modo de respaldo web: El solver Rust no está disponible. Circuitos con diodos o transistores usan resistencias fijas aproximadas (no exactas).">FALLBACK: SOLO LINEAL</div>
 
                     <canvas class="osc-canvas" id="osc-canvas"></canvas>
                   </div>

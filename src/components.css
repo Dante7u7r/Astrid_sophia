@@ -117,6 +117,22 @@
   white-space: nowrap;
 }
 
+.badge-experimental {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(239, 68, 68, 0.20);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.50);
+  font-size: 0.60rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
 /* Controles de análisis */
 .simulation-controls {
   display: flex;

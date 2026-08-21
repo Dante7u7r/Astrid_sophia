@@ -8,10 +8,10 @@ import { ALL_COMPONENT_DEFINITIONS } from "./descriptors/index";
 import type { ComponentDefinition } from "./types";
 
 describe("ComponentRegistry & ComponentDescriptor System", () => {
-  it("contiene registrados todos los 40 componentes del catálogo estándar", () => {
+  it("contiene registrados todos los 44 componentes del catálogo estándar", () => {
     const all = globalComponentRegistry.getAll();
-    expect(all.length).toBe(40);
-    expect(ALL_COMPONENT_DEFINITIONS.length).toBe(40);
+    expect(all.length).toBe(44);
+    expect(ALL_COMPONENT_DEFINITIONS.length).toBe(44);
 
     const expectedTypes: ComponentInstance["type"][] = [
       "resistor",
@@ -32,6 +32,10 @@ describe("ComponentRegistry & ComponentDescriptor System", () => {
       "njf",
       "pjf",
       "opto",
+      "bsim3nmos",
+      "bsim3pmos",
+      "bsim4nmos",
+      "bsim4pmos",
       "opamp",
       "opamp_ideal",
       "vsource",

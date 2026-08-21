@@ -7,12 +7,14 @@ export function createIpcStatusController(): IpcStatusController {
   let statusDot: HTMLElement | null = null;
   let statusText: HTMLElement | null = null;
   let footerSolver: HTMLElement | null = null;
+  let oscFallbackBadge: HTMLElement | null = null;
 
   return {
     init: () => {
       statusDot = document.querySelector("#ipc-status-dot");
       statusText = document.querySelector("#ipc-status-text");
       footerSolver = document.querySelector(".footer-solver");
+      oscFallbackBadge = document.querySelector("#osc-fallback-badge");
     },
     setStatus: (text, color) => {
       if (!statusDot || !statusText) return;
@@ -26,6 +28,9 @@ export function createIpcStatusController(): IpcStatusController {
           footerSolver.textContent = "Solver: Web Fallback (Solo Lineal - Sin Newton-Raphson)";
           footerSolver.style.color = "var(--warning, #f59e0b)";
         }
+        if (oscFallbackBadge) {
+          oscFallbackBadge.style.display = "inline-block";
+        }
       } else {
         statusDot.style.backgroundColor = color || "var(--accent-cyan)";
         statusText.textContent = text;
@@ -33,6 +38,9 @@ export function createIpcStatusController(): IpcStatusController {
         if (footerSolver && text.includes("Rust")) {
           footerSolver.textContent = "Solver: MNA Newton-Raphson (Rust)";
           footerSolver.style.color = "inherit";
+        }
+        if (oscFallbackBadge) {
+          oscFallbackBadge.style.display = "none";
         }
       }
     },
