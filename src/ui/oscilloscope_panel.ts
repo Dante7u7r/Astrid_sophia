@@ -41,7 +41,9 @@ export interface PvtRunResult {
 }
 
 export interface PvtTrace {
-  config: PvtConfig;
+  config?: PvtConfig;
+  name?: string;
+  label?: string;
   results: readonly TimeStepResult[];
   visible: boolean;
   color: string;

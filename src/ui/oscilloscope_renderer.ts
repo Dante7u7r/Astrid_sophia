@@ -290,6 +290,23 @@ export function drawPvtTraces(
     ctx.stroke();
   }
   ctx.shadowBlur = 0;
+
+  // Draw Legend Box in upper-right corner for Parametric / PVT curves
+  if (traces.length > 0) {
+    ctx.save();
+    ctx.font = "10px monospace";
+    let legendY = 18;
+    for (const trace of traces) {
+      if (!trace.visible) continue;
+      const label = trace.label ?? trace.name ?? trace.config?.corner ?? "TRAZA";
+      ctx.fillStyle = trace.color;
+      ctx.fillRect(width - 130, legendY - 8, 8, 8);
+      ctx.fillStyle = "rgba(226, 232, 240, 0.9)";
+      ctx.fillText(label, width - 116, legendY);
+      legendY += 13;
+    }
+    ctx.restore();
+  }
 }
 
 export function drawSplitTyReticle(
