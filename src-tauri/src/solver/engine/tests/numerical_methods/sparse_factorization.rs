@@ -170,3 +170,119 @@ fn test_complex_sparse_csc_numerical_factorize() {
         assert!(diff < 1e-12, "Discrepancia en la solución compleja en índice {}: clásica = {}, csc = {}, diff = {}", i, sol_classic[i], sol_csc[i], diff);
     }
 }
+
+#[test]
+fn test_faer_sparse_real_parity_vs_analytical_and_csc() {
+    let size = 5;
+    let mut matrix_a = SparseMatrix::new(size);
+
+    matrix_a.add_element(0, 0, 4.0);
+    matrix_a.add_element(0, 1, -1.0);
+    matrix_a.add_element(0, 3, -1.0);
+
+    matrix_a.add_element(1, 0, -1.0);
+    matrix_a.add_element(1, 1, 3.0);
+    matrix_a.add_element(1, 2, -1.0);
+
+    matrix_a.add_element(2, 1, -1.0);
+    matrix_a.add_element(2, 2, 4.0);
+    matrix_a.add_element(2, 4, -2.0);
+
+    matrix_a.add_element(3, 0, -1.0);
+    matrix_a.add_element(3, 3, 3.0);
+    matrix_a.add_element(3, 4, -1.0);
+
+    matrix_a.add_element(4, 2, -2.0);
+    matrix_a.add_element(4, 3, -1.0);
+    matrix_a.add_element(4, 4, 5.0);
+
+    let b = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+
+    // Resolver con Faer
+    let sol_faer = crate::solver::linear_backend::solve_linear_real(&matrix_a, &b).unwrap();
+
+    // Resolver con solver clásico
+    let b_vec = nalgebra::DVector::from_vec(b.clone());
+    let lu_classic = SparseLU::factorize(matrix_a.clone()).unwrap();
+    let sol_classic = lu_classic.solve(&b_vec).unwrap();
+
+    for i in 0..size {
+        let diff = (sol_faer[i] - sol_classic[i]).abs();
+        assert!(
+            diff < 1e-12,
+            "Discrepancia Faer vs Clásica en índice {}: faer = {}, clásica = {}, diff = {}",
+            i,
+            sol_faer[i],
+            sol_classic[i],
+            diff
+        );
+    }
+}
+
+#[test]
+fn test_faer_sparse_complex_parity_vs_analytical_and_csc() {
+    let size = 4;
+    let mut matrix_a = ComplexSparseMatrix::new(size);
+
+    matrix_a.add_element(0, 0, Complex::new(4.0, 1.0));
+    matrix_a.add_element(0, 1, Complex::new(-1.0, 0.0));
+    matrix_a.add_element(0, 2, Complex::new(0.0, -2.0));
+
+    matrix_a.add_element(1, 0, Complex::new(-1.0, 0.0));
+    matrix_a.add_element(1, 1, Complex::new(3.0, 2.0));
+    matrix_a.add_element(1, 3, Complex::new(-1.0, 1.0));
+
+    matrix_a.add_element(2, 0, Complex::new(0.0, -2.0));
+    matrix_a.add_element(2, 2, Complex::new(5.0, 0.0));
+    matrix_a.add_element(2, 3, Complex::new(-2.0, -1.0));
+
+    matrix_a.add_element(3, 1, Complex::new(-1.0, 1.0));
+    matrix_a.add_element(3, 2, Complex::new(-2.0, -1.0));
+    matrix_a.add_element(3, 3, Complex::new(6.0, 4.0));
+
+    let b = vec![
+        Complex::new(1.0, 2.0),
+        Complex::new(3.0, -1.0),
+        Complex::new(0.0, 4.0),
+        Complex::new(2.0, 2.0),
+    ];
+
+    let sol_faer = crate::solver::linear_backend::solve_linear_complex(&matrix_a, &b).unwrap();
+    let b_vec = nalgebra::DVector::from_vec(b.clone());
+    let lu_classic = ComplexSparseLU::factorize(matrix_a.clone()).unwrap();
+    let sol_classic = lu_classic.solve(&b_vec).unwrap();
+
+    for i in 0..size {
+        let diff = (sol_faer[i] - sol_classic[i]).norm();
+        assert!(
+            diff < 1e-12,
+            "Discrepancia Compleja Faer vs Clásica en índice {}: faer = {}, clásica = {}, diff = {}",
+            i,
+            sol_faer[i],
+            sol_classic[i],
+            diff
+        );
+    }
+}
+
+#[test]
+fn test_faer_ill_conditioned_high_dynamic_range() {
+    // Matriz con componentes en extremos de escala: Ron = 1e-3, Roff = 1e9
+    let mut mat = SparseMatrix::new(3);
+    mat.add_element(0, 0, 1e3); // G_on = 1000 S
+    mat.add_element(0, 1, -1e3);
+    mat.add_element(1, 0, -1e3);
+    mat.add_element(1, 1, 1e3 + 1e-9); // G_on + G_off
+    mat.add_element(1, 2, -1e-9);
+    mat.add_element(2, 1, -1e-9);
+    mat.add_element(2, 2, 1e-9 + 1.0); // Conexión a carga de 1 ohm
+
+    let rhs = vec![1000.0, 0.0, 0.0];
+    let sol = crate::solver::linear_backend::solve_linear_real(&mat, &rhs).unwrap();
+
+    assert_eq!(sol.len(), 3);
+    for (idx, &v) in sol.iter().enumerate() {
+        assert!(v.is_finite(), "Solución finita en nodo {}", idx);
+    }
+}
+

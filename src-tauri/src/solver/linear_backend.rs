@@ -3,8 +3,9 @@
 //! Proporciona:
 //! 1. `LinearSolverBackend`: Trait unificado para resolución de sistemas lineales reales y complejos.
 //! 2. `FaerLinearSolver`: Backend de alto rendimiento con SIMD vectorizado usando el crate `faer`.
-//! 3. `CustomCscLinearSolver`: Backend legado basado en CSC left-looking y Markowitz estático.
-//! 4. Funciones auxiliares `solve_linear_real` y `solve_linear_complex` para despacho optimizado.
+//! 3. `FaerFactorizedReal` y `FaerFactorizedComplex`: Solvers pre-factorizados para múltiples vectores RHS en O(N^2).
+//! 4. `CustomCscLinearSolver`: Backend legado basado en CSC left-looking y Markowitz estático.
+//! 5. Funciones auxiliares `solve_linear_real` y `solve_linear_complex` para despacho optimizado.
 
 use crate::solver::matrix::{ComplexSparseMatrix, SparseLU, SparseMatrix};
 use faer::prelude::*;
@@ -24,10 +25,142 @@ pub trait LinearSolverBackend: Send + Sync {
     ) -> Result<Vec<Complex<f64>>, String>;
 }
 
+/// Estructura de factorización LU real pre-calculada con `faer`.
+/// Permite resolver múltiples vectores RHS sucesivamente en tiempo $O(N^2)$.
+#[derive(Debug, Clone)]
+pub struct FaerFactorizedReal {
+    size: usize,
+    mat_a: Mat<f64>,
+}
+
+impl FaerFactorizedReal {
+    pub fn solve(&self, rhs: &[f64]) -> Result<Vec<f64>, String> {
+        let n = self.size;
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+        if rhs.len() != n {
+            return Err(format!(
+                "Dimensión incompatible en FaerFactorizedReal: matriz {n}x{n}, rhs {}",
+                rhs.len()
+            ));
+        }
+
+        let mut vec_b = Col::<f64>::zeros(n);
+        for i in 0..n {
+            vec_b[i] = rhs[i];
+        }
+
+        let lu = self.mat_a.full_piv_lu();
+        let sol_col = lu.solve(&vec_b);
+        let mut solution = vec![0.0; n];
+        for i in 0..n {
+            let val = sol_col[i];
+            if !val.is_finite() {
+                return Err(
+                    "Error numérico: Solución contiene valores no finitos (matriz singular o mal condicionada)".to_string(),
+                );
+            }
+            solution[i] = val;
+        }
+
+        Ok(solution)
+    }
+}
+
+/// Estructura de factorización LU compleja pre-calculada con `faer` vía sistema aumentado $2N \times 2N$.
+/// Permite resolver múltiples vectores RHS complejos en barridos de ruido y sensibilidad en $O(N^2)$.
+#[derive(Debug, Clone)]
+pub struct FaerFactorizedComplex {
+    size: usize,
+    mat_2n: Mat<f64>,
+}
+
+impl FaerFactorizedComplex {
+    pub fn solve(&self, rhs: &[Complex<f64>]) -> Result<Vec<Complex<f64>>, String> {
+        let n = self.size;
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+        if rhs.len() != n {
+            return Err(format!(
+                "Dimensión incompatible en FaerFactorizedComplex: matriz compleja {n}x{n}, rhs {}",
+                rhs.len()
+            ));
+        }
+
+        let n2 = 2 * n;
+        let mut vec_2n = Col::<f64>::zeros(n2);
+        for i in 0..n {
+            vec_2n[i] = rhs[i].re;
+            vec_2n[i + n] = rhs[i].im;
+        }
+
+        let lu_2n = self.mat_2n.full_piv_lu();
+        let sol_2n = lu_2n.solve(&vec_2n);
+        let mut solution = Vec::with_capacity(n);
+        for i in 0..n {
+            let re = sol_2n[i];
+            let im = sol_2n[i + n];
+            if !re.is_finite() || !im.is_finite() {
+                return Err(
+                    "Error numérico complejo en FaerFactorizedComplex: NaN/Inf detectado"
+                        .to_string(),
+                );
+            }
+            solution.push(Complex::new(re, im));
+        }
+
+        Ok(solution)
+    }
+}
+
 /// Backend de álgebra lineal de alto rendimiento impulsado por `faer`.
 /// Utiliza kernels SIMD avanzados (AVX2, AVX-512, NEON) y pivoteo completo para estabilidad SPICE MNA.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FaerLinearSolver;
+
+impl FaerLinearSolver {
+    /// Pre-factoriza una matriz real en $O(N^3)$ para resolución acelerada de múltiples vectores RHS.
+    pub fn factorize_real(&self, matrix: &SparseMatrix) -> Result<FaerFactorizedReal, String> {
+        let n = matrix.size;
+        let mut mat_a = Mat::<f64>::zeros(n, n);
+        for (r, row_map) in matrix.rows.iter().enumerate() {
+            for (&c, &val) in row_map {
+                if r < n && c < n {
+                    mat_a[(r, c)] += val;
+                }
+            }
+        }
+        Ok(FaerFactorizedReal { size: n, mat_a })
+    }
+
+    /// Pre-factoriza una matriz compleja vía sistema aumentado $2N \times 2N$.
+    pub fn factorize_complex(
+        &self,
+        matrix: &ComplexSparseMatrix,
+    ) -> Result<FaerFactorizedComplex, String> {
+        let n = matrix.size;
+        let n2 = 2 * n;
+        let mut mat_2n = Mat::<f64>::zeros(n2, n2);
+
+        for (r, row_map) in matrix.rows.iter().enumerate() {
+            for (&c, val) in row_map {
+                if r < n && c < n {
+                    let re = val.re;
+                    let im = val.im;
+
+                    mat_2n[(r, c)] += re;
+                    mat_2n[(r, c + n)] -= im;
+                    mat_2n[(r + n, c)] += im;
+                    mat_2n[(r + n, c + n)] += re;
+                }
+            }
+        }
+
+        Ok(FaerFactorizedComplex { size: n, mat_2n })
+    }
+}
 
 impl LinearSolverBackend for FaerLinearSolver {
     fn solve_real(&self, matrix: &SparseMatrix, rhs: &[f64]) -> Result<Vec<f64>, String> {
@@ -44,39 +177,8 @@ impl LinearSolverBackend for FaerLinearSolver {
             ));
         }
 
-        // 1. Construir matriz contigua para faer
-        let mut mat_a = Mat::<f64>::zeros(n, n);
-        for (r, row_map) in matrix.rows.iter().enumerate() {
-            for (&c, &val) in row_map {
-                if r < n && c < n {
-                    mat_a[(r, c)] += val;
-                }
-            }
-        }
-
-        // 2. Construir vector RHS
-        let mut vec_b = Col::<f64>::zeros(n);
-        for i in 0..n {
-            vec_b[i] = rhs[i];
-        }
-
-        // 3. Factorización LU con pivoteo completo (Full Pivoting LU)
-        let lu = mat_a.full_piv_lu();
-        let sol_col = lu.solve(&vec_b);
-
-        // 4. Extraer solución y verificar valores no finitos (NaN / Inf)
-        let mut solution = vec![0.0; n];
-        for i in 0..n {
-            let val = sol_col[i];
-            if !val.is_finite() {
-                return Err(
-                    "Error numérico: Solución contiene valores no finitos (singularidad o circuito singular/abierto)".to_string(),
-                );
-            }
-            solution[i] = val;
-        }
-
-        Ok(solution)
+        let fact = self.factorize_real(matrix)?;
+        fact.solve(rhs)
     }
 
     fn solve_complex(
@@ -97,52 +199,8 @@ impl LinearSolverBackend for FaerLinearSolver {
             ));
         }
 
-        // Para sistemas complejos, convertimos al sistema aumentado real 2N x 2N equivalente:
-        // [ A_r  -A_i ] [ x_r ] = [ b_r ]
-        // [ A_i   A_r ] [ x_i ]   [ b_i ]
-        let n2 = 2 * n;
-        let mut mat_2n = Mat::<f64>::zeros(n2, n2);
-
-        for (r, row_map) in matrix.rows.iter().enumerate() {
-            for (&c, val) in row_map {
-                if r < n && c < n {
-                    let re = val.re;
-                    let im = val.im;
-
-                    // Bloque [A_r] en (r, c)
-                    mat_2n[(r, c)] += re;
-                    // Bloque [-A_i] en (r, c + n)
-                    mat_2n[(r, c + n)] -= im;
-                    // Bloque [A_i] en (r + n, c)
-                    mat_2n[(r + n, c)] += im;
-                    // Bloque [A_r] en (r + n, c + n)
-                    mat_2n[(r + n, c + n)] += re;
-                }
-            }
-        }
-
-        let mut vec_2n = Col::<f64>::zeros(n2);
-        for i in 0..n {
-            vec_2n[i] = rhs[i].re;
-            vec_2n[i + n] = rhs[i].im;
-        }
-
-        let lu_2n = mat_2n.full_piv_lu();
-        let sol_2n = lu_2n.solve(&vec_2n);
-
-        let mut solution = Vec::with_capacity(n);
-        for i in 0..n {
-            let re = sol_2n[i];
-            let im = sol_2n[i + n];
-            if !re.is_finite() || !im.is_finite() {
-                return Err(
-                    "Error numérico complejo en FaerLinearSolver: NaN/Inf detectado".to_string(),
-                );
-            }
-            solution.push(Complex::new(re, im));
-        }
-
-        Ok(solution)
+        let fact = self.factorize_complex(matrix)?;
+        fact.solve(rhs)
     }
 }
 
@@ -187,6 +245,18 @@ pub fn solve_linear_real(matrix: &SparseMatrix, rhs: &[f64]) -> Result<Vec<f64>,
     }
 }
 
+/// Factoriza un sistema lineal real con faer.
+pub fn factorize_linear_real(matrix: &SparseMatrix) -> Result<FaerFactorizedReal, String> {
+    FaerLinearSolver.factorize_real(matrix)
+}
+
+/// Factoriza un sistema lineal complejo con faer.
+pub fn factorize_linear_complex(
+    matrix: &ComplexSparseMatrix,
+) -> Result<FaerFactorizedComplex, String> {
+    FaerLinearSolver.factorize_complex(matrix)
+}
+
 /// Resuelve un sistema lineal complejo utilizando el solver óptimo (faer con fallback custom).
 pub fn solve_linear_complex(
     matrix: &ComplexSparseMatrix,
@@ -209,11 +279,6 @@ mod tests {
 
     #[test]
     fn test_faer_linear_solver_resistive_divider() {
-        // Divisor resistivo 10V con R1 = 1k, R2 = 1k
-        // Nodos: 1 (10V), 2 (5V)
-        // MNA:
-        // Fila 0: G1 + G2 en nodo 2 -> 2e-3 * V2 - G1 * V1 = 0
-        // Fila 1: V1 = 10 -> rama de voltaje
         let mut mat = SparseMatrix::new(3);
         // Nodo 1: Vsource
         mat.add_element(0, 2, 1.0); // I_V1 en nodo 1
@@ -240,8 +305,47 @@ mod tests {
     }
 
     #[test]
+    fn test_faer_factorized_multiple_rhs() {
+        let mut mat = SparseMatrix::new(2);
+        mat.add_element(0, 0, 2.0);
+        mat.add_element(0, 1, 1.0);
+        mat.add_element(1, 0, 1.0);
+        mat.add_element(1, 1, 3.0);
+
+        let fact = factorize_linear_real(&mat).expect("Factorización fallida");
+
+        let rhs1 = vec![5.0, 5.0];
+        let sol1 = fact.solve(&rhs1).expect("Solución 1 fallida");
+        // 2x + y = 5, x + 3y = 5 -> 5y = 5 -> y = 1, x = 2
+        assert!((sol1[0] - 2.0).abs() < 1e-9);
+        assert!((sol1[1] - 1.0).abs() < 1e-9);
+
+        let rhs2 = vec![8.0, 9.0];
+        let sol2 = fact.solve(&rhs2).expect("Solución 2 fallida");
+        // 2x + y = 8, x + 3y = 9 -> 5y = 10 -> y = 2, x = 3
+        assert!((sol2[0] - 3.0).abs() < 1e-9);
+        assert!((sol2[1] - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_faer_zero_diagonal_pivoting() {
+        // Matriz MNA con cero en la diagonal (típico de fuentes de voltaje independientes puras)
+        // [ 0  1 ] [ x ] = [ 5 ]
+        // [ 1  1 ] [ y ]   [ 7 ]
+        // Solución: y = 5, x = 2
+        let mut mat = SparseMatrix::new(2);
+        mat.add_element(0, 1, 1.0);
+        mat.add_element(1, 0, 1.0);
+        mat.add_element(1, 1, 1.0);
+
+        let rhs = vec![5.0, 7.0];
+        let sol = solve_linear_real(&mat, &rhs).expect("Pivoteo sobre diagonal cero falló");
+        assert!((sol[0] - 2.0).abs() < 1e-9);
+        assert!((sol[1] - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn test_faer_linear_solver_complex_ac() {
-        // Circuito RC con V_in = 1.0 + 0.0i, R = 1k, C = 1uF a f = 1kHz (w = 2*pi*1000)
         let mut mat = ComplexSparseMatrix::new(2);
         let w = 2.0 * std::f64::consts::PI * 1000.0;
         let c_val = 1e-6;

@@ -519,38 +519,46 @@ pub(super) fn solve_ac_frequencies(
                 }
             }
 
-            // Resolver el sistema lineal de esta iteración usando Aritmética Plana CSC Compleja Left-Looking (Cero Alocaciones)
-            let (symbolic, workspace, matrix_csc) = csc_solver.get_or_insert_with(|| {
-                let mut real_pattern = SparseMatrix::new(size);
-                for r in 0..size {
-                    for (&c, &val) in &matrix_a.rows[r] {
-                        real_pattern.add_element(r, c, val.norm());
-                    }
+            // Resolver el sistema lineal complejo de esta frecuencia con faer (o fallback CSC Left-Looking)
+            let solution = match crate::solver::linear_backend::solve_linear_complex(
+                &matrix_a,
+                vector_z.as_slice(),
+            ) {
+                Ok(sol) => DVector::from_vec(sol),
+                Err(_) => {
+                    let (symbolic, workspace, matrix_csc) = csc_solver.get_or_insert_with(|| {
+                        let mut real_pattern = SparseMatrix::new(size);
+                        for r in 0..size {
+                            for (&c, &val) in &matrix_a.rows[r] {
+                                real_pattern.add_element(r, c, val.norm());
+                            }
+                        }
+                        let sym = crate::sparse_csc::SymbolicLU::analyze(&real_pattern);
+                        let work = crate::sparse_csc::ComplexNumericLUWorkspace::new(&sym);
+                        let csc = crate::sparse_csc::ComplexSparseMatrixCSC::from_sparse(&matrix_a);
+                        (sym, work, csc)
+                    });
+
+                    matrix_csc.update_from_sparse(&matrix_a);
+                    matrix_csc
+                        .left_looking_factorize(symbolic, workspace)
+                        .map_err(|_| {
+                            format!(
+                            "Matriz MNA singular en f = {} Hz. Agrega referencia a Tierra (GND).",
+                            f_val
+                        )
+                        })?;
+
+                    symbolic
+                        .solve_complex(workspace, &vector_z)
+                        .ok_or_else(|| {
+                            format!(
+                            "Matriz MNA singular en f = {} Hz. Agrega referencia a Tierra (GND).",
+                            f_val
+                        )
+                        })?
                 }
-                let sym = crate::sparse_csc::SymbolicLU::analyze(&real_pattern);
-                let work = crate::sparse_csc::ComplexNumericLUWorkspace::new(&sym);
-                let csc = crate::sparse_csc::ComplexSparseMatrixCSC::from_sparse(&matrix_a);
-                (sym, work, csc)
-            });
-
-            matrix_csc.update_from_sparse(&matrix_a);
-            matrix_csc
-                .left_looking_factorize(symbolic, workspace)
-                .map_err(|_| {
-                    format!(
-                        "Matriz MNA singular en f = {} Hz. Agrega referencia a Tierra (GND).",
-                        f_val
-                    )
-                })?;
-
-            let solution = symbolic
-                .solve_complex(workspace, &vector_z)
-                .ok_or_else(|| {
-                    format!(
-                        "Matriz MNA singular en f = {} Hz. Agrega referencia a Tierra (GND).",
-                        f_val
-                    )
-                })?;
+            };
 
             let mut node_vals = Vec::new();
             for i in 1..=n {

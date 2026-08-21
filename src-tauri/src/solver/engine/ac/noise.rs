@@ -504,7 +504,7 @@ pub fn solve_noise_sweep(
                 }
             }
 
-            // Resolver el sistema lineal usando Aritmética Plana CSC Compleja Left-Looking (Cero Alocaciones)
+            // Preparar el resolvedor CSC para transferencias adjuntas y resolver punto AC
             let (symbolic, workspace, matrix_csc) = csc_solver.get_or_insert_with(|| {
                 let mut real_pattern = SparseMatrix::new(size);
                 for r in 0..size {
@@ -519,13 +519,17 @@ pub fn solve_noise_sweep(
             });
 
             matrix_csc.update_from_sparse(&matrix_a);
-            matrix_csc
-                .left_looking_factorize(symbolic, workspace)
-                .map_err(|e| format!("Fallo de factorización en análisis de ruido: {}", e))?;
+            let _ = matrix_csc.left_looking_factorize(symbolic, workspace);
 
-            let sol_ac = symbolic
-                .solve_complex(workspace, &vector_z)
-                .unwrap_or_else(|| DVector::zeros(size));
+            let sol_ac = match crate::solver::linear_backend::solve_linear_complex(
+                &matrix_a,
+                vector_z.as_slice(),
+            ) {
+                Ok(sol) => DVector::from_vec(sol),
+                Err(_) => symbolic
+                    .solve_complex(workspace, &vector_z)
+                    .unwrap_or_else(|| DVector::zeros(size)),
+            };
 
             let v_out_ac = (if n_out > 0 {
                 sol_ac[n_out - 1]

@@ -116,6 +116,15 @@ pub(super) fn solve_homotopy_core(
         }
 
         if !solved_ok {
+            if let Ok(sol) =
+                crate::solver::linear_backend::solve_linear_real(&matrix_a, vector_z.as_slice())
+            {
+                new_solution_res = Some(DVector::from_vec(sol));
+                solved_ok = true;
+            }
+        }
+
+        if !solved_ok {
             let (symbolic, workspace, matrix_csc) = csc_solver.get_or_insert_with(|| {
                 let sym = crate::sparse_csc::SymbolicLU::analyze(&matrix_a);
                 let work = crate::sparse_csc::NumericLUWorkspace::new(&sym);

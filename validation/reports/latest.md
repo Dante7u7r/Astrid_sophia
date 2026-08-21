@@ -5,7 +5,7 @@ Observaciones: **50/50** dentro de tolerancia.
 
 - Suite: `phase4-external-correlation`
 - Solver: `0.1.0`
-- Git: `395775c37160` (`dirty`)
+- Git: `ca9b3b5fc07d` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-47 : Circuit level simulation program`
 
@@ -21,9 +21,9 @@ Observaciones: **50/50** dentro de tolerancia.
 | ac-rc-low-pass-cutoff | AC | gain_at_fc | -3.0102999566e0 dB | -3.0102999566e0 dB | 4.441e-16 | 2.000e-3 | PASS |
 | ac-rc-low-pass-cutoff | AC | phase_at_fc | -4.5000000000e1 deg | -4.5000000000e1 deg | 0.000e0 | 2.000e-2 | PASS |
 | ac-rc-low-pass-cutoff | AC | kcl_at_fc | 2.1684043450e-19 A | 0.0000000000e0 A | 2.168e-19 | 1.000e-10 | PASS |
-| ac-rl-low-pass-sweep | AC | gain_fc_over_10 | -4.3213737826e-2 dB | -4.3213737826e-2 dB | 1.166e-15 | 2.000e-3 | PASS |
+| ac-rl-low-pass-sweep | AC | gain_fc_over_10 | -4.3213737826e-2 dB | -4.3213737826e-2 dB | 1.943e-16 | 2.000e-3 | PASS |
 | ac-rl-low-pass-sweep | AC | phase_fc_over_10 | -5.7105931375e0 deg | -5.7105931375e0 deg | 8.882e-16 | 2.000e-2 | PASS |
-| ac-rl-low-pass-sweep | AC | kcl_fc_over_10 | 1.0408340856e-17 A | 0.0000000000e0 A | 1.041e-17 | 1.000e-10 | PASS |
+| ac-rl-low-pass-sweep | AC | kcl_fc_over_10 | 3.4964469463e-18 A | 0.0000000000e0 A | 3.496e-18 | 1.000e-10 | PASS |
 | ac-rl-low-pass-sweep | AC | gain_fc | -3.0102999566e0 dB | -3.0102999566e0 dB | 4.441e-16 | 3.010e-3 | PASS |
 | ac-rl-low-pass-sweep | AC | phase_fc | -4.5000000000e1 deg | -4.5000000000e1 deg | 0.000e0 | 4.500e-2 | PASS |
 | ac-rl-low-pass-sweep | AC | kcl_fc | 1.7347234760e-18 A | 0.0000000000e0 A | 1.735e-18 | 1.000e-10 | PASS |

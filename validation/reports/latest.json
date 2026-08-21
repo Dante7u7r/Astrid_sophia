@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "suiteId": "phase4-external-correlation",
   "title": "Correlación científica externa de Astryd Sophia — Fase 4",
-  "generatedAtUnixSeconds": 1787290160,
+  "generatedAtUnixSeconds": 1787290661,
   "solverVersion": "0.1.0",
-  "gitHead": "395775c37160",
+  "gitHead": "ca9b3b5fc07d",
   "gitWorktree": "dirty",
   "platform": "windows-x86_64",
   "externalReferenceStatus": {
@@ -224,10 +224,10 @@
       "observations": [
         {
           "id": "gain_fc_over_10",
-          "actual": -0.04321373782642462,
+          "actual": -0.04321373782642559,
           "expected": -0.043213737826425784,
-          "absoluteError": 1.1657341758564144e-15,
-          "relativeError": 2.6976008891865684e-14,
+          "absoluteError": 1.942890293094024e-16,
+          "relativeError": 4.496001481977614e-15,
           "allowedError": 0.002,
           "units": "dB",
           "expression": "−10·log10(1+0.1²)",
@@ -241,7 +241,7 @@
         },
         {
           "id": "phase_fc_over_10",
-          "actual": -5.710593137499642,
+          "actual": -5.710593137499644,
           "expected": -5.710593137499643,
           "absoluteError": 8.881784197001252e-16,
           "relativeError": 1.5553172819610294e-16,
@@ -258,9 +258,9 @@
         },
         {
           "id": "kcl_fc_over_10",
-          "actual": 1.0408340855860843e-17,
+          "actual": 3.496446946337351e-18,
           "expected": 0.0,
-          "absoluteError": 1.0408340855860843e-17,
+          "absoluteError": 3.496446946337351e-18,
           "relativeError": null,
           "allowedError": 1e-10,
           "units": "A",
