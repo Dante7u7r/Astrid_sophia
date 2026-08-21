@@ -1705,6 +1705,15 @@
                 </label>
               </div>
             </div>
+            <div class="property-group warning-box-experimental" style="border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); border-radius: 8px; padding: 10px;">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: #fbbf24;">
+                <input type="checkbox" id="settings-enable-experimental" />
+                🧪 Habilitar análisis y modelos experimentales (PSS, STB, BSIM)
+              </label>
+              <p style="font-size: 0.72rem; color: var(--text-muted); margin: 6px 0 0 24px; line-height: 1.35;">
+                <strong>Advertencia:</strong> Los análisis PSS (Shooting en no lineales/osciladores), Polos/Ceros STB (modelo reducido) y modelos BSIM3/4 están en fase experimental y no están calibrados para diseño industrial predictivo.
+              </p>
+            </div>
             <div class="property-group">
               <label class="property-label" for="feedback-consent-mode">Datos de mejora y diagnóstico</label>
               <select id="feedback-consent-mode" class="prop-input">
@@ -1724,6 +1733,34 @@
         <div class="modal-footer">
           <button id="btn-cancel-settings" class="btn-cancel" type="button">Cancelar</button>
           <button id="btn-save-settings" class="btn-save" type="button">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. MODAL DE ADVERTENCIA PARA FUNCIONES EXPERIMENTALES (PSS, STB, BSIM) -->
+    <div class="modal-overlay" id="experimental-warning-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="exp-warning-title">
+      <div class="modal-box" id="experimental-warning-box" style="max-width: 520px; border-color: rgba(245, 158, 11, 0.6); box-shadow: 0 0 35px rgba(245, 158, 11, 0.2);">
+        <div class="panel-header" style="background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid rgba(245, 158, 11, 0.3);">
+          <h3 id="exp-warning-title" style="color: #fbbf24; display: flex; align-items: center; gap: 8px;">
+            ⚠️ Análisis o Modelo Experimental Bloqueado
+          </h3>
+        </div>
+        <div class="panel-body" style="padding: 16px; font-size: 0.85rem; line-height: 1.5; color: var(--text-color);">
+          <p id="exp-warning-message" style="margin-bottom: 12px; font-weight: 500;">
+            Has solicitado ejecutar una función de física experimental (<strong>PSS / Polos y Ceros STB / BSIM</strong>) que requiere confirmación explícita para evitar uso en diseño real no calificado:
+          </p>
+          <ul style="margin: 0 0 14px 20px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45;">
+            <li><strong>PSS (Periodic Steady State):</strong> Solo validado en sistemas lineales forzados. Falla o diverge en osciladores autónomos.</li>
+            <li><strong>Polos y Ceros (STB):</strong> Extrae polos de un modelo lineal simplificado; no evalúa ganancia de lazo ni margen de fase en bucle cerrado (Tian/Middlebrook).</li>
+            <li><strong>Modelos BSIM3/4:</strong> Discrepancia &gt;95% frente a SPICE industrial por omisión de derivadas de movilidad/DIBL.</li>
+          </ul>
+          <p style="font-size: 0.8rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 8px 12px; border-radius: 6px;">
+            ¿Deseas activar el flag experimental en Ajustes y continuar con la simulación bajo tu criterio técnico?
+          </p>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button id="btn-exp-cancel" class="btn-cancel" type="button">Cancelar</button>
+          <button id="btn-exp-confirm" class="btn-save" type="button" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #fbbf24; color: #fbbf24;">Habilitar y Continuar</button>
         </div>
       </div>
     </div>

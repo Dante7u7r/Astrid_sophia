@@ -48,6 +48,7 @@ export interface DesktopSimulationControllerDeps {
   getOscilloscopePanel(): OscilloscopePanel | null;
   getInstrumentsDock?(): import("../ui/instruments_dock").InstrumentsDock | null;
   getSimulationSettings(): SimulationSettings;
+  setSimulationSettings?(settings: SimulationSettings): void;
   getActiveAnalysisMode?(): AnalysisMode;
   setActiveAnalysisMode(mode: AnalysisMode): void;
   getSparPorts(): { nodeId: string; z0: number }[];
@@ -129,6 +130,7 @@ export function createDesktopSimulationControllers(
     getInstrumentsDock: deps.getInstrumentsDock,
     getSimulationRunner: () => simulationRunner,
     getSimulationSettings: deps.getSimulationSettings,
+    setSimulationSettings: deps.setSimulationSettings,
     setSimulationRunning,
     setActiveAnalysisMode,
     getActiveTabId: () => deps.getTabManager()?.getActiveTabId() ?? null,

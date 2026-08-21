@@ -25,6 +25,7 @@ import {
 } from "../ui/settings_modal";
 import { parseErcIssues } from "../ui/instrumentation_menu";
 import { DiagnosticModal, type DiagnosticIssue } from "../ui/diagnostic_modal";
+import { ExperimentalWarningModal } from "../ui/experimental_warning_modal";
 import { TelemetryPanel } from "../ui/telemetry_panel";
 import {
   beginFeedbackRun,
@@ -41,6 +42,7 @@ export interface SimulationControllerDependencies {
   getInstrumentsDock?(): InstrumentsDock | null;
   getSimulationRunner(): SimulationRunner | null;
   getSimulationSettings(): SimulationSettings;
+  setSimulationSettings?(settings: SimulationSettings): void;
   setSimulationRunning(running: boolean): void;
   setActiveAnalysisMode(mode: AnalysisMode): void;
   getActiveTabId(): string | null;
@@ -133,6 +135,47 @@ export class SimulationController {
       recordCircuitSummary(feedbackRun, netlist, orchestrator.wires.length);
     }
 
+    const hasBsim = netlist.components.some(component =>
+      component.type === "bsim3nmos"
+      || component.type === "bsim3pmos"
+      || component.type === "bsim4nmos"
+      || component.type === "bsim4pmos"
+    );
+    const isExperimental = mode === "PSS" || mode === "STB" || hasBsim;
+    if (isExperimental && !simulationSettings.enableExperimentalPhysics) {
+      const featureName = mode === "PSS"
+        ? "Análisis PSS (Periodic Steady State)"
+        : mode === "STB"
+          ? "Análisis de Estabilidad (Polos y Ceros STB)"
+          : "Modelos de Transistor BSIM3/4";
+
+      this.dependencies.setSimulationRunning(false);
+      this.dependencies.addLog(
+        `⛔ ${featureName} bloqueado: requiere confirmación explícita de física experimental.`,
+        "error",
+      );
+
+      ExperimentalWarningModal.show({
+        featureName,
+        onConfirm: () => {
+          const updatedSettings: SimulationSettings = {
+            ...simulationSettings,
+            enableExperimentalPhysics: true,
+          };
+          this.dependencies.setSimulationSettings?.(updatedSettings);
+          window.dispatchEvent(
+            new CustomEvent("astryd-settings-synchronized", { detail: updatedSettings }),
+          );
+          this.dependencies.addLog("Flag de física experimental activado.", "system");
+          void this.runSimulation(mode);
+        },
+        onCancel: () => {
+          this.dependencies.setSimulationRunning(false);
+        },
+      });
+      return;
+    }
+
     if (netlist.components.some(component =>
       component.type === "mcu_8051" || component.type === "mcu_avr"
     )) {
@@ -151,12 +194,7 @@ export class SimulationController {
         "error",
       );
     }
-    if (netlist.components.some(component =>
-      component.type === "bsim3nmos"
-      || component.type === "bsim3pmos"
-      || component.type === "bsim4nmos"
-      || component.type === "bsim4pmos"
-    )) {
+    if (hasBsim) {
       this.dependencies.addLog(
         "BSIM EXPERIMENTAL: implementación parcial. La caracterización NMOS BSIM3 contra ngspice muestra errores de corriente de 97.9 % a 99.3 %; no usar para predicción física.",
         "error",

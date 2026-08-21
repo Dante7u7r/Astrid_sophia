@@ -15,6 +15,8 @@ export interface SimulationSettings {
   showThermalHeatmap?: boolean;
   showReactiveFields?: boolean;
   showTelemetryHud?: boolean;
+  /** Gate para análisis y modelos experimentales (PSS, STB, BSIM) */
+  enableExperimentalPhysics?: boolean;
 }
 
 export class SettingsModal {
@@ -34,6 +36,7 @@ export class SettingsModal {
   private showThermalHeatmapInput: HTMLInputElement | null = null;
   private showReactiveFieldsInput: HTMLInputElement | null = null;
   private showTelemetryHudInput: HTMLInputElement | null = null;
+  private enableExperimentalInput: HTMLInputElement | null = null;
   private appViewport: HTMLElement | null = null;
   private returnFocus: HTMLElement | null = null;
 
@@ -51,6 +54,7 @@ export class SettingsModal {
       showThermalHeatmap: initialSettings.showThermalHeatmap ?? true,
       showReactiveFields: initialSettings.showReactiveFields ?? true,
       showTelemetryHud: initialSettings.showTelemetryHud ?? true,
+      enableExperimentalPhysics: initialSettings.enableExperimentalPhysics ?? false,
     };
     this.onSaveCallback = onSave;
 
@@ -70,6 +74,7 @@ export class SettingsModal {
     this.showThermalHeatmapInput = document.querySelector("#settings-show-thermal-heatmap");
     this.showReactiveFieldsInput = document.querySelector("#settings-show-reactive-fields");
     this.showTelemetryHudInput = document.querySelector("#settings-show-telemetry-hud");
+    this.enableExperimentalInput = document.querySelector("#settings-enable-experimental");
     this.appViewport = document.querySelector("#app-viewport");
 
     this.initEvents();
@@ -129,6 +134,7 @@ export class SettingsModal {
     if (this.showThermalHeatmapInput) this.showThermalHeatmapInput.checked = this.settings.showThermalHeatmap !== false;
     if (this.showReactiveFieldsInput) this.showReactiveFieldsInput.checked = this.settings.showReactiveFields !== false;
     if (this.showTelemetryHudInput) this.showTelemetryHudInput.checked = this.settings.showTelemetryHud !== false;
+    if (this.enableExperimentalInput) this.enableExperimentalInput.checked = this.settings.enableExperimentalPhysics === true;
 
     this.returnFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -212,6 +218,9 @@ export class SettingsModal {
       }
       if (this.showTelemetryHudInput) {
         this.settings.showTelemetryHud = this.showTelemetryHudInput.checked;
+      }
+      if (this.enableExperimentalInput) {
+        this.settings.enableExperimentalPhysics = this.enableExperimentalInput.checked;
       }
       this.onSaveCallback({ ...this.settings });
     }

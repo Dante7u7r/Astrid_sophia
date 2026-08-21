@@ -194,7 +194,7 @@ describe('Integration Tests - Flujo Completo de Simulación', () => {
         await dispatchSimulation(
           filterCircuit,
           mode,
-          { simSettings: { dt: 1e-4 }, transientDuration: 0.05, solveCircuitTS },
+          { simSettings: { dt: 1e-4, enableExperimentalPhysics: true }, transientDuration: 0.05, solveCircuitTS },
           {
             addLog: message => logs.push(message),
             onResultsReady,

@@ -204,7 +204,7 @@ export function runElectricalRuleCheck(
 export interface DispatchConfig {
   readonly simSettings: Readonly<
     Pick<SimulationSettings, "dt">
-    & Partial<Pick<SimulationSettings, "tolerance" | "maxIterations">>
+    & Partial<Pick<SimulationSettings, "tolerance" | "maxIterations" | "enableExperimentalPhysics">>
   >;
   readonly transientDuration: number;
   readonly simulationOwnerId?: string;
@@ -268,6 +268,13 @@ export async function dispatchSimulation(
   }
 
   try {
+    const bsimComp = netlist.components.find(c =>
+      c.type === "bsim3nmos" || c.type === "bsim3pmos" || c.type === "bsim4nmos" || c.type === "bsim4pmos"
+    );
+    if (bsimComp && !config.simSettings.enableExperimentalPhysics) {
+      throw new Error(`El modelo BSIM [${bsimComp.id}] está bloqueado: requiere activar el flag 'Habilitar análisis y modelos experimentales' en Ajustes.`);
+    }
+
     let dispatchResult: SimulationDispatchResult | undefined;
     switch (mode) {
       case 'TRAN': {
@@ -333,6 +340,9 @@ export async function dispatchSimulation(
       }
 
       case 'PSS': {
+        if (!config.simSettings.enableExperimentalPhysics) {
+          throw new Error("El análisis PSS está bloqueado: requiere activar el flag 'Habilitar análisis y modelos experimentales' en Ajustes.");
+        }
         callbacks.addLog(
           "PSS EXPERIMENTAL: shooting periódico validado sólo en un RC lineal; sin validación externa ni garantía para osciladores o circuitos no lineales.",
           "system",
@@ -358,6 +368,9 @@ export async function dispatchSimulation(
       }
 
       case 'STB': {
+        if (!config.simSettings.enableExperimentalPhysics) {
+          throw new Error("El análisis de Polos y Ceros (STB) está bloqueado: requiere activar el flag 'Habilitar análisis y modelos experimentales' en Ajustes.");
+        }
         callbacks.addLog(
           "POLOS/CEROS EXPERIMENTAL: modelo reducido. No calcula ganancia de lazo ni márgenes de fase/ganancia.",
           "system",

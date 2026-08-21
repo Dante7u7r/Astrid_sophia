@@ -97,6 +97,7 @@ describe("SettingsModal", () => {
       showThermalHeatmap: false,
       showReactiveFields: false,
       showTelemetryHud: true,
+      enableExperimentalPhysics: false,
     });
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });
