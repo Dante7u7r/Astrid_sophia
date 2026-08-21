@@ -458,3 +458,160 @@ fn test_vco_frequency_tuning() {
     assert!(res_low.fundamental_frequency_hz > 0.0);
     assert!(res_high.fundamental_frequency_hz > 0.0);
 }
+
+#[test]
+fn test_middlebrook_loop_gain_opamp_feedback() {
+    // Circuito con amplificador operacional y red de realimentación:
+    // Rf = 9k, Rin = 1k => beta = 1k / (1k + 9k) = 0.1 (-20 dB)
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V_POS".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_NEG".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -15.0,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "OP1".to_string(),
+                comp_type: "opamp".to_string(),
+                value: 100000.0,
+                pins: vec![
+                    "0".to_string(), // In+
+                    "1".to_string(), // In-
+                    "3".to_string(), // V+
+                    "4".to_string(), // V-
+                    "2".to_string(), // Out
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_IN".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_F".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 9000.0,
+                pins: vec!["2".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C_COMP".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 100.0e-12,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let stab = run_stability_analysis(&netlist)
+        .expect("El análisis de estabilidad y Loop Gain debe ejecutarse con éxito");
+
+    assert!(stab.is_stable, "El amplificador con realimentación negativa debe ser estable");
+    assert!(stab.loop_phase_margin_deg.is_some(), "Debe calcular el Margen de Fase");
+    assert!(stab.unity_gain_frequency_hz.is_some(), "Debe calcular la frecuencia de ganancia unitaria");
+
+    let pm = stab.loop_phase_margin_deg.unwrap();
+    assert!(
+        pm > 45.0 && pm <= 180.0,
+        "El Margen de Fase debe ser adecuado (>45 deg), obtenido: {:.2} deg",
+        pm
+    );
+
+    let fugc = stab.unity_gain_frequency_hz.unwrap();
+    assert!(
+        fugc > 1.0e3 && fugc < 10.0e6,
+        "La frecuencia de ganancia unitaria debe estar en rango, obtenido: {:.2} Hz",
+        fugc
+    );
+}
+
+#[test]
+fn test_middlebrook_loop_gain_direct_sweep() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V_POS".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_NEG".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -15.0,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "OP1".to_string(),
+                comp_type: "opamp".to_string(),
+                value: 100000.0,
+                pins: vec![
+                    "0".to_string(), // In+
+                    "1".to_string(), // In-
+                    "3".to_string(), // V+
+                    "4".to_string(), // V-
+                    "2".to_string(), // Out
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R2".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10000.0,
+                pins: vec!["2".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let loop_gain_res = calculate_middlebrook_loop_gain(&netlist, None, None);
+    assert!(loop_gain_res.is_ok(), "El barrido de Middlebrook Loop Gain debe ejecutarse");
+    let lg = loop_gain_res.unwrap();
+
+    assert!(lg.is_stable, "El lazo debe ser estable");
+    assert!(!lg.sweep_points.is_empty(), "El barrido debe contener puntos de respuesta en frecuencia");
+
+    // A baja frecuencia la ganancia de lazo debe ser alta (~80 dB)
+    let p_dc = &lg.sweep_points[0];
+    assert!(
+        p_dc.magnitude_db > 60.0,
+        "La ganancia de lazo a baja frecuencia debe ser > 60 dB, obtenido: {:.2} dB",
+        p_dc.magnitude_db
+    );
+}
