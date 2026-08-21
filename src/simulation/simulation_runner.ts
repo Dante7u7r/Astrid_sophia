@@ -111,6 +111,7 @@ export interface SimulationRunner {
       tMax: number;
       tolerance?: number;
       maxIterations?: number;
+      disablePacing?: boolean;
     }>,
     ownerTabId: string,
     feedbackRun?: FeedbackRunHandle,
@@ -202,6 +203,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         tMax: number;
         tolerance?: number;
         maxIterations?: number;
+        disablePacing?: boolean;
       }>,
       ownerTabId: string,
       feedbackRun?: FeedbackRunHandle,
@@ -320,6 +322,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
           runId: context.runId,
           tolerance: settings.tolerance ?? 1e-6,
           maxIterations: settings.maxIterations ?? 100,
+          disablePacing: settings.disablePacing ?? false,
         });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);

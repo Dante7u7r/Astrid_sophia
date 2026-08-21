@@ -168,4 +168,20 @@ describe("SimulationRunner streaming", () => {
     // Verificamos que se ejecutó sin errores
     expect(runner.getActiveRunId()).toBeGreaterThan(0);
   });
+
+  it("ejecuta en modo batch headless sin pacing emitiendo todos los frames inmediatamente", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+    await runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05, disablePacing: true },
+      "tab-batch-headless",
+    );
+
+    // Sin necesidad de avanzar temporizadores artificiales, los frames se emitieron de forma síncrona
+    expect(harness.frames).toHaveLength(60);
+    expect(harness.frames[0].frame.time).toBe(0);
+    expect(harness.frames[59].frame.isFinal).toBe(true);
+    expect(harness.completed).toHaveLength(1);
+  });
 });

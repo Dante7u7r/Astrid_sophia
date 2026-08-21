@@ -428,6 +428,7 @@ async fn start_interactive_transient(
     run_id: u64,
     tolerance: Option<f64>,
     max_iterations: Option<usize>,
+    disable_pacing: Option<bool>,
 ) -> Result<(), SimulationError> {
     if run_id == 0 {
         return Err(SimulationError::from(
@@ -440,6 +441,11 @@ async fn start_interactive_transient(
         .validate()
         .map_err(SimulationError::from)?;
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    let disable_pacing_flag = disable_pacing.unwrap_or(false)
+        || std::env::var("ASTRYD_DISABLE_PACING")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
     state.active_run_id.store(run_id, Ordering::SeqCst);
     state.is_running.store(true, Ordering::SeqCst);
     if let Ok(mut mutations) = state.hot_mutations.lock() {
@@ -478,13 +484,15 @@ async fn start_interactive_transient(
                         return false;
                     }
                     if step.time >= next_sample_time {
-                        if !pace_interactive_transient(
-                            started_at,
-                            step.time,
-                            &is_running_inner,
-                            &active_run_id_inner,
-                            run_id,
-                        ) {
+                        if !disable_pacing_flag
+                            && !pace_interactive_transient(
+                                started_at,
+                                step.time,
+                                &is_running_inner,
+                                &active_run_id_inner,
+                                run_id,
+                            )
+                        {
                             return false;
                         }
                         let packet = SimulationFrame {
@@ -510,13 +518,15 @@ async fn start_interactive_transient(
             {
                 if let Ok((ref results, _, _)) = result {
                     if let Some(last) = results.last() {
-                        if !pace_interactive_transient(
-                            started_at,
-                            last.time,
-                            &final_is_running,
-                            &final_active_run_id,
-                            run_id,
-                        ) {
+                        if !disable_pacing_flag
+                            && !pace_interactive_transient(
+                                started_at,
+                                last.time,
+                                &final_is_running,
+                                &final_active_run_id,
+                                run_id,
+                            )
+                        {
                             return;
                         }
                         let packet = SimulationFrame {

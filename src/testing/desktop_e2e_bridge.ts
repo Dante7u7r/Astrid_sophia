@@ -38,6 +38,7 @@ interface DesktopE2eBridge {
   snapshot(): DesktopE2eSnapshot;
   serializeCircuit(): string;
   loadSerializedCircuit(content: string): boolean;
+  setDisablePacing(disable: boolean): void;
   benchmarkFeedbackDc(netlist: CircuitNetlist, iterations: number): Promise<Array<{
     totalMs: number;
     solverMs: number;
@@ -57,6 +58,7 @@ interface DesktopE2eBridgeDependencies {
   getActiveTabName(): string | null;
   getOscilloscopePanel(): OscilloscopePanel | null;
   updateCanvasRendering(): void;
+  setDisablePacing?: (disable: boolean) => void;
 }
 
 export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependencies): void {
@@ -131,6 +133,10 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
       const loaded = dependencies.getDocumentController()?.deserializeCircuit(content) ?? false;
       if (loaded) dependencies.updateCanvasRendering();
       return loaded;
+    },
+
+    setDisablePacing(disable: boolean): void {
+      dependencies.setDisablePacing?.(disable);
     },
 
     async benchmarkFeedbackDc(netlist: CircuitNetlist, requestedIterations: number) {

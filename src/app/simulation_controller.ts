@@ -77,6 +77,12 @@ const ANALYSIS_LABELS: Record<AnalysisMode, string> = {
 export class SimulationController {
   constructor(private readonly dependencies: SimulationControllerDependencies) {}
 
+  updateSimulationSettings(partial: Partial<SimulationSettings>): void {
+    const current = this.dependencies.getSimulationSettings();
+    Object.assign(current, partial);
+    this.dependencies.setSimulationSettings?.(current);
+  }
+
   createControlHandlers(): SimulationControlHandlers {
     return {
       onRunSimulation: async (_netlist, mode) => this.runSimulation(mode),

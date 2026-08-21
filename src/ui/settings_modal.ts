@@ -17,6 +17,8 @@ export interface SimulationSettings {
   showTelemetryHud?: boolean;
   /** Gate para análisis y modelos experimentales (PSS, STB, BSIM) */
   enableExperimentalPhysics?: boolean;
+  /** Modo batch headless sin pacing de reloj de pared para CI/regresiones */
+  disablePacing?: boolean;
 }
 
 export class SettingsModal {
@@ -37,6 +39,7 @@ export class SettingsModal {
   private showReactiveFieldsInput: HTMLInputElement | null = null;
   private showTelemetryHudInput: HTMLInputElement | null = null;
   private enableExperimentalInput: HTMLInputElement | null = null;
+  private disablePacingInput: HTMLInputElement | null = null;
   private appViewport: HTMLElement | null = null;
   private returnFocus: HTMLElement | null = null;
 
@@ -55,6 +58,7 @@ export class SettingsModal {
       showReactiveFields: initialSettings.showReactiveFields ?? true,
       showTelemetryHud: initialSettings.showTelemetryHud ?? true,
       enableExperimentalPhysics: initialSettings.enableExperimentalPhysics ?? false,
+      disablePacing: initialSettings.disablePacing ?? false,
     };
     this.onSaveCallback = onSave;
 
@@ -75,6 +79,7 @@ export class SettingsModal {
     this.showReactiveFieldsInput = document.querySelector("#settings-show-reactive-fields");
     this.showTelemetryHudInput = document.querySelector("#settings-show-telemetry-hud");
     this.enableExperimentalInput = document.querySelector("#settings-enable-experimental");
+    this.disablePacingInput = document.querySelector("#settings-disable-pacing");
     this.appViewport = document.querySelector("#app-viewport");
 
     this.initEvents();
@@ -135,6 +140,7 @@ export class SettingsModal {
     if (this.showReactiveFieldsInput) this.showReactiveFieldsInput.checked = this.settings.showReactiveFields !== false;
     if (this.showTelemetryHudInput) this.showTelemetryHudInput.checked = this.settings.showTelemetryHud !== false;
     if (this.enableExperimentalInput) this.enableExperimentalInput.checked = this.settings.enableExperimentalPhysics === true;
+    if (this.disablePacingInput) this.disablePacingInput.checked = this.settings.disablePacing === true;
 
     this.returnFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -221,6 +227,9 @@ export class SettingsModal {
       }
       if (this.enableExperimentalInput) {
         this.settings.enableExperimentalPhysics = this.enableExperimentalInput.checked;
+      }
+      if (this.disablePacingInput) {
+        this.settings.disablePacing = this.disablePacingInput.checked;
       }
       this.onSaveCallback({ ...this.settings });
     }

@@ -568,6 +568,9 @@ window.addEventListener("DOMContentLoaded", () => {
     getActiveTabName: () => tabManager?.getActiveTab()?.name ?? null,
     getOscilloscopePanel: () => oscilloscopePanel,
     updateCanvasRendering: () => updateCanvasRendering(true),
+    setDisablePacing: (disable) => {
+      simulationController?.updateSimulationSettings({ disablePacing: disable });
+    },
   });
   consoleLogController.bindClearButton();
   void initializeFeedbackRuntime(addLog);

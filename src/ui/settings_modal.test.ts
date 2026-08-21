@@ -35,6 +35,8 @@ function installSettingsDom(): void {
         <input type="checkbox" id="settings-show-thermal-heatmap" checked />
         <input type="checkbox" id="settings-show-reactive-fields" checked />
         <input type="checkbox" id="settings-show-telemetry-hud" checked />
+        <input type="checkbox" id="settings-enable-experimental" />
+        <input type="checkbox" id="settings-disable-pacing" />
         <button id="btn-cancel-settings">Cancelar</button>
         <button id="btn-save-settings">Guardar</button>
       </div>
@@ -98,6 +100,7 @@ describe("SettingsModal", () => {
       showReactiveFields: false,
       showTelemetryHud: true,
       enableExperimentalPhysics: false,
+      disablePacing: false,
     });
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });

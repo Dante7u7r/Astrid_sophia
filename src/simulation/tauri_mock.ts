@@ -85,62 +85,71 @@ function startWebTransient(args?: Record<string, unknown>): void {
   }
 
   const frameCount = 60;
+  const disablePacing = (args?.disablePacing as boolean | undefined) ?? false;
 
-  for (let index = 0; index < frameCount; index += 1) {
-    const timer = setTimeout(() => {
-      if (cancellationId !== webTransientRunId) return;
+  const emitStep = (index: number) => {
+    if (cancellationId !== webTransientRunId) return;
 
-      const time = tMax * (index / (frameCount - 1));
-      const isFinal = index === frameCount - 1;
+    const time = tMax * (index / (frameCount - 1));
+    const isFinal = index === frameCount - 1;
 
-      let nodeVoltages: Record<string, number> = { "0": 0 };
-      let branchCurrents: Record<string, number> = {};
+    let nodeVoltages: Record<string, number> = { "0": 0 };
+    let branchCurrents: Record<string, number> = {};
 
-      if (solvedResults && solvedResults.length > 0) {
-        const stepIdx = Math.min(
-          solvedResults.length - 1,
-          Math.floor((index / (frameCount - 1)) * (solvedResults.length - 1)),
-        );
-        const sample = solvedResults[stepIdx];
-        nodeVoltages = { ...sample.nodeVoltages };
-        branchCurrents = { ...sample.branchCurrents };
-      } else {
-        // Fallback para pruebas unitarias sin netlist
-        const vSourceVal = webActiveMutations.get("V1:value") ?? 5.0;
-        const swState = webActiveMutations.get("SW1:switch_state") ?? 1.0;
-        const v2 = swState > 0 ? vSourceVal * (1 - Math.exp(-time / 0.001)) : 0.0;
-        const iV1 = swState > 0 ? -(vSourceVal / 1000) * Math.exp(-time / 0.001) : 0.0;
-        nodeVoltages = {
-          "0": 0,
-          "1": vSourceVal,
-          "2": v2,
-        };
-        branchCurrents = {
-          V1: iV1,
-        };
+    if (solvedResults && solvedResults.length > 0) {
+      const stepIdx = Math.min(
+        solvedResults.length - 1,
+        Math.floor((index / (frameCount - 1)) * (solvedResults.length - 1)),
+      );
+      const sample = solvedResults[stepIdx];
+      nodeVoltages = { ...sample.nodeVoltages };
+      branchCurrents = { ...sample.branchCurrents };
+    } else {
+      // Fallback para pruebas unitarias sin netlist
+      const vSourceVal = webActiveMutations.get("V1:value") ?? 5.0;
+      const swState = webActiveMutations.get("SW1:switch_state") ?? 1.0;
+      const v2 = swState > 0 ? vSourceVal * (1 - Math.exp(-time / 0.001)) : 0.0;
+      const iV1 = swState > 0 ? -(vSourceVal / 1000) * Math.exp(-time / 0.001) : 0.0;
+      nodeVoltages = {
+        "0": 0,
+        "1": vSourceVal,
+        "2": v2,
+      };
+      branchCurrents = {
+        V1: iV1,
+      };
+    }
+
+    // Aplicar mutaciones activas en caliente
+    for (const [key, val] of webActiveMutations.entries()) {
+      const [comp, field] = key.split(":");
+      if (field === "value" && comp === "V1" && !solvedResults) {
+        nodeVoltages["1"] = val;
       }
+    }
 
-      // Aplicar mutaciones activas en caliente
-      for (const [key, val] of webActiveMutations.entries()) {
-        const [comp, field] = key.split(":");
-        if (field === "value" && comp === "V1" && !solvedResults) {
-          nodeVoltages["1"] = val;
-        }
-      }
+    emitWebEvent("sim-frame-update", {
+      runId,
+      time,
+      nodeVoltages,
+      branchCurrents,
+      frameIndex: index,
+      isFinal,
+      triggerEvent: null,
+    }, index);
 
-      emitWebEvent("sim-frame-update", {
-        runId,
-        time,
-        nodeVoltages,
-        branchCurrents,
-        frameIndex: index,
-        isFinal,
-        triggerEvent: null,
-      }, index);
+    if (isFinal) webTransientTimers = [];
+  };
 
-      if (isFinal) webTransientTimers = [];
-    }, 16 * (index + 1));
-    webTransientTimers.push(timer);
+  if (disablePacing) {
+    for (let index = 0; index < frameCount; index += 1) {
+      emitStep(index);
+    }
+  } else {
+    for (let index = 0; index < frameCount; index += 1) {
+      const timer = setTimeout(() => emitStep(index), 16 * (index + 1));
+      webTransientTimers.push(timer);
+    }
   }
 }
 
