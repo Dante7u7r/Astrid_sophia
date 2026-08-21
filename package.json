@@ -32,6 +32,8 @@
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",
     "test:e2e:frontend": "npm run build:audit && node tests/e2e/frontend_flow.spec.mjs",
+    "test:e2e:canvas": "npm run build:audit && node tests/e2e/frontend_flow.spec.mjs",
+    "test:e2e:playwright": "npm run build:audit && node tests/e2e/frontend_flow.spec.mjs",
     "release:check": "npm run version:check && npm run feedback:contracts:check && npm run test:coverage && npm run build",
     "setup:ngspice:windows": "powershell -NoProfile -File validation/bootstrap-ngspice.ps1",
     "validate:scientific": "cargo run --quiet --manifest-path src-tauri/Cargo.toml --example scientific_validation -- validation/manifest.json",

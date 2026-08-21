@@ -26,6 +26,8 @@ interface DesktopE2eSnapshot {
   readonly components: Array<{
     readonly id: string;
     readonly type: string;
+    readonly value?: number | string;
+    readonly label?: string;
     readonly clientX: number;
     readonly clientY: number;
     readonly worldX: number;
@@ -63,7 +65,8 @@ interface DesktopE2eBridgeDependencies {
 
 export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependencies): void {
   const isAuditOrE2e = typeof import.meta !== "undefined"
-    && (import.meta.env.DEV || import.meta.env.MODE === "audit" || import.meta.env.MODE === "wdio");
+    && (import.meta.env.DEV || import.meta.env.MODE === "audit" || import.meta.env.MODE === "wdio"
+        || (typeof window !== "undefined" && (window.location.search.includes("audit=1") || window.location.search.includes("e2e=1"))));
   if (!isAuditOrE2e) return;
 
   // The Tauri service compares the native title with document.title exactly.
@@ -111,6 +114,8 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
           return {
             id: component.id,
             type: component.type,
+            value: component.value,
+            label: component.label,
             clientX: rect.left + center.x,
             clientY: rect.top + center.y,
             worldX: component.x,
