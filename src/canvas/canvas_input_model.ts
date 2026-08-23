@@ -31,11 +31,11 @@ export interface PaletteComponentData {
 
 export function clientToCanvasPoint(
   rect: Pick<DOMRect, "left" | "top">,
-  point: ClientPoint,
+  point: Partial<ClientPoint>,
 ): ScreenPoint {
   return {
-    screenX: point.clientX - rect.left,
-    screenY: point.clientY - rect.top,
+    screenX: (point.clientX ?? 0) - (rect.left ?? 0),
+    screenY: (point.clientY ?? 0) - (rect.top ?? 0),
   };
 }
 

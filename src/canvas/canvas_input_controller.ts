@@ -347,27 +347,7 @@ export function attachCanvasInput(
       return;
     }
 
-    // 1. Pinch-to-zoom en Touchpad (o Ctrl + Rueda)
-    const isPinch = e.ctrlKey || e.metaKey;
-    if (isPinch) {
-      const rect = canvas.getBoundingClientRect();
-      const { screenX, screenY } = clientToCanvasPoint(rect, e);
-      const { zoomFactor } = resolveWheelZoomStep(
-        e.deltaY,
-        orchestrator.zoom,
-        {
-          minZoom: orchestrator.minZoom,
-          maxZoom: orchestrator.maxZoom,
-        },
-        true,
-      );
-      orchestrator.zoomAt(zoomFactor, screenX, screenY);
-      callbacks.requestRender();
-      e.preventDefault();
-      return;
-    }
-
-    // 2. Shift + Scroll (Pan horizontal estándar en Trackpad / Ratón)
+    // 2. Shift + Scroll (Pan horizontal si se mantiene Shift)
     if (e.shiftKey) {
       const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
       orchestrator.pan(-delta, 0);
@@ -376,9 +356,24 @@ export function attachCanvasInput(
       return;
     }
 
-    // 3. Desplazamiento 2D continuo y natural en Touchpad (2-finger scroll)
-    orchestrator.pan(-e.deltaX, -e.deltaY);
-    callbacks.requestRender();
+    // 3. Zoom natural con la rueda del ratón o gesto Pinch en touchpad (centrado en la posición del puntero)
+    const rect = canvas.getBoundingClientRect();
+    const { screenX, screenY } = clientToCanvasPoint(rect, e);
+    const isPinch = e.ctrlKey || e.metaKey;
+    const { zoomFactor } = resolveWheelZoomStep(
+      e.deltaY,
+      orchestrator.zoom,
+      {
+        minZoom: orchestrator.minZoom,
+        maxZoom: orchestrator.maxZoom,
+      },
+      isPinch,
+    );
+
+    if (Math.abs(zoomFactor - 1) > 0.0001) {
+      orchestrator.zoomAt(zoomFactor, screenX, screenY);
+      callbacks.requestRender();
+    }
     e.preventDefault();
   };
 

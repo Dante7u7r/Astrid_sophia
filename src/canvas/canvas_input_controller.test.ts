@@ -63,6 +63,50 @@ describe("canvas_input_controller", () => {
     expect(inputCallbacks.requestRender).toHaveBeenCalledTimes(2);
   });
 
+  it("acerca y aleja el lienzo directamente con la rueda del ratón", () => {
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = vi.fn(() => ({
+      left: 10,
+      top: 20,
+      width: 800,
+      height: 600,
+      right: 810,
+      bottom: 620,
+      x: 10,
+      y: 20,
+      toJSON: () => ({}),
+    }));
+    document.body.appendChild(canvas);
+
+    const zoomAt = vi.fn();
+    const orchestrator = {
+      zoomAt,
+      minZoom: 0.3,
+      maxZoom: 3,
+      zoom: 1.0,
+      selectedComponents: [],
+      selectedComponent: null,
+      selectedWire: null,
+    } as unknown as CanvasOrchestrator;
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    // Rueda hacia adelante (deltaY < 0): Zoom in
+    const wheelIn = new WheelEvent("wheel", { deltaY: -100, bubbles: true });
+    Object.defineProperty(wheelIn, "clientX", { value: 210 });
+    Object.defineProperty(wheelIn, "clientY", { value: 120 });
+    canvas.dispatchEvent(wheelIn);
+    expect(zoomAt).toHaveBeenNthCalledWith(1, 1.1, 200, 100);
+
+    // Rueda hacia atrás (deltaY > 0): Zoom out
+    const wheelOut = new WheelEvent("wheel", { deltaY: 100, bubbles: true });
+    Object.defineProperty(wheelOut, "clientX", { value: 210 });
+    Object.defineProperty(wheelOut, "clientY", { value: 120 });
+    canvas.dispatchEvent(wheelOut);
+    expect(zoomAt).toHaveBeenNthCalledWith(2, 0.9, 200, 100);
+    expect(inputCallbacks.requestRender).toHaveBeenCalledTimes(2);
+  });
+
   it("inicia, actualiza y completa cuadro de selección con el ratón", () => {
     const canvas = document.createElement("canvas");
     Object.defineProperties(canvas, {
