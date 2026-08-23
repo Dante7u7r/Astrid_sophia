@@ -56,3 +56,41 @@ export function installWebviewKeyGuards(isDevMode: boolean): void {
     }
   }, { capture: true });
 }
+
+/**
+ * Desactiva el autocompletado y guardado de historial del navegador/WebView
+ * en todos los campos de texto e inputs de la aplicación, evitando que aparezcan
+ * popups emergentes ("Información guardada", sugerencias de formularios web, etc.).
+ */
+export function installWebviewAutofillGuards(): void {
+  if (typeof document === 'undefined') return;
+
+  const sanitize = (el: Element) => {
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      el.setAttribute('autocomplete', 'off');
+      el.setAttribute('autocorrect', 'off');
+      el.setAttribute('autocapitalize', 'off');
+      el.setAttribute('spellcheck', 'false');
+      el.setAttribute('data-lpignore', 'true');
+      el.setAttribute('data-form-type', 'other');
+    }
+  };
+
+  document.querySelectorAll('input, textarea').forEach(sanitize);
+
+  if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+              sanitize(node);
+            }
+            node.querySelectorAll?.('input, textarea').forEach(sanitize);
+          }
+        });
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+}

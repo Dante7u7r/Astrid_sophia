@@ -1843,6 +1843,124 @@ select.btn-text-only.sim-locked {
 }
 
 /* ==========================================================================
+   CONFIRMATION MODAL — Diálogos de Confirmación Nativos y Seguros
+   ========================================================================== */
+
+.confirmation-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeInModal 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.confirmation-dialog {
+  background: #0d1527;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  width: 440px;
+  max-width: 92vw;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  overflow: hidden;
+  animation: scaleUpDialog 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.confirmation-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.confirmation-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.confirmation-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #f8fafc;
+}
+
+.confirmation-body {
+  padding: 20px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.confirmation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: rgba(10, 15, 28, 0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-confirm-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-confirm-cancel:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+}
+
+.btn-confirm-primary {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-confirm-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-confirm-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-confirm-danger:hover {
+  background: #b91c1c;
+}
+
+/* ==========================================================================
    DIAGNOSTIC MODAL — Centro de Diagnóstico Interactivo y Asistente ERC
    ========================================================================== */
 

@@ -14,7 +14,7 @@ import { McuDebugPanel } from "./ui/mcu_debug_panel";
 import { type SimulationRunner } from "./simulation/simulation_runner";
 import { createCircuitStateManager } from "./simulation/circuit_state_manager";
 import { attachCanvasInput, attachCanvasDrop } from "./canvas/canvas_input_controller";
-import { isTypingInFormField, installWebviewKeyGuards } from "./canvas/keyboard_guards";
+import { isTypingInFormField, installWebviewKeyGuards, installWebviewAutofillGuards } from "./canvas/keyboard_guards";
 import { TooltipManager } from "./ui/tooltip_manager";
 import { TabManager } from "./ui/tab_manager";
 import { PropertyEditor } from "./ui/property_editor";
@@ -520,6 +520,8 @@ function initCanvasCAD() {
 window.addEventListener("DOMContentLoaded", () => {
   // Instalar protectores de teclado del WebView contra recarga accidental
   installWebviewKeyGuards(import.meta.env.DEV);
+  // Desactivar popups de autocompletado e historial del navegador en inputs
+  installWebviewAutofillGuards();
 
   // Inicializar gestor de tooltips premium
   TooltipManager.init();

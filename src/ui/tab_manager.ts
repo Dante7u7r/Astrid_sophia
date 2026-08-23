@@ -5,6 +5,7 @@ import { type OscilloscopePanel, type TimeStepResult } from "./oscilloscope_pane
 import { appendLiveTransientSample } from "../simulation/transient_history";
 import { type AnalysisMode, type SimulationControls } from "./simulation_controls";
 import type { McuDebugPanel } from "./mcu_debug_panel";
+import { ConfirmationModal } from "./confirmation_modal";
 import { TabsView } from "./tabs_view";
 import { WorkspaceStore } from "./workspace_store";
 import {
@@ -317,7 +318,13 @@ export class TabManager {
     }
 
     if (targetTab.unsaved) {
-      const confirmClose = confirm(`La pestana "${targetTab.name}" tiene cambios no guardados. Deseas cerrarla de todas formas?`);
+      const confirmClose = await ConfirmationModal.confirm({
+        title: "Cerrar pestaña",
+        message: `La pestaña "${targetTab.name}" tiene cambios no guardados. ¿Deseas cerrarla de todas formas?`,
+        confirmText: "Cerrar pestaña",
+        cancelText: "Cancelar",
+        danger: true,
+      });
       if (!confirmClose) return;
     }
 
