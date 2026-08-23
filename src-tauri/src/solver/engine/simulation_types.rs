@@ -81,6 +81,104 @@ pub struct TimeStepResult {
     pub branch_currents: HashMap<String, f64>,
 }
 
+/// Representación plana de memoria contigua para transferencia IPC de ultra-alto rendimiento.
+/// Evita la creación de millones de HashMaps en Rust y la deserialización de millones de objetos en JS.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackedTransientResult {
+    pub node_names: Vec<String>,
+    pub branch_names: Vec<String>,
+    pub times: Vec<f64>,
+    /// Matriz contigua ordenada por pasos: [paso0_nodos..., paso1_nodos..., ...]
+    pub node_voltages: Vec<f64>,
+    /// Matriz contigua ordenada por pasos: [paso0_ramas..., paso1_ramas..., ...]
+    pub branch_currents: Vec<f64>,
+}
+
+pub fn pack_transient_results(results: &[TimeStepResult]) -> PackedTransientResult {
+    if results.is_empty() {
+        return PackedTransientResult {
+            node_names: Vec::new(),
+            branch_names: Vec::new(),
+            times: Vec::new(),
+            node_voltages: Vec::new(),
+            branch_currents: Vec::new(),
+        };
+    }
+
+    let mut node_set = std::collections::BTreeSet::new();
+    let mut branch_set = std::collections::BTreeSet::new();
+    for step in results {
+        for k in step.node_voltages.keys() {
+            node_set.insert(k.clone());
+        }
+        for k in step.branch_currents.keys() {
+            branch_set.insert(k.clone());
+        }
+    }
+
+    let node_names: Vec<String> = node_set.into_iter().collect();
+    let branch_names: Vec<String> = branch_set.into_iter().collect();
+    let num_steps = results.len();
+    let num_nodes = node_names.len();
+    let num_branches = branch_names.len();
+
+    let mut times = Vec::with_capacity(num_steps);
+    let mut node_voltages = Vec::with_capacity(num_steps * num_nodes);
+    let mut branch_currents = Vec::with_capacity(num_steps * num_branches);
+
+    for step in results {
+        times.push(step.time);
+        for node in &node_names {
+            node_voltages.push(*step.node_voltages.get(node).unwrap_or(&0.0));
+        }
+        for branch in &branch_names {
+            branch_currents.push(*step.branch_currents.get(branch).unwrap_or(&0.0));
+        }
+    }
+
+    PackedTransientResult {
+        node_names,
+        branch_names,
+        times,
+        node_voltages,
+        branch_currents,
+    }
+}
+
+pub fn unpack_transient_results(packed: &PackedTransientResult) -> Vec<TimeStepResult> {
+    let num_steps = packed.times.len();
+    let num_nodes = packed.node_names.len();
+    let num_branches = packed.branch_names.len();
+
+    let mut results = Vec::with_capacity(num_steps);
+    for s in 0..num_steps {
+        let time = packed.times[s];
+        let mut node_voltages = HashMap::with_capacity(num_nodes);
+        let node_offset = s * num_nodes;
+        for (n_idx, name) in packed.node_names.iter().enumerate() {
+            if let Some(&val) = packed.node_voltages.get(node_offset + n_idx) {
+                node_voltages.insert(name.clone(), val);
+            }
+        }
+
+        let mut branch_currents = HashMap::with_capacity(num_branches);
+        let branch_offset = s * num_branches;
+        for (b_idx, name) in packed.branch_names.iter().enumerate() {
+            if let Some(&val) = packed.branch_currents.get(branch_offset + b_idx) {
+                branch_currents.insert(name.clone(), val);
+            }
+        }
+
+        results.push(TimeStepResult {
+            time,
+            node_voltages,
+            branch_currents,
+        });
+    }
+    results
+}
+
 #[cfg(test)]
 mod validation_tests {
     use super::*;
@@ -118,5 +216,47 @@ mod validation_tests {
         }
         .validate()
         .is_err());
+    }
+
+    #[test]
+    fn test_pack_and_unpack_transient_results() {
+        let mut step1_nodes = HashMap::new();
+        step1_nodes.insert("1".to_string(), 5.0);
+        step1_nodes.insert("2".to_string(), 2.5);
+        let mut step1_branches = HashMap::new();
+        step1_branches.insert("R1".to_string(), 0.005);
+
+        let mut step2_nodes = HashMap::new();
+        step2_nodes.insert("1".to_string(), 4.8);
+        step2_nodes.insert("2".to_string(), 2.4);
+        let mut step2_branches = HashMap::new();
+        step2_branches.insert("R1".to_string(), 0.0048);
+
+        let original = vec![
+            TimeStepResult {
+                time: 0.0,
+                node_voltages: step1_nodes,
+                branch_currents: step1_branches,
+            },
+            TimeStepResult {
+                time: 0.001,
+                node_voltages: step2_nodes,
+                branch_currents: step2_branches,
+            },
+        ];
+
+        let packed = pack_transient_results(&original);
+        assert_eq!(packed.times, vec![0.0, 0.001]);
+        assert_eq!(packed.node_names, vec!["1", "2"]);
+        assert_eq!(packed.branch_names, vec!["R1"]);
+        assert_eq!(packed.node_voltages, vec![5.0, 2.5, 4.8, 2.4]);
+        assert_eq!(packed.branch_currents, vec![0.005, 0.0048]);
+
+        let unpacked = unpack_transient_results(&packed);
+        assert_eq!(unpacked.len(), 2);
+        assert_eq!(unpacked[0].time, 0.0);
+        assert_eq!(unpacked[0].node_voltages.get("1"), Some(&5.0));
+        assert_eq!(unpacked[1].time, 0.001);
+        assert_eq!(unpacked[1].node_voltages.get("1"), Some(&4.8));
     }
 }

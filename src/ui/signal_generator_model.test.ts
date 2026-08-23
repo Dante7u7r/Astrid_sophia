@@ -100,4 +100,36 @@ describe("SignalGeneratorModel — Síntesis y Métricas", () => {
     expect(sine1k?.params.frequency).toBe(1000);
     expect(sine1k?.params.amplitude).toBe(5);
   });
+
+  it("evalúa modulación en frecuencia FM y barrido Sweep", () => {
+    const fmParams: SignalGeneratorParams = {
+      ...baseSineParams,
+      waveType: "fm",
+      frequency: 10_000,
+      modFrequency: 500,
+      fmDeviation: 2000,
+    };
+    const valFm = evaluateSignalPoint(0.001, fmParams);
+    expect(valFm).toBeGreaterThanOrEqual(-5.0);
+    expect(valFm).toBeLessThanOrEqual(5.0);
+
+    const sweepParams: SignalGeneratorParams = {
+      ...baseSineParams,
+      waveType: "sweep",
+      sweepStartFreq: 100,
+      sweepEndFreq: 1000,
+      sweepTime: 0.1,
+    };
+    const valSweep = evaluateSignalPoint(0.05, sweepParams);
+    expect(valSweep).toBeGreaterThanOrEqual(-5.0);
+    expect(valSweep).toBeLessThanOrEqual(5.0);
+
+    const noiseParams: SignalGeneratorParams = {
+      ...baseSineParams,
+      waveType: "noise",
+    };
+    const valNoise = evaluateSignalPoint(0.0123, noiseParams);
+    expect(valNoise).toBeGreaterThanOrEqual(-5.0);
+    expect(valNoise).toBeLessThanOrEqual(5.0);
+  });
 });

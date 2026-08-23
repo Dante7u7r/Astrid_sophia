@@ -33,6 +33,7 @@ fn test_variable_order_controller_transitions() {
         1e-3,
         1e-3,
         1e-6,
+        None,
     );
 
     assert!(
@@ -74,6 +75,7 @@ fn test_variable_order_controller_transitions() {
         1e-3,
         1e-3,
         1e-6,
+        None,
     );
 
     assert!(decision_ring.ringing_detected);

@@ -188,8 +188,6 @@ export function drawLogicAnalyzer(
 
     ctx.strokeStyle = ch.color;
     ctx.lineWidth = 1.8;
-    ctx.shadowColor = ch.color;
-    ctx.shadowBlur = 4;
     ctx.beginPath();
 
     const getPixelY = (lvl: 0 | 1 | "X") => (lvl === 1 ? waveHighY : lvl === 0 ? waveLowY : waveMidY);
@@ -221,9 +219,6 @@ export function drawLogicAnalyzer(
     // Completar hasta el borde derecho
     ctx.lineTo(width, prevY);
     ctx.stroke();
-
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
   }
 
   // 5. Dibujar Bus Paralelo Decodificado (si está activo)

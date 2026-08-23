@@ -35,9 +35,6 @@ export function createInteractiveSimulationCallbacks(
       const oscilloscopePanel = dependencies.getOscilloscopePanel();
       if (oscilloscopePanel) {
         oscilloscopePanel.transientResults = ownerTab.transientResults;
-        if (ownerTab.transientResults.length === 20 && oscilloscopePanel.voltsPerDivCh1 === 1.0 && oscilloscopePanel.timeDivValue === 0.02) {
-          oscilloscopePanel.autoFit();
-        }
         dependencies.updateOscilloscopeRendering();
       }
 

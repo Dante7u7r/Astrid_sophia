@@ -335,24 +335,19 @@ export class CanvasSceneRenderer {
       const isBus = wire.isBus || (wire.label ? isBusLabel(wire.label) : false);
       const busWidth = wire.busWidth ?? (wire.label ? getBusWidth(wire.label) : 1);
 
-      let strokeColor = isBus ? "#818CF8" : "#5B9FD6";
-      this.ctx.shadowBlur = 0;
+      let strokeColor = isBus ? "#818CF8" : "#64748B";
       if (isSelected) {
         strokeColor = "#38BDF8";
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = isBus ? 4.8 : 2.8;
-        this.ctx.shadowColor = "rgba(56, 189, 248, 0.4)";
-        this.ctx.shadowBlur = 6;
+        this.ctx.lineWidth = isBus ? 4.8 : 3.0;
       } else if (isHovered) {
-        strokeColor = isBus ? "#A5B4FC" : "#78C8F0";
+        strokeColor = isBus ? "#A5B4FC" : "#94A3B8";
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 4.4 : 2.4;
       } else if (isNetHighlighted) {
         strokeColor = "#38BDF8";
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 4.4 : 2.4;
-        this.ctx.shadowColor = "rgba(56, 189, 248, 0.35)";
-        this.ctx.shadowBlur = 5;
       } else if (wire.color) {
         strokeColor = wire.color;
         this.ctx.strokeStyle = strokeColor;
@@ -363,7 +358,6 @@ export class CanvasSceneRenderer {
       }
 
       this.ctx.stroke();
-      this.ctx.shadowBlur = 0;
 
       // Si es un cable de bus / vector, dibujar el slash diagonal /N en el segmento central
       if (isBus && busWidth > 1 && pts.length >= 2) {
@@ -540,12 +534,9 @@ export class CanvasSceneRenderer {
 
         if (isHovered || isActive) {
           this.ctx.fillStyle = "#38BDF8";
-          this.ctx.shadowColor = "#38BDF8";
-          this.ctx.shadowBlur = 6;
           this.ctx.beginPath();
           this.ctx.arc(pin.x, pin.y, 5.5, 0, Math.PI * 2);
           this.ctx.fill();
-          this.ctx.shadowBlur = 0;
 
           // Draw HUD de Telemetría de Pin/Nodo
           const nodeId = nodeMap[pinKey];

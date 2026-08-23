@@ -31,6 +31,22 @@ export const DiodeDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
+
+    const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vDiff = v0 - v1;
+    const isConduction = vDiff >= 0.55;
+
+    ctx.save();
+    if (isConduction) {
+      ctx.fillStyle = "rgba(16, 185, 129, 0.85)"; // Verde de conducción directa activa
+      ctx.strokeStyle = "#34D399";
+    } else {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+      ctx.strokeStyle = state.color;
+    }
+
+    ctx.beginPath();
     ctx.moveTo(-12, -10);
     ctx.lineTo(-12, 10);
     ctx.lineTo(8, 0);
@@ -42,6 +58,7 @@ export const DiodeDefinition: ComponentDefinition = {
     ctx.moveTo(8, -10);
     ctx.lineTo(8, 10);
     ctx.stroke();
+    ctx.restore();
   },
   evaluateLiveBehavior: (pinVoltages) => {
     const v0 = pinVoltages[0] ?? 0;
@@ -111,24 +128,42 @@ export const NmosDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    // Canal vertical central
+
+    const vG = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vS = options.voltageMap?.[`${comp.id}:2`] ?? 0;
+    const vGS = vG - vS;
+    const vth = Number(comp.value) || 1.5;
+    const isChannelFormed = vGS >= vth;
+
+    ctx.save();
+    // 1. Canal vertical central (se ilumina si se forma el canal de inversión)
+    ctx.beginPath();
     ctx.moveTo(10, -20);
     ctx.lineTo(10, 20);
+    if (isChannelFormed) {
+      ctx.strokeStyle = "#38BDF8";
+      ctx.lineWidth = 3.0;
+    } else {
+      ctx.strokeStyle = state.color;
+      ctx.lineWidth = state.lineWidth;
+    }
+    ctx.stroke();
 
-    // Placa a la izquierda (Puerta / Gate)
+    // 2. Placa a la izquierda (Puerta / Gate)
+    ctx.beginPath();
     ctx.moveTo(-10, -15);
     ctx.lineTo(-10, 15);
+    ctx.strokeStyle = isChannelFormed ? "#38BDF8" : state.color;
+    ctx.lineWidth = state.lineWidth;
+    ctx.stroke();
 
-    // Terminal de la Puerta (Gate)
+    // 3. Terminales de Gate, Drain, Source
+    ctx.beginPath();
     ctx.moveTo(-10, 0);
     ctx.lineTo(-40, 0);
-
-    // Terminal del Drenaje (Drain)
     ctx.moveTo(10, -15);
     ctx.lineTo(20, -15);
     ctx.lineTo(20, -40);
-
-    // Terminal de la Fuente (Source)
     ctx.moveTo(10, 15);
     ctx.lineTo(20, 15);
     ctx.lineTo(20, 40);
@@ -138,7 +173,10 @@ export const NmosDefinition: ComponentDefinition = {
     ctx.lineTo(15, 11);
     ctx.moveTo(10, 15);
     ctx.lineTo(15, 19);
+    ctx.strokeStyle = state.color;
+    ctx.lineWidth = state.lineWidth;
     ctx.stroke();
+    ctx.restore();
   },
 };
 
@@ -156,18 +194,34 @@ export const PmosDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    // Canal vertical central
+
+    const vG = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vS = options.voltageMap?.[`${comp.id}:2`] ?? 0;
+    const vSG = vS - vG;
+    const isChannelFormed = vSG >= 1.5;
+
+    ctx.save();
+    // 1. Canal vertical
+    ctx.beginPath();
     ctx.moveTo(10, -20);
     ctx.lineTo(10, 20);
-
-    // Burbuja de inversión en puerta
-    ctx.moveTo(-6, 0);
+    if (isChannelFormed) {
+      ctx.strokeStyle = "#A855F7";
+      ctx.lineWidth = 3.0;
+    } else {
+      ctx.strokeStyle = state.color;
+      ctx.lineWidth = state.lineWidth;
+    }
     ctx.stroke();
+
+    // 2. Burbuja de inversión en puerta
     ctx.beginPath();
     ctx.arc(-11, 0, 4, 0, Math.PI * 2);
+    ctx.strokeStyle = state.color;
+    ctx.lineWidth = state.lineWidth;
     ctx.stroke();
 
-    // Placa a la izquierda (Puerta / Gate)
+    // 3. Placa a la izquierda (Puerta / Gate)
     ctx.beginPath();
     ctx.moveTo(-6, -15);
     ctx.lineTo(-6, 15);
@@ -192,6 +246,7 @@ export const PmosDefinition: ComponentDefinition = {
     ctx.moveTo(10, 15);
     ctx.lineTo(5, 19);
     ctx.stroke();
+    ctx.restore();
   },
 };
 
@@ -209,20 +264,44 @@ export const NpnDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    // Barra vertical de la Base
+
+    const vB = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vC = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vE = options.voltageMap?.[`${comp.id}:2`] ?? 0;
+    const vBE = vB - vE;
+    const vCE = vC - vE;
+
+    // Región de operación: Activa (verde), Saturación (cyan), Corte (normal)
+    const isConducting = vBE >= 0.55;
+    const isSaturated = isConducting && vCE <= 0.25;
+
+    ctx.save();
+    // 1. Barra vertical de la Base
+    ctx.beginPath();
     ctx.moveTo(-10, -20);
     ctx.lineTo(-10, 20);
+    if (isSaturated) {
+      ctx.strokeStyle = "#38BDF8"; // Saturación
+      ctx.lineWidth = 2.8;
+    } else if (isConducting) {
+      ctx.strokeStyle = "#10B981"; // Zona activa lineal
+      ctx.lineWidth = 2.4;
+    } else {
+      ctx.strokeStyle = state.color;
+      ctx.lineWidth = state.lineWidth;
+    }
+    ctx.stroke();
 
-    // Terminal de la Base (Base)
+    // 2. Terminal de la Base
+    ctx.beginPath();
     ctx.moveTo(-10, 0);
     ctx.lineTo(-40, 0);
 
-    // Colector (Collector)
+    // 3. Colector y Emisor
     ctx.moveTo(-10, -10);
     ctx.lineTo(20, -25);
     ctx.lineTo(20, -40);
 
-    // Emisor (Emitter)
     ctx.moveTo(-10, 10);
     ctx.lineTo(20, 25);
     ctx.lineTo(20, 40);
@@ -232,7 +311,10 @@ export const NpnDefinition: ComponentDefinition = {
     ctx.lineTo(12, 23);
     ctx.moveTo(20, 25);
     ctx.lineTo(15, 17);
+    ctx.strokeStyle = isConducting ? (isSaturated ? "#38BDF8" : "#10B981") : state.color;
+    ctx.lineWidth = state.lineWidth;
     ctx.stroke();
+    ctx.restore();
   },
 };
 
@@ -250,20 +332,42 @@ export const PnpDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    // Barra vertical de la Base
+
+    const vB = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vC = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vE = options.voltageMap?.[`${comp.id}:2`] ?? 0;
+    const vEB = vE - vB;
+    const vEC = vE - vC;
+    const isConducting = vEB >= 0.55;
+    const isSaturated = isConducting && vEC <= 0.25;
+
+    ctx.save();
+    // 1. Barra vertical de la Base
+    ctx.beginPath();
     ctx.moveTo(-10, -20);
     ctx.lineTo(-10, 20);
+    if (isSaturated) {
+      ctx.strokeStyle = "#38BDF8";
+      ctx.lineWidth = 2.8;
+    } else if (isConducting) {
+      ctx.strokeStyle = "#10B981";
+      ctx.lineWidth = 2.4;
+    } else {
+      ctx.strokeStyle = state.color;
+      ctx.lineWidth = state.lineWidth;
+    }
+    ctx.stroke();
 
-    // Terminal de la Base (Base)
+    // 2. Terminal de Base
+    ctx.beginPath();
     ctx.moveTo(-10, 0);
     ctx.lineTo(-40, 0);
 
-    // Colector (Collector)
+    // 3. Colector y Emisor
     ctx.moveTo(-10, -10);
     ctx.lineTo(20, -25);
     ctx.lineTo(20, -40);
 
-    // Emisor (Emitter)
     ctx.moveTo(-10, 10);
     ctx.lineTo(20, 25);
     ctx.lineTo(20, 40);
@@ -273,7 +377,10 @@ export const PnpDefinition: ComponentDefinition = {
     ctx.lineTo(-2, 12);
     ctx.moveTo(-10, 10);
     ctx.lineTo(-5, 18);
+    ctx.strokeStyle = isConducting ? (isSaturated ? "#38BDF8" : "#10B981") : state.color;
+    ctx.lineWidth = state.lineWidth;
     ctx.stroke();
+    ctx.restore();
   },
 };
 
@@ -403,3 +510,125 @@ export const Bsim4PmosDefinition: ComponentDefinition = {
     ctx.stroke();
   },
 };
+
+export const ZenerDiodeDefinition: ComponentDefinition = {
+  type: "zener_diode",
+  name: "Diodo Zener",
+  category: "semiconductores",
+  prefix: "DZ",
+  defaultProperties: { value: 5.1 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  getPins: () => STANDARD_TWO_PINS,
+  render: (ctx, comp, state, options) => {
+    if (options.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+
+    const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vDiff = v0 - v1;
+    const vz = Math.max(Number(comp.value) || 5.1, 0.1);
+    const isForward = vDiff >= 0.55;
+    const isZenerBreakdown = (v1 - v0) >= vz * 0.95;
+
+    ctx.save();
+    if (isForward) {
+      ctx.fillStyle = "rgba(16, 185, 129, 0.85)"; // Verde de conducción directa
+      ctx.strokeStyle = "#34D399";
+    } else if (isZenerBreakdown) {
+      ctx.fillStyle = "rgba(168, 85, 247, 0.85)"; // Violeta de regulación Zener
+      ctx.strokeStyle = "#C084FC";
+    } else {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+      ctx.strokeStyle = state.color;
+    }
+
+    // Triángulo
+    ctx.beginPath();
+    ctx.moveTo(-12, -10);
+    ctx.lineTo(-12, 10);
+    ctx.lineTo(8, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Barra de cátodo en Z de Zener
+    ctx.beginPath();
+    ctx.moveTo(4, -13);
+    ctx.lineTo(8, -10);
+    ctx.lineTo(8, 10);
+    ctx.lineTo(12, 13);
+    ctx.stroke();
+    ctx.restore();
+  },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const v0 = pinVoltages[0] ?? 0;
+    const v1 = pinVoltages[1] ?? 0;
+    const vDiff = v0 - v1;
+    const vz = Math.max(Number(comp.value) || 5.1, 0.1);
+    let i = 0;
+    if (vDiff > 0.5) {
+      i = Math.max(0, (vDiff - 0.6) / 10);
+    } else if (vDiff < -vz) {
+      i = -(Math.abs(vDiff) - vz) / 5;
+    }
+    return { branchCurrents: { 0: i, 1: -i } };
+  },
+};
+
+export const SchottkyDiodeDefinition: ComponentDefinition = {
+  type: "schottky_diode",
+  name: "Diodo Schottky",
+  category: "semiconductores",
+  prefix: "DS",
+  defaultProperties: { value: 0.3 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  getPins: () => STANDARD_TWO_PINS,
+  render: (ctx, comp, state, options) => {
+    if (options.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+
+    const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vDiff = v0 - v1;
+    const isForward = vDiff >= 0.25; // Conducción rápida de baja caída
+
+    ctx.save();
+    if (isForward) {
+      ctx.fillStyle = "rgba(14, 165, 233, 0.85)"; // Azul cyan de conmutación rápida
+      ctx.strokeStyle = "#38BDF8";
+    } else {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+      ctx.strokeStyle = state.color;
+    }
+
+    // Triángulo
+    ctx.beginPath();
+    ctx.moveTo(-12, -10);
+    ctx.lineTo(-12, 10);
+    ctx.lineTo(8, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Barra de cátodo en S de Schottky
+    ctx.beginPath();
+    ctx.moveTo(4, -10);
+    ctx.lineTo(8, -10);
+    ctx.lineTo(8, 10);
+    ctx.lineTo(12, 10);
+    ctx.stroke();
+    ctx.restore();
+  },
+  evaluateLiveBehavior: (pinVoltages) => {
+    const v0 = pinVoltages[0] ?? 0;
+    const v1 = pinVoltages[1] ?? 0;
+    const vDiff = v0 - v1;
+    const i = vDiff > 0.2 ? Math.max(0, (vDiff - 0.25) / 5) : 0;
+    return { branchCurrents: { 0: i, 1: -i } };
+  },
+};
+

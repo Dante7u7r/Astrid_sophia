@@ -92,11 +92,15 @@ fn is_mcu_component(comp: &ComponentData) -> bool {
     comp.comp_type == "arduino_uno"
         || comp.comp_type == "esp32"
         || comp.comp_type == "raspberry_pi_pico"
+        || comp.comp_type == "mcu_8051"
+        || comp.comp_type == "8051"
+        || comp.comp_type == "mcu_avr"
+        || comp.comp_type == "atmega328p"
 }
 
 fn mcu_supply_voltage(comp_type: &str) -> f64 {
     match comp_type {
-        "arduino_uno" => 5.0,
+        "arduino_uno" | "mcu_8051" | "8051" | "mcu_avr" | "atmega328p" => 5.0,
         "esp32" | "raspberry_pi_pico" => 3.3,
         _ => 5.0,
     }
@@ -104,7 +108,8 @@ fn mcu_supply_voltage(comp_type: &str) -> f64 {
 
 fn mcu_baseline_current(comp_type: &str) -> f64 {
     match comp_type {
-        "arduino_uno" => 0.015,
+        "arduino_uno" | "mcu_avr" | "atmega328p" => 0.015,
+        "mcu_8051" | "8051" => 0.020,
         "esp32" => 0.060,
         "raspberry_pi_pico" => 0.025,
         _ => 0.015,

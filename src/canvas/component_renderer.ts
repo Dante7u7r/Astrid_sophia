@@ -41,11 +41,6 @@ export function drawComponentSymbol(
   ctx.lineWidth = visualState.lineWidth;
   ctx.fillStyle = "rgba(8, 12, 22, 0.75)";
 
-  if (visualState.shadowBlur > 0) {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = visualState.shadowBlur;
-  }
-
   if (options.detail === "compact" && !isSelected && !isHovered) {
     drawCompactComponent(ctx, comp, color);
     ctx.restore();
@@ -78,7 +73,6 @@ export function drawComponentSymbol(
   }
 
   // 3. Dibujar ID y valor numérico formateado
-  ctx.shadowBlur = 0;
   if (comp.mirror) {
     ctx.scale(-1, 1);
   }

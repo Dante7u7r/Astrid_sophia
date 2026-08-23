@@ -3,7 +3,6 @@
 // ==========================================================================
 
 import type { ComponentInstance } from "../canvas_orchestrator";
-import { globalComponentRegistry } from "../components/registry";
 
 const WAVE_LABELS: Record<string, string> = {
   sine: "∿",
@@ -47,12 +46,12 @@ export function getComponentVisualState(
 
   if (isSelected) {
     color = "#38BDF8";
-    lineWidth = 2.6;
-    shadowBlur = 6;
+    lineWidth = 2.8;
+    shadowBlur = 0;
   } else if (isHovered) {
     color = "#5B9FD6";
-    lineWidth = 2.2;
-    shadowBlur = 3;
+    lineWidth = 2.4;
+    shadowBlur = 0;
   }
 
   return {
@@ -63,7 +62,9 @@ export function getComponentVisualState(
 }
 
 export function shouldDrawStandardLeads(type: ComponentInstance["type"]): boolean {
-  return globalComponentRegistry.hasStandardLeads(type);
+  return type === "resistor" || type === "capacitor" || type === "inductor"
+    || type === "diode" || type === "zener_diode" || type === "schottky_diode"
+    || type === "fuse" || type === "ldr" || type === "thermistor" || type === "lamp";
 }
 
 export function getComponentLabelLayout(comp: ComponentInstance): ComponentLabelLayout {
@@ -86,7 +87,7 @@ export function getComponentLabelLayout(comp: ComponentInstance): ComponentLabel
 }
 
 export function shouldDrawValueLabel(type: ComponentInstance["type"]): boolean {
-  return globalComponentRegistry.hasValueLabel(type);
+  return type !== "ground" && type !== "net_label" && type !== "text_note" && type !== "dmm" && type !== "x";
 }
 
 export function formatComponentValue(comp: ComponentInstance): string {

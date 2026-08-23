@@ -102,8 +102,6 @@ export function drawPoleZeroPlot(
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
-    ctx.shadowColor = isLhp ? "rgba(56, 189, 248, 0.5)" : "rgba(239, 68, 68, 0.7)";
-    ctx.shadowBlur = 6;
 
     const arm = 6;
     ctx.beginPath();
@@ -112,7 +110,6 @@ export function drawPoleZeroPlot(
     ctx.moveTo(x + arm, y - arm);
     ctx.lineTo(x - arm, y + arm);
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // Etiqueta del polo
     ctx.fillStyle = color;

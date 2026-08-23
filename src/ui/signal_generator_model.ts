@@ -5,17 +5,21 @@
  * cálculo de parámetros RMS/Pico y presets de señales de laboratorio.
  */
 
-export type GeneratorWaveType = "sine" | "square" | "triangle" | "sawtooth" | "pulse" | "am" | "dc";
+export type GeneratorWaveType = "sine" | "square" | "triangle" | "sawtooth" | "pulse" | "am" | "fm" | "sweep" | "noise" | "dc";
 
 export interface SignalGeneratorParams {
   waveType: GeneratorWaveType;
-  frequency: number;       // Hz
+  frequency: number;       // Hz (frecuencia central / portadora)
   amplitude: number;       // V (amplitud pico)
   offset: number;          // V (tensión continua offset)
   dutyCycle: number;       // 0.01 .. 0.99 (50% por defecto)
   phase: number;           // Grados (0 .. 360)
-  modFrequency: number;    // Hz (para modulación AM)
-  modIndex: number;        // 0.0 .. 1.0 (para modulación AM)
+  modFrequency: number;    // Hz (para modulación AM / FM)
+  modIndex: number;        // 0.0 .. 1.0 (índice de modulación AM)
+  fmDeviation?: number;    // Hz (desviación de frecuencia para FM, ej: 500 Hz)
+  sweepStartFreq?: number; // Hz (frecuencia inicial para Sweep)
+  sweepEndFreq?: number;   // Hz (frecuencia final para Sweep)
+  sweepTime?: number;      // s (duración del ciclo de barrido, ej: 0.1 s)
   enabled: boolean;        // Salida activa o en espera
 }
 
@@ -134,6 +138,31 @@ export function evaluateSignalPoint(t: number, params: SignalGeneratorParams): n
       const modIdx = Math.max(0, Math.min(1.0, params.modIndex ?? 0.5));
       const envelope = 1 + modIdx * Math.sin(2 * Math.PI * modF * t);
       return offset + amp * envelope * Math.sin(2 * Math.PI * f * t + phaseRad);
+    }
+    case "fm": {
+      const modF = Math.max(0.1, params.modFrequency || 100);
+      const dev = params.fmDeviation ?? f * 0.2; // Desviación en Hz
+      // Fase acumulada = 2*pi*fc*t - (dev/modF)*cos(2*pi*modF*t)
+      const fmPhase = 2 * Math.PI * f * t - (dev / modF) * Math.cos(2 * Math.PI * modF * t);
+      return offset + amp * Math.sin(fmPhase + phaseRad);
+    }
+    case "sweep": {
+      const fStart = Math.max(1, params.sweepStartFreq ?? (f * 0.1));
+      const fEnd = Math.max(fStart, params.sweepEndFreq ?? (f * 2));
+      const tSweep = Math.max(1e-4, params.sweepTime ?? 0.1);
+      const tInSweep = ((t % tSweep) + tSweep) % tSweep;
+      // Barrido lineal: chirp phase
+      const sweepPhase = 2 * Math.PI * (fStart * tInSweep + ((fEnd - fStart) / (2 * tSweep)) * tInSweep * tInSweep);
+      return offset + amp * Math.sin(sweepPhase + phaseRad);
+    }
+    case "noise": {
+      // Generador PRNG determinista con transformación Box-Muller
+      const seed = Math.sin(t * 1e6) * 43758.5453;
+      const u1 = Math.max(1e-6, Math.abs(seed - Math.floor(seed)));
+      const u2 = Math.abs(Math.cos(t * 1e5));
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      const clampedZ = Math.max(-3, Math.min(3, z)) / 3;
+      return offset + amp * clampedZ;
     }
     default:
       return offset;

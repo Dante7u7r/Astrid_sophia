@@ -40,6 +40,9 @@ export interface DesktopUiControllerDeps {
   addLog(text: string, type?: LogType): void;
   requestAnimationFrame(callback: FrameRequestCallback): number;
   now(): number;
+  getSimulationRunner?(): import("../simulation/simulation_runner").SimulationRunner | null;
+  getSimulationSettings?(): import("../ui/settings_modal").SimulationSettings;
+  setSimulationSettings?(settings: import("../ui/settings_modal").SimulationSettings): void;
 }
 
 export function createDesktopUiControllers(
@@ -66,6 +69,13 @@ export function createDesktopUiControllers(
   });
   oscilloscopePanel.onFrameUpdate = (sweepTime) => {
     renderController.handlePlaybackFrame(sweepTime);
+  };
+  oscilloscopePanel.onSpeedChanged = (speed) => {
+    deps.getSimulationRunner?.()?.setSimulationSpeed(speed);
+    const current = deps.getSimulationSettings?.();
+    if (current) {
+      deps.setSimulationSettings?.({ ...current, speedMultiplier: speed });
+    }
   };
 
   initInstrumentationMenu({

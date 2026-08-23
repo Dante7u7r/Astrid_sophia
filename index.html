@@ -925,6 +925,26 @@
                   <button id="osc-mode-split" class="btn-osc-mini" type="button" title="Alternar cuadrícula dividida para separar los canales">⊞ Split</button>
                   <button id="osc-math-btn" class="btn-osc-mini" type="button" title="Canal Matemático (CH1 - CH2)">🧮 MATH</button>
                   <button id="osc-cursors-btn" class="btn-osc-mini" type="button">📏 Cursores: OFF</button>
+
+                  <select id="osc-interpolation-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px;" title="Tipo de interpolación de traza">
+                    <option value="linear" selected>Traza: Lineal</option>
+                    <option value="sinc">Traza: Sinc (Lanczos)</option>
+                  </select>
+                  <select id="osc-phosphor-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px;" title="Persistencia de fósforo digital">
+                    <option value="off" selected>Fósforo: Off</option>
+                    <option value="short">Fósforo: Corto</option>
+                    <option value="medium">Fósforo: Medio</option>
+                    <option value="infinite">Fósforo: Infinito</option>
+                  </select>
+
+                  <select id="osc-speed-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px;" title="Velocidad de simulación interactiva">
+                    <option value="0.5">Vel: 0.5x</option>
+                    <option value="1" selected>Vel: 1x (Real)</option>
+                    <option value="2">Vel: 2x</option>
+                    <option value="5">Vel: 5x</option>
+                    <option value="10">Vel: 10x</option>
+                    <option value="100">Vel: Turbo</option>
+                  </select>
                   
                   <span class="osc-v-divider"></span>
                   
@@ -1132,6 +1152,8 @@
                           <span id="osc-focused-volts-badge" class="rack-val-badge">1.0 V/div</span>
                         </div>
                         <select id="osc-focused-volts" class="osc-select" aria-label="Voltios por división">
+                          <option value="0.001">1 mV/div</option>
+                          <option value="0.002">2 mV/div</option>
                           <option value="0.005">5 mV/div</option>
                           <option value="0.01">10 mV/div</option>
                           <option value="0.02">20 mV/div</option>
@@ -1144,6 +1166,11 @@
                           <option value="5">5.0 V/div</option>
                           <option value="10">10 V/div</option>
                           <option value="20">20 V/div</option>
+                          <option value="50">50 V/div</option>
+                          <option value="100">100 V/div</option>
+                          <option value="200">200 V/div</option>
+                          <option value="500">500 V/div</option>
+                          <option value="1000">1000 V/div</option>
                         </select>
                       </div>
 

@@ -68,7 +68,7 @@ interface DesktopE2eBridgeDependencies {
 export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependencies): void {
   const isAuditOrE2e = typeof import.meta !== "undefined"
     && (import.meta.env.DEV || import.meta.env.MODE === "wdio"
-        || (typeof window !== "undefined" && (window.location.search.includes("audit=1") || window.location.search.includes("e2e=1"))));
+        || (typeof window !== "undefined" && window.location.search.includes("e2e=1")));
   if (!isAuditOrE2e) return;
 
   // The Tauri service compares the native title with document.title exactly.

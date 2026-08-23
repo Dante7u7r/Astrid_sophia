@@ -31,15 +31,39 @@ export const OpampDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    // Main triangle
+
+    const vInPlus = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vInMinus = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vCC = options.voltageMap?.[`${comp.id}:2`] ?? 15;
+    const vEE = options.voltageMap?.[`${comp.id}:3`] ?? -15;
+    const vOut = options.voltageMap?.[`${comp.id}:4`] ?? 0;
+
+    const diff = Math.abs(vInPlus - vInMinus);
+    const isSaturatedPos = vOut >= vCC - 0.5;
+    const isSaturatedNeg = vOut <= vEE + 0.5;
+    const isVirtualGround = diff <= 0.05 && !isSaturatedPos && !isSaturatedNeg;
+
+    ctx.save();
+    // 1. Relleno pedagógico del cuerpo triangular
+    ctx.beginPath();
     ctx.moveTo(-25, -30);
     ctx.lineTo(-25, 30);
     ctx.lineTo(25, 0);
     ctx.closePath();
+
+    if (isSaturatedPos || isSaturatedNeg) {
+      ctx.fillStyle = "rgba(239, 68, 68, 0.25)"; // Rojo/Ámbar de saturación en riel
+    } else if (isVirtualGround) {
+      ctx.fillStyle = "rgba(56, 189, 248, 0.2)"; // Azul cyan de equilibrio de lazo lineal
+    } else {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    }
     ctx.fill();
+    ctx.strokeStyle = isSaturatedPos || isSaturatedNeg ? "#EF4444" : (isVirtualGround ? "#38BDF8" : state.color);
+    ctx.lineWidth = state.lineWidth;
     ctx.stroke();
 
-    // Input/output terminals
+    // 2. Terminales de entrada/salida y alimentación
     ctx.beginPath();
     ctx.moveTo(-40, -15);
     ctx.lineTo(-25, -15);
@@ -48,14 +72,13 @@ export const OpampDefinition: ComponentDefinition = {
     ctx.moveTo(25, 0);
     ctx.lineTo(40, 0);
 
-    // Power supply terminals
     ctx.moveTo(0, -40);
     ctx.lineTo(0, -15);
     ctx.moveTo(0, 40);
     ctx.lineTo(0, 15);
     ctx.stroke();
 
-    // Plus (+) at pin 0 (-15)
+    // 3. Plus (+) en pin 0
     ctx.strokeStyle = state.color;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -64,10 +87,24 @@ export const OpampDefinition: ComponentDefinition = {
     ctx.moveTo(-18, -18);
     ctx.lineTo(-18, -12);
 
-    // Minus (-) at pin 1 (+15)
+    // 4. Minus (-) en pin 1
     ctx.moveTo(-21, 15);
     ctx.lineTo(-15, 15);
     ctx.stroke();
+
+    // 5. Indicador de estado
+    if (isSaturatedPos || isSaturatedNeg) {
+      ctx.fillStyle = "#EF4444";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(isSaturatedPos ? "SAT+" : "SAT-", -5, 4);
+    } else if (isVirtualGround) {
+      ctx.fillStyle = "#38BDF8";
+      ctx.font = "bold 7px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("LIN", -5, 3);
+    }
+    ctx.restore();
   },
 };
 
@@ -89,12 +126,23 @@ export const OpampIdealDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
+
+    const vInPlus = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vInMinus = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const diff = Math.abs(vInPlus - vInMinus);
+    const isVirtualGround = diff <= 0.05;
+
+    ctx.save();
     // Main triangle
+    ctx.beginPath();
     ctx.moveTo(-25, -30);
     ctx.lineTo(-25, 30);
     ctx.lineTo(25, 0);
     ctx.closePath();
+    ctx.fillStyle = isVirtualGround ? "rgba(56, 189, 248, 0.2)" : "rgba(15, 23, 42, 0.85)";
     ctx.fill();
+    ctx.strokeStyle = isVirtualGround ? "#38BDF8" : state.color;
+    ctx.lineWidth = state.lineWidth;
     ctx.stroke();
 
     // Input terminals (+ and -) and output terminal (OUT)
@@ -120,6 +168,7 @@ export const OpampIdealDefinition: ComponentDefinition = {
     ctx.moveTo(-21, 15);
     ctx.lineTo(-15, 15);
     ctx.stroke();
+    ctx.restore();
   },
 };
 

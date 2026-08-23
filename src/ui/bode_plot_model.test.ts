@@ -57,5 +57,8 @@ describe("BodePlotModel — Tests Unitarios", () => {
     // En 100 kHz la amplitud es 0.01 (-40 dB), por lo que GM = -(-40) = +40 dB
     expect(result.metrics.gainMarginDb).toBeCloseTo(40, 0);
     expect(result.metrics.isStable).toBe(true);
+    expect(result.metrics.stabilityQuality).toBe("stable");
+    expect(result.nyquistPoints.length).toBe(frequencies.length);
+    expect(result.nyquistPoints[0].real).toBeGreaterThan(0);
   });
 });

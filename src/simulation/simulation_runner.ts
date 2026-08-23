@@ -32,6 +32,7 @@ import {
   recordConvergence,
   type FeedbackRunHandle,
 } from "../feedback/instrumentation";
+import { type TimeStepResult } from "../ui/oscilloscope_panel";
 
 // ==========================================================================
 // Interfaces públicas
@@ -49,6 +50,8 @@ export interface SimulationFrame {
   /** Evento de interrupción analógica (cruce de umbral) o null.
    *  Se despacha al runtime MCU antes de notificar a la UI. */
   readonly triggerEvent: AnalogEventTrigger | null;
+  /** Lote de pasos transitorios calculados con resolución de física completa */
+  readonly batchSteps?: ReadonlyArray<TimeStepResult>;
 }
 
 export interface SimulationRunContext {
@@ -112,10 +115,13 @@ export interface SimulationRunner {
       tolerance?: number;
       maxIterations?: number;
       disablePacing?: boolean;
+      speedMultiplier?: number;
     }>,
     ownerTabId: string,
     feedbackRun?: FeedbackRunHandle,
   ): Promise<void>;
+  /** Ajusta la velocidad de simulación en caliente sobre la marcha */
+  setSimulationSpeed(speed: number): Promise<void>;
   /** Aplica una mutación de parámetro en caliente (hot-patching) sobre
    *  un componente durante la simulación activa sin reiniciar el análisis. */
   mutateComponent(
@@ -204,6 +210,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         tolerance?: number;
         maxIterations?: number;
         disablePacing?: boolean;
+        speedMultiplier?: number;
       }>,
       ownerTabId: string,
       feedbackRun?: FeedbackRunHandle,
@@ -323,6 +330,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
           tolerance: settings.tolerance ?? 1e-6,
           maxIterations: settings.maxIterations ?? 100,
           disablePacing: settings.disablePacing ?? false,
+          speedMultiplier: settings.speedMultiplier ?? 1.0,
         });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -335,6 +343,17 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
           callbacks.onSimulationError(errorMsg, context);
         }
         throw err;
+      }
+    },
+
+    async setSimulationSpeed(speed: number): Promise<void> {
+      try {
+        await invoke('set_interactive_simulation_speed', {
+          speed: Math.max(0.01, speed),
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(`[Simulation Speed] Error al ajustar velocidad: ${errorMsg}`);
       }
     },
 

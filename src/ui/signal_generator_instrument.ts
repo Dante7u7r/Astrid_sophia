@@ -138,6 +138,9 @@ export class SignalGeneratorInstrument {
               <button type="button" class="gen-wave-btn" data-wave="sawtooth" title="Diente de Sierra">⊿ Rampa</button>
               <button type="button" class="gen-wave-btn" data-wave="pulse" title="Tren de Pulsos">⎍ Pulso</button>
               <button type="button" class="gen-wave-btn" data-wave="am" title="Modulación en Amplitud">📻 AM</button>
+              <button type="button" class="gen-wave-btn" data-wave="fm" title="Modulación en Frecuencia">📻 FM</button>
+              <button type="button" class="gen-wave-btn" data-wave="sweep" title="Barrido de Frecuencia">〰 Sweep</button>
+              <button type="button" class="gen-wave-btn" data-wave="noise" title="Ruido Blanco Gaussiano">⚅ Ruido</button>
               <button type="button" class="gen-wave-btn" data-wave="dc" title="Corriente Continua (DC)">⎓ DC</button>
             </div>
 

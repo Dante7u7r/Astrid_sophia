@@ -85,4 +85,12 @@ mod core_tests {
     mod electromigration {
         include!("tests/electromigration_tests.rs");
     }
+
+    mod demos_audit {
+        include!("tests/demos_audit_tests.rs");
+    }
+
+    mod numerical_fuzz {
+        include!("tests/numerical_fuzz_tests.rs");
+    }
 }

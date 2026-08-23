@@ -271,6 +271,208 @@ export function decodeUartProtocol(
   return packets;
 }
 
+export interface I2cPacket {
+  type: "start" | "address" | "data" | "ack" | "nack" | "stop";
+  startTime: number;
+  endTime: number;
+  value?: number;
+  isRead?: boolean;
+  label: string;
+}
+
+export interface SpiPacket {
+  startTime: number;
+  endTime: number;
+  mosiByte?: number;
+  misoByte?: number;
+  label: string;
+}
+
+/** Decodificador de protocolo serie síncrono I2C (SCL / SDA). */
+export function decodeI2cProtocol(
+  sclSamples: readonly LogicSample[],
+  sdaSamples: readonly LogicSample[],
+  threshold: LogicThresholdConfig,
+): I2cPacket[] {
+  if (sclSamples.length < 10 || sdaSamples.length < 10) return [];
+
+  const sclTrans = extractTransitions(sclSamples, threshold);
+  const sdaTrans = extractTransitions(sdaSamples, threshold);
+  if (sclTrans.length < 2 || sdaTrans.length < 2) return [];
+
+  const packets: I2cPacket[] = [];
+  let inTransaction = false;
+  let bitCount = 0;
+  let currentByte = 0;
+  let byteStartTime = 0;
+  let isAddressPhase = true;
+
+  // Detectar condiciones START y STOP por transiciones de SDA mientras SCL está en nivel alto '1'
+  for (let i = 0; i < sdaTrans.length; i++) {
+    const sda = sdaTrans[i];
+    const sclLvl = getLevelAtTime(sclTrans, sda.time);
+
+    if (sclLvl === 1) {
+      if (sda.level === 0) {
+        // START CONDITION (SDA cae mientras SCL es 1)
+        inTransaction = true;
+        isAddressPhase = true;
+        bitCount = 0;
+        currentByte = 0;
+        packets.push({
+          type: "start",
+          startTime: sda.time,
+          endTime: sda.time + 1e-6,
+          label: "START",
+        });
+      } else if (sda.level === 1 && inTransaction) {
+        // STOP CONDITION (SDA sube mientras SCL es 1)
+        inTransaction = false;
+        packets.push({
+          type: "stop",
+          startTime: sda.time,
+          endTime: sda.time + 1e-6,
+          label: "STOP",
+        });
+      }
+    }
+  }
+
+  // Muestreo de bits en flancos de subida de SCL
+  for (let i = 0; i < sclTrans.length; i++) {
+    const scl = sclTrans[i];
+    if (scl.level === 1 && inTransaction) {
+      const sdaBit = getLevelAtTime(sdaTrans, scl.time);
+      if (sdaBit === "X") continue;
+
+      if (bitCount === 0) {
+        byteStartTime = scl.time;
+      }
+
+      if (bitCount < 8) {
+        currentByte = (currentByte << 1) | (sdaBit as number);
+        bitCount++;
+      } else if (bitCount === 8) {
+        // 9º bit: ACK (0) o NACK (1)
+        const isAck = sdaBit === 0;
+        if (isAddressPhase) {
+          const addr7 = (currentByte >> 1) & 0x7F;
+          const isRead = (currentByte & 0x01) === 1;
+          packets.push({
+            type: "address",
+            startTime: byteStartTime,
+            endTime: scl.time,
+            value: addr7,
+            isRead,
+            label: `ADDR: 0x${addr7.toString(16).toUpperCase().padStart(2, "0")} (${isRead ? "R" : "W"}) [${isAck ? "ACK" : "NACK"}]`,
+          });
+          isAddressPhase = false;
+        } else {
+          packets.push({
+            type: "data",
+            startTime: byteStartTime,
+            endTime: scl.time,
+            value: currentByte,
+            label: `DATA: 0x${currentByte.toString(16).toUpperCase().padStart(2, "0")} [${isAck ? "ACK" : "NACK"}]`,
+          });
+        }
+        bitCount = 0;
+        currentByte = 0;
+      }
+    }
+  }
+
+  return packets;
+}
+
+/** Decodificador de protocolo serie SPI (SCK, MOSI, MISO, CS). */
+export function decodeSpiProtocol(
+  sckSamples: readonly LogicSample[],
+  mosiSamples: readonly LogicSample[],
+  misoSamples: readonly LogicSample[],
+  csSamples: readonly LogicSample[],
+  threshold: LogicThresholdConfig,
+): SpiPacket[] {
+  if (sckSamples.length < 10) return [];
+
+  const sckTrans = extractTransitions(sckSamples, threshold);
+  const mosiTrans = extractTransitions(mosiSamples, threshold);
+  const misoTrans = extractTransitions(misoSamples, threshold);
+  const csTrans = csSamples.length > 0 ? extractTransitions(csSamples, threshold) : [];
+
+  const packets: SpiPacket[] = [];
+  let bitCount = 0;
+  let mosiByte = 0;
+  let misoByte = 0;
+  let byteStartTime = 0;
+
+  for (let i = 0; i < sckTrans.length; i++) {
+    const sck = sckTrans[i];
+    // Modo 0 por defecto (Muestreo en flanco de subida)
+    if (sck.level === 1) {
+      // Verificar Chip Select si está presente (CS activo en nivel bajo '0')
+      const csLvl = csTrans.length > 0 ? getLevelAtTime(csTrans, sck.time) : 0;
+      if (csLvl !== 0) continue;
+
+      if (bitCount === 0) byteStartTime = sck.time;
+
+      const mosiBit = getLevelAtTime(mosiTrans, sck.time);
+      const misoBit = getLevelAtTime(misoTrans, sck.time);
+
+      if (mosiBit !== "X") mosiByte = (mosiByte << 1) | mosiBit;
+      if (misoBit !== "X") misoByte = (misoByte << 1) | misoBit;
+      bitCount++;
+
+      if (bitCount === 8) {
+        const mosiHex = mosiByte.toString(16).toUpperCase().padStart(2, "0");
+        const misoHex = misoByte.toString(16).toUpperCase().padStart(2, "0");
+        packets.push({
+          startTime: byteStartTime,
+          endTime: sck.time,
+          mosiByte,
+          misoByte,
+          label: `MOSI: 0x${mosiHex} | MISO: 0x${misoHex}`,
+        });
+        bitCount = 0;
+        mosiByte = 0;
+        misoByte = 0;
+      }
+    }
+  }
+
+  return packets;
+}
+
+/** Disparo por coincidencia de patrón binario de 8 canales (ej: 0b1010XXXX). */
+export function findPatternTriggerMatch(
+  channelsHistory: readonly (readonly LogicSample[])[],
+  patternMask: readonly (0 | 1 | "X")[],
+  threshold: LogicThresholdConfig,
+): number {
+  if (channelsHistory.length === 0 || !channelsHistory[0] || channelsHistory[0].length < 2) return 0;
+  const numSamples = channelsHistory[0].length;
+
+  for (let i = 0; i < numSamples; i++) {
+    let match = true;
+    for (let ch = 0; ch < Math.min(8, patternMask.length, channelsHistory.length); ch++) {
+      const expected = patternMask[ch];
+      if (expected === "X") continue;
+
+      const sample = channelsHistory[ch][i];
+      if (!sample) continue;
+      const actual = evaluateLogicLevel(sample.val, threshold);
+      if (actual !== expected) {
+        match = false;
+        break;
+      }
+    }
+
+    if (match) return i;
+  }
+
+  return 0;
+}
+
 /** Formatea una escala de tiempo a texto legible (ns/div, µs/div, ms/div, s/div). */
 export function formatTimeDiv(secondsPerDiv: number): string {
   if (secondsPerDiv >= 1) return `${secondsPerDiv.toFixed(secondsPerDiv % 1 === 0 ? 0 : 2)} s/div`;

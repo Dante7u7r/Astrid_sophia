@@ -1,4 +1,10 @@
-import { buildTyTracePoints, selectTraceSampleIndices } from "./oscilloscope_model";
+import {
+  buildTyTracePoints,
+  selectTraceSampleIndices,
+  type WaveformHistogram,
+  type MaskToleranceDefinition,
+  type MaskTestResult,
+} from "./oscilloscope_model";
 import type { AcSweepResult, PvtTrace, TimeStepResult } from "./oscilloscope_panel";
 
 export interface OscilloscopeChannelView {
@@ -82,10 +88,8 @@ export function drawXyTrace(
     ctx.stroke();
   }
 
-  ctx.strokeStyle = "#66fcf1";
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = "#66fcf1";
-  ctx.shadowBlur = 6;
+  ctx.strokeStyle = "#38BDF8";
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
   const indices = selectTraceSampleIndices(
     results.length,
@@ -99,7 +103,6 @@ export function drawXyTrace(
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
-  ctx.shadowBlur = 0;
 }
 
 export interface ReticleChannelMarker {
@@ -273,8 +276,6 @@ export function drawPvtTraces(
     if (!trace.visible || trace.results.length < 2) continue;
     ctx.strokeStyle = trace.color;
     ctx.lineWidth = 1.8;
-    ctx.shadowColor = trace.color;
-    ctx.shadowBlur = 3;
     ctx.beginPath();
     const points = buildTyTracePoints(
       trace.results,
@@ -289,7 +290,6 @@ export function drawPvtTraces(
     }
     ctx.stroke();
   }
-  ctx.shadowBlur = 0;
 
   // Draw Legend Box in upper-right corner for Parametric / PVT curves
   if (traces.length > 0) {
@@ -435,6 +435,7 @@ export function drawOscilloscopeCursors(
   voltageOffset: number,
   timeDivValue: number,
   signalPeriod?: number,
+  sourceLabel?: string,
 ): void {
   ctx.strokeStyle = "rgba(251, 191, 36, 0.7)";
   ctx.lineWidth = 1;
@@ -475,7 +476,8 @@ export function drawOscilloscopeCursors(
   const deltaVoltage = Math.abs(cursorV2 - cursorV1);
   const frequency = deltaTime > 0 ? 1 / deltaTime : 0;
   const deltaSymbol = "\u0394";
-  let label = `${deltaSymbol}t: ${(deltaTime * 1_000).toFixed(2)} ms | 1/${deltaSymbol}t: ${frequency.toFixed(1)} Hz | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
+  const prefix = sourceLabel ? `[${sourceLabel.toUpperCase()}] ` : "";
+  let label = `${prefix}${deltaSymbol}t: ${(deltaTime * 1_000).toFixed(2)} ms | 1/${deltaSymbol}t: ${frequency.toFixed(1)} Hz | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
   if (signalPeriod && signalPeriod > 0) {
     const phaseDeg = ((deltaTime / signalPeriod) * 360) % 360;
     label += ` | Phase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
@@ -492,4 +494,161 @@ export function drawOscilloscopeCursors(
   ctx.fillStyle = "hsl(174, 97%, 69%)";
   ctx.textAlign = "center";
   ctx.fillText(label, width / 2, 24);
+}
+
+export function drawWaveformHistogram(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  histogram: WaveformHistogram,
+  color = "#FACC15",
+): void {
+  if (histogram.totalSamples === 0 || histogram.counts.length === 0) return;
+
+  ctx.save();
+  const maxCount = Math.max(1, ...histogram.counts);
+  const barMaxWidth = Math.min(100, width * 0.22);
+  const chartX = width - barMaxWidth - 10;
+  const binCount = histogram.counts.length;
+  const binHeight = height / binCount;
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.65)";
+  ctx.strokeStyle = "rgba(250, 204, 21, 0.25)";
+  ctx.lineWidth = 1;
+  ctx.fillRect(chartX - 5, 0, barMaxWidth + 15, height);
+  ctx.strokeRect(chartX - 5, 0, barMaxWidth + 15, height);
+
+  // Render horizontal density bars
+  for (let i = 0; i < binCount; i++) {
+    const count = histogram.counts[i];
+    const barWidth = (count / maxCount) * barMaxWidth;
+    // Map bin index (0 = minV, max = maxV) to canvas y coordinate (inverted)
+    const y = height - (i + 1) * binHeight;
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(chartX, y, barWidth, binHeight - 1);
+
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = color;
+    ctx.strokeRect(chartX, y, barWidth, binHeight - 1);
+  }
+
+  // Label: Mean & StdDev HUD badge
+  ctx.globalAlpha = 1.0;
+  ctx.font = "bold 8px var(--font-mono)";
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "right";
+  ctx.fillText(`µ: ${histogram.mean.toFixed(2)}V`, width - 12, 14);
+  ctx.fillText(`σ: ${histogram.stdDev.toFixed(2)}V`, width - 12, 26);
+
+  ctx.restore();
+}
+
+export function drawMaskOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  results: readonly TimeStepResult[],
+  _testNodeId: string,
+  mask: MaskToleranceDefinition,
+  voltsPerDiv: number,
+  offsetPixels: number,
+  timeDivValue: number,
+  triggerStartIdx = 0,
+  violations?: MaskTestResult,
+): void {
+  if (results.length < 2) return;
+
+  const windowDuration = timeDivValue * 10;
+  const firstTime = results[triggerStartIdx]?.time ?? 0;
+  const divHeight = height / 8;
+  const centerY = height / 2;
+
+  ctx.save();
+
+  // Draw shaded tolerance envelope
+  ctx.fillStyle = "rgba(56, 189, 248, 0.12)";
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 2]);
+
+  const upperPoints: Array<{ x: number; y: number }> = [];
+  const lowerPoints: Array<{ x: number; y: number }> = [];
+
+  for (let i = triggerStartIdx; i < results.length; i++) {
+    const pt = results[i];
+    const relTime = pt.time - firstTime;
+    if (relTime > windowDuration) break;
+
+    const x = (relTime / windowDuration) * width;
+    let refV = 0;
+    if (mask.referenceNodeId) {
+      refV = pt.nodeVoltages[mask.referenceNodeId] ?? 0;
+    } else if (mask.centerPoints && mask.centerPoints.length > 0) {
+      refV = mask.centerPoints[0].voltage;
+    }
+
+    const yUpper = centerY - ((refV + mask.deltaV) / voltsPerDiv) * divHeight - offsetPixels;
+    const yLower = centerY - ((refV - mask.deltaV) / voltsPerDiv) * divHeight - offsetPixels;
+
+    upperPoints.push({ x, y: yUpper });
+    lowerPoints.push({ x, y: yLower });
+  }
+
+  if (upperPoints.length > 1) {
+    ctx.beginPath();
+    ctx.moveTo(upperPoints[0].x, upperPoints[0].y);
+    for (let i = 1; i < upperPoints.length; i++) {
+      ctx.lineTo(upperPoints[i].x, upperPoints[i].y);
+    }
+    for (let i = lowerPoints.length - 1; i >= 0; i--) {
+      ctx.lineTo(lowerPoints[i].x, lowerPoints[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Highlight violation points in red circles
+  if (violations && violations.violationPoints.length > 0) {
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ef4444";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+
+    for (const vPoint of violations.violationPoints) {
+      const relTime = vPoint.time - firstTime;
+      if (relTime < 0 || relTime > windowDuration) continue;
+      const x = (relTime / windowDuration) * width;
+      const y = centerY - (vPoint.voltage / voltsPerDiv) * divHeight - offsetPixels;
+
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  // Draw Mask Test Status Badge
+  const pass = violations ? violations.passed : true;
+  const statusText = pass ? "MASK: PASS" : `MASK: FAIL (${violations?.violationCount} err)`;
+  const statusColor = pass ? "#22c55e" : "#ef4444";
+
+  ctx.font = "bold 9px var(--font-mono)";
+  const badgeW = ctx.measureText(statusText).width + 16;
+  ctx.fillStyle = "rgba(10, 15, 25, 0.85)";
+  ctx.strokeStyle = statusColor;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.roundRect(14, 12, badgeW, 18, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = statusColor;
+  ctx.textAlign = "left";
+  ctx.fillText(statusText, 22, 24);
+
+  ctx.restore();
 }

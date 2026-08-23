@@ -7,7 +7,7 @@
  */
 
 export type FftWindowType = "hann" | "hamming" | "blackman_harris" | "flat_top" | "rectangular";
-export type FftScaleMode = "dbv" | "dbm" | "linear_rms" | "linear_vpk";
+export type FftScaleMode = "dbv" | "dbm" | "dbm_50" | "dbm_600" | "dbu" | "linear_rms" | "linear_vpk";
 export type FftAveragingMode = "off" | "max_hold" | "avg_8" | "avg_16" | "avg_32";
 
 export interface FftWindowConfig {
@@ -49,6 +49,7 @@ export interface FftAnalysisResult {
   snrDb: number;              // Signal-to-Noise Ratio en dB
   sfdrDbc: number;            // Spurious-Free Dynamic Range en dBc
   sinadDb: number;            // SINAD en dB
+  enob: number;               // Effective Number of Bits: (SINAD - 1.76) / 6.02
 }
 
 /** Aplica la ventana seleccionada sobre el array de muestras reales. */
@@ -279,18 +280,19 @@ export function computeFftSpectrum(
   const thdPercent = (Math.sqrt(harmonicPowerSum) / Math.max(1e-12, fundamentalVrms)) * 100;
   const thdDb = 20 * Math.log10(Math.max(1e-6, thdPercent / 100));
 
-  // Potencia total del espectro AC (excluyendo DC)
-  let totalAcPower = 0;
+  // Potencia de ruido y distorsión (excluyendo el lóbulo principal de la fundamental ±3 bins)
+  let noiseAndDistortionPower = 0;
   for (let i = 1; i < halfN; i++) {
-    totalAcPower += magnitudesVrms[i] * magnitudesVrms[i];
+    if (Math.abs(i - peakIndex) > 3) {
+      noiseAndDistortionPower += magnitudesVrms[i] * magnitudesVrms[i];
+    }
   }
-
-  const noiseAndDistortionPower = Math.max(1e-15, totalAcPower - fundPower);
+  noiseAndDistortionPower = Math.max(1e-15, noiseAndDistortionPower);
   const noisePower = Math.max(1e-15, noiseAndDistortionPower - harmonicPowerSum);
 
   const thdPlusNoisePercent = (Math.sqrt(noiseAndDistortionPower) / Math.max(1e-12, fundamentalVrms)) * 100;
   const snrDb = 10 * Math.log10(Math.max(1e-12, fundPower / noisePower));
-  const sinadDb = 10 * Math.log10(Math.max(1e-12, totalAcPower / noiseAndDistortionPower));
+  const sinadDb = 10 * Math.log10(Math.max(1e-12, fundPower / noiseAndDistortionPower));
 
   // SFDR: Diferencia en dBc entre fundamental y el mayor espurio fuera del pico fundamental
   let maxSpurVrms = 1e-12;
@@ -300,6 +302,7 @@ export function computeFftSpectrum(
     }
   }
   const sfdrDbc = 20 * Math.log10(Math.max(1e-12, fundamentalVrms / maxSpurVrms));
+  const enob = Math.max(0, (sinadDb - 1.76) / 6.02);
 
   return {
     frequencies,
@@ -317,6 +320,7 @@ export function computeFftSpectrum(
     snrDb,
     sfdrDbc,
     sinadDb,
+    enob,
   };
 }
 
@@ -325,12 +329,20 @@ export function convertMagnitude(
   vrms: number,
   scale: FftScaleMode,
 ): { value: number; unit: string } {
+  const v = Math.max(1e-12, vrms);
   switch (scale) {
     case "dbv":
-      return { value: 20 * Math.log10(Math.max(1e-12, vrms)), unit: "dBV" };
+      return { value: 20 * Math.log10(v), unit: "dBV" };
+    case "dbu":
+      // dBu: Ref 0.7746 Vrms (1 mW into 600 ohm)
+      return { value: 20 * Math.log10(v / 0.7746), unit: "dBu" };
     case "dbm":
+    case "dbm_50":
       // dBm en 50Ω: P(mW) = (Vrms^2 / 50) * 1000 = Vrms^2 * 20 -> 10 log10(P) = dBV + 13.01
-      return { value: 20 * Math.log10(Math.max(1e-12, vrms)) + 13.01, unit: "dBm" };
+      return { value: 20 * Math.log10(v) + 13.0103, unit: "dBm(50Ω)" };
+    case "dbm_600":
+      // dBm en 600Ω: P(mW) = (Vrms^2 / 600) * 1000 = Vrms^2 * (10/6) -> 10 log10(P) = dBV + 2.2185
+      return { value: 20 * Math.log10(v) + 2.2185, unit: "dBm(600Ω)" };
     case "linear_vpk":
       return { value: vrms * Math.SQRT2, unit: "Vpk" };
     case "linear_rms":

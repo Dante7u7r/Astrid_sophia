@@ -138,10 +138,7 @@ export function drawSparkline(
 
   ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 1.3;
-  ctx.shadowColor = strokeColor;
-  ctx.shadowBlur = 4;
   ctx.stroke();
-  ctx.shadowBlur = 0;
 
   // Indicador de amplitud pico a pico (Vpp / Ipp)
   ctx.font = "6px 'JetBrains Mono', monospace";
@@ -244,19 +241,16 @@ function renderHudBox(
   const boxX = anchorX - boxW / 2;
   const boxY = placement === "bottom" ? anchorY - boxH : anchorY;
 
-  // Fondo glassmorphism oscuro CAD
-  ctx.fillStyle = "rgba(23, 29, 38, 0.96)";
-  ctx.strokeStyle = "#38434F";
+  // Fondo oscuro CAD nítido
+  ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
+  ctx.strokeStyle = "#334155";
   ctx.lineWidth = 1;
-  ctx.shadowColor = "rgba(0, 0, 0, 0.50)";
-  ctx.shadowBlur = 10;
 
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxW, boxH, 6);
   ctx.fill();
   ctx.stroke();
 
-  ctx.shadowBlur = 0;
   ctx.textAlign = "left";
 
   for (let i = 0; i < lines.length; i++) {

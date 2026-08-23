@@ -161,11 +161,9 @@ export function drawBodePlot(
 
   // 5. Trazado de Curvas si existen puntos
   if (pts.length > 1) {
-    // Curva de Magnitud (Cian Neón)
+    // Curva de Magnitud (Cian Neón vectorial)
     ctx.strokeStyle = "#38bdf8";
     ctx.lineWidth = 2.0;
-    ctx.shadowColor = "rgba(56, 189, 248, 0.4)";
-    ctx.shadowBlur = 6;
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
       const x = freqToX(pts[i].freq);
@@ -174,13 +172,10 @@ export function drawBodePlot(
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // Curva de Fase (Ámbar Neón)
+    // Curva de Fase (Ámbar Neón vectorial)
     ctx.strokeStyle = "#f59e0b";
     ctx.lineWidth = 2.0;
-    ctx.shadowColor = "rgba(245, 158, 11, 0.4)";
-    ctx.shadowBlur = 6;
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
       const x = freqToX(pts[i].freq);
@@ -189,7 +184,6 @@ export function drawBodePlot(
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // 6. Marcador de Frecuencia de Corte a -3 dB
     if (dataSet?.metrics.cutoffFreq3dB) {
@@ -217,9 +211,35 @@ export function drawBodePlot(
         ctx.fillText(`fc = ${formatFreq(fc)} (-3dB)`, xFc + 6, yFc - 4);
       }
     }
+
+    // 7. Marcadores de Estabilidad: Frecuencia de cruce de ganancia (PM) y cruce de fase (GM)
+    if (dataSet?.metrics.gainCrossoverFreq && dataSet.metrics.phaseMarginDeg !== null) {
+      const f0dB = dataSet.metrics.gainCrossoverFreq;
+      if (f0dB >= fMin && f0dB <= fMax) {
+        const x0dB = freqToX(f0dB);
+        const yPhase = phaseToY(dataSet.metrics.phaseMarginDeg - 180);
+
+        ctx.strokeStyle = "#eab308";
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x0dB, padTop);
+        ctx.lineTo(x0dB, phaseTop + phaseHeight);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#eab308";
+        ctx.beginPath();
+        ctx.arc(x0dB, yPhase, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.font = "bold 8px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(`PM = ${dataSet.metrics.phaseMarginDeg.toFixed(1)}°`, x0dB + 5, yPhase - 3);
+      }
+    }
   }
 
-  // 7. Cursores F1 y F2
+  // 8. Cursores F1 y F2
   if (options.isCursorsEnabled) {
     if (options.cursorF1 && options.cursorF1 >= fMin && options.cursorF1 <= fMax) {
       drawCursorLine(ctx, freqToX(options.cursorF1), padTop, plotHeight + 14, "#38bdf8", "F1", formatFreq(options.cursorF1));
@@ -233,6 +253,97 @@ export function drawBodePlot(
   ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
   ctx.strokeRect(padLeft, padTop, plotWidth, magHeight);
   ctx.strokeRect(padLeft, phaseTop, plotWidth, phaseHeight);
+}
+
+/**
+ * Renderizado del Diagrama Polar de Nyquist en el Plano Complejo Re(G) vs Im(G).
+ */
+export function drawNyquistPlot(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  dataSet: BodeDataSet | null,
+): void {
+  ctx.fillStyle = "#070a14";
+  ctx.fillRect(0, 0, width, height);
+
+  if (width <= 40 || height <= 40) return;
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxRadius = Math.min(width, height) * 0.42;
+
+  // Escala de ganancia (1.0 = radio del círculo unitario)
+  let maxLinearGain = 1.5;
+  if (dataSet?.nyquistPoints) {
+    for (const pt of dataSet.nyquistPoints) {
+      if (pt.magLinear > maxLinearGain && pt.magLinear < 100) {
+        maxLinearGain = pt.magLinear;
+      }
+    }
+  }
+  const scale = maxRadius / maxLinearGain;
+
+  // Círculos concéntricos de referencia
+  ctx.lineWidth = 1;
+  const radii = [0.5, 1.0, 2.0];
+  for (const r of radii) {
+    const pixelR = r * scale;
+    if (pixelR > maxRadius * 1.5) continue;
+    ctx.strokeStyle = r === 1.0 ? "rgba(234, 179, 8, 0.5)" : "rgba(79, 156, 249, 0.15)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, pixelR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = r === 1.0 ? "#eab308" : "rgba(148, 163, 184, 0.5)";
+    ctx.font = "8px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(`|G|=${r.toFixed(1)}`, cx + pixelR + 2, cy - 2);
+  }
+
+  // Ejes ortogonales Re e Im
+  ctx.strokeStyle = "rgba(79, 156, 249, 0.4)";
+  ctx.beginPath();
+  ctx.moveTo(10, cy);
+  ctx.lineTo(width - 10, cy);
+  ctx.moveTo(cx, 10);
+  ctx.lineTo(cx, height - 10);
+  ctx.stroke();
+
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "9px monospace";
+  ctx.textAlign = "right";
+  ctx.fillText("Re", width - 12, cy - 4);
+  ctx.textAlign = "left";
+  ctx.fillText("Im", cx + 4, 16);
+
+  // Punto crítico (-1, 0j)
+  const critX = cx - 1.0 * scale;
+  const critY = cy;
+  ctx.fillStyle = "#ef4444";
+  ctx.beginPath();
+  ctx.arc(critX, critY, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#f87171";
+  ctx.font = "bold 9px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("(-1, 0)", critX, critY + 12);
+
+  // Traza del contorno de Nyquist
+  const nyqPts = dataSet?.nyquistPoints ?? [];
+  if (nyqPts.length > 1) {
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < nyqPts.length; i++) {
+      const pt = nyqPts[i];
+      const px = cx + pt.real * scale;
+      const py = cy - pt.imag * scale;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
 }
 
 function drawCursorLine(

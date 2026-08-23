@@ -19,6 +19,8 @@ export interface SimulationSettings {
   enableExperimentalPhysics?: boolean;
   /** Modo batch headless sin pacing de reloj de pared para CI/regresiones */
   disablePacing?: boolean;
+  /** Multiplicador de velocidad para la simulación interactiva (ej: 1.0, 2.0, 5.0) */
+  speedMultiplier?: number;
 }
 
 export class SettingsModal {

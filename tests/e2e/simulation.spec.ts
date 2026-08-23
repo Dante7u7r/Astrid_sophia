@@ -47,8 +47,12 @@ test.describe("Circuit Simulation E2E Suite", () => {
     expect(simResults.count).toBeGreaterThan(0);
     expect(simResults.hasVoltages).toBe(true);
 
-    // 5. Detener simulación
-    if (await stopBtn.isVisible() && await stopBtn.isEnabled()) {
+    // 5. Detener simulación si aún está en ejecución interactiva
+    const isRunningBeforeStop = await page.evaluate(() => {
+      const w = window as any;
+      return w.isSimulationRunning?.() ?? false;
+    });
+    if (isRunningBeforeStop && await stopBtn.isEnabled()) {
       await stopBtn.click();
       await page.waitForTimeout(100);
     }

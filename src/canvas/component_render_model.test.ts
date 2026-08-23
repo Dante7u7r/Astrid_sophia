@@ -26,13 +26,13 @@ describe("component_render_model", () => {
     });
     expect(getComponentVisualState(true, false)).toMatchObject({
       color: "#38BDF8",
-      lineWidth: 2.6,
-      shadowBlur: 6,
+      lineWidth: 2.8,
+      shadowBlur: 0,
     });
     expect(getComponentVisualState(false, true)).toMatchObject({
       color: "#5B9FD6",
-      lineWidth: 2.2,
-      shadowBlur: 3,
+      lineWidth: 2.4,
+      shadowBlur: 0,
     });
   });
 

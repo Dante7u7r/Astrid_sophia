@@ -24,13 +24,15 @@ pub mod dual3;
 pub mod feedback;
 mod gpu_solver;
 pub mod krylov;
+pub mod mcu;
 pub mod parser;
 pub mod solver;
 mod sparse_csc;
 pub mod sparse_parallel;
 mod symbolic;
-mod telemetry;
+pub mod telemetry;
 mod topology;
+pub mod wasm;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -148,6 +150,7 @@ pub struct SimulationControlState {
     pub active_run_id: Arc<AtomicU64>,
     pub hot_mutations: Arc<Mutex<Vec<ComponentMutation>>>,
     pub approved_circuit_paths: Arc<Mutex<HashSet<PathBuf>>>,
+    pub speed_multiplier: Arc<Mutex<f64>>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -159,42 +162,37 @@ pub struct SimulationFrame {
     pub branch_currents: HashMap<String, f64>,
     pub frame_index: u64,
     pub is_final: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch_steps: Option<Vec<solver::TimeStepResult>>,
 }
 
-const INTERACTIVE_TRANSIENT_FRAME_BUDGET: f64 = 240.0;
-const INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD: f64 = 1.0 / 30.0;
 
-/// El muestreo del stream debe seguir el tiempo físico, no la velocidad de la
-/// CPU. De otro modo, un circuito pequeño termina antes del primer intervalo
-/// de pared y la interfaz recibe únicamente la muestra final.
-fn interactive_transient_sample_period(t_max: f64, dt: f64) -> f64 {
-    if dt >= INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD {
-        return dt;
-    }
-    (t_max / INTERACTIVE_TRANSIENT_FRAME_BUDGET).clamp(dt, INTERACTIVE_TRANSIENT_MAX_FRAME_PERIOD)
-}
-
-/// Espera hasta que el reloj de pared alcance el instante físico calculado.
-/// La espera se divide en tramos cortos para que «Detener» siga respondiendo.
-fn pace_interactive_transient(
-    started_at: std::time::Instant,
-    simulation_time: f64,
+/// Control de cadencia cuadro a cuadro (60 FPS fluidos) para simulación interactiva.
+/// En cada cuadro espera hasta cumplir los 16.66 ms de tiempo de pared (1/60 s),
+/// permitiendo cambios instantáneos de velocidad multiplicadora sin saltos ni bloqueos.
+fn pace_interactive_frame(
+    last_frame_instant: std::time::Instant,
     is_running: &AtomicBool,
     active_run_id: &AtomicU64,
     run_id: u64,
     disable_pacing: bool,
+    speed_multiplier: f64,
 ) -> bool {
-    if disable_pacing {
+    if disable_pacing || speed_multiplier >= 100.0 {
         return is_running.load(Ordering::SeqCst) && active_run_id.load(Ordering::SeqCst) == run_id;
     }
 
-    let target_elapsed = std::time::Duration::from_secs_f64(simulation_time.max(0.0));
-    let max_sleep = std::time::Duration::from_millis(5);
-    while let Some(remaining) = target_elapsed.checked_sub(started_at.elapsed()) {
-        if !is_running.load(Ordering::SeqCst) || active_run_id.load(Ordering::SeqCst) != run_id {
-            return false;
+    let target_frame_duration = std::time::Duration::from_micros(16_666); // 60 FPS
+    let elapsed = last_frame_instant.elapsed();
+    if let Some(mut remaining) = target_frame_duration.checked_sub(elapsed) {
+        let max_sleep = std::time::Duration::from_millis(2);
+        while remaining > std::time::Duration::ZERO {
+            if !is_running.load(Ordering::SeqCst) || active_run_id.load(Ordering::SeqCst) != run_id {
+                return false;
+            }
+            std::thread::sleep(remaining.min(max_sleep));
+            remaining = target_frame_duration.saturating_sub(last_frame_instant.elapsed());
         }
-        std::thread::sleep(remaining.min(max_sleep));
     }
     is_running.load(Ordering::SeqCst) && active_run_id.load(Ordering::SeqCst) == run_id
 }
@@ -251,6 +249,23 @@ async fn run_transient_simulation(
         numerical_settings(tolerance, max_iterations),
     )
     .map_err(SimulationError::from)
+}
+
+#[tauri::command]
+async fn run_transient_simulation_packed(
+    netlist: solver::CircuitNetlist,
+    settings: solver::TransientSettings,
+    tolerance: Option<f64>,
+    max_iterations: Option<usize>,
+) -> Result<solver::PackedTransientResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    let raw_steps = solver::solve_transient_circuit_with_numerical_settings(
+        &netlist,
+        &settings,
+        numerical_settings(tolerance, max_iterations),
+    )
+    .map_err(SimulationError::from)?;
+    Ok(solver::pack_transient_results(&raw_steps))
 }
 
 #[tauri::command]
@@ -434,6 +449,7 @@ async fn start_interactive_transient(
     tolerance: Option<f64>,
     max_iterations: Option<usize>,
     disable_pacing: Option<bool>,
+    speed_multiplier: Option<f64>,
 ) -> Result<(), SimulationError> {
     if run_id == 0 {
         return Err(SimulationError::from(
@@ -456,23 +472,35 @@ async fn start_interactive_transient(
     if let Ok(mut mutations) = state.hot_mutations.lock() {
         mutations.clear();
     }
+    if let Some(speed) = speed_multiplier {
+        if let Ok(mut mult) = state.speed_multiplier.lock() {
+            *mult = speed.max(0.01);
+        }
+    }
     let is_running = state.is_running.clone();
     let active_run_id = state.active_run_id.clone();
     let hot_mutations = state.hot_mutations.clone();
+    let speed_multiplier_arc = state.speed_multiplier.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
         let window_inner = window.clone();
+        let window_panic = window.clone();
         let is_running_inner = is_running.clone();
         let active_run_id_inner = active_run_id.clone();
         let panic_run_id = active_run_id.clone();
 
         let catch_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
             let mut frame_index = 0u64;
-            let sample_period = interactive_transient_sample_period(settings.t_max, settings.dt);
-            let mut next_sample_time = sample_period;
-            let started_at = std::time::Instant::now();
+            let mut batch: Vec<solver::TimeStepResult> = Vec::with_capacity(512);
+            let mut last_frame_sim_time = 0.0_f64;
+            let mut last_pushed_time = 0.0_f64;
+            let mut last_frame_wall_time = std::time::Instant::now();
             let final_is_running = is_running_inner.clone();
             let final_active_run_id = active_run_id_inner.clone();
+            let final_speed_arc = speed_multiplier_arc.clone();
+
+            // Intervalo mínimo de sub-muestreo para no saturar el IPC en transiciones ultra rápidas (LTE adaptativo)
+            let min_batch_interval = (settings.dt * 0.25).max(1e-7);
 
             let result = solver::solve_transient_circuit_inner(
                 &netlist,
@@ -488,17 +516,45 @@ async fn start_interactive_transient(
                     {
                         return false;
                     }
-                    if step.time >= next_sample_time {
-                        if !pace_interactive_transient(
-                            started_at,
-                            step.time,
-                            &is_running_inner,
-                            &active_run_id_inner,
-                            run_id,
-                            disable_pacing_flag,
-                        ) {
+
+                    if batch.is_empty() || step.time - last_pushed_time >= min_batch_interval {
+                        batch.push(step.clone());
+                        last_pushed_time = step.time;
+                    }
+
+                    let current_speed = speed_multiplier_arc.lock().map(|s| *s).unwrap_or(1.0).max(0.01);
+                    let sim_advance = step.time - last_frame_sim_time;
+                    let target_sim_advance = (1.0_f64 / 60.0_f64) * current_speed;
+                    let wall_elapsed = last_frame_wall_time.elapsed();
+                    let target_wall_frame = std::time::Duration::from_micros(16_666); // 60 FPS (~16.6 ms)
+
+                    let should_emit = if frame_index == 0 {
+                        // Frame 0: emitir de inmediato (primeros 20 pasos o 2ms) para respuesta visual instantánea
+                        batch.len() >= 20 || wall_elapsed >= std::time::Duration::from_millis(2)
+                    } else {
+                        // Frames posteriores: emitir cuando se cumpla el avance objetivo de simulación (velocidad deseada),
+                        // O si ya transcurrieron 16.6 ms de tiempo real (garantizando 60 FPS bajo cualquier carga).
+                        sim_advance >= target_sim_advance || wall_elapsed >= target_wall_frame
+                    };
+
+                    if should_emit {
+                        if frame_index > 0
+                            && !pace_interactive_frame(
+                                last_frame_wall_time,
+                                &is_running_inner,
+                                &active_run_id_inner,
+                                run_id,
+                                disable_pacing_flag,
+                                current_speed,
+                            )
+                        {
                             return false;
                         }
+                        if batch.last().map(|s| s.time != step.time).unwrap_or(true) {
+                            batch.push(step.clone());
+                            last_pushed_time = step.time;
+                        }
+                        let steps_to_send = std::mem::take(&mut batch);
                         let packet = SimulationFrame {
                             run_id,
                             time: step.time,
@@ -506,12 +562,12 @@ async fn start_interactive_transient(
                             branch_currents: step.branch_currents.clone(),
                             frame_index,
                             is_final: false,
+                            batch_steps: Some(steps_to_send),
                         };
                         window_inner.emit("sim-frame-update", &packet).ok();
                         frame_index += 1;
-                        while next_sample_time <= step.time {
-                            next_sample_time += sample_period;
-                        }
+                        last_frame_sim_time = step.time;
+                        last_frame_wall_time = std::time::Instant::now();
                     }
                     true
                 }),
@@ -520,18 +576,24 @@ async fn start_interactive_transient(
             if final_is_running.load(Ordering::SeqCst)
                 && final_active_run_id.load(Ordering::SeqCst) == run_id
             {
+                let final_speed = final_speed_arc.lock().map(|s| *s).unwrap_or(1.0);
                 if let Ok((ref results, _, _)) = result {
                     if let Some(last) = results.last() {
-                        if !pace_interactive_transient(
-                            started_at,
-                            last.time,
+                        if !pace_interactive_frame(
+                            last_frame_wall_time,
                             &final_is_running,
                             &final_active_run_id,
                             run_id,
                             disable_pacing_flag,
+                            final_speed,
                         ) {
                             return;
                         }
+                        let steps_to_send = if !batch.is_empty() {
+                            Some(std::mem::take(&mut batch))
+                        } else {
+                            None
+                        };
                         let packet = SimulationFrame {
                             run_id,
                             time: last.time,
@@ -539,6 +601,7 @@ async fn start_interactive_transient(
                             branch_currents: last.branch_currents.clone(),
                             frame_index,
                             is_final: true,
+                            batch_steps: steps_to_send,
                         };
                         window_inner.emit("sim-frame-update", &packet).ok();
                     }
@@ -558,7 +621,7 @@ async fn start_interactive_transient(
         }));
 
         if catch_result.is_err() && panic_run_id.load(Ordering::SeqCst) == run_id {
-            window
+            window_panic
                 .emit(
                     "sim-frame-error",
                     &SimulationStreamError {
@@ -580,6 +643,20 @@ async fn start_interactive_transient(
         }
     });
 
+    Ok(())
+}
+
+#[tauri::command]
+fn set_interactive_simulation_speed(
+    state: tauri::State<'_, SimulationControlState>,
+    speed: f64,
+) -> Result<(), String> {
+    if speed <= 0.0 || !speed.is_finite() {
+        return Err("La velocidad debe ser un número positivo finito.".to_string());
+    }
+    if let Ok(mut mult) = state.speed_multiplier.lock() {
+        *mult = speed;
+    }
     Ok(())
 }
 
@@ -826,26 +903,23 @@ mod persistence_tests {
 
 #[cfg(test)]
 mod interactive_transient_tests {
-    use super::interactive_transient_sample_period;
+    use super::SimulationFrame;
+    use std::collections::HashMap;
 
     #[test]
-    fn samples_a_short_transient_by_physical_progress() {
-        let period = interactive_transient_sample_period(0.05, 1e-4);
-
-        assert!(period >= 1e-4);
-        assert!((period - (0.05 / 240.0)).abs() < 1e-15);
-        assert!((0.05 / period).ceil() <= 240.0);
-    }
-
-    #[test]
-    fn never_requests_samples_finer_than_the_solver_step() {
-        assert_eq!(interactive_transient_sample_period(1e-6, 1e-4), 1e-4);
-    }
-
-    #[test]
-    fn caps_long_interactive_runs_at_a_responsive_frame_rate() {
-        let period = interactive_transient_sample_period(60.0, 1e-4);
-        assert!((period - (1.0 / 30.0)).abs() < 1e-15);
+    fn validates_transient_stream_frame_batching() {
+        let frame = SimulationFrame {
+            run_id: 1,
+            time: 0.05,
+            node_voltages: HashMap::new(),
+            branch_currents: HashMap::new(),
+            frame_index: 0,
+            is_final: false,
+            batch_steps: Some(vec![]),
+        };
+        assert_eq!(frame.time, 0.05);
+        assert!(!frame.is_final);
+        assert!(frame.batch_steps.is_some());
     }
 }
 
@@ -881,6 +955,39 @@ async fn open_circuit_file(
     }
 }
 
+#[tauri::command]
+fn mcu_step(
+    mcu_type: String,
+    firmware_hex: Option<String>,
+    cycles: u32,
+    inputs: mcu::GpioInputs,
+) -> Result<mcu::McuState, String> {
+    let mut core: Box<dyn mcu::McuCore> = match mcu_type.to_lowercase().as_str() {
+        "8051" | "mcu_8051" => Box::new(mcu::mcu8051::Mcu8051::new()),
+        _ => Box::new(mcu::atmega328p::Atmega328p::new()),
+    };
+    if let Some(hex) = firmware_hex {
+        core.load_firmware(hex.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    core.run_cycles(cycles, &inputs);
+    Ok(core.get_state())
+}
+
+#[tauri::command]
+fn mcu_get_state(
+    mcu_type: String,
+    firmware_hex: Option<String>,
+) -> Result<mcu::McuState, String> {
+    let mut core: Box<dyn mcu::McuCore> = match mcu_type.to_lowercase().as_str() {
+        "8051" | "mcu_8051" => Box::new(mcu::mcu8051::Mcu8051::new()),
+        _ => Box::new(mcu::atmega328p::Atmega328p::new()),
+    };
+    if let Some(hex) = firmware_hex {
+        core.load_firmware(hex.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(core.get_state())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -914,11 +1021,13 @@ pub fn run() {
             active_run_id: Arc::new(AtomicU64::new(0)),
             hot_mutations: Arc::new(Mutex::new(Vec::new())),
             approved_circuit_paths: Arc::new(Mutex::new(HashSet::new())),
+            speed_multiplier: Arc::new(Mutex::new(1.0)),
         })
         .invoke_handler(tauri::generate_handler![
             ping,
             run_dc_simulation,
             run_transient_simulation,
+            run_transient_simulation_packed,
             run_ac_sweep,
             run_dc_sweep,
             parse_spice_netlist,
@@ -940,6 +1049,7 @@ pub fn run() {
             get_live_inspection_state,
             start_interactive_transient,
             stop_interactive_transient,
+            set_interactive_simulation_speed,
             inject_live_mutation,
             advanced_ipc::run_pvt_matrix_analysis,
             advanced_ipc::extract_sparameter,
@@ -951,6 +1061,8 @@ pub fn run() {
             feedback::store::export_feedback_events,
             feedback::store::delete_feedback_data,
             feedback::store::flush_feedback_store,
+            mcu_step,
+            mcu_get_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

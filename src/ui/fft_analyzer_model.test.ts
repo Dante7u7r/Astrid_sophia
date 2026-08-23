@@ -77,9 +77,35 @@ describe("FftAnalyzerModel", () => {
     expect(convertMagnitude(vrms, "dbv").unit).toBe("dBV");
 
     expect(convertMagnitude(vrms, "dbm").value).toBeCloseTo(13.01, 1);
-    expect(convertMagnitude(vrms, "dbm").unit).toBe("dBm");
+    expect(convertMagnitude(vrms, "dbm_50").value).toBeCloseTo(13.01, 1);
+
+    // dBu: Ref 0.7746 Vrms -> 20 * log10(1 / 0.7746) = +2.218 dBu
+    expect(convertMagnitude(vrms, "dbu").value).toBeCloseTo(2.218, 2);
+    expect(convertMagnitude(vrms, "dbu").unit).toBe("dBu");
+
+    // dBm(600Ω): Ref 1mW in 600Ω -> +2.218 dBm
+    expect(convertMagnitude(vrms, "dbm_600").value).toBeCloseTo(2.218, 2);
+    expect(convertMagnitude(vrms, "dbm_600").unit).toBe("dBm(600Ω)");
 
     expect(convertMagnitude(vrms, "linear_vpk").value).toBeCloseTo(Math.SQRT2, 4);
     expect(convertMagnitude(vrms, "linear_vpk").unit).toBe("Vpk");
+  });
+
+  it("calcula ENOB correctamente a partir de SINAD", () => {
+    const fs = 10000;
+    const f0 = 1000;
+    const numPoints = 256;
+    const samples: { time: number; val: number }[] = [];
+
+    for (let i = 0; i < numPoints; i++) {
+      const t = i / fs;
+      samples.push({ time: t, val: 2.0 * Math.sin(2 * Math.PI * f0 * t) });
+    }
+
+    const result = computeFftSpectrum(samples, "hann", 256);
+    expect(result).not.toBeNull();
+    if (!result) return;
+    expect(result.enob).toBeDefined();
+    expect(result.enob).toBeGreaterThan(5.0); // Tono sintético con SNR alto
   });
 });

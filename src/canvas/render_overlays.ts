@@ -19,10 +19,10 @@ const probeBadgeStyles: Array<{
   color: string;
   bgFill: string;
 }> = [
-  { key: "ch1", label: "CH1", color: "#66fcf1", bgFill: "rgba(10, 30, 35, 0.92)" },
-  { key: "ch2", label: "CH2", color: "#a855f7", bgFill: "rgba(28, 12, 40, 0.92)" },
-  { key: "ch3", label: "CH3", color: "#f97316", bgFill: "rgba(35, 18, 10, 0.92)" },
-  { key: "ch4", label: "CH4", color: "#22c55e", bgFill: "rgba(10, 32, 18, 0.92)" },
+  { key: "ch1", label: "CH1", color: "#FACC15", bgFill: "rgba(42, 36, 10, 0.95)" },
+  { key: "ch2", label: "CH2", color: "#38BDF8", bgFill: "rgba(10, 32, 48, 0.95)" },
+  { key: "ch3", label: "CH3", color: "#F43F5E", bgFill: "rgba(42, 12, 24, 0.95)" },
+  { key: "ch4", label: "CH4", color: "#4ADE80", bgFill: "rgba(10, 36, 20, 0.95)" },
 ];
 
 export function drawTemporaryWire(
@@ -78,8 +78,6 @@ export function drawProbeBadges(
     const badgeX = point.x - badgeW / 2;
     const badgeY = point.y - 23;
 
-    ctx.shadowColor = badge.color;
-    ctx.shadowBlur = 6;
     ctx.fillStyle = badge.bgFill;
     ctx.strokeStyle = badge.color;
     ctx.lineWidth = 1.2;
@@ -88,7 +86,6 @@ export function drawProbeBadges(
     ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
     ctx.fill();
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // 3. Texto del canal
     ctx.fillStyle = badge.color;
@@ -110,12 +107,12 @@ export function drawSParameterMarkers(
   for (const marker of markers) {
     const hue = 140 + marker.index * 30;
     ctx.fillStyle = `hsla(${hue}, 90%, 60%, 0.85)`;
-    ctx.shadowColor = `hsla(${hue}, 90%, 60%, 0.6)`;
-    ctx.shadowBlur = 10;
+    ctx.strokeStyle = `hsla(${hue}, 90%, 60%, 1.0)`;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(marker.x, marker.y - 14, 10, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.stroke();
     ctx.fillStyle = "#030508";
     ctx.font = "bold 10px 'Inter', sans-serif";
     ctx.textAlign = "center";
@@ -214,7 +211,6 @@ export function drawErcAndDrcOverlays(
     const isError = issue.type === "error";
     const strokeColor = isError ? "hsl(0, 84%, 60%)" : "hsl(38, 96%, 52%)";
     const fillColor = isError ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)";
-    const glowColor = isError ? "rgba(239, 68, 68, 0.6)" : "rgba(245, 158, 11, 0.6)";
 
     let anchorX = 0;
     let anchorY = 0;
@@ -242,9 +238,7 @@ export function drawErcAndDrcOverlays(
 
     ctx.save();
 
-    // 1. Halo circular pulsante con Glow
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 8;
+    // 1. Halo circular pulsante
     ctx.strokeStyle = strokeColor;
     ctx.fillStyle = fillColor;
     ctx.lineWidth = isPinIssue ? 1.8 : 2.2;
@@ -257,7 +251,6 @@ export function drawErcAndDrcOverlays(
     ctx.stroke();
 
     // 2. Icono central de advertencia o error
-    ctx.shadowBlur = 0;
     if (isPinIssue) {
       ctx.fillStyle = strokeColor;
       ctx.beginPath();

@@ -96,6 +96,13 @@ export function drawFftSpectrum(
   ctx.strokeStyle = "rgba(79, 156, 249, 0.35)";
   ctx.strokeRect(leftMargin, topMargin, plotW, plotH);
 
+  // Etiqueta de escala
+  const unitLabel = scaleMode === "dbu" ? "dBu" : scaleMode === "dbm_600" ? "dBm (600Ω)" : (scaleMode === "dbm_50" || scaleMode === "dbm") ? "dBm (50Ω)" : scaleMode.startsWith("linear") ? "V" : "dBV";
+  ctx.fillStyle = "#66fcf1";
+  ctx.font = "bold 9px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText(`ESCALA: ${unitLabel}`, leftMargin + 4, topMargin - 6);
+
   // 4. Etiquetas de Frecuencia en Eje X
   const maxFreq = result ? result.samplingFreq / 2 : 10000;
   const freqPerDiv = maxFreq / numDivsX;
@@ -151,11 +158,9 @@ export function drawFftSpectrum(
     ctx.stroke();
   }
 
-  // 6. Trazar Espectro en Vivo (Live Trace con Brillo Fósforo)
+  // 6. Trazar Espectro en Vivo (Live Trace vectorial nítido)
   ctx.strokeStyle = "#38bdf8";
   ctx.lineWidth = 1.8;
-  ctx.shadowColor = "#38bdf8";
-  ctx.shadowBlur = 5;
   ctx.beginPath();
 
   for (let i = 1; i < numBins; i++) {
@@ -172,9 +177,6 @@ export function drawFftSpectrum(
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
-
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = "transparent";
 
   // 7. Marcas de Armónicos Neón (f0, 2f0, 3f0..6f0)
   if (showHarmonics && result.harmonics.length > 0) {

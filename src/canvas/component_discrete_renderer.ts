@@ -102,12 +102,10 @@ export function drawLed(
 
   if (glow > 0.02) {
     ctx.save();
-    ctx.fillStyle = `${theme.lens}${(0.25 + glow * 0.75).toFixed(3)})`;
+    ctx.fillStyle = `${theme.lens}${(0.35 + glow * 0.65).toFixed(3)})`;
     ctx.fill();
     ctx.strokeStyle = theme.stroke;
     ctx.lineWidth = 1.8;
-    ctx.shadowColor = theme.beam;
-    ctx.shadowBlur = 10 * glow;
     ctx.stroke();
     ctx.restore();
   } else {
@@ -124,8 +122,6 @@ export function drawLed(
     ctx.save();
     ctx.strokeStyle = theme.stroke;
     ctx.lineWidth = 2.0;
-    ctx.shadowColor = theme.beam;
-    ctx.shadowBlur = 6 * glow;
     ctx.stroke();
     ctx.restore();
   } else {
@@ -134,13 +130,9 @@ export function drawLed(
 
   // 4. Flechas de emisión de fotones (Radiación óptica)
   ctx.save();
-  const photonColor = glow > 0.02 ? `${theme.photonStroke}${(0.5 + glow * 0.5).toFixed(3)})` : color;
+  const photonColor = glow > 0.02 ? `${theme.photonStroke}${(0.6 + glow * 0.4).toFixed(3)})` : color;
   ctx.strokeStyle = photonColor;
   ctx.lineWidth = glow > 0.02 ? 1.6 : 1.2;
-  if (glow > 0.02) {
-    ctx.shadowColor = theme.beam;
-    ctx.shadowBlur = 6 * glow;
-  }
   ctx.beginPath();
   ctx.moveTo(12, -6);
   ctx.lineTo(20, -12);
@@ -181,9 +173,7 @@ export function drawSwitch(
     ctx.beginPath();
     ctx.moveTo(-15, 0);
     ctx.lineTo(15, 0);
-    ctx.strokeStyle = "hsl(174, 97%, 69%)";
-    ctx.shadowColor = "hsl(174, 97%, 69%)";
-    ctx.shadowBlur = 6;
+    ctx.strokeStyle = "#2DD4BF";
     ctx.lineWidth = 2.5;
     ctx.stroke();
   } else {

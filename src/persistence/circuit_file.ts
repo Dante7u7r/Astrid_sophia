@@ -46,6 +46,9 @@ export interface PersistedOscilloscopeState {
   isCursorsEnabled: boolean;
   isMathEnabled?: boolean;
   mathExpression?: string;
+  mathVoltsPerDiv?: number;
+  mathOffset?: number;
+  cursorTargetChannel?: "ch1" | "ch2" | "ch3" | "ch4" | "math";
   triggerChannel: "ch1" | "ch2" | "ch3" | "ch4";
   triggerEdge: "rising" | "falling";
   triggerLevel: number;

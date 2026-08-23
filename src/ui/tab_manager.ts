@@ -1,7 +1,7 @@
 import { type CanvasOrchestrator } from "../canvas_orchestrator";
-import type { CircuitDocumentPort } from "../app/circuit_document_controller";
+import { type CircuitDocumentPort } from "../app/circuit_document_controller";
 import { TabFileActions } from "./tab_file_actions";
-import { type OscilloscopePanel } from "./oscilloscope_panel";
+import { type OscilloscopePanel, type TimeStepResult } from "./oscilloscope_panel";
 import { appendLiveTransientSample } from "../simulation/transient_history";
 import { type AnalysisMode, type SimulationControls } from "./simulation_controls";
 import type { McuDebugPanel } from "./mcu_debug_panel";
@@ -105,17 +105,25 @@ export class TabManager {
       time: number;
       nodeVoltages: Readonly<Record<string, number>>;
       branchCurrents: Readonly<Record<string, number>>;
+      batchSteps?: ReadonlyArray<TimeStepResult>;
     },
   ): Tab | undefined {
     const tab = this.store.findTab(tabId);
     if (!tab) return undefined;
 
-    appendLiveTransientSample(tab.transientResults, {
-      time: frame.time,
-      nodeVoltages: { ...frame.nodeVoltages },
-      branchCurrents: { ...frame.branchCurrents },
-    });
-    tab.voltageSnapshot = { ...frame.nodeVoltages };
+    if (frame.batchSteps && frame.batchSteps.length > 0) {
+      for (let i = 0; i < frame.batchSteps.length; i++) {
+        const step = frame.batchSteps[i];
+        appendLiveTransientSample(tab.transientResults, step as TimeStepResult);
+      }
+    } else {
+      appendLiveTransientSample(tab.transientResults, {
+        time: frame.time,
+        nodeVoltages: frame.nodeVoltages as Record<string, number>,
+        branchCurrents: frame.branchCurrents as Record<string, number>,
+      });
+    }
+    tab.voltageSnapshot = frame.nodeVoltages as Record<string, number>;
     return tab;
   }
 

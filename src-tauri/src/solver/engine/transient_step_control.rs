@@ -97,12 +97,22 @@ pub(crate) fn estimate_local_truncation_error(
     integration_method: &str,
     reltol_opt: Option<f64>,
     vntol_opt: Option<f64>,
+    dynamic_nodes: Option<&std::collections::HashSet<usize>>,
 ) -> LteEstimate {
     if is_fixed || steps_completed < 2 {
         return LteEstimate {
             maximum: 0.0,
             integrator_order: 1.0,
         };
+    }
+
+    if let Some(nodes) = dynamic_nodes {
+        if nodes.is_empty() {
+            return LteEstimate {
+                maximum: 0.0,
+                integrator_order: 1.0,
+            };
+        }
     }
 
     let reltol = reltol_opt.unwrap_or(1e-3);
@@ -118,17 +128,30 @@ pub(crate) fn estimate_local_truncation_error(
         };
         let mut maximum: f64 = 0.0;
         let prev_h = previous_dt.max(1e-18);
-        for i in 0..node_count {
-            let d1 = (step_solution[i] - sol_n[i]) / dt;
-            let d2 = (sol_n[i] - sol_n1[i]) / prev_h;
-            let d3 = (sol_n1[i] - sol_n2[i]) / prev_h;
-            let dd1 = 2.0 * (d1 - d2) / (dt + prev_h);
-            let dd2 = (d2 - d3) / prev_h;
-            let third_derivative = 3.0 * (dd1 - dd2) / (dt + 2.0 * prev_h);
-            let lte_raw = coefficient * dt.powi(3) * third_derivative.abs();
-            let norm_scale = reltol * step_solution[i].abs() + vntol;
-            maximum = maximum.max(lte_raw / norm_scale);
+        let mut check_node = |i: usize| {
+            if i < node_count {
+                let d1 = (step_solution[i] - sol_n[i]) / dt;
+                let d2 = (sol_n[i] - sol_n1[i]) / prev_h;
+                let d3 = (sol_n1[i] - sol_n2[i]) / prev_h;
+                let dd1 = 2.0 * (d1 - d2) / (dt + prev_h);
+                let dd2 = (d2 - d3) / prev_h;
+                let third_derivative = 3.0 * (dd1 - dd2) / (dt + 2.0 * prev_h);
+                let lte_raw = coefficient * dt.powi(3) * third_derivative.abs();
+                let norm_scale = reltol * step_solution[i].abs() + vntol;
+                maximum = maximum.max(lte_raw / norm_scale);
+            }
+        };
+
+        if let Some(nodes) = dynamic_nodes {
+            for &idx in nodes {
+                check_node(idx);
+            }
+        } else {
+            for i in 0..node_count {
+                check_node(i);
+            }
         }
+
         return LteEstimate {
             maximum,
             integrator_order: 2.0,
@@ -136,14 +159,27 @@ pub(crate) fn estimate_local_truncation_error(
     }
 
     let mut maximum: f64 = 0.0;
-    for i in 0..node_count {
-        let d1 = (step_solution[i] - sol_n[i]) / dt;
-        let d2 = (sol_n[i] - sol_n1[i]) / previous_dt;
-        let second_derivative = 2.0 * (d1 - d2) / (dt + previous_dt);
-        let lte_raw = 0.5 * dt * dt * second_derivative.abs();
-        let norm_scale = reltol * step_solution[i].abs() + vntol;
-        maximum = maximum.max(lte_raw / norm_scale);
+    let mut check_node_order1 = |i: usize| {
+        if i < node_count {
+            let d1 = (step_solution[i] - sol_n[i]) / dt;
+            let d2 = (sol_n[i] - sol_n1[i]) / previous_dt;
+            let second_derivative = 2.0 * (d1 - d2) / (dt + previous_dt);
+            let lte_raw = 0.5 * dt * dt * second_derivative.abs();
+            let norm_scale = reltol * step_solution[i].abs() + vntol;
+            maximum = maximum.max(lte_raw / norm_scale);
+        }
+    };
+
+    if let Some(nodes) = dynamic_nodes {
+        for &idx in nodes {
+            check_node_order1(idx);
+        }
+    } else {
+        for i in 0..node_count {
+            check_node_order1(i);
+        }
     }
+
     LteEstimate {
         maximum,
         integrator_order: 1.0,
@@ -179,6 +215,7 @@ pub fn predict_variable_order_step(
     dt_max: f64,
     reltol: f64,
     vntol: f64,
+    dynamic_nodes: Option<&std::collections::HashSet<usize>>,
 ) -> VariableOrderDecision {
     if is_fixed {
         controller.steps_with_current_method += 1;
@@ -205,6 +242,7 @@ pub fn predict_variable_order_step(
         controller.active_method.as_str(),
         Some(reltol),
         Some(vntol),
+        dynamic_nodes,
     );
     let lte_max = lte.maximum;
     let order = lte.integrator_order;
@@ -367,7 +405,7 @@ mod tests {
     fn fixed_step_has_no_lte_rejection_signal() {
         let sample = DVector::from_vec(vec![1.0]);
         let estimate = estimate_local_truncation_error(
-            &sample, &sample, &sample, &sample, 1, 1e-3, 1e-3, true, 4, "trap", None, None,
+            &sample, &sample, &sample, &sample, 1, 1e-3, 1e-3, true, 4, "trap", None, None, None,
         );
         assert_eq!(estimate.maximum, 0.0);
         assert_eq!(estimate.integrator_order, 1.0);
@@ -386,6 +424,7 @@ mod tests {
             false,
             2,
             "euler",
+            None,
             None,
             None,
         );

@@ -250,6 +250,34 @@ where
     let mut sol_n2 = current_solution.clone(); // Solución en n-2
     let mut steps_completed = 0;
 
+    // Identificar nodos conectados a componentes dinámicos reactivos para acotar LTE
+    let mut dynamic_nodes = std::collections::HashSet::new();
+    for comp in &netlist.components {
+        if comp.comp_type == "capacitor"
+            || comp.comp_type == "inductor"
+            || comp.comp_type == "transmission_line"
+            || comp.comp_type == "coupled_inductor"
+            || comp.comp_type == "diode"
+            || comp.comp_type == "nmos"
+            || comp.comp_type == "pmos"
+            || comp.comp_type == "npn"
+            || comp.comp_type == "pnp"
+            || comp.comp_type == "bsim3nmos"
+            || comp.comp_type == "bsim3pmos"
+            || comp.comp_type == "bsim4nmos"
+            || comp.comp_type == "bsim4pmos"
+            || comp.comp_type.ends_with("_gate")
+        {
+            for pin in &comp.pins {
+                if let Ok(node_idx) = pin.parse::<usize>() {
+                    if node_idx > 0 && node_idx <= n {
+                        dynamic_nodes.insert(node_idx - 1);
+                    }
+                }
+            }
+        }
+    }
+
     // Tolerancia LTE normalizada: lte_max <= 1.0 cumple reltol y vntol
     let lte_tol = 1.0;
     // El mínimo adaptativo permite reducir el paso hasta 1000x en transiciones rápidas
@@ -504,6 +532,7 @@ where
                 dt_max,
                 numerical_settings.tolerance,
                 1e-6,
+                Some(&dynamic_nodes),
             );
 
             // Decidir si aceptamos o rechazamos el paso temporal

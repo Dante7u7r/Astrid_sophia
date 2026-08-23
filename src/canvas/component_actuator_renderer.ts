@@ -18,20 +18,28 @@ export function drawLamp(
     ctx.restore();
   }
 
+  // Bulbo exterior de vidrio
   ctx.beginPath();
   ctx.arc(0, 0, 16, 0, Math.PI * 2);
   ctx.stroke();
+
+  // Filamento interior en cruz
   ctx.beginPath();
   ctx.moveTo(-11, -11);
   ctx.lineTo(11, 11);
   ctx.moveTo(11, -11);
   ctx.lineTo(-11, 11);
+
   if (glow > 0.05) {
     ctx.save();
-    ctx.strokeStyle = `rgba(255, 230, 150, ${0.4 + glow * 0.6})`;
-    ctx.shadowColor = "rgba(255, 180, 0, 0.9)";
-    ctx.shadowBlur = 10 * glow;
-    ctx.lineWidth = 2.5;
+    // Halo base vectorizado sin shadowBlur
+    ctx.strokeStyle = `rgba(245, 158, 11, ${0.4 + glow * 0.5})`;
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    // Núcleo incandescente de tungsteno
+    ctx.strokeStyle = `rgba(254, 240, 138, ${0.7 + glow * 0.3})`;
+    ctx.lineWidth = 1.8;
     ctx.stroke();
     ctx.restore();
   } else {
@@ -44,18 +52,23 @@ export function drawRelay(
   comp: ComponentInstance,
 ): void {
   const closed = comp.relayClosed ?? false;
+  // Terminales de bobina (COIL1, COIL2)
   ctx.beginPath();
   ctx.moveTo(-40, -20);
   ctx.lineTo(-20, -20);
   ctx.moveTo(-40, 20);
   ctx.lineTo(-20, 20);
   ctx.stroke();
+
+  // Terminales de contacto (COM, NO)
   ctx.beginPath();
   ctx.moveTo(40, -20);
   ctx.lineTo(20, -20);
   ctx.moveTo(40, 20);
   ctx.lineTo(20, 20);
   ctx.stroke();
+
+  // Símbolo de la bobina
   ctx.beginPath();
   ctx.rect(-20, -20, 10, 40);
   ctx.stroke();
@@ -63,27 +76,31 @@ export function drawRelay(
   ctx.moveTo(-15, -20);
   ctx.lineTo(-15, 20);
   ctx.stroke();
+
+  // Acoplamiento electromagnético punteado
   ctx.save();
   ctx.setLineDash([3, 2]);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeStyle = closed ? "rgba(56, 189, 248, 0.6)" : "rgba(255, 255, 255, 0.25)";
   ctx.beginPath();
   ctx.moveTo(-10, 0);
   ctx.lineTo(10, 0);
   ctx.stroke();
   ctx.restore();
+
+  // Nodos de contacto
   ctx.beginPath();
-  ctx.arc(20, -20, 2, 0, Math.PI * 2);
-  ctx.arc(20, 20, 2, 0, Math.PI * 2);
+  ctx.arc(20, -20, 2.5, 0, Math.PI * 2);
+  ctx.arc(20, 20, 2.5, 0, Math.PI * 2);
   ctx.fill();
+
+  // Armadura móvil del relé
   ctx.beginPath();
   if (closed) {
     ctx.moveTo(20, -20);
     ctx.lineTo(20, 20);
     ctx.save();
-    ctx.strokeStyle = "hsl(174, 97%, 69%)";
-    ctx.shadowColor = "hsl(174, 97%, 69%)";
-    ctx.shadowBlur = 6;
-    ctx.lineWidth = 2.0;
+    ctx.strokeStyle = "#38BDF8";
+    ctx.lineWidth = 2.2;
     ctx.stroke();
     ctx.restore();
   } else {
@@ -106,18 +123,19 @@ export function drawBuzzer(
   ctx.lineTo(12, -18);
   ctx.closePath();
   ctx.stroke();
+
   ctx.beginPath();
   ctx.moveTo(-20, 0);
   ctx.lineTo(-12, 0);
   ctx.stroke();
+
   if (level > 0.05) {
     ctx.save();
-    ctx.strokeStyle = `rgba(102, 252, 241, ${level * 0.8})`;
-    ctx.shadowColor = "hsl(174, 97%, 69%)";
-    ctx.shadowBlur = 4 * level;
+    ctx.strokeStyle = `rgba(56, 189, 248, ${level * 0.85})`;
+    ctx.lineWidth = 1.6;
     const wavePhase = (nowMs / 150) % 3;
     for (let i = 0; i < 3; i++) {
-      const r = 20 + i * 8 + wavePhase;
+      const r = 18 + i * 7 + wavePhase;
       ctx.beginPath();
       ctx.arc(4, 0, r, -Math.PI / 4, Math.PI / 4, false);
       ctx.stroke();

@@ -203,6 +203,103 @@ describe("OscilloscopePanel", () => {
     expect(() => panel.exportMeasurementsCsv("Circuito Test")).not.toThrow();
     expect(() => panel.exportMeasurementsJson("Circuito Test")).not.toThrow();
   });
+
+  it("mantiene escala y offset independiente para canal Math", () => {
+    const panel = new OscilloscopePanel();
+    panel.voltsPerDivCh1 = 1.0;
+    panel.offsetCh1 = 0.0;
+    panel.mathVoltsPerDiv = 5.0;
+    panel.mathOffset = -2.0;
+
+    expect(panel.getVoltsPerDiv("ch1")).toBe(1.0);
+    expect(panel.getVoltsPerDiv("math")).toBe(5.0);
+    expect(panel.getOffsetDivs("ch1")).toBe(0.0);
+    expect(panel.getOffsetDivs("math")).toBe(-2.0);
+
+    const state = panel.getPersistentState();
+    expect(state.mathVoltsPerDiv).toBe(5.0);
+    expect(state.mathOffset).toBe(-2.0);
+
+    const newPanel = new OscilloscopePanel();
+    newPanel.applyPersistentState(state);
+    expect(newPanel.mathVoltsPerDiv).toBe(5.0);
+    expect(newPanel.mathOffset).toBe(-2.0);
+  });
+
+  it("permite seleccionar canal objetivo para cursores de voltaje (cursorTargetChannel)", () => {
+    const panel = new OscilloscopePanel();
+    panel.cursorTargetChannel = "ch2";
+    panel.voltsPerDivCh2 = 2.0;
+    panel.offsetCh2 = 1.0;
+
+    const state = panel.getPersistentState();
+    expect(state.cursorTargetChannel).toBe("ch2");
+
+    const newPanel = new OscilloscopePanel();
+    newPanel.applyPersistentState(state);
+    expect(newPanel.cursorTargetChannel).toBe("ch2");
+  });
+
+  it("ejecuta autoFit para canal Math", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.ch2ProbeNode = "2";
+    panel.isMathEnabled = true;
+    panel.mathExpression = "CH1 - CH2";
+    panel.transientResults = [
+      { time: 0.0, nodeVoltages: { "1": 10.0, "2": 0.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "1": 0.0, "2": 10.0 }, branchCurrents: {} },
+    ];
+
+    const fitted = panel.autoFit("math");
+    expect(fitted).toBe(true);
+    expect(panel.mathVoltsPerDiv).toBeGreaterThan(0);
+  });
+
+  it("permite rearmar el disparo single-shot mediante rearmSingleTrigger", () => {
+    const panel = new OscilloscopePanel();
+    panel.triggerSweepMode = "single";
+    panel.isSimulating = true;
+    panel.transientResults = [
+      { time: 0, nodeVoltages: { "1": 0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "1": 2.5 }, branchCurrents: {} },
+    ];
+    panel.rearmSingleTrigger();
+    expect(panel.isOscPaused).toBe(false);
+  });
+
+  it("ejecuta busqueda y navegacion en trazas (searchNextCrossing, searchNextPeak, jumpToTime)", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.transientResults = [
+      { time: 0.0, nodeVoltages: { "1": -1.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "1": 1.0 }, branchCurrents: {} },
+      { time: 0.002, nodeVoltages: { "1": 3.0 }, branchCurrents: {} },
+      { time: 0.003, nodeVoltages: { "1": 0.5 }, branchCurrents: {} },
+    ];
+
+    const crossingIdx = panel.searchNextCrossing("ch1", 0, "rising", 0);
+    expect(crossingIdx).toBe(1);
+
+    const peakIdx = panel.searchNextPeak("ch1", "max", 0);
+    expect(peakIdx).toBe(2);
+
+    const jumped = panel.jumpToTime(0.002);
+    expect(jumped).toBe(true);
+  });
+
+  it("activa y configura el histograma de onda y prueba de mascara", () => {
+    const panel = new OscilloscopePanel();
+    panel.setHistogramEnabled(true);
+    expect(panel.isHistogramEnabled).toBe(true);
+
+    panel.setMaskTesting(true, {
+      centerPoints: [{ time: 0, voltage: 5.0 }],
+      deltaV: 0.5,
+    });
+    expect(panel.isMaskTestingEnabled).toBe(true);
+    expect(panel.activeMask).toBeDefined();
+  });
 });
 
 

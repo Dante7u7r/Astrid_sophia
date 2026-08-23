@@ -35,8 +35,7 @@ function createSpiceImportModalDOM(): void {
   modal.style.cssText = `
     position: fixed;
     inset: 0;
-    background: rgba(10, 15, 26, 0.78);
-    backdrop-filter: blur(8px);
+    background: rgba(10, 15, 26, 0.88);
     z-index: 1000;
     display: none;
     align-items: center;

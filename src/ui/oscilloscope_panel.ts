@@ -3,13 +3,22 @@ import type { PersistedOscilloscopeState } from "../persistence/circuit_file";
 import {
   calculateOscilloscopeMetrics,
   calculateAutoFitSettings,
+  calculateAutoFitForValues,
+  calculateWaveformHistogram,
+  evaluateMaskTest,
+  findTimeIndex,
+  searchNextCrossing,
+  searchNextPeak,
   type AutoFitSettings,
+  type MaskToleranceDefinition,
   buildTyTracePoints,
   findTriggerStartIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
   type OscilloscopeChannel,
   type TriggerEdge,
+  OSCILLOSCOPE_TIME_PER_DIV,
+  OSCILLOSCOPE_VOLTS_PER_DIV,
 } from "./oscilloscope_model";
 import {
   drawAcSweep,
@@ -18,6 +27,8 @@ import {
   drawSplitTyReticle,
   drawTyReticle,
   drawXyTrace,
+  drawWaveformHistogram,
+  drawMaskOverlay,
 } from "./oscilloscope_renderer";
 import {
   dragOscilloscopeCursor,
@@ -87,6 +98,8 @@ export class OscilloscopePanel {
   private modeTyBtn: HTMLButtonElement | null = null;
   private modeXyBtn: HTMLButtonElement | null = null;
   private modeSplitBtn: HTMLButtonElement | null = null;
+  private interpolationSelect: HTMLSelectElement | null = null;
+  private phosphorSelect: HTMLSelectElement | null = null;
   private isSplitMode = false;
 
   // Tabbed Focused Channel UI elements
@@ -127,12 +140,17 @@ export class OscilloscopePanel {
   public ch3ProbeNode: string | null = "3";
   public ch4ProbeNode: string | null = "4";
 
+  // Advanced Digital Storage Features (Tektronix / Keysight DSO)
+  public interpolationMode: "linear" | "sinc" = "linear";
+  public phosphorDecay: "off" | "short" | "medium" | "infinite" = "off";
+
   public onFrameUpdate?: (sweepTime: number) => void;
+  public onSpeedChanged?: (speed: number) => void;
 
   // PVT Multi-corner overlay
   public pvtMode = false;
   public pvtTraces: PvtTrace[] = [];
-  public pvtColors: string[] = ['#66fcf1', '#a855f7', '#f97316', '#22c55e', '#ef4444'];
+  public pvtColors: string[] = ['#FACC15', '#38BDF8', '#F43F5E', '#4ADE80', '#FB923C'];
 
   // SPAR (S-Parameter) state
   public sparResult: SParameterResult | null = null;
@@ -141,6 +159,7 @@ export class OscilloscopePanel {
 
   // Interactive Cursors & Marker Dragging
   public isCursorsEnabled = false;
+  public cursorTargetChannel: "ch1" | "ch2" | "ch3" | "ch4" | "math" = "ch1";
   private cursorT1 = 0.25; // fraction of width
   private cursorT2 = 0.75; // fraction of width
   private cursorV1 = 1.0;  // volts
@@ -154,12 +173,14 @@ export class OscilloscopePanel {
   public voltsPerDivCh2 = 1.0;
   public voltsPerDivCh3 = 1.0;
   public voltsPerDivCh4 = 1.0;
+  public mathVoltsPerDiv = 1.0;
 
   // Offsets in Divisions (-4.0 to +4.0 div)
   public offsetCh1 = 0.0;
   public offsetCh2 = 0.0;
   public offsetCh3 = 0.0;
   public offsetCh4 = 0.0;
+  public mathOffset = 0.0;
 
   // Channel Coupling & Inversion
   public couplingCh1: "dc" | "ac" | "gnd" = "dc";
@@ -174,6 +195,11 @@ export class OscilloscopePanel {
 
   public isMathEnabled = false;
   public mathExpression = "CH1 - CH2";
+
+  // Histogram / PDF & Mask Testing State
+  public isHistogramEnabled = false;
+  public isMaskTestingEnabled = false;
+  public activeMask: MaskToleranceDefinition | null = null;
 
   public timeDivValue = 0.02; // seconds/div (default 20ms/div)
   public isXyMode = false;
@@ -205,14 +231,16 @@ export class OscilloscopePanel {
   }
 
   public getVoltsPerDiv(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): number {
-    if (ch === "ch1" || ch === "math") return this.voltsPerDivCh1;
+    if (ch === "math") return this.mathVoltsPerDiv;
+    if (ch === "ch1") return this.voltsPerDivCh1;
     if (ch === "ch2") return this.voltsPerDivCh2;
     if (ch === "ch3") return this.voltsPerDivCh3;
     return this.voltsPerDivCh4;
   }
 
   public getOffsetDivs(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): number {
-    if (ch === "ch1" || ch === "math") return this.offsetCh1;
+    if (ch === "math") return this.mathOffset;
+    if (ch === "ch1") return this.offsetCh1;
     if (ch === "ch2") return this.offsetCh2;
     if (ch === "ch3") return this.offsetCh3;
     return this.offsetCh4;
@@ -238,6 +266,9 @@ export class OscilloscopePanel {
       isCursorsEnabled: this.isCursorsEnabled,
       isMathEnabled: this.isMathEnabled,
       mathExpression: this.mathExpression,
+      mathVoltsPerDiv: this.mathVoltsPerDiv,
+      mathOffset: this.mathOffset,
+      cursorTargetChannel: this.cursorTargetChannel,
       triggerChannel: this.triggerChannel,
       triggerEdge: this.triggerEdge,
       triggerLevel: this.triggerLevel,
@@ -265,6 +296,15 @@ export class OscilloscopePanel {
     }
     if (typeof state.mathExpression === "string") {
       this.mathExpression = state.mathExpression;
+    }
+    if (typeof state.mathVoltsPerDiv === "number") {
+      this.mathVoltsPerDiv = state.mathVoltsPerDiv;
+    }
+    if (typeof state.mathOffset === "number") {
+      this.mathOffset = state.mathOffset;
+    }
+    if (state.cursorTargetChannel) {
+      this.cursorTargetChannel = state.cursorTargetChannel;
     }
     this.triggerChannel = state.triggerChannel;
     this.triggerEdge = state.triggerEdge;
@@ -316,6 +356,8 @@ export class OscilloscopePanel {
     this.modeTyBtn = document.querySelector("#osc-mode-ty");
     this.modeXyBtn = document.querySelector("#osc-mode-xy");
     this.modeSplitBtn = document.querySelector("#osc-mode-split");
+    this.interpolationSelect = document.querySelector("#osc-interpolation-select");
+    this.phosphorSelect = document.querySelector("#osc-phosphor-select");
 
     // Focused Channel UI
     this.focusedCard = document.querySelector("#osc-focused-card");
@@ -505,6 +547,8 @@ export class OscilloscopePanel {
 
       // Check Cursors if enabled
       if (this.isCursorsEnabled) {
+        const targetVPerDiv = this.getVoltsPerDiv(this.cursorTargetChannel);
+        const targetOffsetPx = this.getOffsetDivs(this.cursorTargetChannel) * divHeight;
         const cursor = hitTestOscilloscopeCursor(
           x,
           y,
@@ -517,8 +561,8 @@ export class OscilloscopePanel {
           {
             width: w,
             height: h,
-            voltsPerDivCh1: this.voltsPerDivCh1,
-            offsetCh1: this.offsetCh1 * divHeight,
+            voltsPerDiv: targetVPerDiv,
+            offsetPixels: targetOffsetPx,
           },
           12,
         );
@@ -557,6 +601,8 @@ export class OscilloscopePanel {
           this.updateHud();
           this.draw();
         } else if (this.draggingMarker.type === "cursor" && this.isCursorsEnabled) {
+          const targetVPerDiv = this.getVoltsPerDiv(this.cursorTargetChannel);
+          const targetOffsetPx = this.getOffsetDivs(this.cursorTargetChannel) * divHeight;
           const nextCursorState = dragOscilloscopeCursor(
             this.draggingMarker.cursor,
             this.oscMouseX!,
@@ -570,8 +616,8 @@ export class OscilloscopePanel {
             {
               width: w,
               height: h,
-              voltsPerDivCh1: this.voltsPerDivCh1,
-              offsetCh1: this.offsetCh1 * divHeight,
+              voltsPerDiv: targetVPerDiv,
+              offsetPixels: targetOffsetPx,
             },
           );
           this.cursorT1 = nextCursorState.cursorT1;
@@ -648,6 +694,56 @@ export class OscilloscopePanel {
       this.oscMouseY = null;
       this.draggingMarker = null;
     });
+
+    // Wheel zoom: Vertical Volts/div (o Horizontal Time/div con Shift)
+    this.oscCanvas.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+          // Zoom Horizontal de Base de Tiempo
+          const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+          const timeOptions = [...OSCILLOSCOPE_TIME_PER_DIV];
+          let curIdx = timeOptions.findIndex((t) => t >= this.timeDivValue * 0.999);
+          if (curIdx === -1) curIdx = 0;
+          if (delta > 0 && curIdx < timeOptions.length - 1) {
+            this.timeDivValue = timeOptions[curIdx + 1];
+          } else if (delta < 0 && curIdx > 0) {
+            this.timeDivValue = timeOptions[curIdx - 1];
+          }
+          if (this.timeDivSelect) this.timeDivSelect.value = this.timeDivValue.toString();
+          this.updateHud();
+          this.draw();
+        } else {
+          // Zoom Vertical de Escala Volts/div para el canal enfocado
+          const ch = this.focusedChannel;
+          const curV = this.getVoltsPerDiv(ch);
+          const voltOptions = [...OSCILLOSCOPE_VOLTS_PER_DIV];
+          let curIdx = voltOptions.findIndex((v) => v >= curV * 0.999);
+          if (curIdx === -1) curIdx = 0;
+
+          let nextV = curV;
+          if (e.deltaY > 0 && curIdx < voltOptions.length - 1) {
+            // Rueda hacia abajo: alejar / aumentar V/div -> la onda se hace más compacta
+            nextV = voltOptions[curIdx + 1];
+          } else if (e.deltaY < 0 && curIdx > 0) {
+            // Rueda hacia arriba: acercar / reducir V/div -> la onda se hace más grande
+            nextV = voltOptions[curIdx - 1];
+          }
+
+          if (ch === "math") this.mathVoltsPerDiv = nextV;
+          else if (ch === "ch1") this.voltsPerDivCh1 = nextV;
+          else if (ch === "ch2") this.voltsPerDivCh2 = nextV;
+          else if (ch === "ch3") this.voltsPerDivCh3 = nextV;
+          else if (ch === "ch4") this.voltsPerDivCh4 = nextV;
+
+          this.syncFocusedChannelUI();
+          this.updateHud();
+          this.draw();
+        }
+      },
+      { passive: false },
+    );
 
     // 2. Channel Tabs
     this.tabCh1?.addEventListener("click", () => this.setFocusedChannel("ch1"));
@@ -727,7 +823,8 @@ export class OscilloscopePanel {
     this.focusedVoltsSelect?.addEventListener("input", () => {
       const val = parseFloat(this.focusedVoltsSelect?.value || "1.0");
       const ch = this.focusedChannel;
-      if (ch === "ch1" || ch === "math") this.voltsPerDivCh1 = val;
+      if (ch === "math") this.mathVoltsPerDiv = val;
+      else if (ch === "ch1") this.voltsPerDivCh1 = val;
       else if (ch === "ch2") this.voltsPerDivCh2 = val;
       else if (ch === "ch3") this.voltsPerDivCh3 = val;
       else if (ch === "ch4") this.voltsPerDivCh4 = val;
@@ -739,7 +836,8 @@ export class OscilloscopePanel {
     this.focusedOffsetSlider?.addEventListener("input", () => {
       const val = parseFloat(this.focusedOffsetSlider?.value || "0.0");
       const ch = this.focusedChannel;
-      if (ch === "ch1" || ch === "math") this.offsetCh1 = val;
+      if (ch === "math") this.mathOffset = val;
+      else if (ch === "ch1") this.offsetCh1 = val;
       else if (ch === "ch2") this.offsetCh2 = val;
       else if (ch === "ch3") this.offsetCh3 = val;
       else if (ch === "ch4") this.offsetCh4 = val;
@@ -773,6 +871,7 @@ export class OscilloscopePanel {
     this.triggerSweepModeSelect?.addEventListener("input", () => {
       if (this.triggerSweepModeSelect) {
         this.triggerSweepMode = (this.triggerSweepModeSelect.value as "auto" | "normal" | "single") || "auto";
+        this.singleTriggerFired = false;
       }
       this.draw();
     });
@@ -815,6 +914,33 @@ export class OscilloscopePanel {
       this.mathBtn?.classList.toggle("active", this.isMathEnabled);
       this.setFocusedChannel("math");
       this.draw();
+    });
+
+    // Interpolation Mode (Linear / Sinc Lanczos)
+    this.interpolationSelect?.addEventListener("change", () => {
+      const val = this.interpolationSelect?.value;
+      if (val === "linear" || val === "sinc") {
+        this.interpolationMode = val;
+        this.draw();
+      }
+    });
+
+    // Digital Phosphor Decay (Off / Short / Medium / Infinite)
+    this.phosphorSelect?.addEventListener("change", () => {
+      const val = this.phosphorSelect?.value;
+      if (val === "off" || val === "short" || val === "medium" || val === "infinite") {
+        this.phosphorDecay = val;
+        this.draw();
+      }
+    });
+
+    // Simulation Speed Control (0.5x, 1x, 2x, 5x, 10x, Turbo)
+    const speedSelect = document.querySelector<HTMLSelectElement>("#osc-speed-select");
+    speedSelect?.addEventListener("change", () => {
+      const speed = parseFloat(speedSelect.value || "1.0");
+      if (Number.isFinite(speed) && speed > 0) {
+        this.onSpeedChanged?.(speed);
+      }
     });
 
     // Snapshot PNG & CSV Export
@@ -904,8 +1030,16 @@ export class OscilloscopePanel {
     const { width, height } = ensureCanvasDpr(this.oscCanvas, this.oscCtx);
     if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return;
 
-    // Clean background clear (NO GHOST TRAILS, NO SMUDGING)
-    this.oscCtx.fillStyle = "#030508";
+    // Digital Phosphor Persistence / Clean background clear
+    if (this.phosphorDecay === "short") {
+      this.oscCtx.fillStyle = "rgba(3, 5, 8, 0.25)";
+    } else if (this.phosphorDecay === "medium") {
+      this.oscCtx.fillStyle = "rgba(3, 5, 8, 0.10)";
+    } else if (this.phosphorDecay === "infinite") {
+      this.oscCtx.fillStyle = "rgba(3, 5, 8, 0.01)";
+    } else {
+      this.oscCtx.fillStyle = "#030508";
+    }
     this.oscCtx.fillRect(0, 0, width, height);
 
     const isCh1Active = this.oscCh1Btn?.classList.contains("active") ?? false;
@@ -916,10 +1050,10 @@ export class OscilloscopePanel {
     // --- MODO AC SWEEP: DIAGRAMA DE BODE LOGARÍTMICO ---
     if (this.activeAnalysisMode === "AC" && this.acSweepResults !== null && this.acSweepResults.frequencies.length > 0) {
       drawAcSweep(this.oscCtx, width, height, this.acSweepResults, [
-        { node: this.ch1ProbeNode, color: "#66fcf1", active: isCh1Active },
-        { node: this.ch2ProbeNode, color: "#a855f7", active: isCh2Active },
-        { node: this.ch3ProbeNode, color: "#f97316", active: isCh3Active },
-        { node: this.ch4ProbeNode, color: "#22c55e", active: isCh4Active },
+        { node: this.ch1ProbeNode, color: "#FACC15", active: isCh1Active },
+        { node: this.ch2ProbeNode, color: "#38BDF8", active: isCh2Active },
+        { node: this.ch3ProbeNode, color: "#F43F5E", active: isCh3Active },
+        { node: this.ch4ProbeNode, color: "#4ADE80", active: isCh4Active },
       ]);
     } else if (this.activeAnalysisMode === "PVT" && this.pvtTraces.length > 0) {
       drawPvtTraces(
@@ -959,10 +1093,10 @@ export class OscilloscopePanel {
       );
 
       const activeChannelsList = [
-        { num: 1, node: this.ch1ProbeNode || "1", color: "#66fcf1", voltsPerDiv: this.voltsPerDivCh1, offsetDivs: this.offsetCh1, active: isCh1Active, coupling: this.couplingCh1, invert: this.invertCh1 },
-        { num: 2, node: this.ch2ProbeNode || "2", color: "#a855f7", voltsPerDiv: this.voltsPerDivCh2, offsetDivs: this.offsetCh2, active: isCh2Active, coupling: this.couplingCh2, invert: this.invertCh2 },
-        { num: 3, node: this.ch3ProbeNode || "3", color: "#f97316", voltsPerDiv: this.voltsPerDivCh3, offsetDivs: this.offsetCh3, active: isCh3Active, coupling: this.couplingCh3, invert: this.invertCh3 },
-        { num: 4, node: this.ch4ProbeNode || "4", color: "#22c55e", voltsPerDiv: this.voltsPerDivCh4, offsetDivs: this.offsetCh4, active: isCh4Active, coupling: this.couplingCh4, invert: this.invertCh4 },
+        { num: 1, node: this.ch1ProbeNode || "1", color: "#FACC15", voltsPerDiv: this.voltsPerDivCh1, offsetDivs: this.offsetCh1, active: isCh1Active, coupling: this.couplingCh1, invert: this.invertCh1 },
+        { num: 2, node: this.ch2ProbeNode || "2", color: "#38BDF8", voltsPerDiv: this.voltsPerDivCh2, offsetDivs: this.offsetCh2, active: isCh2Active, coupling: this.couplingCh2, invert: this.invertCh2 },
+        { num: 3, node: this.ch3ProbeNode || "3", color: "#F43F5E", voltsPerDiv: this.voltsPerDivCh3, offsetDivs: this.offsetCh3, active: isCh3Active, coupling: this.couplingCh3, invert: this.invertCh3 },
+        { num: 4, node: this.ch4ProbeNode || "4", color: "#4ADE80", voltsPerDiv: this.voltsPerDivCh4, offsetDivs: this.offsetCh4, active: isCh4Active, coupling: this.couplingCh4, invert: this.invertCh4 },
       ].filter(c => c.active && c.node);
 
       if (this.isSplitMode && activeChannelsList.length > 1) {
@@ -1017,10 +1151,10 @@ export class OscilloscopePanel {
         // Overlay standard single grid
         drawTyReticle(this.oscCtx, width, height, {
           channels: [
-            { num: 1, color: "#66fcf1", offsetPixels: this.offsetCh1 * divHeight, active: isCh1Active },
-            { num: 2, color: "#a855f7", offsetPixels: this.offsetCh2 * divHeight, active: isCh2Active },
-            { num: 3, color: "#f97316", offsetPixels: this.offsetCh3 * divHeight, active: isCh3Active },
-            { num: 4, color: "#22c55e", offsetPixels: this.offsetCh4 * divHeight, active: isCh4Active },
+            { num: 1, color: "#FACC15", offsetPixels: this.offsetCh1 * divHeight, active: isCh1Active },
+            { num: 2, color: "#38BDF8", offsetPixels: this.offsetCh2 * divHeight, active: isCh2Active },
+            { num: 3, color: "#F43F5E", offsetPixels: this.offsetCh3 * divHeight, active: isCh3Active },
+            { num: 4, color: "#4ADE80", offsetPixels: this.offsetCh4 * divHeight, active: isCh4Active },
           ],
           trigger: {
             levelVolts: this.triggerLevel,
@@ -1046,7 +1180,7 @@ export class OscilloscopePanel {
           voltsPerDiv: number,
           offsetDivs: number,
           isActive: boolean,
-          config: { coupling: "dc" | "ac" | "gnd"; invert: boolean },
+          config: { coupling: "dc" | "ac" | "gnd"; invert: boolean; interpolation?: "linear" | "sinc" },
         ) => {
           if (!isActive || !nodeId || triggerStartIdx >= this.transientResults.length) return;
 
@@ -1072,21 +1206,25 @@ export class OscilloscopePanel {
           ctx.stroke();
         };
 
-        drawChannelTY(this.ch1ProbeNode || "1", "#66fcf1", this.voltsPerDivCh1, this.offsetCh1, isCh1Active, {
+        drawChannelTY(this.ch1ProbeNode || "1", "#FACC15", this.voltsPerDivCh1, this.offsetCh1, isCh1Active, {
           coupling: this.couplingCh1,
           invert: this.invertCh1,
+          interpolation: this.interpolationMode,
         });
-        drawChannelTY(this.ch2ProbeNode || "2", "#a855f7", this.voltsPerDivCh2, this.offsetCh2, isCh2Active, {
+        drawChannelTY(this.ch2ProbeNode || "2", "#38BDF8", this.voltsPerDivCh2, this.offsetCh2, isCh2Active, {
           coupling: this.couplingCh2,
           invert: this.invertCh2,
+          interpolation: this.interpolationMode,
         });
-        drawChannelTY(this.ch3ProbeNode || "3", "#f97316", this.voltsPerDivCh3, this.offsetCh3, isCh3Active, {
+        drawChannelTY(this.ch3ProbeNode || "3", "#F43F5E", this.voltsPerDivCh3, this.offsetCh3, isCh3Active, {
           coupling: this.couplingCh3,
           invert: this.invertCh3,
+          interpolation: this.interpolationMode,
         });
-        drawChannelTY(this.ch4ProbeNode || "4", "#22c55e", this.voltsPerDivCh4, this.offsetCh4, isCh4Active, {
+        drawChannelTY(this.ch4ProbeNode || "4", "#4ADE80", this.voltsPerDivCh4, this.offsetCh4, isCh4Active, {
           coupling: this.couplingCh4,
           invert: this.invertCh4,
+          interpolation: this.interpolationMode,
         });
 
         // Render MATH channel (Arbitrary parsed expressions: CH1 - CH2, CH1 * CH2, DERIV(CH1), INTEG(CH1), FFT(CH1), etc.)
@@ -1100,15 +1238,15 @@ export class OscilloscopePanel {
           const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
 
           if (mathVals.length > 1) {
-            ctx.strokeStyle = "#ec4899";
+            ctx.strokeStyle = "#FB923C";
             ctx.lineWidth = 2.0;
             ctx.setLineDash([4, 2]);
             ctx.beginPath();
 
             const windowDuration = this.timeDivValue * 10;
             const firstTime = this.transientResults[triggerStartIdx]?.time ?? 0;
-            const mathVoltsPerDiv = this.voltsPerDivCh1 || 1.0;
-            const mathOffsetPx = this.offsetCh1 * divHeight;
+            const mathVoltsPerDiv = this.mathVoltsPerDiv || 1.0;
+            const mathOffsetPx = this.mathOffset * divHeight;
 
             let firstPoint = true;
             for (let i = triggerStartIdx; i < this.transientResults.length; i++) {
@@ -1130,21 +1268,55 @@ export class OscilloscopePanel {
             ctx.setLineDash([]);
           }
         }
+
+        // Draw Waveform Histogram if enabled
+        if (this.isHistogramEnabled) {
+          const histNode = this.getProbeNodeByChannel(this.focusedChannel === "math" ? "ch1" : this.focusedChannel);
+          if (histNode) {
+            const hist = calculateWaveformHistogram(this.transientResults, histNode, 24);
+            drawWaveformHistogram(this.oscCtx, width, height, hist, "#FACC15");
+          }
+        }
+
+        // Draw Mask Testing overlay if enabled
+        if (this.isMaskTestingEnabled && this.activeMask) {
+          const testNode = this.getProbeNodeByChannel(this.focusedChannel === "math" ? "ch1" : this.focusedChannel);
+          if (testNode) {
+            const violations = evaluateMaskTest(this.transientResults, testNode, this.activeMask, triggerStartIdx);
+            const vPerDiv = this.getVoltsPerDiv(this.focusedChannel);
+            const offPx = this.getOffsetDivs(this.focusedChannel) * divHeight;
+            drawMaskOverlay(
+              this.oscCtx,
+              width,
+              height,
+              this.transientResults,
+              testNode,
+              this.activeMask,
+              vPerDiv,
+              offPx,
+              this.timeDivValue,
+              triggerStartIdx,
+              violations,
+            );
+          }
+        }
       }
 
       this.updateMeasurementsIfNeeded(
         [
-          { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: isCh1Active, color: "#66fcf1" },
-          { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: isCh2Active, color: "#a855f7" },
-          { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: isCh3Active, color: "#f97316" },
-          { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: isCh4Active, color: "#22c55e" },
+          { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: isCh1Active, color: "#FACC15" },
+          { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: isCh2Active, color: "#38BDF8" },
+          { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: isCh3Active, color: "#F43F5E" },
+          { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: isCh4Active, color: "#4ADE80" },
         ],
       );
 
       if (this.isCursorsEnabled) {
-        const activeProbe = this.ch1ProbeNode || this.ch2ProbeNode || this.ch3ProbeNode || this.ch4ProbeNode;
-        const metrics = activeProbe && this.transientResults.length > 2
-          ? calculateOscilloscopeMetrics(this.transientResults, activeProbe)
+        const targetVPerDiv = this.getVoltsPerDiv(this.cursorTargetChannel);
+        const targetOffsetPx = this.getOffsetDivs(this.cursorTargetChannel) * divHeight;
+        const targetNode = this.getProbeNodeByChannel(this.cursorTargetChannel === "math" ? "ch1" : this.cursorTargetChannel);
+        const metrics = targetNode && this.transientResults.length > 2
+          ? calculateOscilloscopeMetrics(this.transientResults, targetNode)
           : null;
 
         drawOscilloscopeCursors(
@@ -1156,10 +1328,11 @@ export class OscilloscopePanel {
           this.cursorT2,
           this.cursorV1,
           this.cursorV2,
-          this.voltsPerDivCh1,
-          this.offsetCh1 * divHeight,
+          targetVPerDiv,
+          targetOffsetPx,
           this.timeDivValue,
           metrics?.period,
+          this.cursorTargetChannel,
         );
       }
     }
@@ -1183,11 +1356,6 @@ export class OscilloscopePanel {
     }
     this.lastMeasurementsUpdateAt = now;
 
-    // Keep transient results bounded during long simulation runs to prevent memory bloat
-    if (this.transientResults.length > 15_000) {
-      this.transientResults = this.transientResults.slice(-10_000);
-    }
-
     for (const channel of channels) {
       const card = document.getElementById(channel.id);
       if (!card) continue;
@@ -1198,11 +1366,11 @@ export class OscilloscopePanel {
         nodeBadge.textContent = channel.node ? `N:${channel.node}` : "No Probe";
       }
 
-      const vppEl = card.querySelector<HTMLElement>(".val-vpp");
-      const vrmsEl = card.querySelector<HTMLElement>(".val-vrms");
-      const vavgEl = card.querySelector<HTMLElement>(".val-vavg");
-      const freqEl = card.querySelector<HTMLElement>(".val-freq");
-      const dutyEl = card.querySelector<HTMLElement>(".val-duty");
+      const vppEl = card.querySelector<HTMLElement>("[id^='meas-vpp']") || card.querySelector<HTMLElement>(".val-vpp");
+      const vrmsEl = card.querySelector<HTMLElement>("[id^='meas-vrms']") || card.querySelector<HTMLElement>(".val-vrms");
+      const vavgEl = card.querySelector<HTMLElement>("[id^='meas-vavg']") || card.querySelector<HTMLElement>(".val-vavg");
+      const freqEl = card.querySelector<HTMLElement>("[id^='meas-freq']") || card.querySelector<HTMLElement>(".val-freq");
+      const dutyEl = card.querySelector<HTMLElement>("[id^='meas-duty']") || card.querySelector<HTMLElement>(".val-duty");
 
       if (channel.active && channel.node) {
         const metrics = calculateOscilloscopeMetrics(this.transientResults, channel.node);
@@ -1226,10 +1394,10 @@ export class OscilloscopePanel {
 
   public snapshotPng(): void {
     if (!this.oscCanvas) return;
-    const link = document.createElement("a");
-    link.download = `osciloscopio_captura_${Date.now()}.png`;
-    link.href = this.oscCanvas.toDataURL("image/png");
-    link.click();
+    const a = document.createElement("a");
+    a.download = `oscilloscope_${Date.now()}.png`;
+    a.href = this.oscCanvas.toDataURL("image/png");
+    a.click();
   }
 
   public exportCsv(): void {
@@ -1238,7 +1406,6 @@ export class OscilloscopePanel {
     const ch2Title = this.ch2ProbeNode ? `CH2_Node_${this.ch2ProbeNode}` : "CH2";
     const ch3Title = this.ch3ProbeNode ? `CH3_Node_${this.ch3ProbeNode}` : "CH3";
     const ch4Title = this.ch4ProbeNode ? `CH4_Node_${this.ch4ProbeNode}` : "CH4";
-
     let csv = `Time_s,${ch1Title}_V,${ch2Title}_V,${ch3Title}_V,${ch4Title}_V\n`;
     for (const pt of this.transientResults) {
       const v1 = this.ch1ProbeNode ? (pt.nodeVoltages[this.ch1ProbeNode] ?? 0) : 0;
@@ -1329,15 +1496,21 @@ export class OscilloscopePanel {
     this.refreshVisibility();
   }
 
-  public autoFit(channel: OscilloscopeChannel | null = null): boolean {
+  public rearmSingleTrigger(): void {
+    this.singleTriggerFired = false;
+    this.isOscPaused = false;
+    this.refreshVisibility();
+  }
+
+  public autoFit(channel: OscilloscopeChannel | "math" | null = null): boolean {
     if (this.transientResults.length === 0) return false;
 
     const channelsToFit: Array<{ ch: OscilloscopeChannel; node: string }> = [];
 
-    if (channel) {
+    if (channel && channel !== "math") {
       const node = this.getProbeNodeByChannel(channel);
       if (node) channelsToFit.push({ ch: channel, node });
-    } else {
+    } else if (!channel) {
       const activeList: readonly [OscilloscopeChannel, boolean][] = [
         ["ch1", this.oscCh1Btn?.classList.contains("active") ?? false],
         ["ch2", this.oscCh2Btn?.classList.contains("active") ?? false],
@@ -1349,14 +1522,12 @@ export class OscilloscopePanel {
         const node = this.getProbeNodeByChannel(ch);
         if (node) channelsToFit.push({ ch, node });
       }
-      if (channelsToFit.length === 0) {
+      if (channelsToFit.length === 0 && !this.isMathEnabled) {
         const fallbackCh = this.getAutoFitChannel() || "ch1";
         const node = this.getProbeNodeByChannel(fallbackCh);
         if (node) channelsToFit.push({ ch: fallbackCh, node });
       }
     }
-
-    if (channelsToFit.length === 0) return false;
 
     let primaryFit: AutoFitSettings | null = null;
 
@@ -1369,10 +1540,9 @@ export class OscilloscopePanel {
       const minOffset = -4;
       const maxOffset = 4;
       const voltsPerDiv = fit.voltsPerDiv;
-      const offsetDivs = Math.min(
-        maxOffset,
-        Math.max(minOffset, -(fit.centerVoltage / voltsPerDiv)),
-      );
+      const offsetDivs = Math.abs(fit.centerVoltage) > 1e-4
+        ? Math.min(maxOffset, Math.max(minOffset, -(fit.centerVoltage / voltsPerDiv)))
+        : 0;
 
       if (ch === "ch1") {
         this.voltsPerDivCh1 = voltsPerDiv;
@@ -1389,6 +1559,25 @@ export class OscilloscopePanel {
       }
     }
 
+    // Auto-fit Math channel if requested or enabled
+    if ((channel === "math" || (!channel && this.isMathEnabled)) && this.transientResults.length > 1) {
+      const bindings = {
+        ch1Node: this.ch1ProbeNode,
+        ch2Node: this.ch2ProbeNode,
+        ch3Node: this.ch3ProbeNode,
+        ch4Node: this.ch4ProbeNode,
+      };
+      const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
+      if (mathVals.length > 0) {
+        const mathFit = calculateAutoFitForValues(mathVals, this.transientResults);
+        this.mathVoltsPerDiv = mathFit.voltsPerDiv;
+        this.mathOffset = Math.min(4, Math.max(-4, -(mathFit.centerVoltage / mathFit.voltsPerDiv)));
+        if (!primaryFit && channel === "math") {
+          primaryFit = mathFit;
+        }
+      }
+    }
+
     if (primaryFit) {
       this.timeDivValue = primaryFit.timeDivValue;
       if (this.timeDivSelect) this.timeDivSelect.value = primaryFit.timeDivValue.toString();
@@ -1398,5 +1587,101 @@ export class OscilloscopePanel {
     this.updateHud();
     this.draw();
     return true;
+  }
+
+  // ==========================================================================
+  // SEARCH & NAVIGATE IN TRACE
+  // ==========================================================================
+
+  public searchNextCrossing(
+    channel?: "ch1" | "ch2" | "ch3" | "ch4" | "math",
+    thresholdVolts = 0.0,
+    edge: "rising" | "falling" | "both" = "both",
+    fromIndex = 0,
+  ): number | null {
+    const ch = channel ?? this.focusedChannel;
+    if (ch === "math") {
+      const bindings = {
+        ch1Node: this.ch1ProbeNode,
+        ch2Node: this.ch2ProbeNode,
+        ch3Node: this.ch3ProbeNode,
+        ch4Node: this.ch4ProbeNode,
+      };
+      const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
+      if (mathVals.length < 2) return null;
+      for (let i = fromIndex; i < mathVals.length - 1; i++) {
+        const vCurr = mathVals[i];
+        const vNext = mathVals[i + 1];
+        const isRising = vCurr <= thresholdVolts && vNext > thresholdVolts;
+        const isFalling = vCurr >= thresholdVolts && vNext < thresholdVolts;
+        if (edge === "rising" && isRising) return i + 1;
+        if (edge === "falling" && isFalling) return i + 1;
+        if (edge === "both" && (isRising || isFalling)) return i + 1;
+      }
+      return null;
+    }
+    const node = this.getProbeNodeByChannel(ch);
+    if (!node) return null;
+    return searchNextCrossing(this.transientResults, node, thresholdVolts, edge, fromIndex);
+  }
+
+  public searchNextPeak(
+    channel?: "ch1" | "ch2" | "ch3" | "ch4" | "math",
+    type: "max" | "min" | "both" = "both",
+    fromIndex = 0,
+  ): number | null {
+    const ch = channel ?? this.focusedChannel;
+    if (ch === "math") {
+      const bindings = {
+        ch1Node: this.ch1ProbeNode,
+        ch2Node: this.ch2ProbeNode,
+        ch3Node: this.ch3ProbeNode,
+        ch4Node: this.ch4ProbeNode,
+      };
+      const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
+      if (mathVals.length < 3) return null;
+      for (let i = Math.max(1, fromIndex); i < mathVals.length - 1; i++) {
+        const isMax = mathVals[i] > mathVals[i - 1] && mathVals[i] >= mathVals[i + 1];
+        const isMin = mathVals[i] < mathVals[i - 1] && mathVals[i] <= mathVals[i + 1];
+        if (type === "max" && isMax) return i;
+        if (type === "min" && isMin) return i;
+        if (type === "both" && (isMax || isMin)) return i;
+      }
+      return null;
+    }
+    const node = this.getProbeNodeByChannel(ch);
+    if (!node) return null;
+    return searchNextPeak(this.transientResults, node, type, fromIndex);
+  }
+
+  public jumpToTime(targetTime: number): boolean {
+    if (this.transientResults.length === 0) return false;
+    const sampleIdx = findTimeIndex(this.transientResults, targetTime);
+    return this.jumpToSampleIndex(sampleIdx);
+  }
+
+  public jumpToSampleIndex(sampleIdx: number): boolean {
+    if (this.transientResults.length === 0) return false;
+    const clampedIdx = Math.max(0, Math.min(this.transientResults.length - 1, sampleIdx));
+    const targetSample = this.transientResults[clampedIdx];
+    if (!targetSample) return false;
+
+    const totalDuration = this.timeDivValue * 10;
+    const firstTime = this.transientResults[0]?.time ?? 0;
+    const relTime = targetSample.time - firstTime;
+    this.cursorT1 = Math.max(0.02, Math.min(0.98, relTime / totalDuration));
+    this.draw();
+    return true;
+  }
+
+  public setHistogramEnabled(enabled: boolean): void {
+    this.isHistogramEnabled = enabled;
+    this.draw();
+  }
+
+  public setMaskTesting(enabled: boolean, mask?: MaskToleranceDefinition): void {
+    this.isMaskTestingEnabled = enabled;
+    if (mask) this.activeMask = mask;
+    this.draw();
   }
 }

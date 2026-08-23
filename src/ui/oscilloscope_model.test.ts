@@ -3,11 +3,19 @@ import type { TimeStepResult } from "./oscilloscope_panel";
 import {
   calculateOscilloscopeMetrics,
   calculateAutoFitSettings,
+  calculateAutoFitForValues,
   buildTyTracePoints,
+  interpolateSincTrace,
   findTriggerStartIndex,
+  findTimeIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
   selectTraceSampleIndices,
+  searchNextCrossing,
+  searchNextPeak,
+  calculateWaveformHistogram,
+  evaluateMaskTest,
+  type MaskToleranceDefinition,
 } from "./oscilloscope_model";
 
 function point(time: number, voltage: number): TimeStepResult {
@@ -44,18 +52,25 @@ describe("oscilloscope_model", () => {
     expect(calculateOscilloscopeMetrics([], "1")).toMatchObject({ vpp: 0, vrms: 0, freq: 0 });
   });
 
-  it("encuentra el inicio de trigger por flanco", () => {
+  it("encuentra el inicio de trigger por flanco y respeta ventana completa", () => {
     const results = [
       point(0, -1),
       point(0.1, 0),
       point(0.2, 1),
       point(0.3, 0),
       point(0.4, -1),
+      point(0.5, 0),
+      point(0.6, 1),
     ];
 
     expect(findTriggerStartIndex(results, "1", "rising", 0)).toBe(2);
     expect(findTriggerStartIndex(results, "1", "falling", 0)).toBe(4);
     expect(findTriggerStartIndex(results, null, "rising", 0)).toBe(0);
+
+    // Fallback a ventana rodante cuando hay tiempo suficiente pero no cruce con ventana completa
+    const noCrossingResults = Array.from({ length: 20 }, (_, i) => point(i * 0.05, 5));
+    const rollStart = findTriggerStartIndex(noCrossingResults, "1", "rising", 0, 0.05);
+    expect(noCrossingResults[rollStart].time).toBeCloseTo(0.45, 2);
   });
 
   it("construye puntos T-Y dentro de la ventana visible", () => {
@@ -144,5 +159,144 @@ describe("oscilloscope_model", () => {
     const invTrace = buildTyTracePoints(pointsDc, "1", { width: 100, height: 80 }, { voltsPerDiv: 1, offsetPixels: 0, timeDivValue: 0.01 }, 0, { coupling: "ac", invert: true });
     expect(invTrace[0].y).toBeCloseTo(30); // antes era 50
     expect(invTrace[1].y).toBeCloseTo(50); // antes era 30
+  });
+
+  it("calcula auto-fit desde un vector arbitrario de valores (canal Math)", () => {
+    const mathValues = [-5, 0, 5, 0, -5];
+    const settings = calculateAutoFitForValues(mathValues);
+    expect(settings.voltsPerDiv).toBe(2);
+    expect(settings.centerVoltage).toBe(0);
+  });
+
+  it("busca y navega cruces por umbral (searchNextCrossing)", () => {
+    const results = [
+      point(0, -1),
+      point(0.1, 0.5), // Cruce subida en i=1
+      point(0.2, 1.0),
+      point(0.3, -0.5), // Cruce bajada en i=3
+      point(0.4, 0.8), // Cruce subida en i=4
+    ];
+
+    expect(searchNextCrossing(results, "1", 0, "rising", 0)).toBe(1);
+    expect(searchNextCrossing(results, "1", 0, "falling", 1)).toBe(3);
+    expect(searchNextCrossing(results, "1", 0, "both", 2)).toBe(3);
+    expect(searchNextCrossing(results, "1", 0, "rising", 3)).toBe(4);
+    expect(searchNextCrossing(results, "1", 0, "rising", 4)).toBeNull();
+  });
+
+  it("busca y navega picos maximos y minimos (searchNextPeak)", () => {
+    const results = [
+      point(0, 0),
+      point(0.1, 2.5), // Pico max en i=1
+      point(0.2, 0),
+      point(0.3, -3.0), // Pico min en i=3
+      point(0.4, 1.0),
+    ];
+
+    expect(searchNextPeak(results, "1", "max", 0)).toBe(1);
+    expect(searchNextPeak(results, "1", "min", 1)).toBe(3);
+    expect(searchNextPeak(results, "1", "both", 0)).toBe(1);
+    expect(searchNextPeak(results, "1", "both", 2)).toBe(3);
+  });
+
+  it("realiza busqueda binaria de tiempo exacto (findTimeIndex)", () => {
+    const results = [
+      point(0.0, 0),
+      point(0.02, 1),
+      point(0.04, 2),
+      point(0.06, 3),
+      point(0.08, 4),
+    ];
+
+    expect(findTimeIndex(results, -0.01)).toBe(0);
+    expect(findTimeIndex(results, 0.04)).toBe(2);
+    expect(findTimeIndex(results, 0.055)).toBe(3);
+    expect(findTimeIndex(results, 0.10)).toBe(4);
+  });
+
+  it("calcula histograma de amplitud y funcion de densidad de probabilidad (PDF)", () => {
+    const results = [
+      point(0, 1),
+      point(1, 2),
+      point(2, 3),
+      point(3, 4),
+      point(4, 5),
+    ];
+
+    const hist = calculateWaveformHistogram(results, "1", 5);
+    expect(hist.totalSamples).toBe(5);
+    expect(hist.minV).toBe(1);
+    expect(hist.maxV).toBe(5);
+    expect(hist.mean).toBe(3);
+    expect(hist.median).toBe(3);
+    expect(hist.counts.reduce((a, b) => a + b, 0)).toBe(5);
+    expect(hist.probabilities.reduce((a, b) => a + b, 0)).toBeCloseTo(1.0);
+  });
+
+  it("evalua pruebas de mascara (Mask Testing) detectando violaciones de tolerancia", () => {
+    const results = [
+      point(0.0, 5.0),
+      point(0.1, 5.1), // Dentro de ±0.5V
+      point(0.2, 5.8), // VIOLACION (> 5.5V)
+      point(0.3, 4.9), // Dentro
+    ];
+
+    const mask = {
+      centerPoints: [
+        { time: 0.0, voltage: 5.0 },
+        { time: 0.1, voltage: 5.0 },
+        { time: 0.2, voltage: 5.0 },
+        { time: 0.3, voltage: 5.0 },
+      ],
+      deltaV: 0.5,
+    };
+
+    const evalResult = evaluateMaskTest(results, "1", mask);
+    expect(evalResult.passed).toBe(false);
+    expect(evalResult.totalSamples).toBe(4);
+    expect(evalResult.violationCount).toBe(1);
+    expect(evalResult.violationIndices).toEqual([2]);
+    expect(evalResult.violationPoints[0].voltage).toBe(5.8);
+  });
+
+  it("calcula metricas de pulso y transitorios (riseTime, fallTime, posWidth)", () => {
+    // Generar un pulso cuadrado de 0V a 5V con flancos lineales
+    const pulseResults = [
+      point(0.0, 0.0),
+      point(0.001, 0.0),
+      point(0.002, 5.0), // Flanco de subida rápido
+      point(0.005, 5.0),
+      point(0.006, 0.0), // Flanco de bajada rápido
+      point(0.008, 0.0),
+    ];
+
+    const metrics = calculateOscilloscopeMetrics(pulseResults, "1");
+    expect(metrics.vpp).toBe(5.0);
+    expect(metrics.riseTime).toBeDefined();
+    expect(metrics.riseTime).toBeGreaterThan(0);
+    expect(metrics.riseTime).toBeLessThan(0.002);
+    expect(metrics.fallTime).toBeDefined();
+    expect(metrics.fallTime).toBeGreaterThan(0);
+    expect(metrics.fallTime).toBeLessThan(0.002);
+    expect(metrics.posWidth).toBeDefined();
+    expect(metrics.posWidth).toBeCloseTo(0.004, 2);
+  });
+
+  it("reconstruye curvas suaves mediante interpolacion sinc", () => {
+    const rawPoints = [
+      { x: 0, y: 0 },
+      { x: 20, y: 50 },
+      { x: 40, y: 100 },
+      { x: 60, y: 50 },
+      { x: 80, y: 0 },
+    ];
+
+    const interpolated = interpolateSincTrace(rawPoints, 20);
+    expect(interpolated.length).toBe(20);
+    expect(interpolated[0].x).toBe(0);
+    expect(interpolated[19].x).toBe(80);
+    // El punto medio debe estar cerca del pico
+    const midPoint = interpolated[Math.floor(interpolated.length / 2)];
+    expect(midPoint.y).toBeGreaterThan(20);
   });
 });

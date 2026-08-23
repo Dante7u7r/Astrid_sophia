@@ -109,4 +109,34 @@ describe("CurrentAnimationRenderer", () => {
     renderer.renderCurrentFlow(ctx, [wire], { "W1:I": 0.02 }, {}, visibleBounds, 1032, 2.5);
     expect(ctx.stroke).toHaveBeenCalled();
   });
+
+  it("cables inactivos (|I| < 0.1 µA) tienen 0 llamadas de dibujo (Smart Culling)", () => {
+    const renderer = new CurrentAnimationRenderer();
+    const ctx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      setLineDash: vi.fn(),
+      lineDashOffset: 0,
+      lineWidth: 1,
+      strokeStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+
+    const inactiveWire: WireInstance = {
+      id: "W_INACTIVE",
+      from: { componentId: "M1", pinIndex: 0 }, // Gate MOSFET
+      to: { componentId: "R2", pinIndex: 0 },
+      points: [{ x: 10, y: 10 }, { x: 50, y: 10 }],
+    };
+
+    const visibleBounds = { x: 0, y: 0, width: 1000, height: 1000 };
+
+    renderer.renderCurrentFlow(ctx, [inactiveWire], { "W_INACTIVE:I": 0.0 }, {}, visibleBounds, 1000);
+    renderer.renderCurrentFlow(ctx, [inactiveWire], { "W_INACTIVE:I": 1e-12 }, {}, visibleBounds, 1016);
+
+    expect(ctx.stroke).not.toHaveBeenCalled();
+  });
 });

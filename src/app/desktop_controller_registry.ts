@@ -117,6 +117,9 @@ export function createDesktopControllerRegistry(
     addLog: deps.addLog,
     requestAnimationFrame: deps.requestAnimationFrame,
     now: deps.now,
+    getSimulationRunner: () => simulationRunner,
+    getSimulationSettings: deps.getSimulationSettings,
+    setSimulationSettings: deps.setSimulationSettings,
   });
   const renderController = uiControllers.renderController;
   oscilloscopePanel = uiControllers.oscilloscopePanel;

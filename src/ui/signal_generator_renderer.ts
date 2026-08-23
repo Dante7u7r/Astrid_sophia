@@ -126,8 +126,6 @@ export function drawSignalGeneratorPreview(
 
   ctx.strokeStyle = "#38bdf8";
   ctx.lineWidth = 2.2;
-  ctx.shadowColor = "rgba(56, 189, 248, 0.6)";
-  ctx.shadowBlur = 8;
   ctx.beginPath();
 
   for (let i = 0; i <= pointsCount; i++) {
@@ -141,10 +139,6 @@ export function drawSignalGeneratorPreview(
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
-
-  // Reset de sombra para elementos HUD
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = "transparent";
 
   // 6. Guías de Tensión Pico (+Vmax y -Vmin)
   const yMax = centerY - (metrics.vmax / voltsPerDiv) * divHeight;

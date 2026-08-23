@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   decodeParallelBus,
   decodeUartProtocol,
+  decodeSpiProtocol,
+  decodeI2cProtocol,
+  findPatternTriggerMatch,
   evaluateLogicLevel,
   extractTransitions,
   findTriggerMatch,
@@ -135,5 +138,40 @@ describe("LogicAnalyzerModel", () => {
     expect(formatTimeDiv(10e-3)).toBe("10 ms/div");
     expect(formatTimeDiv(25e-6)).toBe("25 µs/div");
     expect(formatTimeDiv(100e-9)).toBe("100 ns/div");
+  });
+
+  it("detecta disparos por patrón binario de 8 canales (Pattern Triggering)", () => {
+    const ch0: LogicSample[] = [{ time: 0, val: 5 }, { time: 1, val: 0 }, { time: 2, val: 5 }];
+    const ch1: LogicSample[] = [{ time: 0, val: 0 }, { time: 1, val: 5 }, { time: 2, val: 5 }];
+    const channels = [ch0, ch1, [], [], [], [], [], []];
+
+    // Buscar patrón: CH0=1, CH1=1 (tiempo 2)
+    const matchIdx = findPatternTriggerMatch(channels, [1, 1, "X", "X", "X", "X", "X", "X"], ttlThreshold);
+    expect(matchIdx).toBe(2);
+  });
+
+  it("decodifica tramas serie síncronas SPI", () => {
+    const sck: LogicSample[] = [];
+    const mosi: LogicSample[] = [];
+    const miso: LogicSample[] = [];
+    const cs: LogicSample[] = [];
+
+    // Enviar byte 0xA5 (0b10100101)
+    const bits = [1, 0, 1, 0, 0, 1, 0, 1];
+    let t = 0;
+    for (const b of bits) {
+      cs.push({ time: t, val: 0.0 }); // CS bajo
+      mosi.push({ time: t, val: b === 1 ? 3.3 : 0.0 });
+      miso.push({ time: t, val: 0.0 });
+      sck.push({ time: t, val: 0.0 });
+      t += 1e-6;
+      sck.push({ time: t, val: 3.3 }); // Rising edge
+      t += 1e-6;
+    }
+
+    const packets = decodeSpiProtocol(sck, mosi, miso, cs, ttlThreshold);
+    expect(packets.length).toBe(1);
+    expect(packets[0].mosiByte).toBe(0xA5);
+    expect(packets[0].label).toContain("MOSI: 0xA5");
   });
 });

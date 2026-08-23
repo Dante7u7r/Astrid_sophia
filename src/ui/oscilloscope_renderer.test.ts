@@ -6,9 +6,12 @@ import {
   drawPvtTraces,
   drawSplitTyReticle,
   drawOscilloscopeCursors,
+  drawWaveformHistogram,
+  drawMaskOverlay,
   type OscilloscopeChannelView,
 } from "./oscilloscope_renderer";
 import type { AcSweepResult, PvtTrace, TimeStepResult } from "./oscilloscope_panel";
+import type { WaveformHistogram, MaskToleranceDefinition, MaskTestResult } from "./oscilloscope_model";
 
 function createMockContext(): CanvasRenderingContext2D {
   return {
@@ -205,5 +208,127 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
     expect(ctx.fillText).toHaveBeenCalledWith("v1", expect.any(Number), expect.any(Number));
     expect(ctx.fillText).toHaveBeenCalledWith("v2", expect.any(Number), expect.any(Number));
     expect(ctx.roundRect).toHaveBeenCalled();
+  });
+
+  it("renderiza etiqueta de canal origen cuando se especifica sourceLabel", () => {
+    const ctx = createMockContext();
+    drawOscilloscopeCursors(
+      ctx,
+      800,
+      400,
+      50,
+      0.2,
+      0.7,
+      1.0,
+      3.5,
+      5.0,
+      0,
+      0.001,
+      undefined,
+      "ch2",
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("[CH2]"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+  });
+});
+
+describe("OscilloscopeRenderer — drawWaveformHistogram", () => {
+  it("renderiza barras de distribucion y estadisticas de media y desviacion", () => {
+    const ctx = createMockContext();
+    const histogram: WaveformHistogram = {
+      binCenters: [0, 1, 2, 3, 4],
+      counts: [10, 25, 50, 25, 10],
+      probabilities: [0.08, 0.21, 0.42, 0.21, 0.08],
+      minV: 0,
+      maxV: 4,
+      mean: 2.0,
+      stdDev: 0.85,
+      median: 2.0,
+      totalSamples: 120,
+    };
+
+    drawWaveformHistogram(ctx, 800, 400, histogram, "#FACC15");
+    expect(ctx.save).toHaveBeenCalled();
+    expect(ctx.restore).toHaveBeenCalled();
+    expect(ctx.fillRect).toHaveBeenCalled();
+    expect(ctx.strokeRect).toHaveBeenCalled();
+    expect(ctx.fillText).toHaveBeenCalledWith("µ: 2.00V", expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith("σ: 0.85V", expect.any(Number), expect.any(Number));
+  });
+
+  it("omite renderizado si el histograma esta vacio", () => {
+    const ctx = createMockContext();
+    const emptyHist: WaveformHistogram = {
+      binCenters: [],
+      counts: [],
+      probabilities: [],
+      minV: 0,
+      maxV: 0,
+      mean: 0,
+      stdDev: 0,
+      median: 0,
+      totalSamples: 0,
+    };
+    drawWaveformHistogram(ctx, 800, 400, emptyHist);
+    expect(ctx.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("OscilloscopeRenderer — drawMaskOverlay", () => {
+  it("renderiza corredor de mascara y badges de PASS", () => {
+    const ctx = createMockContext();
+    const results: TimeStepResult[] = [
+      { time: 0, nodeVoltages: { "out": 5.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "out": 5.0 }, branchCurrents: {} },
+      { time: 0.002, nodeVoltages: { "out": 5.0 }, branchCurrents: {} },
+    ];
+    const mask: MaskToleranceDefinition = {
+      centerPoints: [{ time: 0, voltage: 5.0 }],
+      deltaV: 0.5,
+    };
+    const violations: MaskTestResult = {
+      passed: true,
+      totalSamples: 3,
+      violationCount: 0,
+      violationIndices: [],
+      violationPoints: [],
+    };
+
+    drawMaskOverlay(ctx, 800, 400, results, "out", mask, 1.0, 0, 0.001, 0, violations);
+    expect(ctx.save).toHaveBeenCalled();
+    expect(ctx.restore).toHaveBeenCalled();
+    expect(ctx.fill).toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalled();
+    expect(ctx.fillText).toHaveBeenCalledWith("MASK: PASS", expect.any(Number), expect.any(Number));
+  });
+
+  it("renderiza circulos de error y badge FAIL ante violaciones de mascara", () => {
+    const ctx = createMockContext();
+    const results: TimeStepResult[] = [
+      { time: 0, nodeVoltages: { "out": 5.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "out": 6.5 }, branchCurrents: {} },
+    ];
+    const mask: MaskToleranceDefinition = {
+      centerPoints: [{ time: 0, voltage: 5.0 }],
+      deltaV: 0.5,
+    };
+    const violations: MaskTestResult = {
+      passed: false,
+      totalSamples: 2,
+      violationCount: 1,
+      violationIndices: [1],
+      violationPoints: [{ time: 0.001, voltage: 6.5, expected: 5.0 }],
+    };
+
+    drawMaskOverlay(ctx, 800, 400, results, "out", mask, 1.0, 0, 0.001, 0, violations);
+    expect(ctx.arc).toHaveBeenCalled();
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("MASK: FAIL (1 err)"),
+      expect.any(Number),
+      expect.any(Number),
+    );
   });
 });

@@ -1,7 +1,8 @@
 import type { TimeStepResult } from "../ui/oscilloscope_panel";
+export { TransientRingBuffer, DEFAULT_RING_CAPACITY } from "./transient_ring_buffer";
 
-export const MAX_LIVE_TRANSIENT_SAMPLES = 60_000;
-const LIVE_HISTORY_TRIM_CHUNK = 6_000;
+export const MAX_LIVE_TRANSIENT_SAMPLES = 150_000;
+const LIVE_HISTORY_TRIM_CHUNK = 15_000;
 
 export function appendLiveTransientSample(
   results: TimeStepResult[],

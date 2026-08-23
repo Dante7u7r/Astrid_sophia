@@ -10,15 +10,21 @@ import type { InstrumentCallbacks } from "./instrument_callbacks";
 import { ensureCanvasDpr } from "./canvas_dpr";
 import {
   decodeParallelBus,
+  decodeI2cProtocol,
+  decodeSpiProtocol,
+  decodeUartProtocol,
   findTriggerMatch,
   formatTimeDiv,
   LOGIC_FAMILIES,
+  type BusPacket,
   type ChannelTriggerConfig,
   type LogicSample,
   type LogicThresholdConfig,
   type TriggerEdge,
 } from "./logic_analyzer_model";
 import { drawLogicAnalyzer, type LogicRendererChannel } from "./logic_analyzer_renderer";
+
+export type ProtocolDecoderMode = "parallel" | "i2c" | "spi" | "uart" | "none";
 
 export class LogicAnalyzerInstrument {
   private container: HTMLElement;
@@ -36,7 +42,7 @@ export class LogicAnalyzerInstrument {
   // Configuración de Umbrales y Disparo
   private selectedThreshold: LogicThresholdConfig = LOGIC_FAMILIES[0]; // TTL 5V por defecto
   private triggerConfig: ChannelTriggerConfig = { channelIndex: 0, edge: "none" };
-  private isBusEnabled = true;
+  private decoderMode: ProtocolDecoderMode = "parallel";
   private isCursorsEnabled = false;
 
   // Ventana de Tiempo / Zoom y Pan
@@ -124,9 +130,13 @@ export class LogicAnalyzerInstrument {
           <!-- Barra Superior: Controles de Base de Tiempo, Bus, Cursores y Exportación -->
           <div class="logic-top-bar">
             <div style="display: flex; gap: 4px; align-items: center;">
-              <button id="logic-btn-bus" type="button" class="logic-btn active" title="Alternar decodificación de bus paralelo">
-                🔢 Bus Hex: ON
-              </button>
+              <select id="logic-decoder-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px; cursor: pointer;" title="Decodificador de Protocolo">
+                <option value="parallel" selected>Decodificador: Bus Hex (D0..D7)</option>
+                <option value="i2c">Decodificador: I2C (D0:SCL, D1:SDA)</option>
+                <option value="spi">Decodificador: SPI (D0:SCK, D1:MOSI, D2:MISO, D3:CS)</option>
+                <option value="uart">Decodificador: UART (D0:RX, 9600 Bd)</option>
+                <option value="none">Decodificador: Ninguno</option>
+              </select>
               <button id="logic-btn-cursors" type="button" class="logic-btn" title="Alternar cursores temporales T1 y T2">
                 📏 Cursores: OFF
               </button>
@@ -184,12 +194,10 @@ export class LogicAnalyzerInstrument {
       }
     });
 
-    // 2. Botón Bus Hex ON/OFF
-    const busBtn = this.container.querySelector("#logic-btn-bus") as HTMLButtonElement | null;
-    busBtn?.addEventListener("click", () => {
-      this.isBusEnabled = !this.isBusEnabled;
-      busBtn.classList.toggle("active", this.isBusEnabled);
-      busBtn.textContent = this.isBusEnabled ? "🔢 Bus Hex: ON" : "🔢 Bus Hex: OFF";
+    // 2. Selector de Decodificador de Protocolo
+    const decoderSelect = this.container.querySelector("#logic-decoder-select") as HTMLSelectElement | null;
+    decoderSelect?.addEventListener("change", () => {
+      this.decoderMode = (decoderSelect.value as ProtocolDecoderMode) || "parallel";
       this.drawWaveforms();
     });
 
@@ -387,10 +395,45 @@ export class LogicAnalyzerInstrument {
       }
     }
 
-    // Decodificación de Bus
-    const busPackets = this.isBusEnabled
-      ? decodeParallelBus(channelsHistory, this.channelEnabled, this.selectedThreshold, timeBounds)
-      : [];
+    // Decodificación de Protocolo Seleccionado
+    let busPackets: BusPacket[] = [];
+    if (this.decoderMode === "parallel") {
+      busPackets = decodeParallelBus(channelsHistory, this.channelEnabled, this.selectedThreshold, timeBounds);
+    } else if (this.decoderMode === "i2c") {
+      const scl = channelsHistory[0] || [];
+      const sda = channelsHistory[1] || [];
+      const i2cPackets = decodeI2cProtocol(scl, sda, this.selectedThreshold);
+      busPackets = i2cPackets.map((p) => ({
+        startTime: p.startTime,
+        endTime: p.endTime,
+        value: p.value ?? 0,
+        hasUndefined: false,
+        hexLabel: p.label,
+      }));
+    } else if (this.decoderMode === "spi") {
+      const sck = channelsHistory[0] || [];
+      const mosi = channelsHistory[1] || [];
+      const miso = channelsHistory[2] || [];
+      const cs = channelsHistory[3] || [];
+      const spiPackets = decodeSpiProtocol(sck, mosi, miso, cs, this.selectedThreshold);
+      busPackets = spiPackets.map((p) => ({
+        startTime: p.startTime,
+        endTime: p.endTime,
+        value: p.mosiByte ?? p.misoByte ?? 0,
+        hasUndefined: false,
+        hexLabel: p.label,
+      }));
+    } else if (this.decoderMode === "uart") {
+      const rx = channelsHistory[0] || [];
+      const uartPackets = decodeUartProtocol(rx, 9600, this.selectedThreshold);
+      busPackets = uartPackets.map((p) => ({
+        startTime: p.startTime,
+        endTime: p.endTime,
+        value: p.byte,
+        hasUndefined: Boolean(p.isParityError),
+        hexLabel: `0x${p.byte.toString(16).toUpperCase().padStart(2, "0")} ${p.charLabel}`,
+      }));
+    }
 
     drawLogicAnalyzer(this.ctx, {
       width,
@@ -399,7 +442,7 @@ export class LogicAnalyzerInstrument {
       threshold: this.selectedThreshold,
       timeWindow: timeBounds,
       triggerTime,
-      isBusEnabled: this.isBusEnabled,
+      isBusEnabled: this.decoderMode !== "none",
       busPackets,
       cursors: this.isCursorsEnabled ? { cursorT1: this.cursorT1, cursorT2: this.cursorT2 } : undefined,
     });

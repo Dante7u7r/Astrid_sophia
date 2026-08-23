@@ -53,8 +53,9 @@ describe("LogicAnalyzerInstrument UI Component", () => {
     const channelSelects = container.querySelectorAll(".logic-channel-select");
     expect(channelSelects.length).toBe(8);
 
-    const busBtn = container.querySelector("#logic-btn-bus");
-    expect(busBtn).not.toBeNull();
+    const decoderSelect = container.querySelector("#logic-decoder-select") as HTMLSelectElement;
+    expect(decoderSelect).not.toBeNull();
+    expect(decoderSelect.value).toBe("parallel");
   });
 
   it("permite registrar muestras de nodos y calcular rango temporal", () => {
@@ -67,14 +68,15 @@ describe("LogicAnalyzerInstrument UI Component", () => {
     expect(statusEl?.textContent).toContain("Muestras:");
   });
 
-  it("alterna el estado del Bus Hex y los Cursores al pulsar sus botones", () => {
+  it("alterna el estado del decodificador de protocolo y los Cursores", () => {
     instrument = new LogicAnalyzerInstrument(container, orchestrator, callbacks);
 
-    const busBtn = container.querySelector("#logic-btn-bus") as HTMLButtonElement;
-    expect(busBtn.textContent).toContain("Bus Hex: ON");
+    const decoderSelect = container.querySelector("#logic-decoder-select") as HTMLSelectElement;
+    expect(decoderSelect.value).toBe("parallel");
 
-    busBtn.click();
-    expect(busBtn.textContent).toContain("Bus Hex: OFF");
+    decoderSelect.value = "i2c";
+    decoderSelect.dispatchEvent(new Event("change"));
+    expect(decoderSelect.value).toBe("i2c");
 
     const cursorsBtn = container.querySelector("#logic-btn-cursors") as HTMLButtonElement;
     expect(cursorsBtn.textContent).toContain("Cursores: OFF");

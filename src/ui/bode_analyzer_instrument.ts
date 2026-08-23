@@ -14,13 +14,13 @@ import {
   processAcSweepData,
   type BodeDataSet,
 } from "./bode_plot_model";
-import { drawBodePlot } from "./bode_plot_renderer";
+import { drawBodePlot, drawNyquistPlot } from "./bode_plot_renderer";
 import { drawSensitivityPlot } from "./sensitivity_plot_renderer";
 import { drawPoleZeroPlot } from "./pole_zero_renderer";
 import type { SensitivityAnalysisResult, StabilityAnalysisResult } from "../simulation/tauri_commands";
 import type { AcSweepResult } from "./oscilloscope_panel";
 
-export type BodeViewMode = "bode" | "sens" | "polezero";
+export type BodeViewMode = "bode" | "nyquist" | "sens" | "polezero";
 
 export class BodeAnalyzerInstrument {
   private container: HTMLElement;
@@ -75,6 +75,7 @@ export class BodeAnalyzerInstrument {
             <label class="rack-label" style="font-size: 0.58rem;">Modo de Visualización</label>
             <div style="display: flex; gap: 2px;">
               <button id="bode-btn-mode-bode" type="button" class="bode-btn active" style="flex: 1; justify-content: center;">Bode</button>
+              <button id="bode-btn-mode-nyquist" type="button" class="bode-btn" style="flex: 1; justify-content: center;">Nyquist</button>
               <button id="bode-btn-mode-sens" type="button" class="bode-btn" style="flex: 1; justify-content: center;">Sensib.</button>
               <button id="bode-btn-mode-pz" type="button" class="bode-btn" style="flex: 1; justify-content: center;">Polos/S</button>
             </div>
@@ -169,28 +170,39 @@ export class BodeAnalyzerInstrument {
   private bindEvents(): void {
     // Selector de Modo de Visualización
     const btnBode = this.container.querySelector("#bode-btn-mode-bode");
+    const btnNyquist = this.container.querySelector("#bode-btn-mode-nyquist");
     const btnSens = this.container.querySelector("#bode-btn-mode-sens");
     const btnPz = this.container.querySelector("#bode-btn-mode-pz");
 
-    btnBode?.addEventListener("click", () => {
-      this.setViewMode("bode");
-      btnBode.classList.add("active");
+    const clearActive = () => {
+      btnBode?.classList.remove("active");
+      btnNyquist?.classList.remove("active");
       btnSens?.classList.remove("active");
       btnPz?.classList.remove("active");
+    };
+
+    btnBode?.addEventListener("click", () => {
+      this.setViewMode("bode");
+      clearActive();
+      btnBode.classList.add("active");
+    });
+
+    btnNyquist?.addEventListener("click", () => {
+      this.setViewMode("nyquist");
+      clearActive();
+      btnNyquist.classList.add("active");
     });
 
     btnSens?.addEventListener("click", () => {
       this.setViewMode("sens");
+      clearActive();
       btnSens.classList.add("active");
-      btnBode?.classList.remove("active");
-      btnPz?.classList.remove("active");
     });
 
     btnPz?.addEventListener("click", () => {
       this.setViewMode("polezero");
+      clearActive();
       btnPz.classList.add("active");
-      btnBode?.classList.remove("active");
-      btnSens?.classList.remove("active");
     });
 
     // Inputs de Frecuencia
@@ -321,6 +333,8 @@ export class BodeAnalyzerInstrument {
         cursorF1: this.cursorF1,
         cursorF2: this.cursorF2,
       });
+    } else if (this.viewMode === "nyquist") {
+      drawNyquistPlot(this.ctx, width, height, this.bodeData);
     } else if (this.viewMode === "sens") {
       drawSensitivityPlot(this.ctx, width, height, this.sensResult);
     } else if (this.viewMode === "polezero") {

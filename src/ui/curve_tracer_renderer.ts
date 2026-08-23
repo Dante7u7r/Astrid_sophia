@@ -148,14 +148,12 @@ export function drawCurveTracer(
   ctx.textBaseline = "middle";
   ctx.fillText(`DISPOSITIVO: ${result.deviceName} | MODO: ${result.mode.toUpperCase()}`, leftMargin, topMargin / 2);
 
-  // 4. Trazado de Familia de Curvas
+  // 4. Trazado de Familia de Curvas (vectorial nítido)
   for (const trace of result.traces) {
     if (trace.points.length < 2) continue;
 
     ctx.strokeStyle = trace.color;
     ctx.lineWidth = 2.0;
-    ctx.shadowColor = trace.color;
-    ctx.shadowBlur = 4;
     ctx.beginPath();
 
     for (let ptIdx = 0; ptIdx < trace.points.length; ptIdx++) {
@@ -167,9 +165,6 @@ export function drawCurveTracer(
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
     // Etiqueta del paso en el extremo final de la curva
     if (result.traces.length > 1) {

@@ -117,8 +117,6 @@ export function drawEyeDiagram(
 
   ctx.strokeStyle = scheme.stroke;
   ctx.lineWidth = 1.4;
-  ctx.shadowColor = scheme.glow;
-  ctx.shadowBlur = 2;
 
   for (const slice of slices) {
     const pts = slice.points;
@@ -137,7 +135,6 @@ export function drawEyeDiagram(
     }
     ctx.stroke();
   }
-  ctx.shadowBlur = 0;
 
   // 5. Renderizar Máscara de Ojo (Eye Mask Testing)
   if (showMask && mask) {

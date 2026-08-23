@@ -25,13 +25,67 @@ export const ResistorDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
+
+    // Cálculo pedagógico de disipación térmica en tiempo real (P = V^2 / R)
+    const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vDiff = Math.abs(v0 - v1);
+    const rVal = Math.max(Number(comp.value) || 1000, 1e-6);
+    const power = (vDiff * vDiff) / rVal;
+    const powerRating = 0.25; // 1/4W potencia nominal estándar
+    const stress = power / powerRating;
+
+    // 1. Resplandor / cuerpo térmico si hay calentamiento perceptible
+    if (stress > 0.4) {
+      ctx.save();
+      if (stress > 3.0) {
+        // Componente quemado / carbonizado por sobrecorriente severa
+        ctx.fillStyle = "rgba(39, 39, 42, 0.92)";
+        ctx.fillRect(-18, -10, 36, 20);
+      } else if (stress > 1.0) {
+        // Incandescencia al rojo vivo (Sobrecarga)
+        const alpha = Math.min(0.85, 0.25 + (stress - 1.0) * 0.3);
+        ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+        ctx.fillRect(-18, -9, 36, 18);
+      } else {
+        // Calentamiento moderado (Ámbar)
+        const alpha = Math.min(0.4, (stress - 0.4) * 0.6);
+        ctx.fillStyle = `rgba(245, 158, 11, ${alpha})`;
+        ctx.fillRect(-18, -8, 36, 16);
+      }
+      ctx.restore();
+    }
+
+    // 2. Trazo en zigzag
+    ctx.beginPath();
     ctx.moveTo(-20, 0);
     ctx.lineTo(-15, -8);
     ctx.lineTo(-5, 8);
     ctx.lineTo(5, -8);
     ctx.lineTo(15, 8);
     ctx.lineTo(20, 0);
-    ctx.stroke();
+
+    if (stress > 3.0) {
+      // Color quemado con alerta
+      ctx.strokeStyle = "#71717A";
+      ctx.stroke();
+
+      ctx.save();
+      ctx.fillStyle = "#EF4444";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      ctx.fillText("🔥 SOBREPOTENCIA", -36, -13);
+      ctx.restore();
+    } else if (stress > 1.0) {
+      // Al rojo vivo
+      ctx.strokeStyle = "#EF4444";
+      ctx.stroke();
+    } else if (stress > 0.4) {
+      // Ámbar tibio
+      ctx.strokeStyle = "#F59E0B";
+      ctx.stroke();
+    } else {
+      ctx.stroke();
+    }
   },
   evaluateLiveBehavior: (pinVoltages, comp) => {
     const v0 = pinVoltages[0];
@@ -71,9 +125,18 @@ export const CapacitorDefinition: ComponentDefinition = {
       const intensity = Math.min(1.0, absV / 10.0);
       ctx.save();
       ctx.fillStyle = vDiff > 0
-        ? `rgba(102, 252, 241, ${0.15 + intensity * 0.35})`
+        ? `rgba(14, 165, 233, ${0.15 + intensity * 0.35})`
         : `rgba(168, 85, 247, ${0.15 + intensity * 0.35})`;
       ctx.fillRect(-5, -13, 10, 26);
+
+      // Polaridad (+) en la placa de mayor potencial
+      ctx.fillStyle = vDiff > 0 ? "#38BDF8" : "#C084FC";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      if (vDiff > 0) {
+        ctx.fillText("+", -13, -7);
+      } else {
+        ctx.fillText("+", 8, -7);
+      }
       ctx.restore();
     }
   },
@@ -268,9 +331,15 @@ export const ThermistorDefinition: ComponentDefinition = {
     ctx.lineTo(22, -12);
     ctx.stroke();
 
-    ctx.fillStyle = "currentColor";
-    ctx.font = "bold 10px 'Inter', sans-serif";
-    ctx.fillText("-t°", 15, -13);
+    const tempC = Math.round(comp.temperatureCelsius ?? 25);
+    const tempColor = tempC > 50 ? "#EF4444" : (tempC < 15 ? "#38BDF8" : "#F59E0B");
+
+    ctx.save();
+    ctx.fillStyle = tempColor;
+    ctx.font = "bold 9px 'Inter', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`${tempC}°C`, 0, -14);
+    ctx.restore();
   },
   evaluateLiveBehavior: (pinVoltages, comp) => {
     const v0 = pinVoltages[0] ?? 0;
@@ -369,3 +438,84 @@ export const DmmDefinition: ComponentDefinition = {
     ctx.fillText(`DMM [${mode}]`, 0, 5);
   },
 };
+
+export const FuseDefinition: ComponentDefinition = {
+  type: "fuse",
+  name: "Fusible de Protección",
+  category: "pasivos",
+  prefix: "F",
+  defaultProperties: { value: 1.0 },
+  halfExtents: { halfW: 40, halfH: 20 },
+  hasStandardLeads: true,
+  getPins: () => STANDARD_TWO_PINS,
+  render: (ctx, comp, state, options) => {
+    if (options.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+
+    const iBranch = Math.abs(
+      options.branchCurrents?.[`${comp.id}:I`] ??
+      options.branchCurrents?.[`${comp.id}:0`] ??
+      0,
+    );
+    const iRating = Math.max(Number(comp.value) || 1.0, 1e-4);
+    const isBlown = comp.isBlown || (iBranch > iRating * 1.25);
+    if (isBlown) {
+      comp.isBlown = true;
+    }
+
+    // 1. Cuerpo cilíndrico de vidrio
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.strokeStyle = state.color;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.rect(-20, -9, 40, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    // 2. Tapas metálicas de extremo
+    ctx.fillStyle = "#94A3B8";
+    ctx.fillRect(-20, -9, 6, 18);
+    ctx.fillRect(14, -9, 6, 18);
+
+    // 3. Filamento interno
+    ctx.beginPath();
+    if (isBlown) {
+      // Filamento fundido / roto
+      ctx.moveTo(-14, 0);
+      ctx.lineTo(-4, -4);
+      ctx.moveTo(4, 4);
+      ctx.lineTo(14, 0);
+      ctx.strokeStyle = "#EF4444";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.fillStyle = "#EF4444";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("🔥 FUNDIDO", 0, -13);
+      ctx.restore();
+    } else {
+      // Filamento intacto en S
+      ctx.moveTo(-14, 0);
+      ctx.quadraticCurveTo(-4, -6, 0, 0);
+      ctx.quadraticCurveTo(4, 6, 14, 0);
+      const stress = iBranch / iRating;
+      ctx.strokeStyle = stress > 0.8 ? "#F59E0B" : "#E2E8F0";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const v0 = pinVoltages[0] ?? 0;
+    const v1 = pinVoltages[1] ?? 0;
+    const rVal = comp.isBlown ? 1e9 : 0.01;
+    const i = (v0 - v1) / rVal;
+    return {
+      branchCurrents: { 0: i, 1: -i },
+    };
+  },
+};
+

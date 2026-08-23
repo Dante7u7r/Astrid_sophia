@@ -13,6 +13,16 @@ export interface BodePoint {
   readonly magLinear: number;  // Magnitud lineal en V o V/V
 }
 
+export type StabilityQuality = "stable" | "marginal" | "unstable";
+
+export interface NyquistPoint {
+  readonly freq: number;
+  readonly real: number; // Re(G(jω))
+  readonly imag: number; // Im(G(jω))
+  readonly magLinear: number;
+  readonly phaseDeg: number;
+}
+
 export interface BodeAnalysisMetrics {
   readonly dcGainDb: number;            // Ganancia en baja frecuencia (DC) en dB
   readonly maxGainDb: number;           // Pico máximo de ganancia en dB
@@ -23,10 +33,12 @@ export interface BodeAnalysisMetrics {
   readonly phaseCrossoverFreq: number | null;// Frecuencia donde la fase cruza -180° (Hz)
   readonly gainMarginDb: number | null;      // Margen de ganancia: -magDb(f_-180°) en dB
   readonly isStable: boolean;                // Estabilidad con realimentación unitaria (PM > 0)
+  readonly stabilityQuality: StabilityQuality; // Calidad del diseño (estable >=45°, marginal, inestable)
 }
 
 export interface BodeDataSet {
   readonly points: readonly BodePoint[];
+  readonly nyquistPoints: readonly NyquistPoint[];
   readonly metrics: BodeAnalysisMetrics;
 }
 
@@ -57,6 +69,7 @@ export function processAcSweepData(
   if (frequencies.length === 0 || amplitudes.length === 0) {
     return {
       points: [],
+      nyquistPoints: [],
       metrics: {
         dcGainDb: 0,
         maxGainDb: 0,
@@ -67,6 +80,7 @@ export function processAcSweepData(
         phaseCrossoverFreq: null,
         gainMarginDb: null,
         isStable: true,
+        stabilityQuality: "stable",
       },
     };
   }
@@ -146,10 +160,35 @@ export function processAcSweepData(
     }
   }
 
+  const nyquistPoints: NyquistPoint[] = [];
+  for (const pt of points) {
+    const phaseRad = (pt.phaseDeg * Math.PI) / 180;
+    const real = pt.magLinear * Math.cos(phaseRad);
+    const imag = pt.magLinear * Math.sin(phaseRad);
+    nyquistPoints.push({
+      freq: pt.freq,
+      real,
+      imag,
+      magLinear: pt.magLinear,
+      phaseDeg: pt.phaseDeg,
+    });
+  }
+
   const isStable = phaseMarginDeg === null || phaseMarginDeg > 0;
+  let stabilityQuality: StabilityQuality = "stable";
+  if (phaseMarginDeg !== null) {
+    if (phaseMarginDeg <= 0 || (gainMarginDb !== null && gainMarginDb <= 0)) {
+      stabilityQuality = "unstable";
+    } else if (phaseMarginDeg < 45 || (gainMarginDb !== null && gainMarginDb < 6)) {
+      stabilityQuality = "marginal";
+    } else {
+      stabilityQuality = "stable";
+    }
+  }
 
   return {
     points,
+    nyquistPoints,
     metrics: {
       dcGainDb,
       maxGainDb,
@@ -160,6 +199,7 @@ export function processAcSweepData(
       phaseCrossoverFreq,
       gainMarginDb,
       isStable,
+      stabilityQuality,
     },
   };
 }

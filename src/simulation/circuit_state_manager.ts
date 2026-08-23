@@ -78,6 +78,14 @@ export interface VoltageSnapshot {
 // sin envoltorios redundantes.
 // ==========================================================================
 
+export type CircuitStateEventType =
+  | "voltages-updated"
+  | "netlist-mapped"
+  | "reset"
+  | "actuators-synced";
+
+export type CircuitStateListener = () => void;
+
 export class CircuitStateManager {
   // --- Sub-objetos de soporte (expuestos para respetar sus APIs nativas) ---
   readonly actuatorHistory: ActuatorHistoryManager;
@@ -87,10 +95,44 @@ export class CircuitStateManager {
   private _liveVoltages: Record<string, number> = {};
   private _liveCurrents: Record<string, number> = {};
   private _pinToNodeMap: Record<string, string> = {};
+  private readonly _listeners = new Map<CircuitStateEventType, Set<CircuitStateListener>>();
 
   constructor() {
     this.actuatorHistory = new ActuatorHistoryManager();
     this.audioOrchestrator = new AudioOrchestrator();
+  }
+
+  // ========================================================================
+  // REACTIVIDAD — Suscripción tipada a eventos de estado
+  // ========================================================================
+
+  /**
+   * Suscribe un callback a cambios de estado del circuito.
+   * Retorna una función para cancelar la suscripción.
+   */
+  subscribe(event: CircuitStateEventType, listener: CircuitStateListener): () => void {
+    let set = this._listeners.get(event);
+    if (!set) {
+      set = new Set();
+      this._listeners.set(event, set);
+    }
+    set.add(listener);
+    return () => {
+      set?.delete(listener);
+    };
+  }
+
+  private emit(event: CircuitStateEventType): void {
+    const set = this._listeners.get(event);
+    if (set) {
+      for (const listener of set) {
+        try {
+          listener();
+        } catch (err) {
+          console.error(`[CircuitStateManager] Error en listener de ${event}:`, err);
+        }
+      }
+    }
   }
 
   // ========================================================================
@@ -132,23 +174,27 @@ export class CircuitStateManager {
     // al frame subyacente que puede ser reutilizado por el runner.
     this._liveVoltages = { ...frame.nodeVoltages };
     this._liveCurrents = { ...frame.branchCurrents };
+    this.emit("voltages-updated");
   }
 
   /** Reemplaza el mapa de voltajes y corrientes desde un snapshot plano */
   setVoltagesFromSnapshot(nodeVoltages: Record<string, number>, branchCurrents: Record<string, number> = {}): void {
     this._liveVoltages = { ...nodeVoltages };
     this._liveCurrents = { ...branchCurrents };
+    this.emit("voltages-updated");
   }
 
   /** Reemplaza el mapa pin→nodo (se produce en cada extracción de netlist) */
   setPinToNodeMap(map: Record<string, string>): void {
     this._pinToNodeMap = { ...map };
+    this.emit("netlist-mapped");
   }
 
   /** Limpia el mapa de voltajes y corrientes (p. ej. al vaciar el lienzo) */
   clearVoltages(): void {
     this._liveVoltages = {};
     this._liveCurrents = {};
+    this.emit("voltages-updated");
   }
 
   /** Reset completo: voltajes, corrientes, mapa de pines, historial de actuadores y audio */
@@ -158,6 +204,7 @@ export class CircuitStateManager {
     this._pinToNodeMap = {};
     this.actuatorHistory.clear();
     this.audioOrchestrator.stopAll();
+    this.emit("reset");
   }
 
   /**
@@ -193,6 +240,7 @@ export class CircuitStateManager {
     this._pinToNodeMap = {};
     this.actuatorHistory.clear();
     this.audioOrchestrator.stopAll();
+    this.emit("reset");
 
     // 4. Limpiar el netlist extraído vaciando componentes y cables del orchestrator
     if (orchestrator) {
@@ -339,6 +387,7 @@ export class CircuitStateManager {
     }
 
     this._liveCurrents = branchCurrents;
+    this.emit("actuators-synced");
   }
 }
 

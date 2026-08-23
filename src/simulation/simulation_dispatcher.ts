@@ -204,7 +204,7 @@ export function runElectricalRuleCheck(
 export interface DispatchConfig {
   readonly simSettings: Readonly<
     Pick<SimulationSettings, "dt">
-    & Partial<Pick<SimulationSettings, "tolerance" | "maxIterations" | "enableExperimentalPhysics" | "disablePacing">>
+    & Partial<Pick<SimulationSettings, "tolerance" | "maxIterations" | "enableExperimentalPhysics" | "disablePacing" | "speedMultiplier">>
   >;
   readonly transientDuration: number;
   readonly simulationOwnerId?: string;
@@ -289,6 +289,7 @@ export async function dispatchSimulation(
           tolerance,
           maxIterations,
           disablePacing: config.simSettings.disablePacing ?? false,
+          speedMultiplier: config.simSettings.speedMultiplier ?? 1.0,
         };
         await config.simulationRunner.startInteractiveTransient(
           netlist,

@@ -7,6 +7,7 @@ import type { ComponentDefinition } from "../types";
 import {
   CapacitorDefinition,
   DmmDefinition,
+  FuseDefinition,
   GroundDefinition,
   InductorDefinition,
   LdrDefinition,
@@ -26,6 +27,8 @@ import {
   PjfDefinition,
   PmosDefinition,
   PnpDefinition,
+  SchottkyDiodeDefinition,
+  ZenerDiodeDefinition,
   Bsim3NmosDefinition,
   Bsim3PmosDefinition,
   Bsim4NmosDefinition,
@@ -81,12 +84,15 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   PotentiometerDefinition,
   LdrDefinition,
   ThermistorDefinition,
+  FuseDefinition,
   GroundDefinition,
   TransformerDefinition,
   DmmDefinition,
 
   // Semiconductores
   DiodeDefinition,
+  ZenerDiodeDefinition,
+  SchottkyDiodeDefinition,
   LedDefinition,
   NmosDefinition,
   PmosDefinition,
