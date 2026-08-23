@@ -813,8 +813,13 @@ export function attachCanvasDrop(
     }
   };
 
+  const onDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+  };
+
   canvasViewport.addEventListener("dragover", onDragOver);
   canvasViewport.addEventListener("drop", onDrop);
+  canvasViewport.addEventListener("dragenter", onDragEnter);
 
   const paletteCleanups: Array<() => void> = [];
   const toolboxCards = document.querySelectorAll<HTMLElement>(".component-card");
@@ -984,6 +989,7 @@ export function attachCanvasDrop(
   return () => {
     canvasViewport.removeEventListener("dragover", onDragOver);
     canvasViewport.removeEventListener("drop", onDrop);
+    canvasViewport.removeEventListener("dragenter", onDragEnter);
     paletteCleanups.forEach((cleanup) => cleanup());
   };
 }
@@ -1006,6 +1012,15 @@ function attachProbePointerDrag(
   let startY = 0;
   let dragging = false;
   let ghost: HTMLElement | null = null;
+
+  element.setAttribute("draggable", "false");
+  element.style.userSelect = "none";
+  element.style.touchAction = "none";
+
+  const onDragStart = (e: DragEvent) => {
+    e.preventDefault();
+  };
+  element.addEventListener("dragstart", onDragStart);
 
   const probeColors: Record<string, { color: string; bg: string }> = {
     CH1: { color: "#FACC15", bg: "rgba(250, 204, 21, 0.15)" },
@@ -1079,6 +1094,11 @@ function attachProbePointerDrag(
     pointerId = event.pointerId;
     startX = event.clientX;
     startY = event.clientY;
+    try {
+      (event.currentTarget as HTMLElement)?.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Ignorar fallo de captura en mocks
+    }
     document.addEventListener("pointermove", onPointerMove, { passive: false });
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("pointercancel", onPointerCancel);
@@ -1121,6 +1141,7 @@ function attachProbePointerDrag(
 
   element.addEventListener("pointerdown", onPointerDown);
   return () => {
+    element.removeEventListener("dragstart", onDragStart);
     element.removeEventListener("pointerdown", onPointerDown);
     resetDrag();
   };

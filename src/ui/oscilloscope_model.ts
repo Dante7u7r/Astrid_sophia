@@ -58,7 +58,7 @@ function findVisibleEndIndex(
   return low;
 }
 
-function buildMinMaxTrace(
+function buildLttbTrace(
   results: readonly TimeStepResult[],
   nodeId: string,
   startIndex: number,
@@ -67,39 +67,57 @@ function buildMinMaxTrace(
   toPoint: (sample: TimeStepResult) => TyTracePoint,
 ): TyTracePoint[] {
   const sampleCount = endIndex - startIndex;
-  if (sampleCount <= maxPoints) {
+  if (sampleCount <= maxPoints || maxPoints <= 2) {
     return results.slice(startIndex, endIndex).map(toPoint);
   }
 
-  const bucketCount = Math.max(1, Math.floor(maxPoints / 2));
-  const bucketSize = sampleCount / bucketCount;
-  const points: TyTracePoint[] = [];
-  for (let bucket = 0; bucket < bucketCount; bucket++) {
-    const from = startIndex + Math.floor(bucket * bucketSize);
-    const to = Math.min(endIndex, startIndex + Math.floor((bucket + 1) * bucketSize));
-    let minIndex = from;
-    let maxIndex = from;
-    let minValue = results[from].nodeVoltages[nodeId] ?? 0;
-    let maxValue = minValue;
-    for (let index = from + 1; index < to; index++) {
-      const value = results[index].nodeVoltages[nodeId] ?? 0;
-      if (value < minValue) {
-        minValue = value;
-        minIndex = index;
-      }
-      if (value > maxValue) {
-        maxValue = value;
-        maxIndex = index;
+  const sampled: TyTracePoint[] = [];
+  const bucketSize = (sampleCount - 2) / (maxPoints - 2);
+
+  let a = startIndex;
+  sampled.push(toPoint(results[a]));
+
+  for (let i = 0; i < maxPoints - 2; i++) {
+    const bucketStart = startIndex + 1 + Math.floor(i * bucketSize);
+    const bucketEnd = Math.min(endIndex - 1, startIndex + 1 + Math.floor((i + 1) * bucketSize));
+
+    const nextBucketStart = startIndex + 1 + Math.floor((i + 1) * bucketSize);
+    const nextBucketEnd = Math.min(endIndex, startIndex + 1 + Math.floor((i + 2) * bucketSize));
+
+    let avgX = 0;
+    let avgY = 0;
+    const nextCount = Math.max(1, nextBucketEnd - nextBucketStart);
+    for (let j = nextBucketStart; j < nextBucketEnd; j++) {
+      avgX += results[j].time;
+      avgY += results[j].nodeVoltages[nodeId] ?? 0;
+    }
+    avgX /= nextCount;
+    avgY /= nextCount;
+
+    let maxArea = -1;
+    let maxIndex = bucketStart;
+    const pointAX = results[a].time;
+    const pointAY = results[a].nodeVoltages[nodeId] ?? 0;
+
+    for (let j = bucketStart; j < bucketEnd; j++) {
+      const px = results[j].time;
+      const py = results[j].nodeVoltages[nodeId] ?? 0;
+      const area = Math.abs(
+        (pointAX - avgX) * (py - pointAY) - (pointAX - px) * (avgY - pointAY),
+      ) * 0.5;
+
+      if (area > maxArea) {
+        maxArea = area;
+        maxIndex = j;
       }
     }
-    if (minIndex <= maxIndex) {
-      points.push(toPoint(results[minIndex]));
-      if (maxIndex !== minIndex) points.push(toPoint(results[maxIndex]));
-    } else {
-      points.push(toPoint(results[maxIndex]), toPoint(results[minIndex]));
-    }
+
+    sampled.push(toPoint(results[maxIndex]));
+    a = maxIndex;
   }
-  return points;
+
+  sampled.push(toPoint(results[endIndex - 1]));
+  return sampled;
 }
 
 export function selectTraceSampleIndices(
@@ -444,7 +462,7 @@ export function buildTyTracePoints(
     return { x, y };
   };
 
-  const rawTrace = buildMinMaxTrace(
+  const rawTrace = buildLttbTrace(
     results,
     nodeId,
     effectiveStartIndex,

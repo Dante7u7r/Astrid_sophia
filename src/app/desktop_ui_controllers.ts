@@ -76,6 +76,11 @@ export function createDesktopUiControllers(
     if (current) {
       deps.setSimulationSettings?.({ ...current, speedMultiplier: speed });
     }
+    const orch = deps.getOrchestrator?.();
+    if (orch) {
+      orch.currentAnimationSpeed = speed;
+      deps.updateCanvasRendering();
+    }
   };
 
   initInstrumentationMenu({

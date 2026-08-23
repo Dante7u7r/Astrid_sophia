@@ -274,9 +274,6 @@ export function drawPvtTraces(
   drawTyReticle(ctx, width, height);
   for (const trace of traces) {
     if (!trace.visible || trace.results.length < 2) continue;
-    ctx.strokeStyle = trace.color;
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
     const points = buildTyTracePoints(
       trace.results,
       node,
@@ -284,11 +281,28 @@ export function drawPvtTraces(
       { voltsPerDiv, offsetPixels, timeDivValue },
       0,
     );
-    for (let index = 0; index < points.length; index++) {
-      if (index === 0) ctx.moveTo(points[index].x, points[index].y);
-      else ctx.lineTo(points[index].x, points[index].y);
-    }
+    if (points.length < 2) continue;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Glow pass
+    ctx.strokeStyle = trace.color;
+    ctx.globalAlpha = 0.22;
+    ctx.lineWidth = 4.2;
+    ctx.beginPath();
+    renderSmoothTracePath(ctx, points);
     ctx.stroke();
+
+    // Center crisp line
+    ctx.globalAlpha = 1.0;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    renderSmoothTracePath(ctx, points);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   // Draw Legend Box in upper-right corner for Parametric / PVT curves
@@ -652,3 +666,37 @@ export function drawMaskOverlay(
 
   ctx.restore();
 }
+
+/**
+ * Renderiza un trazado ultra-suave interpolando puntos intermedios mediante curvas de Bézier cuadráticas,
+ * eliminando los ángulos secos y logrando el aspecto orgánico y fluido de un osciloscopio analógico/digital de alta gama.
+ */
+export function renderSmoothTracePath(
+  ctx: CanvasRenderingContext2D,
+  points: readonly { x: number; y: number }[],
+): void {
+  const len = points.length;
+  if (len < 2) return;
+  if (len === 2) {
+    ctx.moveTo(points[0].x, points[0].y);
+    ctx.lineTo(points[1].x, points[1].y);
+    return;
+  }
+
+  ctx.moveTo(points[0].x, points[0].y);
+  const hasQuad = typeof ctx.quadraticCurveTo === "function";
+  for (let i = 0; i < len - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    if (hasQuad) {
+      const midX = (p0.x + p1.x) / 2;
+      const midY = (p0.y + p1.y) / 2;
+      ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+    } else {
+      ctx.lineTo(p0.x, p0.y);
+    }
+  }
+  const last = points[len - 1];
+  ctx.lineTo(last.x, last.y);
+}
+

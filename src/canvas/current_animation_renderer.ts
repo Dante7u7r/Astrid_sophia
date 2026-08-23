@@ -42,7 +42,7 @@ export class CurrentAnimationRenderer {
     this.baseOffset += dt * 40;
 
     const flowSign = this.flowMode === "electron" ? 1 : -1;
-    const speedMult = Math.max(0.1, Math.min(this.speedMultiplier, 5.0));
+    const speedMult = Math.max(0.05, Math.min(this.speedMultiplier, 50.0));
 
     const zoomScale = Math.max(0.3, Math.min(zoom, 4.0));
     const dashLength = Math.max(3.0, 7 / Math.pow(zoomScale, 0.45));

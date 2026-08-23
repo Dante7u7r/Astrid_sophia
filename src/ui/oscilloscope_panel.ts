@@ -29,6 +29,7 @@ import {
   drawXyTrace,
   drawWaveformHistogram,
   drawMaskOverlay,
+  renderSmoothTracePath,
 } from "./oscilloscope_renderer";
 import {
   dragOscilloscopeCursor,
@@ -1163,17 +1164,28 @@ export class OscilloscopePanel {
           );
           if (tracePoints.length < 2) continue;
 
+          const shiftedPoints = tracePoints.map((pt) => ({ x: pt.x, y: pt.y + topY }));
+
+          ctx.save();
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          // Glow pass
           ctx.strokeStyle = ch.color;
-          ctx.lineWidth = 1.8;
+          ctx.globalAlpha = 0.25;
+          ctx.lineWidth = 4.5;
           ctx.beginPath();
-          for (let i = 0; i < tracePoints.length; i++) {
-            const pt = tracePoints[i];
-            const px = pt.x;
-            const py = pt.y + topY;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
+          renderSmoothTracePath(ctx, shiftedPoints);
           ctx.stroke();
+
+          // Crisp core line
+          ctx.globalAlpha = 1.0;
+          ctx.lineWidth = 1.9;
+          ctx.beginPath();
+          renderSmoothTracePath(ctx, shiftedPoints);
+          ctx.stroke();
+
+          ctx.restore();
         }
       } else {
         // Overlay standard single grid
@@ -1201,7 +1213,7 @@ export class OscilloscopePanel {
           }
         }
 
-        // Draw channel traces (Clean, Crisp, 60 FPS, Zero Slicing Lag)
+        // Draw channel traces (Clean, Crisp, 60 FPS, Ultra-smooth Phosphor Bloom)
         const drawChannelTY = (
           nodeId: string,
           color: string,
@@ -1223,15 +1235,26 @@ export class OscilloscopePanel {
           );
           if (tracePoints.length < 2) return;
 
+          ctx.save();
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          // Pass 1: Soft Phosphor Bloom Halo
           ctx.strokeStyle = color;
-          ctx.lineWidth = 1.8;
+          ctx.globalAlpha = 0.25;
+          ctx.lineWidth = 4.5;
           ctx.beginPath();
-          for (let i = 0; i < tracePoints.length; i++) {
-            const point = tracePoints[i];
-            if (i === 0) ctx.moveTo(point.x, point.y);
-            else ctx.lineTo(point.x, point.y);
-          }
+          renderSmoothTracePath(ctx, tracePoints);
           ctx.stroke();
+
+          // Pass 2: Crisp Bright Centerline
+          ctx.globalAlpha = 1.0;
+          ctx.lineWidth = 1.9;
+          ctx.beginPath();
+          renderSmoothTracePath(ctx, tracePoints);
+          ctx.stroke();
+
+          ctx.restore();
         };
 
         drawChannelTY(this.ch1ProbeNode || "1", "#FACC15", this.voltsPerDivCh1, this.offsetCh1, isCh1Active, {
@@ -1266,17 +1289,12 @@ export class OscilloscopePanel {
           const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
 
           if (mathVals.length > 1) {
-            ctx.strokeStyle = "#FB923C";
-            ctx.lineWidth = 2.0;
-            ctx.setLineDash([4, 2]);
-            ctx.beginPath();
-
             const windowDuration = this.timeDivValue * 10;
             const firstTime = this.transientResults[triggerStartIdx]?.time ?? 0;
             const mathVoltsPerDiv = this.mathVoltsPerDiv || 1.0;
             const mathOffsetPx = this.mathOffset * divHeight;
 
-            let firstPoint = true;
+            const mathPoints: { x: number; y: number }[] = [];
             for (let i = triggerStartIdx; i < this.transientResults.length; i++) {
               const pt = this.transientResults[i];
               const relTime = pt.time - firstTime;
@@ -1284,16 +1302,21 @@ export class OscilloscopePanel {
               const x = (relTime / windowDuration) * width;
               const vMath = mathVals[i] ?? 0;
               const y = height / 2 - (vMath / mathVoltsPerDiv) * divHeight - mathOffsetPx;
-
-              if (firstPoint) {
-                ctx.moveTo(x, y);
-                firstPoint = false;
-              } else {
-                ctx.lineTo(x, y);
-              }
+              mathPoints.push({ x, y });
             }
-            ctx.stroke();
-            ctx.setLineDash([]);
+
+            if (mathPoints.length > 1) {
+              ctx.save();
+              ctx.strokeStyle = "#FB923C";
+              ctx.lineWidth = 2.0;
+              ctx.setLineDash([4, 2]);
+              ctx.lineCap = "round";
+              ctx.lineJoin = "round";
+              ctx.beginPath();
+              renderSmoothTracePath(ctx, mathPoints);
+              ctx.stroke();
+              ctx.restore();
+            }
           }
         }
 
