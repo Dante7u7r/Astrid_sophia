@@ -822,4 +822,66 @@ describe("extractElectricalNetlist", () => {
     expect(vBit3?.pins[0]).toBe(rBit3?.pins[0]);
     expect(vBit3?.pins[0]).not.toBe("0");
   });
+
+  test("soporta múltiples circuitos independientes en el lienzo con símbolos GND distintos (GND1, GND2, GND3)", () => {
+    const components: ComponentInstance[] = [
+      // Circuito 1: V1, R1, GND1
+      { id: "V1", type: "vsource", value: 10, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 50, y: 0, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 25, y: 50, rotation: 0 },
+
+      // Circuito 2: V2, R2, GND2
+      { id: "V2", type: "vsource", value: 5, x: 200, y: 0, rotation: 0 },
+      { id: "R2", type: "resistor", value: 2000, x: 250, y: 0, rotation: 0 },
+      { id: "GND2", type: "ground", value: 0, x: 225, y: 50, rotation: 0 },
+
+      // Circuito 3: V3, R3, GND3
+      { id: "V3", type: "vsource", value: 12, x: 400, y: 0, rotation: 0 },
+      { id: "R3", type: "resistor", value: 3000, x: 450, y: 0, rotation: 0 },
+      { id: "GND3", type: "ground", value: 0, x: 425, y: 50, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      // Cableado Circuito 1
+      { id: "w1_1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w1_2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w1_3", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+
+      // Cableado Circuito 2
+      { id: "w2_1", from: { componentId: "V2", pinIndex: 0 }, to: { componentId: "R2", pinIndex: 0 } },
+      { id: "w2_2", from: { componentId: "V2", pinIndex: 1 }, to: { componentId: "GND2", pinIndex: 0 } },
+      { id: "w2_3", from: { componentId: "R2", pinIndex: 1 }, to: { componentId: "GND2", pinIndex: 0 } },
+
+      // Cableado Circuito 3
+      { id: "w3_1", from: { componentId: "V3", pinIndex: 0 }, to: { componentId: "R3", pinIndex: 0 } },
+      { id: "w3_2", from: { componentId: "V3", pinIndex: 1 }, to: { componentId: "GND3", pinIndex: 0 } },
+      { id: "w3_3", from: { componentId: "R3", pinIndex: 1 }, to: { componentId: "GND3", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    // Los 3 símbolos de tierra deben mapearse al nodo global "0"
+    expect(res.pinToNodeMap["GND1:0"]).toBe("0");
+    expect(res.pinToNodeMap["GND2:0"]).toBe("0");
+    expect(res.pinToNodeMap["GND3:0"]).toBe("0");
+
+    const v1 = res.netlist.components.find(c => c.id === "V1");
+    const v2 = res.netlist.components.find(c => c.id === "V2");
+    const v3 = res.netlist.components.find(c => c.id === "V3");
+
+    expect(v1?.pins[1]).toBe("0");
+    expect(v2?.pins[1]).toBe("0");
+    expect(v3?.pins[1]).toBe("0");
+  });
 });

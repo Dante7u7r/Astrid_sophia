@@ -374,6 +374,14 @@ export function extractElectricalNetlist(
 
     const GND_ALIASES = ["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"];
 
+    // Unión virtual para componentes de Tierra (GND global de referencia en esquemático)
+    for (const comp of components) {
+      if (comp.type === 'ground') {
+        const compPin = pinKey(comp.id, 0);
+        dsu!.union(compPin, "net_virtual:GND");
+      }
+    }
+
     // Unión virtual para componentes net_label (Puertos de Red, Alimentación, Tierra, Buses y Señales EDA)
     for (const comp of components) {
       if (comp.type === 'net_label') {
@@ -385,21 +393,25 @@ export function extractElectricalNetlist(
         } else {
           const rawNetName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
           if (rawNetName.length > 0) {
-            const parsed = parseBusLabel(rawNetName);
-            const prefix = "net_virtual";
-
-            if (parsed.isBus) {
-              const busRootKey = `${prefix}:${parsed.baseName}[${parsed.start}:${parsed.end}]`;
-              dsu!.union(compPin, busRootKey);
-              for (const member of parsed.members) {
-                dsu!.union(`${prefix}:${member}`, `${prefix}:${member}`);
-              }
-            } else if (parsed.isBusMember) {
-              const canonicalKey = `${prefix}:${parsed.baseName}[${parsed.index}]`;
-              dsu!.union(compPin, canonicalKey);
+            if (GND_ALIASES.includes(rawNetName)) {
+              dsu!.union(compPin, "net_virtual:GND");
             } else {
-              const netKey = `${prefix}:${rawNetName}`;
-              dsu!.union(compPin, netKey);
+              const parsed = parseBusLabel(rawNetName);
+              const prefix = "net_virtual";
+
+              if (parsed.isBus) {
+                const busRootKey = `${prefix}:${parsed.baseName}[${parsed.start}:${parsed.end}]`;
+                dsu!.union(compPin, busRootKey);
+                for (const member of parsed.members) {
+                  dsu!.union(`${prefix}:${member}`, `${prefix}:${member}`);
+                }
+              } else if (parsed.isBusMember) {
+                const canonicalKey = `${prefix}:${parsed.baseName}[${parsed.index}]`;
+                dsu!.union(compPin, canonicalKey);
+              } else {
+                const netKey = `${prefix}:${rawNetName}`;
+                dsu!.union(compPin, netKey);
+              }
             }
           }
         }
@@ -407,32 +419,18 @@ export function extractElectricalNetlist(
     }
 
     // 3. Identificar el grupo de Tierra (GND) y asignarle el ID de nodo "0"
-    let gndRoot: string | null = null;
-    for (const comp of components) {
-      if (comp.type === 'ground') {
-        const gndPinKey = `${comp.id}:0`;
-        gndRoot = dsu!.find(gndPinKey);
-        break;
-      }
-      if (comp.type === 'net_label' && getTerminalType(comp) === 'ground') {
-        const gndPinKey = `${comp.id}:0`;
-        gndRoot = dsu!.find(gndPinKey);
-        break;
-      }
-    }
-
-    if (!gndRoot) {
+    if (dsu!.has("net_virtual:GND")) {
+      const gndRoot = dsu!.find("net_virtual:GND");
+      rootToNodeIdMap[gndRoot] = "0";
+    } else {
       for (const gndAlias of GND_ALIASES) {
         const gndKey = `net_virtual:${gndAlias}`;
         if (dsu!.has(gndKey)) {
-          gndRoot = dsu!.find(gndKey);
+          const gndRoot = dsu!.find(gndKey);
+          rootToNodeIdMap[gndRoot] = "0";
           break;
         }
       }
-    }
-
-    if (gndRoot) {
-      rootToNodeIdMap[gndRoot] = "0";
     }
   }
 
