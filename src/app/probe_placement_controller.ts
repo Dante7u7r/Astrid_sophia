@@ -25,9 +25,9 @@ export interface ProbePlacementControllerDeps {
 
 const DEFAULT_PROBE_NODES: ProbeNodes = {
   ch1: "1",
-  ch2: "2",
-  ch3: "3",
-  ch4: "4",
+  ch2: null,
+  ch3: null,
+  ch4: null,
 };
 
 function probeKey(channel: ProbeChannel): keyof ProbeNodes {
@@ -41,11 +41,11 @@ function channelIndex(channel: ProbeChannel): number {
 function channelColor(channel: ProbeChannel): string {
   switch (channel) {
     case "CH1":
-      return "Cian";
+      return "Amarilla";
     case "CH2":
-      return "Morada";
+      return "Celeste";
     case "CH3":
-      return "Naranja";
+      return "Rosa";
     case "CH4":
       return "Verde";
   }

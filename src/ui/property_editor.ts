@@ -192,10 +192,16 @@ export class PropertyEditor {
 
     this.propIdInput.value = comp.id;
     const usesActuatorModel = ACTUATOR_MODEL_EDITORS.has(comp.type);
-    this.propValInput.value = usesActuatorModel
-      ? comp.value.toString()
-      : formatSpiceValue(Number(comp.value) || 0);
-    this.propValSlider.value = usesActuatorModel ? "0" : comp.value.toString();
+    if (comp.type === "net_label") {
+      this.propValInput.value = String(comp.label || comp.value || "NET_A");
+    } else if (comp.type === "text_note") {
+      this.propValInput.value = String(comp.label || comp.value || "");
+    } else if (usesActuatorModel) {
+      this.propValInput.value = comp.value.toString();
+    } else {
+      this.propValInput.value = formatSpiceValue(Number(comp.value) || 0);
+    }
+    this.propValSlider.value = usesActuatorModel || comp.type === "net_label" || comp.type === "text_note" ? "0" : comp.value.toString();
 
     const mcuDebugPanel = this.callbacks.getMcuDebugPanel();
     if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {

@@ -10,7 +10,7 @@ export type TerminalType = "signal" | "power" | "ground" | "input" | "output" | 
 
 export function isPowerRailName(name: string): boolean {
   const upper = name.trim().toUpperCase();
-  if (["VCC", "VDD", "VEE", "VSS", "VBAT", "VBUS"].includes(upper)) return true;
+  if (["VCC", "VDD", "VEE", "VSS", "VBAT", "VBUS", "V+", "V-", "+V", "-V", "+VS", "-VS", "VCC+", "VEE-", "VDD+", "VSS-"].includes(upper)) return true;
   return /^[+-]?\d+(\.\d+)?\s*V$/i.test(upper) || /^[+-]\d+(\.\d+)?$/i.test(upper);
 }
 
@@ -35,9 +35,11 @@ export function parsePowerRailVoltage(comp: ComponentInstance): number {
   }
   const name = String(comp.label || comp.value || comp.id || "").trim().toUpperCase();
   if (name === "VCC") return 5.0;
-  if (name === "VDD") return 3.3;
+  if (name === "VDD" || name === "VDD+") return 3.3;
   if (name === "VEE") return -5.0;
-  if (name === "VSS") return 0.0;
+  if (name === "VSS" || name === "VSS-") return 0.0;
+  if (name === "V+" || name === "+V" || name === "+VS" || name === "VCC+") return 15.0;
+  if (name === "V-" || name === "-V" || name === "-VS" || name === "VEE-") return -15.0;
   if (name === "VBAT") return 3.7;
   if (name === "VBUS") return 5.0;
   const match = name.match(/^([+-]?\d+(?:\.\d+)?)/);

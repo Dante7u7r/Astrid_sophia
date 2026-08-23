@@ -42,6 +42,61 @@ export interface CanvasInputCallbacks {
   onWireMode: () => void;
 }
 
+function resolveNodeAtWorldPoint(
+  worldPt: { x: number; y: number },
+  orchestrator: CanvasOrchestrator,
+  callbacks: { getPinNode?: (pinKey: string) => string | undefined },
+): string | undefined {
+  if (orchestrator.hoveredPin) {
+    const pinKey = `${orchestrator.hoveredPin.componentId}:${orchestrator.hoveredPin.pinIndex}`;
+    const node = callbacks.getPinNode?.(pinKey);
+    if (node !== undefined) return node;
+  }
+  if (orchestrator.hoveredWire) {
+    const pinKey = `${orchestrator.hoveredWire.from.componentId}:${orchestrator.hoveredWire.from.pinIndex}`;
+    const node = callbacks.getPinNode?.(pinKey);
+    if (node !== undefined) return node;
+  }
+
+  // 1. Búsqueda por proximidad en pines de componentes (35px de tolerancia)
+  let closestPinKey: string | null = null;
+  let minPinDist = 35;
+  for (const comp of orchestrator.components) {
+    const pins = orchestrator.getComponentPins(comp);
+    for (const pin of pins) {
+      const d = Math.hypot(pin.x - worldPt.x, pin.y - worldPt.y);
+      if (d < minPinDist) {
+        minPinDist = d;
+        closestPinKey = `${comp.id}:${pin.pinIndex}`;
+      }
+    }
+  }
+  if (closestPinKey) {
+    const node = callbacks.getPinNode?.(closestPinKey);
+    if (node !== undefined) return node;
+  }
+
+  // 2. Búsqueda por proximidad en cables del circuito (25px de tolerancia)
+  for (const wire of orchestrator.wires) {
+    const fromKey = `${wire.from.componentId}:${wire.from.pinIndex}`;
+    for (let i = 0; i < wire.points.length - 1; i++) {
+      const p1 = wire.points[i];
+      const p2 = wire.points[i + 1];
+      const l2 = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
+      let t = l2 === 0 ? 0 : ((worldPt.x - p1.x) * (p2.x - p1.x) + (worldPt.y - p1.y) * (p2.y - p1.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = p1.x + t * (p2.x - p1.x);
+      const projY = p1.y + t * (p2.y - p1.y);
+      if (Math.hypot(worldPt.x - projX, worldPt.y - projY) <= 25) {
+        const node = callbacks.getPinNode?.(fromKey);
+        if (node !== undefined) return node;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 export function attachCanvasInput(
   canvas: HTMLCanvasElement,
   orchestrator: CanvasOrchestrator,
@@ -50,6 +105,7 @@ export function attachCanvasInput(
   let isRightClickPanning = false;
   let isSpacePressed = false;
   let lastMousePos = { x: 0, y: 0 };
+  let draggingCanvasProbe: "CH1" | "CH2" | "CH3" | "CH4" | null = null;
 
   const onMouseDown = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
@@ -68,15 +124,7 @@ export function attachCanvasInput(
     if (e.button === 0) {
       const probeMode = callbacks.getProbePlacementMode();
       if (probeMode) {
-        let targetNode: string | undefined;
-        if (orchestrator.hoveredPin) {
-          const pinKey = `${orchestrator.hoveredPin.componentId}:${orchestrator.hoveredPin.pinIndex}`;
-          targetNode = callbacks.getPinNode(pinKey);
-        } else if (orchestrator.hoveredWire) {
-          const pinKey = `${orchestrator.hoveredWire.from.componentId}:${orchestrator.hoveredWire.from.pinIndex}`;
-          targetNode = callbacks.getPinNode(pinKey);
-        }
-
+        const targetNode = resolveNodeAtWorldPoint(worldPt, orchestrator, callbacks);
         if (targetNode !== undefined) {
           callbacks.onProbePlaced(probeMode, targetNode);
         }
@@ -85,9 +133,19 @@ export function attachCanvasInput(
         return;
       }
 
+      // Arrastre directo de la insignia de sonda sobre el lienzo
+      const hitProbe = orchestrator.hitTestProbe?.(worldPt.x, worldPt.y) ?? null;
+      if (hitProbe) {
+        draggingCanvasProbe = hitProbe;
+        canvas.style.cursor = "grabbing";
+        callbacks.log(`Moviendo sonda ${hitProbe}. Arrástrala y suéltala sobre cualquier terminal o cable.`, "system");
+        e.preventDefault();
+        return;
+      }
+
       if (callbacks.getActiveAnalysisMode() === "SPAR" && orchestrator.hoveredPin) {
         const pinKey = `${orchestrator.hoveredPin.componentId}:${orchestrator.hoveredPin.pinIndex}`;
-        const nodeId = callbacks.getPinNode(pinKey);
+        const nodeId = callbacks.getPinNode?.(pinKey);
         if (nodeId !== undefined) {
           if (callbacks.onSparPortAssign(nodeId)) {
             callbacks.requestRender(true);
@@ -134,7 +192,21 @@ export function attachCanvasInput(
     const { screenX, screenY } = clientToCanvasPoint(rect, e);
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
 
+    if (draggingCanvasProbe) {
+      orchestrator.checkHover(worldPt.x, worldPt.y);
+      canvas.style.cursor = "grabbing";
+      callbacks.requestRender();
+      return;
+    }
+
     orchestrator.checkHover(worldPt.x, worldPt.y);
+
+    if (!orchestrator.isDragging && !orchestrator.activePinForWire && !orchestrator.isDraggingWireHandle && !orchestrator.selectionStart) {
+      const hoveredProbe = orchestrator.hitTestProbe?.(worldPt.x, worldPt.y) ?? null;
+      if (hoveredProbe) {
+        canvas.style.cursor = "grab";
+      }
+    }
 
     if (orchestrator.isDraggingWireHandle) {
       orchestrator.handleWireHandleDragging(worldPt);
@@ -167,7 +239,25 @@ export function attachCanvasInput(
     callbacks.requestRender();
   };
 
-  const completeConnection = (_e: MouseEvent) => {
+  const completeConnection = (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    const { screenX, screenY } = clientToCanvasPoint(rect, e);
+    const worldPt = orchestrator.screenToWorld(screenX, screenY);
+
+    if (draggingCanvasProbe) {
+      const targetNode = resolveNodeAtWorldPoint(worldPt, orchestrator, callbacks);
+      if (targetNode !== undefined) {
+        callbacks.onProbePlaced(draggingCanvasProbe, targetNode);
+        callbacks.log(`Sonda ${draggingCanvasProbe} conectada al Nodo ${targetNode}.`, "system");
+      } else {
+        callbacks.log(`No se soltó la sonda ${draggingCanvasProbe} sobre un terminal o cable válido.`, "system");
+      }
+      draggingCanvasProbe = null;
+      canvas.style.cursor = "";
+      callbacks.requestRender(true);
+      return;
+    }
+
     if (orchestrator.isDraggingWireHandle) {
       orchestrator.stopWireHandleDragging();
       callbacks.onCanvasModified();
@@ -578,7 +668,10 @@ export function attachCanvasDrop(
   callbacks: Pick<
     CanvasInputCallbacks,
     "requestRender" | "onNetlistSync" | "onCanvasModified" | "onComponentPlaced" | "log"
-  >,
+  > & {
+    getPinNode?: (pinKey: string) => string | undefined;
+    onProbePlaced?: (channel: "CH1" | "CH2" | "CH3" | "CH4", nodeId: string) => void;
+  },
 ): () => void {
   const placeComponent = (
     type: ComponentInstance["type"],
@@ -619,13 +712,96 @@ export function attachCanvasDrop(
 
   const onDragOver = (e: DragEvent) => {
     e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = "copy";
+      const rect = canvas.getBoundingClientRect();
+      const { screenX, screenY } = clientToCanvasPoint(rect, e);
+      const worldPt = orchestrator.screenToWorld(screenX, screenY);
+      orchestrator.checkHover(worldPt.x, worldPt.y);
+      callbacks.requestRender();
+    }
   };
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     try {
-      const rawData = e.dataTransfer?.getData("text/plain");
+      // 1. Detección robusta de arrastre de sonda del osciloscopio
+      let probeChannel: string | undefined = e.dataTransfer?.getData("application/astryd-probe");
+      const plainText = e.dataTransfer?.getData("text/plain") || "";
+      if (!probeChannel || !["CH1", "CH2", "CH3", "CH4"].includes(probeChannel)) {
+        if (plainText.startsWith("probe:")) {
+          probeChannel = plainText.replace("probe:", "").trim().toUpperCase();
+        } else if (["CH1", "CH2", "CH3", "CH4"].includes(plainText.trim().toUpperCase())) {
+          probeChannel = plainText.trim().toUpperCase();
+        }
+      }
+
+      if (probeChannel && ["CH1", "CH2", "CH3", "CH4"].includes(probeChannel)) {
+        const rect = canvas.getBoundingClientRect();
+        const { screenX, screenY } = clientToCanvasPoint(rect, e);
+        const worldPt = orchestrator.screenToWorld(screenX, screenY);
+        orchestrator.checkHover(worldPt.x, worldPt.y);
+
+        let targetNode: string | undefined;
+        if (orchestrator.hoveredPin) {
+          const pinKey = `${orchestrator.hoveredPin.componentId}:${orchestrator.hoveredPin.pinIndex}`;
+          targetNode = callbacks.getPinNode?.(pinKey);
+        } else if (orchestrator.hoveredWire) {
+          const pinKey = `${orchestrator.hoveredWire.from.componentId}:${orchestrator.hoveredWire.from.pinIndex}`;
+          targetNode = callbacks.getPinNode?.(pinKey);
+        }
+
+        // Búsqueda por proximidad si el cursor no cayó exactamente a nivel de píxel sobre el pin
+        if (targetNode === undefined) {
+          let closestPinKey: string | null = null;
+          let minDistance = 30; // 30px en coordenadas del mundo
+          for (const comp of orchestrator.components) {
+            const pins = orchestrator.getComponentPins(comp);
+            for (const pin of pins) {
+              const d = Math.hypot(pin.x - worldPt.x, pin.y - worldPt.y);
+              if (d < minDistance) {
+                minDistance = d;
+                closestPinKey = `${comp.id}:${pin.pinIndex}`;
+              }
+            }
+          }
+          if (closestPinKey) {
+            targetNode = callbacks.getPinNode?.(closestPinKey);
+          }
+        }
+
+        // Búsqueda por proximidad en cables si aún no se resuelve
+        if (targetNode === undefined) {
+          for (const wire of orchestrator.wires) {
+            const fromKey = `${wire.from.componentId}:${wire.from.pinIndex}`;
+            for (let i = 0; i < wire.points.length - 1; i++) {
+              const p1 = wire.points[i];
+              const p2 = wire.points[i + 1];
+              const l2 = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
+              let t = l2 === 0 ? 0 : ((worldPt.x - p1.x) * (p2.x - p1.x) + (worldPt.y - p1.y) * (p2.y - p1.y)) / l2;
+              t = Math.max(0, Math.min(1, t));
+              const projX = p1.x + t * (p2.x - p1.x);
+              const projY = p1.y + t * (p2.y - p1.y);
+              if (Math.hypot(worldPt.x - projX, worldPt.y - projY) <= 20) {
+                targetNode = callbacks.getPinNode?.(fromKey);
+                break;
+              }
+            }
+            if (targetNode !== undefined) break;
+          }
+        }
+
+        if (targetNode !== undefined) {
+          callbacks.onProbePlaced?.(probeChannel as "CH1" | "CH2" | "CH3" | "CH4", targetNode);
+          callbacks.requestRender(true);
+        } else {
+          callbacks.log(`Suelta la sonda ${probeChannel} sobre un terminal o cable del circuito.`, "system");
+        }
+        return;
+      }
+
+      // 2. Colocación de componentes estándar desde la paleta
+      const rawData = plainText;
       if (!rawData) return;
       const { type, value } = JSON.parse(rawData) as {
         type: ComponentInstance["type"];
@@ -633,7 +809,7 @@ export function attachCanvasDrop(
       };
       placeComponent(type, value, e.clientX, e.clientY);
     } catch {
-      callbacks.log("Error al colocar componente.", "error");
+      callbacks.log("Error al procesar elemento soltado en el lienzo.", "error");
     }
   };
 
@@ -777,9 +953,175 @@ export function attachCanvasDrop(
     });
   });
 
+  // Vinculación de arrastre mediante Pointer Events para botones y pestañas del osciloscopio
+  const probeButtons = [
+    { id: "#osc-tab-ch1", getChannel: () => "CH1" as const },
+    { id: "#osc-tab-ch2", getChannel: () => "CH2" as const },
+    { id: "#osc-tab-ch3", getChannel: () => "CH3" as const },
+    { id: "#osc-tab-ch4", getChannel: () => "CH4" as const },
+    { id: "#osc-ch1-btn", getChannel: () => "CH1" as const },
+    { id: "#osc-ch2-btn", getChannel: () => "CH2" as const },
+    { id: "#osc-ch3-btn", getChannel: () => "CH3" as const },
+    { id: "#osc-ch4-btn", getChannel: () => "CH4" as const },
+    {
+      id: "#osc-focused-pick-probe-btn",
+      getChannel: () => {
+        const activeTab = document.querySelector(".osc-channel-tab.active") as HTMLElement | null;
+        const ch = activeTab?.dataset?.ch?.toUpperCase() || "CH1";
+        return (["CH1", "CH2", "CH3", "CH4"].includes(ch) ? ch : "CH1") as "CH1" | "CH2" | "CH3" | "CH4";
+      },
+    },
+  ];
+
+  probeButtons.forEach(({ id, getChannel }) => {
+    const el = document.querySelector<HTMLElement>(id);
+    if (el) {
+      const cleanup = attachProbePointerDrag(el, getChannel, canvasViewport, canvas, orchestrator, callbacks);
+      paletteCleanups.push(cleanup);
+    }
+  });
+
   return () => {
     canvasViewport.removeEventListener("dragover", onDragOver);
     canvasViewport.removeEventListener("drop", onDrop);
     paletteCleanups.forEach((cleanup) => cleanup());
+  };
+}
+
+function attachProbePointerDrag(
+  element: HTMLElement,
+  getChannel: () => "CH1" | "CH2" | "CH3" | "CH4",
+  canvasViewport: HTMLElement,
+  canvas: HTMLCanvasElement,
+  orchestrator: CanvasOrchestrator,
+  callbacks: {
+    requestRender: (immediate?: boolean) => void;
+    log: (text: string, type?: "system" | "error") => void;
+    getPinNode?: (pinKey: string) => string | undefined;
+    onProbePlaced?: (channel: "CH1" | "CH2" | "CH3" | "CH4", nodeId: string) => void;
+  },
+): () => void {
+  let pointerId: number | null = null;
+  let startX = 0;
+  let startY = 0;
+  let dragging = false;
+  let ghost: HTMLElement | null = null;
+
+  const probeColors: Record<string, { color: string; bg: string }> = {
+    CH1: { color: "#FACC15", bg: "rgba(250, 204, 21, 0.15)" },
+    CH2: { color: "#38BDF8", bg: "rgba(56, 189, 248, 0.15)" },
+    CH3: { color: "#F43F5E", bg: "rgba(244, 63, 94, 0.15)" },
+    CH4: { color: "#4ADE80", bg: "rgba(74, 222, 128, 0.15)" },
+  };
+
+  const isInsideCanvas = (clientX: number, clientY: number): boolean => {
+    const rect = canvasViewport.getBoundingClientRect();
+    return isPointInsideRect(rect, { clientX, clientY });
+  };
+
+  const updateDragVisuals = (clientX: number, clientY: number): void => {
+    if (ghost) {
+      ghost.style.transform = `translate3d(${clientX + 10}px, ${clientY + 10}px, 0)`;
+    }
+    if (isInsideCanvas(clientX, clientY)) {
+      const rect = canvas.getBoundingClientRect();
+      const { screenX, screenY } = clientToCanvasPoint(rect, { clientX, clientY });
+      const worldPt = orchestrator.screenToWorld(screenX, screenY);
+      orchestrator.checkHover(worldPt.x, worldPt.y);
+      callbacks.requestRender();
+    }
+  };
+
+  const beginDrag = (clientX: number, clientY: number): void => {
+    dragging = true;
+    const ch = getChannel();
+    const info = probeColors[ch] || { color: "#FACC15", bg: "rgba(250, 204, 21, 0.15)" };
+
+    ghost = document.createElement("div");
+    ghost.className = "probe-drag-ghost";
+    ghost.textContent = `📍 ${ch}`;
+    ghost.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 100000;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: bold;
+      color: ${info.color};
+      background: rgba(10, 15, 28, 0.95);
+      border: 1.5px solid ${info.color};
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 10px ${info.bg};
+      transform: translate3d(${clientX + 10}px, ${clientY + 10}px, 0);
+    `;
+    document.body.appendChild(ghost);
+    document.body.style.cursor = "grabbing";
+    updateDragVisuals(clientX, clientY);
+  };
+
+  const resetDrag = (): void => {
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    document.removeEventListener("pointercancel", onPointerCancel);
+    window.removeEventListener("blur", resetDrag);
+    pointerId = null;
+    dragging = false;
+    ghost?.remove();
+    ghost = null;
+    document.body.style.cursor = "";
+  };
+
+  const onPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0 || pointerId !== null) return;
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    startY = event.clientY;
+    document.addEventListener("pointermove", onPointerMove, { passive: false });
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("blur", resetDrag, { once: true });
+  };
+
+  const onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerId !== pointerId) return;
+    if (!dragging && Math.hypot(event.clientX - startX, event.clientY - startY) > 5) {
+      beginDrag(event.clientX, event.clientY);
+    }
+    if (dragging) {
+      event.preventDefault();
+      updateDragVisuals(event.clientX, event.clientY);
+    }
+  };
+
+  const onPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== pointerId) return;
+    if (dragging && isInsideCanvas(event.clientX, event.clientY)) {
+      const ch = getChannel();
+      const rect = canvas.getBoundingClientRect();
+      const { screenX, screenY } = clientToCanvasPoint(rect, { clientX: event.clientX, clientY: event.clientY });
+      const worldPt = orchestrator.screenToWorld(screenX, screenY);
+      const targetNode = resolveNodeAtWorldPoint(worldPt, orchestrator, callbacks);
+      if (targetNode !== undefined) {
+        callbacks.onProbePlaced?.(ch, targetNode);
+        callbacks.log(`Sonda ${ch} conectada al Nodo ${targetNode}.`, "system");
+        callbacks.requestRender(true);
+      } else {
+        callbacks.log(`Suelta la sonda ${ch} sobre un terminal o cable del circuito.`, "system");
+      }
+    }
+    resetDrag();
+  };
+
+  const onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId === pointerId) resetDrag();
+  };
+
+  element.addEventListener("pointerdown", onPointerDown);
+  return () => {
+    element.removeEventListener("pointerdown", onPointerDown);
+    resetDrag();
   };
 }

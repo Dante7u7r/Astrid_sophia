@@ -268,6 +268,9 @@ function initOscilloscopeInterface() {
       const mode = channel.toUpperCase() as ProbeChannel;
       handleProbeActivation(mode);
     };
+    oscilloscopePanel.onProbeNodeChanged = () => {
+      updateCanvasRendering();
+    };
   }
 
   const setupChBtn = (btn: HTMLButtonElement | null, channel: ProbeChannel, getProbe: () => string | null, colorName: string) => {
@@ -286,9 +289,9 @@ function initOscilloscopeInterface() {
     });
   };
 
-  setupChBtn(oscCh1Btn, 'CH1', () => probePlacementController.getNode("CH1"), 'Cian');
-  setupChBtn(oscCh2Btn, 'CH2', () => probePlacementController.getNode("CH2"), 'Morado');
-  setupChBtn(oscCh3Btn, 'CH3', () => probePlacementController.getNode("CH3"), 'Naranja');
+  setupChBtn(oscCh1Btn, 'CH1', () => probePlacementController.getNode("CH1"), 'Amarillo');
+  setupChBtn(oscCh2Btn, 'CH2', () => probePlacementController.getNode("CH2"), 'Celeste');
+  setupChBtn(oscCh3Btn, 'CH3', () => probePlacementController.getNode("CH3"), 'Rosa');
   setupChBtn(oscCh4Btn, 'CH4', () => probePlacementController.getNode("CH4"), 'Verde');
 
   const oscAutofitBtn = document.querySelector("#osc-autofit-btn") as HTMLButtonElement | null;
@@ -486,6 +489,11 @@ function initCanvasCAD() {
       },
       onComponentPlaced: (comp) => updatePropertiesPanel(comp),
       log: (text, type = "system") => addLog(text, type),
+      getPinNode: (pinKey) => circuitState.getPinNode(pinKey),
+      onProbePlaced: (channel, nodeId) => {
+        addLog(probePlacementController.placeProbe(channel, nodeId), "system");
+        updateCanvasRendering();
+      },
     });
   }
   if (visualAudit.isStep("drop")) return;

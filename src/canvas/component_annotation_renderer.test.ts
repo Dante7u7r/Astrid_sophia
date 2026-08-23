@@ -95,6 +95,8 @@ describe("component_annotation_renderer terminal helpers", () => {
     expect(parsePowerRailVoltage({ label: "VDD" } as any)).toBe(3.3);
     expect(parsePowerRailVoltage({ label: "VEE" } as any)).toBe(-5);
     expect(parsePowerRailVoltage({ label: "VSS" } as any)).toBe(0);
+    expect(parsePowerRailVoltage({ label: "V+" } as any)).toBe(15);
+    expect(parsePowerRailVoltage({ label: "V-" } as any)).toBe(-15);
     expect(parsePowerRailVoltage({ label: "+24V" } as any)).toBe(24);
   });
 

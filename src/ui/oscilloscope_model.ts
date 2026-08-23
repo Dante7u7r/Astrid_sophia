@@ -383,9 +383,29 @@ export function buildTyTracePoints(
 
   let effectiveStartIndex = Math.max(0, Math.min(startIndex, results.length - 1));
   let firstTime = results[effectiveStartIndex].time;
-  let endIndex = findVisibleEndIndex(results, effectiveStartIndex, firstTime + windowDuration);
+  const latestTime = results[results.length - 1].time;
+  const totalAvailableDuration = latestTime - results[0].time;
 
-  // Si no hay suficientes muestras hacia adelante desde el trigger, rebobinamos para llenar la pantalla
+  // Si desde effectiveStartIndex no se cubre la duración esperada pero hay más datos en el buffer, rebobinar adecuadamente
+  if (latestTime - firstTime < Math.min(windowDuration * 0.5, totalAvailableDuration)) {
+    if (totalAvailableDuration >= windowDuration) {
+      const targetStartTime = latestTime - windowDuration;
+      let newStart = 0;
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].time >= targetStartTime) {
+          newStart = i;
+          break;
+        }
+      }
+      effectiveStartIndex = newStart;
+      firstTime = results[effectiveStartIndex].time;
+    } else {
+      effectiveStartIndex = 0;
+      firstTime = results[0].time;
+    }
+  }
+
+  let endIndex = findVisibleEndIndex(results, effectiveStartIndex, firstTime + windowDuration);
   if (endIndex - effectiveStartIndex < 2 && results.length >= 2) {
     effectiveStartIndex = 0;
     firstTime = results[0].time;

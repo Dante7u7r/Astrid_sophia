@@ -78,7 +78,7 @@ export const OpampDefinition: ComponentDefinition = {
     ctx.lineTo(0, 15);
     ctx.stroke();
 
-    // 3. Plus (+) en pin 0
+    // 3. Plus (+) en pin 0 (In+)
     ctx.strokeStyle = state.color;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -87,12 +87,22 @@ export const OpampDefinition: ComponentDefinition = {
     ctx.moveTo(-18, -18);
     ctx.lineTo(-18, -12);
 
-    // 4. Minus (-) en pin 1
+    // 4. Minus (-) en pin 1 (In-)
     ctx.moveTo(-21, 15);
     ctx.lineTo(-15, 15);
     ctx.stroke();
 
-    // 5. Indicador de estado
+    // 5. Etiquetas de alimentación V+ (Pin 2 superior) y V- (Pin 3 inferior)
+    ctx.font = "bold 8px 'JetBrains Mono', monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#F59E0B"; // Ámbar para positivo
+    ctx.fillText("V+", 4, -28);
+
+    ctx.fillStyle = "#38BDF8"; // Celeste para negativo
+    ctx.fillText("V-", 4, 28);
+
+    // 6. Indicador de estado de saturación / linealidad
     if (isSaturatedPos || isSaturatedNeg) {
       ctx.fillStyle = "#EF4444";
       ctx.font = "bold 8px 'Inter', sans-serif";

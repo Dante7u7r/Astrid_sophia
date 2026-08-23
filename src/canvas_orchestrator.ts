@@ -536,6 +536,8 @@ export class CanvasOrchestrator {
 
   // --- DRAWING / RENDERING ---
 
+  public lastProbes: ProbeBadges = {};
+
   public renderBase(
     voltageMap: Record<string, number> = {},
     probes: ProbeBadges = {},
@@ -543,6 +545,7 @@ export class CanvasOrchestrator {
     sparMarkers?: SParameterMarker[],
     branchCurrents: Record<string, number> = {},
   ): void {
+    this.lastProbes = probes;
     this.sceneRenderer.render(voltageMap, probes, nodeMap, sparMarkers, branchCurrents);
   }
 
@@ -565,10 +568,31 @@ export class CanvasOrchestrator {
     sparMarkers?: SParameterMarker[],
     branchCurrents: Record<string, number> = {},
   ): void {
+    this.lastProbes = probes;
     this.renderBase(voltageMap, probes, nodeMap, sparMarkers, branchCurrents);
     if (this.overlayRenderer) {
       this.renderOverlay(voltageMap, branchCurrents);
     }
+  }
+
+  public hitTestProbe(worldX: number, worldY: number): "CH1" | "CH2" | "CH3" | "CH4" | null {
+    const probeEntries: [keyof ProbeBadges, "CH1" | "CH2" | "CH3" | "CH4"][] = [
+      ["ch1", "CH1"],
+      ["ch2", "CH2"],
+      ["ch3", "CH3"],
+      ["ch4", "CH4"],
+    ];
+    for (const [key, ch] of probeEntries) {
+      const pt = this.lastProbes[key];
+      if (!pt) continue;
+      // Badge rectangle: width 28, height 15, centered at pt.x, top at pt.y - 23
+      const inBadge = worldX >= pt.x - 18 && worldX <= pt.x + 18 && worldY >= pt.y - 28 && worldY <= pt.y - 2;
+      const nearTip = Math.hypot(worldX - pt.x, worldY - pt.y) <= 15;
+      if (inBadge || nearTip) {
+        return ch;
+      }
+    }
+    return null;
   }
 
   /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel. */

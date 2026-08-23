@@ -136,9 +136,9 @@ export class OscilloscopePanel {
 
   // 4 channels probe nodes
   public ch1ProbeNode: string | null = "1";
-  public ch2ProbeNode: string | null = "2";
-  public ch3ProbeNode: string | null = "3";
-  public ch4ProbeNode: string | null = "4";
+  public ch2ProbeNode: string | null = null;
+  public ch3ProbeNode: string | null = null;
+  public ch4ProbeNode: string | null = null;
 
   // Advanced Digital Storage Features (Tektronix / Keysight DSO)
   public interpolationMode: "linear" | "sinc" = "linear";
@@ -167,6 +167,7 @@ export class OscilloscopePanel {
   private draggingMarker: null | { type: "cursor"; cursor: OscilloscopeCursor } | { type: "channelOffset"; channel: 1 | 2 | 3 | 4 } | { type: "triggerLevel" } = null;
 
   public onPickProbeRequested?: (channel: "ch1" | "ch2" | "ch3" | "ch4") => void;
+  public onProbeNodeChanged?: (channel: "ch1" | "ch2" | "ch3" | "ch4", nodeId: string | null) => void;
 
   // Calibration settings per channel
   public voltsPerDivCh1 = 1.0;
@@ -408,6 +409,14 @@ export class OscilloscopePanel {
     this.draw();
   }
 
+  public isChannelActive(key: "ch1" | "ch2" | "ch3" | "ch4" | "math"): boolean {
+    if (key === "ch1") return this.oscCh1Btn?.classList.contains("active") ?? true;
+    if (key === "ch2") return this.oscCh2Btn?.classList.contains("active") ?? false;
+    if (key === "ch3") return this.oscCh3Btn?.classList.contains("active") ?? false;
+    if (key === "ch4") return this.oscCh4Btn?.classList.contains("active") ?? false;
+    return this.isMathEnabled;
+  }
+
   public syncFocusedChannelUI(): void {
     const ch = this.focusedChannel;
 
@@ -439,14 +448,7 @@ export class OscilloscopePanel {
     }
 
     // Active Toggle Button
-    const isChannelActive = (key: "ch1" | "ch2" | "ch3" | "ch4" | "math") => {
-      if (key === "ch1") return this.oscCh1Btn?.classList.contains("active") ?? true;
-      if (key === "ch2") return this.oscCh2Btn?.classList.contains("active") ?? false;
-      if (key === "ch3") return this.oscCh3Btn?.classList.contains("active") ?? false;
-      if (key === "ch4") return this.oscCh4Btn?.classList.contains("active") ?? false;
-      return this.isMathEnabled;
-    };
-    const active = isChannelActive(ch);
+    const active = this.isChannelActive(ch);
     if (this.focusedToggleBtn) {
       this.focusedToggleBtn.textContent = active ? "ON" : "OFF";
       this.focusedToggleBtn.classList.toggle("active", active);
@@ -752,14 +754,37 @@ export class OscilloscopePanel {
     this.tabCh4?.addEventListener("click", () => this.setFocusedChannel("ch4"));
     this.tabMath?.addEventListener("click", () => this.setFocusedChannel("math"));
 
-    // 3. Probe Picker Button in focused channel card
+    // 3. Probe Picker Button and Drag-and-Drop from panel to canvas
     const pickProbeBtn = document.querySelector<HTMLButtonElement>("#osc-focused-pick-probe-btn");
     pickProbeBtn?.addEventListener("click", () => {
       const ch = this.focusedChannel === "math" ? "ch1" : this.focusedChannel;
       this.onPickProbeRequested?.(ch);
     });
 
-    // 3. Focused Card Controls
+    const setupProbeDrag = (el: HTMLElement | null, getChannel: () => string) => {
+      if (!el) return;
+      el.setAttribute("draggable", "true");
+      el.addEventListener("dragstart", (e) => {
+        const ch = getChannel().toUpperCase();
+        if (e.dataTransfer) {
+          e.dataTransfer.setData("application/astryd-probe", ch);
+          e.dataTransfer.setData("text/plain", `probe:${ch}`);
+          e.dataTransfer.effectAllowed = "copy";
+        }
+      });
+    };
+
+    setupProbeDrag(pickProbeBtn, () => this.focusedChannel === "math" ? "ch1" : this.focusedChannel);
+    setupProbeDrag(this.oscCh1Btn, () => "ch1");
+    setupProbeDrag(this.oscCh2Btn, () => "ch2");
+    setupProbeDrag(this.oscCh3Btn, () => "ch3");
+    setupProbeDrag(this.oscCh4Btn, () => "ch4");
+    setupProbeDrag(this.tabCh1, () => "ch1");
+    setupProbeDrag(this.tabCh2, () => "ch2");
+    setupProbeDrag(this.tabCh3, () => "ch3");
+    setupProbeDrag(this.tabCh4, () => "ch4");
+
+    // 4. Focused Card Controls
     this.focusedToggleBtn?.addEventListener("click", () => {
       const ch = this.focusedChannel;
       if (ch === "ch1") this.oscCh1Btn?.classList.toggle("active");
@@ -794,6 +819,9 @@ export class OscilloscopePanel {
       }
       this.syncFocusedChannelUI();
       this.draw();
+      if (ch !== "math") {
+        this.onProbeNodeChanged?.(ch, val);
+      }
     });
 
     const setCoupling = (mode: "dc" | "ac" | "gnd") => {

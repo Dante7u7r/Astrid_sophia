@@ -729,87 +729,8 @@
                 <span class="category-arrow">▲</span>
               </div>
               <div class="category-content" id="cat-anotaciones">
-                <!-- Terminal de Alimentación Explícito (Power Port) -->
-                <div class="component-card" draggable="true" id="comp-power-port" data-type="power_port" data-default="5" data-tooltip="Terminal de alimentación explícito. Genera una fuente de tensión visible en el netlist (auditable). Preferir sobre net_label 'power'.">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="20" cy="18" r="10" stroke="currentColor" fill="none"/>
-                      <text x="20" y="21" text-anchor="middle" font-size="8" font-family="monospace" fill="#F59E0B">5V</text>
-                      <path d="M 20 8 L 20 2 M 16 6 L 20 2 L 24 6" stroke="currentColor" fill="none"/>
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Terminal de Alimentación</span>
-                    <span class="comp-desc">Fuente visible en netlist (auditable)</span>
-                  </div>
-                </div>
-
-                <!-- Terminal de Alimentación (+5V VCC) -->
-                <div class="component-card" draggable="true" id="comp-power_5v" data-type="net_label" data-default="+5V" data-tooltip="Terminal +5V: Inyecta una fuente de tensión virtual constante de +5V referenciada a GND (0V) en todos los nodos con esta etiqueta sin trazar cables.">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <line x1="20" y1="32" x2="20" y2="16" />
-                      <line x1="10" y1="16" x2="30" y2="16" />
-                      <polygon points="14,16 20,8 26,16" fill="#F59E0B" fill-opacity="0.35" />
-                      <circle cx="20" cy="32" r="2.5" fill="#F59E0B" />
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Terminal +5V (VCC)</span>
-                    <span class="comp-desc">Fuente V-source virtual (+5V)</span>
-                  </div>
-                </div>
-
-                <!-- Terminal de Alimentación (+3.3V VDD) -->
-                <div class="component-card" draggable="true" id="comp-power_3v3" data-type="net_label" data-default="+3.3V" data-tooltip="Terminal +3.3V: Inyecta una fuente de tensión virtual constante de +3.3V referenciada a GND (0V) en todos los nodos con esta etiqueta sin trazar cables.">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <line x1="20" y1="32" x2="20" y2="16" />
-                      <line x1="10" y1="16" x2="30" y2="16" />
-                      <polygon points="14,16 20,8 26,16" fill="#F59E0B" fill-opacity="0.35" />
-                      <circle cx="20" cy="32" r="2.5" fill="#F59E0B" />
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Terminal +3.3V (VDD)</span>
-                    <span class="comp-desc">Fuente V-source virtual (+3.3V)</span>
-                  </div>
-                </div>
-
-                <!-- Terminal de Tierra (GND / 0V) -->
-                <div class="component-card" draggable="true" id="comp-ground_term" data-type="net_label" data-default="GND" data-tooltip="Terminal GND: Fija el potencial del nodo a Tierra de referencia SPICE (Nodo 0).">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <line x1="20" y1="8" x2="20" y2="18" />
-                      <line x1="10" y1="18" x2="30" y2="18" />
-                      <line x1="14" y1="23" x2="26" y2="23" />
-                      <line x1="17" y1="28" x2="23" y2="28" />
-                      <circle cx="20" cy="8" r="2.5" fill="#10B981" />
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Terminal de Tierra (GND)</span>
-                    <span class="comp-desc">Referencia 0V directa (Nodo 0)</span>
-                  </div>
-                </div>
-
-                <!-- Terminal de Reloj / Pulso (CLK) -->
-                <div class="component-card" draggable="true" id="comp-clk_gen" data-type="net_label" data-default="CLK" data-tooltip="Terminal CLK: Inyecta un generador de señal de reloj/pulsos virtual (V_SIG) referenciado a GND.">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#FBBF24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#FBBF24" fill-opacity="0.15" />
-                      <polyline points="15,22 15,16 19,16 19,22 23,22 23,16" stroke-width="1.8" />
-                      <circle cx="6" cy="20" r="2.5" fill="#FBBF24" />
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Terminal Reloj (CLK)</span>
-                    <span class="comp-desc">Generador virtual de pulsos</span>
-                  </div>
-                </div>
-
-                <!-- Puerto de Red (Net Label) -->
-                <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A" data-tooltip="Puerto de Red: Conecta de forma virtual e invisible todos los terminales que compartan el mismo nombre de red (sin fuente de tensión).">
+                <!-- Puerto de Red / Terminal Configurable (Net Label) -->
+                <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A" data-tooltip="Puerto de Red: Conecta de forma virtual e invisible todos los terminales que compartan el mismo nombre. Totalmente configurable como Alimentación (VCC/VDD/V-), Tierra (GND), Señal, Generador de reloj o Bus desde el panel de propiedades.">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#38BDF8" fill-opacity="0.15" />
@@ -819,11 +740,11 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Puerto de Red</span>
-                    <span class="comp-desc">Unión virtual (sin fuente)</span>
+                    <span class="comp-desc">Configurable (Alim, GND, Señal, Bus)</span>
                   </div>
                 </div>
 
-                <!-- Bloque de Nota / Título -->
+                <!-- Bloque de Nota de Ingeniería -->
                 <div class="component-card" draggable="true" id="comp-text_note" data-type="text_note" data-default="Nota de Ingeniería">
                   <div class="comp-icon-box">
                     <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -835,7 +756,7 @@
                   </div>
                   <div class="comp-details">
                     <span class="comp-name">Nota de Ingeniería</span>
-                    <span class="comp-desc">Títulos y Documentación</span>
+                    <span class="comp-desc">Texto y Documentación Markdown</span>
                   </div>
                 </div>
               </div>
@@ -911,11 +832,11 @@
               <!-- Scope Header Console -->
               <div class="osc-header-bar" id="osc-header">
                 <div class="osc-panel-controls" id="osc-controls">
-                  <!-- Channel Active Buttons -->
-                  <button id="osc-ch1-btn" class="btn-osc-mini active ch1-badge" type="button"><span class="ch-dot"></span> CH1</button>
-                  <button id="osc-ch2-btn" class="btn-osc-mini ch2-badge" type="button"><span class="ch-dot"></span> CH2</button>
-                  <button id="osc-ch3-btn" class="btn-osc-mini ch3-badge" type="button"><span class="ch-dot"></span> CH3</button>
-                  <button id="osc-ch4-btn" class="btn-osc-mini ch4-badge" type="button"><span class="ch-dot"></span> CH4</button>
+                  <!-- Channel Active Buttons (Clic para alternar, Shift+Clic o Arrastrar al lienzo para colocar sonda) -->
+                  <button id="osc-ch1-btn" class="btn-osc-mini active ch1-badge" type="button" draggable="true" title="Clic: Alternar traza · Shift+Clic o Arrastra al lienzo para conectar sonda"><span class="ch-dot"></span> CH1</button>
+                  <button id="osc-ch2-btn" class="btn-osc-mini ch2-badge" type="button" draggable="true" title="Clic: Alternar traza · Shift+Clic o Arrastra al lienzo para conectar sonda"><span class="ch-dot"></span> CH2</button>
+                  <button id="osc-ch3-btn" class="btn-osc-mini ch3-badge" type="button" draggable="true" title="Clic: Alternar traza · Shift+Clic o Arrastra al lienzo para conectar sonda"><span class="ch-dot"></span> CH3</button>
+                  <button id="osc-ch4-btn" class="btn-osc-mini ch4-badge" type="button" draggable="true" title="Clic: Alternar traza · Shift+Clic o Arrastra al lienzo para conectar sonda"><span class="ch-dot"></span> CH4</button>
                   
                   <span class="osc-v-divider"></span>
                   
@@ -1112,11 +1033,11 @@
                     
                     <!-- Channel Selector Tabs -->
                     <div class="osc-channel-tabs-bar">
-                      <button id="osc-tab-ch1" class="osc-channel-tab ch1 active" type="button" data-ch="ch1"><span class="ch-tab-dot"></span> CH1</button>
-                      <button id="osc-tab-ch2" class="osc-channel-tab ch2" type="button" data-ch="ch2"><span class="ch-tab-dot"></span> CH2</button>
-                      <button id="osc-tab-ch3" class="osc-channel-tab ch3" type="button" data-ch="ch3"><span class="ch-tab-dot"></span> CH3</button>
-                      <button id="osc-tab-ch4" class="osc-channel-tab ch4" type="button" data-ch="ch4"><span class="ch-tab-dot"></span> CH4</button>
-                      <button id="osc-tab-math" class="osc-channel-tab math" type="button" data-ch="math"><span class="ch-tab-dot"></span> MATH</button>
+                      <button id="osc-tab-ch1" class="osc-channel-tab ch1 active" type="button" draggable="true" data-ch="ch1" title="Clic para enfocar · Arrastra al lienzo para conectar sonda CH1"><span class="ch-tab-dot"></span> CH1</button>
+                      <button id="osc-tab-ch2" class="osc-channel-tab ch2" type="button" draggable="true" data-ch="ch2" title="Clic para enfocar · Arrastra al lienzo para conectar sonda CH2"><span class="ch-tab-dot"></span> CH2</button>
+                      <button id="osc-tab-ch3" class="osc-channel-tab ch3" type="button" draggable="true" data-ch="ch3" title="Clic para enfocar · Arrastra al lienzo para conectar sonda CH3"><span class="ch-tab-dot"></span> CH3</button>
+                      <button id="osc-tab-ch4" class="osc-channel-tab ch4" type="button" draggable="true" data-ch="ch4" title="Clic para enfocar · Arrastra al lienzo para conectar sonda CH4"><span class="ch-tab-dot"></span> CH4</button>
+                      <button id="osc-tab-math" class="osc-channel-tab math" type="button" data-ch="math" title="Clic para enfocar canal matemático"><span class="ch-tab-dot"></span> MATH</button>
                     </div>
 
                     <!-- Focused Channel Control Card -->
@@ -1129,7 +1050,7 @@
                       <div class="rack-row">
                         <div class="rack-label-group">
                           <label for="osc-focused-node" class="rack-label">Sonda / Nodo Circuito</label>
-                          <button id="osc-focused-pick-probe-btn" class="btn-osc-mini" type="button" title="Haz clic y luego toca un terminal en el lienzo">📍 Sonda</button>
+                          <button id="osc-focused-pick-probe-btn" class="btn-osc-mini" type="button" draggable="true" title="Clic para seleccionar en lienzo · O arrastra esta sonda directamente sobre un terminal o cable">📍 Sonda</button>
                         </div>
                         <input id="osc-focused-node" type="text" class="osc-select" value="1" placeholder="Ej. 1, out..." />
                       </div>

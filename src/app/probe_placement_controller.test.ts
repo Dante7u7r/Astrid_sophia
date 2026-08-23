@@ -16,16 +16,16 @@ describe("ProbePlacementController", () => {
 
     expect(controller.getNodes()).toEqual({
       ch1: "1",
-      ch2: "2",
-      ch3: "3",
-      ch4: "4",
+      ch2: null,
+      ch3: null,
+      ch4: null,
     });
 
     const logMessage = controller.placeProbe("CH3", "12");
 
     expect(controller.getNode("CH3")).toBe("12");
     expect(panel.ch3ProbeNode).toBe("12");
-    expect(logMessage).toBe("Sonda del Canal 3 (Naranja) conectada al Nodo 12.");
+    expect(logMessage).toBe("Sonda del Canal 3 (Rosa) conectada al Nodo 12.");
   });
 
   it("gestiona el modo activo de colocacion", () => {

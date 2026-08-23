@@ -7,6 +7,10 @@
 .main-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0 16px;
   gap: 10px;
   background: rgba(11, 15, 25, 0.96);
@@ -250,7 +254,8 @@
   padding: 3px 8px;
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.06);
-  flex-shrink: 1;
+  flex-shrink: 0;
+  margin-left: auto;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -948,14 +953,18 @@ body.palette-drag-active * {
   top: 8px;
   left: 10px;
   display: flex;
-  gap: 10px;
-  background: rgba(5, 8, 18, 0.95);
+  gap: 8px;
+  background: rgba(5, 8, 18, 0.92);
   border: 1px solid rgba(102, 252, 241, 0.15);
   padding: 3px 8px;
   border-radius: 6px;
   z-index: 5;
   font-family: var(--font-mono);
   font-size: 0.65rem;
+  max-width: calc(100% - 95px);
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .hud-item {
@@ -1068,9 +1077,9 @@ body.palette-drag-active * {
 
 /* SIDEBAR RACK DE CONTROLES */
 .osc-sidebar-controls {
-  width: clamp(170px, 26vw, 205px);
-  min-width: 165px;
-  max-width: 220px;
+  width: clamp(210px, 28vw, 240px);
+  min-width: 200px;
+  max-width: 260px;
   border-left: 1px solid rgba(102, 252, 241, 0.12);
   background: linear-gradient(180deg, rgba(8, 12, 22, 0.95) 0%, rgba(5, 7, 14, 0.98) 100%);
   display: flex;
@@ -1093,15 +1102,14 @@ body.palette-drag-active * {
 }
 
 .rack-section-title {
-  font-size: clamp(0.52rem, 0.85vw, 0.6rem);
+  font-size: clamp(0.55rem, 0.85vw, 0.64rem);
   font-weight: 800;
   color: var(--text-muted);
   letter-spacing: 0.6px;
   text-transform: uppercase;
   margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .rack-row {
@@ -1126,7 +1134,7 @@ body.palette-drag-active * {
 }
 
 .rack-label {
-  font-size: clamp(0.5rem, 0.8vw, 0.58rem);
+  font-size: clamp(0.54rem, 0.8vw, 0.62rem);
   font-weight: 700;
   color: var(--text-sub);
   text-transform: uppercase;
@@ -1144,7 +1152,7 @@ body.palette-drag-active * {
 }
 
 .rack-val-badge {
-  font-size: clamp(0.52rem, 0.85vw, 0.6rem);
+  font-size: clamp(0.54rem, 0.85vw, 0.62rem);
   font-family: var(--font-mono);
   color: var(--cyan);
   font-weight: 700;
@@ -1511,6 +1519,9 @@ body.palette-drag-active * {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0 20px;
   background: rgba(2, 3, 8, 0.75);
   border-top: 1px solid rgba(255,255,255,0.055);
@@ -2201,7 +2212,15 @@ select.btn-text-only.sim-locked {
 .context-menu-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 8px;
   color: var(--text-main);
+  background: transparent;
+  border: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
   font-family: var(--font-sans);
   font-size: 0.76rem;
   font-weight: 500;
@@ -2209,10 +2228,11 @@ select.btn-text-only.sim-locked {
   transition: all 0.15s ease;
   width: 100%;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .context-menu-item:hover {
-  background: rgba(91, 243, 228, 0.08);
+  background: rgba(91, 243, 228, 0.12);
   color: var(--cyan);
 }
 
@@ -2278,6 +2298,7 @@ select.btn-text-only.sim-locked {
   flex-direction: column;
   gap: 2px;
   animation: contextMenuFadeIn 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  box-sizing: border-box;
 }
 
 .context-menu-item-wrapper:hover > .context-menu-submenu,

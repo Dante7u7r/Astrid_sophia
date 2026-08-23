@@ -386,7 +386,7 @@ export function extractElectricalNetlist(
           const rawNetName = String(comp.label || comp.value || comp.id).trim().toUpperCase();
           if (rawNetName.length > 0) {
             const parsed = parseBusLabel(rawNetName);
-            const prefix = tType === "power" ? "net_pwr" : "net_virtual";
+            const prefix = "net_virtual";
 
             if (parsed.isBus) {
               const busRootKey = `${prefix}:${parsed.baseName}[${parsed.start}:${parsed.end}]`;

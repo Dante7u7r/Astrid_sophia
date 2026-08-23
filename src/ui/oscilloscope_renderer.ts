@@ -240,7 +240,7 @@ export function drawTyReticle(
 
     ctx.font = "bold 9px var(--font-mono)";
     const badgeW = ctx.measureText(statusText).width + 12;
-    const badgeX = width - badgeW - 24;
+    const badgeX = width - badgeW - 10;
     const badgeY = 8;
 
     ctx.fillStyle = "rgba(10, 15, 25, 0.85)";

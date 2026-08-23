@@ -81,21 +81,38 @@
   padding: 0;
 }
 
+html {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
 body {
   font-family: var(--font-sans);
   background: var(--bg-void);
   color: var(--text-main);
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
+  box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* ══ CONTAINER PRINCIPAL ═════════════════════════ */
 .app-container {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
   display: grid;
   grid-template-rows: var(--header-h) 1fr var(--footer-h);
   background: var(--bg-void);
@@ -108,6 +125,8 @@ body {
   flex-direction: row;
   height: 100%;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -835,8 +854,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 0 14px;
+  gap: 6px;
+  padding: 0 10px;
   background: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -846,9 +865,9 @@ body {
 .panel-header h2,
 .panel-header h3 {
   margin: 0;
-  font-size: var(--font-sm);
+  font-size: clamp(0.7rem, 1vw, 0.78rem);
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--text-sub);
   background: linear-gradient(90deg, var(--text-bright) 0%, var(--text-sub) 100%);

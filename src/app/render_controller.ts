@@ -12,6 +12,7 @@ import {
   findClosestTimeIndex,
   shouldRenderPlaybackCanvas as canRenderPlaybackCanvas,
 } from "./playback_helpers";
+import { calculateWireMidpoint } from "../canvas/wiring_model";
 
 export interface RenderControllerDependencies {
   getOrchestrator(): CanvasOrchestrator | null;
@@ -343,11 +344,18 @@ export class RenderController {
   } {
     const oscilloscopePanel = this.dependencies.getOscilloscopePanel();
     const fallback = this.dependencies.getProbeFallbacks();
+    const isChActive = (ch: "ch1" | "ch2" | "ch3" | "ch4") => {
+      if (!oscilloscopePanel) return ch === "ch1";
+      if (typeof oscilloscopePanel.isChannelActive === "function") {
+        return oscilloscopePanel.isChannelActive(ch);
+      }
+      return ch === "ch1";
+    };
     const probeNodes = {
-      ch1: oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : fallback.ch1,
-      ch2: oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : fallback.ch2,
-      ch3: oscilloscopePanel ? oscilloscopePanel.ch3ProbeNode : fallback.ch3,
-      ch4: oscilloscopePanel ? oscilloscopePanel.ch4ProbeNode : fallback.ch4,
+      ch1: isChActive("ch1") ? (oscilloscopePanel ? oscilloscopePanel.ch1ProbeNode : fallback.ch1) : null,
+      ch2: isChActive("ch2") ? (oscilloscopePanel ? oscilloscopePanel.ch2ProbeNode : fallback.ch2) : null,
+      ch3: isChActive("ch3") ? (oscilloscopePanel ? oscilloscopePanel.ch3ProbeNode : fallback.ch3) : null,
+      ch4: isChActive("ch4") ? (oscilloscopePanel ? oscilloscopePanel.ch4ProbeNode : fallback.ch4) : null,
     };
     const sparPorts = this.dependencies.getSparPorts();
     const sparMarkers: { index: number; x: number; y: number }[] = [];
@@ -373,10 +381,28 @@ export class RenderController {
           }
         }
 
-        if (nodeId === probeNodes.ch1 && !probeMarkers.ch1) probeMarkers.ch1 = { x: pin.x, y: pin.y };
-        if (nodeId === probeNodes.ch2 && !probeMarkers.ch2) probeMarkers.ch2 = { x: pin.x, y: pin.y };
-        if (nodeId === probeNodes.ch3 && !probeMarkers.ch3) probeMarkers.ch3 = { x: pin.x, y: pin.y };
-        if (nodeId === probeNodes.ch4 && !probeMarkers.ch4) probeMarkers.ch4 = { x: pin.x, y: pin.y };
+        if (probeNodes.ch1 && nodeId === probeNodes.ch1 && !probeMarkers.ch1) probeMarkers.ch1 = { x: pin.x, y: pin.y };
+        if (probeNodes.ch2 && nodeId === probeNodes.ch2 && !probeMarkers.ch2) probeMarkers.ch2 = { x: pin.x, y: pin.y };
+        if (probeNodes.ch3 && nodeId === probeNodes.ch3 && !probeMarkers.ch3) probeMarkers.ch3 = { x: pin.x, y: pin.y };
+        if (probeNodes.ch4 && nodeId === probeNodes.ch4 && !probeMarkers.ch4) probeMarkers.ch4 = { x: pin.x, y: pin.y };
+      }
+    }
+
+    // Si una sonda no coincide con el pin de un componente, buscar en los cables del nodo
+    const probeChannels = ["ch1", "ch2", "ch3", "ch4"] as const;
+    for (const key of probeChannels) {
+      if (!probeMarkers[key] && probeNodes[key]) {
+        const targetNode = probeNodes[key];
+        for (const wire of orchestrator.wires) {
+          const wireNode = this.dependencies.circuitState.getPinNode(`${wire.from.componentId}:${wire.from.pinIndex}`);
+          if (wireNode === targetNode && wire.points.length > 0) {
+            const mid = calculateWireMidpoint(wire.points);
+            if (mid) {
+              probeMarkers[key] = { x: mid.x, y: mid.y };
+              break;
+            }
+          }
+        }
       }
     }
 

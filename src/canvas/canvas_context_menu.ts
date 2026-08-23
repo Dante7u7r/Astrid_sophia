@@ -157,7 +157,7 @@ export function showCanvasContextMenu(
   if (clickedComp) {
     populateComponentMenu(menu, clickedComp, orchestrator, callbacks, createMenuItem, createSubmenu);
   } else if (clickedWire) {
-    populateWireMenu(menu, clickedWire, orchestrator, callbacks, createMenuItem);
+    populateWireMenu(menu, clickedWire, orchestrator, callbacks, createMenuItem, createSubmenu);
   } else {
     populateCanvasMenu(menu, worldPt, orchestrator, callbacks, createMenuItem, createSubmenu);
   }
@@ -231,19 +231,21 @@ function populateComponentMenu(
   }, "📋"));
 
   // Submenú Sondas
-  const { wrapper: probeWrapper, submenu: probeSubmenu } = createSubmenu("Colocar Sonda", "🎯");
-  probeSubmenu.appendChild(createMenuItem("Canal 1 (CH1 - Cian)", "", () => {
-    const pin0Key = `${clickedComp.id}:0`;
-    const nodeId = callbacks.getPinNode(pin0Key) ?? "1";
-    callbacks.onProbePlaced("CH1", nodeId);
-    callbacks.log(`Sonda CH1 conectada a pin 1 de [${clickedComp.id}] (Nodo: ${nodeId})`, "system");
-  }, "🔵"));
-  probeSubmenu.appendChild(createMenuItem("Canal 2 (CH2 - Violeta)", "", () => {
-    const pin1Key = `${clickedComp.id}:1`;
-    const nodeId = callbacks.getPinNode(pin1Key) ?? "2";
-    callbacks.onProbePlaced("CH2", nodeId);
-    callbacks.log(`Sonda CH2 conectada a pin 2 de [${clickedComp.id}] (Nodo: ${nodeId})`, "system");
-  }, "🟣"));
+  const { wrapper: probeWrapper, submenu: probeSubmenu } = createSubmenu("Colocar Sonda Osciloscopio", "📍");
+  const probeConfigs = [
+    { ch: "CH1" as const, label: "Canal 1 (CH1 - Amarillo)", icon: "🟡", pinIdx: 0, defaultNode: "1" },
+    { ch: "CH2" as const, label: "Canal 2 (CH2 - Celeste)", icon: "🔵", pinIdx: 0, defaultNode: "2" },
+    { ch: "CH3" as const, label: "Canal 3 (CH3 - Rosa)", icon: "🔴", pinIdx: 0, defaultNode: "3" },
+    { ch: "CH4" as const, label: "Canal 4 (CH4 - Verde)", icon: "🟢", pinIdx: 0, defaultNode: "4" },
+  ];
+  for (const p of probeConfigs) {
+    probeSubmenu.appendChild(createMenuItem(p.label, "", () => {
+      const pinKey = `${clickedComp.id}:${p.pinIdx}`;
+      const nodeId = callbacks.getPinNode(pinKey) ?? p.defaultNode;
+      callbacks.onProbePlaced(p.ch, nodeId);
+      callbacks.log(`Sonda ${p.ch} conectada a [${clickedComp.id}] (Nodo: ${nodeId})`, "system");
+    }, p.icon));
+  }
   menu.appendChild(probeWrapper);
 
   // Submenú Alineación (si hay selección múltiple)
@@ -295,6 +297,7 @@ function populateWireMenu(
   orchestrator: CanvasOrchestrator,
   callbacks: ContextMenuCallbacks,
   createMenuItem: (label: string, shortcut: string, action: () => void, icon?: string) => HTMLButtonElement,
+  createSubmenu: (label: string, icon?: string) => { wrapper: HTMLElement; submenu: HTMLElement },
 ): void {
   orchestrator.selectedWire = clickedWire;
   orchestrator.selectedComponent = null;
@@ -302,19 +305,22 @@ function populateWireMenu(
   callbacks.onSelectionChanged(null);
   callbacks.requestRender(true);
 
-  menu.appendChild(createMenuItem("Sonda CH1 en este Cable", "", () => {
-    const fromPinKey = `${clickedWire.from.componentId}:${clickedWire.from.pinIndex}`;
-    const nodeId = callbacks.getPinNode(fromPinKey) ?? "1";
-    callbacks.onProbePlaced("CH1", nodeId);
-    callbacks.log(`Sonda CH1 colocada en pista [${clickedWire.id}] (Nodo: ${nodeId})`, "system");
-  }, "🔵"));
-
-  menu.appendChild(createMenuItem("Sonda CH2 en este Cable", "", () => {
-    const fromPinKey = `${clickedWire.from.componentId}:${clickedWire.from.pinIndex}`;
-    const nodeId = callbacks.getPinNode(fromPinKey) ?? "2";
-    callbacks.onProbePlaced("CH2", nodeId);
-    callbacks.log(`Sonda CH2 colocada en pista [${clickedWire.id}] (Nodo: ${nodeId})`, "system");
-  }, "🟣"));
+  const { wrapper: wireProbeWrapper, submenu: wireProbeSubmenu } = createSubmenu("Colocar Sonda Osciloscopio", "📍");
+  const wireProbeConfigs = [
+    { ch: "CH1" as const, label: "Canal 1 (CH1 - Amarillo)", icon: "🟡", defaultNode: "1" },
+    { ch: "CH2" as const, label: "Canal 2 (CH2 - Celeste)", icon: "🔵", defaultNode: "2" },
+    { ch: "CH3" as const, label: "Canal 3 (CH3 - Rosa)", icon: "🔴", defaultNode: "3" },
+    { ch: "CH4" as const, label: "Canal 4 (CH4 - Verde)", icon: "🟢", defaultNode: "4" },
+  ];
+  for (const p of wireProbeConfigs) {
+    wireProbeSubmenu.appendChild(createMenuItem(p.label, "", () => {
+      const fromPinKey = `${clickedWire.from.componentId}:${clickedWire.from.pinIndex}`;
+      const nodeId = callbacks.getPinNode(fromPinKey) ?? p.defaultNode;
+      callbacks.onProbePlaced(p.ch, nodeId);
+      callbacks.log(`Sonda ${p.ch} colocada en cable [${clickedWire.id}] (Nodo: ${nodeId})`, "system");
+    }, p.icon));
+  }
+  menu.appendChild(wireProbeWrapper);
 
   appendDivider(menu);
 
@@ -395,14 +401,8 @@ function populateCanvasMenu(
 
   // Puertos y Terminales EDA (Proteus)
   const { wrapper: noteWrapper, submenu: noteSubmenu } = createSubmenu("Puertos y Terminales (EDA)", "🏷️");
-  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (+5V VCC · V-Source virtual)", "", () => addComp("net_label", "+5V")));
-  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (+3.3V VDD · V-Source virtual)", "", () => addComp("net_label", "+3.3V")));
-  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (+12V · V-Source virtual)", "", () => addComp("net_label", "+12V")));
-  noteSubmenu.appendChild(createMenuItem("Terminal de Alimentación (-12V · V-Source virtual)", "", () => addComp("net_label", "-12V")));
-  noteSubmenu.appendChild(createMenuItem("Terminal de Tierra (GND / Nodo 0)", "", () => addComp("net_label", "GND")));
-  noteSubmenu.appendChild(createMenuItem("Terminal de Reloj / Pulso (CLK · Generador virtual)", "", () => addComp("net_label", "CLK")));
-  noteSubmenu.appendChild(createMenuItem("Puerto de Red (Net Label · Unión sin fuente)", "", () => addComp("net_label", "NET_A")));
-  noteSubmenu.appendChild(createMenuItem("Nota de Documentación Técnica", "", () => addComp("text_note", "Nota técnica")));
+  noteSubmenu.appendChild(createMenuItem("Puerto de Red (Net Label · Configurable)", "", () => addComp("net_label", "NET_A")));
+  noteSubmenu.appendChild(createMenuItem("Nota de Ingeniería (Text Note · Markdown)", "", () => addComp("text_note", "Nota de Ingeniería")));
   addSubmenu.appendChild(noteWrapper);
 
   menu.appendChild(addWrapper);
