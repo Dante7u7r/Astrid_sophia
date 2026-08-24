@@ -72,6 +72,12 @@ export function createComponent(
     const upper = valStr.toUpperCase();
     if (["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"].includes(upper)) {
       newComp.terminalType = "ground";
+    } else if (["NC", "NO_CONNECT", "NO CONNECT", "N/C", "SIN_CONEXION", "SIN CONEXION"].includes(upper)) {
+      newComp.terminalType = "no_connect";
+    } else if (["IN", "INPUT", "ENTRADA"].includes(upper)) {
+      newComp.terminalType = "input";
+    } else if (["OUT", "OUTPUT", "SALIDA"].includes(upper)) {
+      newComp.terminalType = "output";
     } else if (upper.includes("CLK") || upper.includes("PULSE")) {
       newComp.terminalType = "generator";
       newComp.waveType = "square";

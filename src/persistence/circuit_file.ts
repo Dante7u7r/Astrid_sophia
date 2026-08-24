@@ -196,6 +196,7 @@ const VALID_TERMINAL_TYPES = new Set<string>([
   "input",
   "output",
   "generator",
+  "no_connect",
 ]);
 
 type NumericComponentField = (typeof NUMERIC_COMPONENT_FIELDS)[number];

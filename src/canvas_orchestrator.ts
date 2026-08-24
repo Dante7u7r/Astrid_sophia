@@ -181,7 +181,7 @@ export interface ComponentInstance {
   relayClosed?: boolean;
   buzzerLevel?: number;
   label?: string; // Etiqueta de texto o nombre de red
-  terminalType?: "signal" | "power" | "ground" | "input" | "output" | "generator"; // Tipo de terminal EDA (Proteus)
+  terminalType?: "signal" | "power" | "ground" | "input" | "output" | "generator" | "no_connect"; // Tipo de terminal EDA (Proteus / Altium)
   voltage?: number; // Tensión asignada al terminal de alimentación (V)
   fontSize?: number; // Tamaño de fuente para notas
   textColor?: string; // Color personalizado de texto

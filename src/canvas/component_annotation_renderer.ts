@@ -6,7 +6,7 @@ import type { ComponentInstance } from "../canvas_orchestrator";
  * y Bloques de Documentación / Anotaciones de Ingeniería (Engineering Text Notes).
  */
 
-export type TerminalType = "signal" | "power" | "ground" | "input" | "output" | "generator";
+export type TerminalType = "signal" | "power" | "ground" | "input" | "output" | "generator" | "no_connect";
 
 export function isPowerRailName(name: string): boolean {
   const upper = name.trim().toUpperCase();
@@ -17,6 +17,9 @@ export function isPowerRailName(name: string): boolean {
 export function getTerminalType(comp: ComponentInstance): TerminalType {
   if (comp.terminalType) return comp.terminalType;
   const name = String(comp.label || comp.value || comp.id || "").trim().toUpperCase();
+  if (name === "NC" || name === "NO_CONNECT" || name === "N/C" || name === "NO CONNECT" || name === "SIN_CONEXION" || name === "SIN CONEXION") {
+    return "no_connect";
+  }
   if (["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND"].includes(name)) {
     return "ground";
   }
@@ -273,9 +276,48 @@ export function drawNetLabel(
     ctx.fillStyle = isSelected ? "#F0F9FF" : "#FEF08A";
     ctx.fillText(labelText, arrowW + 12 + (totalLength - arrowW - 12) / 2, 0.5);
 
-  } else {
+  } else if (terminalType === "no_connect") {
     // =========================================================================
-    // ETIQUETA DE RED / SEÑAL / INPUT (Banderola Direccional EDA)
+    // DIRECTIVA SIN CONEXIÓN / NO CONNECT (NC / ✕)
+    // =========================================================================
+    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#F87171" : "#EF4444";
+    const size = 6.0;
+
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = isSelected ? 2.4 : 2.0;
+    ctx.lineCap = "round";
+
+    // 1. Cruz 'X' centrada sobre el pin de anclaje (0, 0)
+    ctx.beginPath();
+    ctx.moveTo(-size, -size);
+    ctx.lineTo(size, size);
+    ctx.moveTo(-size, size);
+    ctx.lineTo(size, -size);
+    ctx.stroke();
+
+    // 2. Punto central de anclaje
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
+    ctx.fillStyle = strokeCol;
+    ctx.fill();
+
+    // 3. Etiqueta "NC"
+    const displayTxt = comp.label && comp.label !== "NET" && comp.label !== "NC" ? comp.label : "NC";
+    ctx.font = "bold 8px 'JetBrains Mono', 'Fira Code', monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = isSelected ? "#F0F9FF" : "#FCA5A5";
+    ctx.fillText(displayTxt, size + 4, 0);
+
+    if (isSelected || isHovered) {
+      ctx.font = "600 7px 'Inter', sans-serif";
+      ctx.fillStyle = isSelected ? "#38BDF8" : "rgba(239, 68, 68, 0.90)";
+      ctx.fillText("✕ SIN CONEXIÓN (NC)", size + 4, 10);
+    }
+
+  } else if (terminalType === "input") {
+    // =========================================================================
+    // PUERTO DE ENTRADA (Banderola apuntando hacia el pin / circuito en Índigo)
     // =========================================================================
     ctx.font = "bold 10px 'JetBrains Mono', 'Fira Code', monospace";
     ctx.textAlign = "center";
@@ -286,8 +328,50 @@ export function drawNetLabel(
     const totalLength = textWidth + 18;
     const halfH = 10;
     const arrowW = 8;
-    const isInput = terminalType === "input";
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#78C8F0" : isInput ? "#818CF8" : color || "#38BDF8";
+    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#A5B4FC" : "#818CF8";
+
+    // Banderola apuntando hacia el pin de anclaje (0,0)
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(arrowW, -halfH);
+    ctx.lineTo(totalLength, -halfH);
+    ctx.lineTo(totalLength, halfH);
+    ctx.lineTo(arrowW, halfH);
+    ctx.closePath();
+
+    ctx.fillStyle = isSelected
+      ? "rgba(56, 189, 248, 0.35)"
+      : isHovered
+        ? "rgba(49, 46, 129, 0.95)"
+        : "rgba(30, 27, 75, 0.90)";
+    ctx.fill();
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = isSelected ? 2.0 : 1.4;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = strokeCol;
+    ctx.fill();
+
+    const textCenterX = arrowW + (totalLength - arrowW) / 2;
+    ctx.fillStyle = isSelected ? "#F0F9FF" : "#E0E7FF";
+    ctx.fillText(netName, textCenterX, 0.5);
+
+  } else {
+    // =========================================================================
+    // ETIQUETA DE RED / SEÑAL (Banderola Direccional EDA en Azul Celeste)
+    // =========================================================================
+    ctx.font = "bold 10px 'JetBrains Mono', 'Fira Code', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const metrics = ctx.measureText(netName);
+    const textWidth = Math.max(28, metrics.width);
+    const totalLength = textWidth + 18;
+    const halfH = 10;
+    const arrowW = 8;
+    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#78C8F0" : color || "#38BDF8";
 
     // 1. Trazar Banderola / Pentágono direccional EDA (Pin en 0,0 apuntando hacia +X)
     ctx.beginPath();
@@ -303,9 +387,7 @@ export function drawNetLabel(
       ? "rgba(14, 116, 144, 0.45)"
       : isHovered
         ? "rgba(15, 23, 42, 0.95)"
-        : isInput
-          ? "rgba(49, 46, 129, 0.85)"
-          : "rgba(10, 16, 28, 0.90)";
+        : "rgba(10, 16, 28, 0.90)";
     ctx.fill();
 
     // 3. Contorno y Borde de Acento

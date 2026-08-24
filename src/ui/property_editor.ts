@@ -717,6 +717,18 @@ export class PropertyEditor {
               const rawVal = String(newVal || selected.label || "CLK").trim().toUpperCase();
               selected.value = rawVal;
               selected.label = rawVal;
+            } else if (tType === "no_connect") {
+              const rawVal = String(newVal || selected.label || "NC").trim().toUpperCase();
+              selected.value = rawVal;
+              selected.label = rawVal;
+            } else if (tType === "output") {
+              const rawVal = String(newVal || selected.label || "OUT").trim().toUpperCase();
+              selected.value = rawVal;
+              selected.label = rawVal;
+            } else if (tType === "input") {
+              const rawVal = String(newVal || selected.label || "IN").trim().toUpperCase();
+              selected.value = rawVal;
+              selected.label = rawVal;
             } else {
               const rawVal = String(newVal || selected.label || selected.id).trim().toUpperCase();
               selected.value = rawVal || "NET";

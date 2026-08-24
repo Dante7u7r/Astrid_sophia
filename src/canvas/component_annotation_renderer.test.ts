@@ -166,5 +166,49 @@ describe("component_annotation_renderer terminal helpers", () => {
       rotation: 0,
     };
     expect(() => drawNetLabel(mockCtx, compSig, false, false, "#38BDF8")).not.toThrow();
+
+    const compNc: ComponentInstance = {
+      id: "NC1",
+      type: "net_label",
+      value: "NC",
+      label: "NC",
+      terminalType: "no_connect",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    expect(() => drawNetLabel(mockCtx, compNc, false, false, "#EF4444")).not.toThrow();
+
+    const compInput: ComponentInstance = {
+      id: "IN1",
+      type: "net_label",
+      value: "SIG_IN",
+      label: "SIG_IN",
+      terminalType: "input",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    expect(() => drawNetLabel(mockCtx, compInput, false, false, "#818CF8")).not.toThrow();
+
+    const compOutput: ComponentInstance = {
+      id: "OUT1",
+      type: "net_label",
+      value: "SIG_OUT",
+      label: "SIG_OUT",
+      terminalType: "output",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    expect(() => drawNetLabel(mockCtx, compOutput, false, false, "#34D399")).not.toThrow();
+  });
+
+  test("getTerminalType detects no_connect, input and output names", () => {
+    expect(getTerminalType({ id: "1", type: "net_label", value: "NC" } as any)).toBe("no_connect");
+    expect(getTerminalType({ id: "2", type: "net_label", value: "NO CONNECT" } as any)).toBe("no_connect");
+    expect(getTerminalType({ id: "3", type: "net_label", value: "SIN_CONEXION" } as any)).toBe("no_connect");
+    expect(getTerminalType({ id: "4", type: "net_label", terminalType: "input", value: "A" } as any)).toBe("input");
+    expect(getTerminalType({ id: "5", type: "net_label", terminalType: "output", value: "Y" } as any)).toBe("output");
   });
 });
