@@ -530,7 +530,8 @@ export class PropertyEditor {
       btnSnapStandard.addEventListener("click", () => {
         const orchestrator = this.callbacks.getOrchestrator();
         if (!orchestrator?.selectedComponent) return;
-        const currentVal = parseFloat(this.propValInput!.value) || 0;
+        const parsed = parseSpiceValue(this.propValInput!.value);
+        const currentVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
         if (currentVal > 0) {
           const snapped = snapToStandardValue(currentVal, "E24");
           this.propValInput!.value = formatSpiceValue(snapped);
@@ -562,11 +563,25 @@ export class PropertyEditor {
       this.propValInc.addEventListener("click", () => {
         const activeOrchestrator = this.callbacks.getOrchestrator();
         if (!activeOrchestrator?.selectedComponent) return;
-        let val = parseFloat(this.propValInput!.value) || 0;
-        const step = activeOrchestrator.selectedComponent.type === 'capacitor' ? 1e-7 : 10;
+        const comp = activeOrchestrator.selectedComponent;
+        const parsed = parseSpiceValue(this.propValInput!.value);
+        let val = parsed.valid && parsed.value !== undefined ? parsed.value : (Number(comp.value) || 0);
+
+        let step = 1;
+        if (comp.type === "capacitor") {
+          step = val > 0 ? Math.pow(10, Math.floor(Math.log10(val))) : 1e-9;
+        } else if (comp.type === "inductor") {
+          step = val > 0 ? Math.pow(10, Math.floor(Math.log10(val))) : 1e-6;
+        } else if (comp.type === "resistor" || comp.type === "potentiometer") {
+          step = val >= 1000 ? 1000 : (val >= 100 ? 100 : (val >= 10 ? 10 : 1));
+        } else {
+          step = val > 0 ? Math.max(1, Math.pow(10, Math.floor(Math.log10(Math.abs(val))))) : 1;
+        }
+
         val += step;
-        this.propValInput!.value = val.toString();
+        this.propValInput!.value = formatSpiceValue(val);
         this.propValSlider!.value = val.toString();
+        this.btnApplyProperties?.click();
       });
     }
 
@@ -574,11 +589,25 @@ export class PropertyEditor {
       this.propValDec.addEventListener("click", () => {
         const activeOrchestrator = this.callbacks.getOrchestrator();
         if (!activeOrchestrator?.selectedComponent) return;
-        let val = parseFloat(this.propValInput!.value) || 0;
-        const step = activeOrchestrator.selectedComponent.type === 'capacitor' ? 1e-7 : 10;
-        val = Math.max(val - step, 0);
-        this.propValInput!.value = val.toString();
+        const comp = activeOrchestrator.selectedComponent;
+        const parsed = parseSpiceValue(this.propValInput!.value);
+        let val = parsed.valid && parsed.value !== undefined ? parsed.value : (Number(comp.value) || 0);
+
+        let step = 1;
+        if (comp.type === "capacitor") {
+          step = val > 0 ? Math.pow(10, Math.floor(Math.log10(val))) : 1e-9;
+        } else if (comp.type === "inductor") {
+          step = val > 0 ? Math.pow(10, Math.floor(Math.log10(val))) : 1e-6;
+        } else if (comp.type === "resistor" || comp.type === "potentiometer") {
+          step = val > 1000 ? 1000 : (val > 100 ? 100 : (val > 10 ? 10 : 1));
+        } else {
+          step = val > 0 ? Math.max(1, Math.pow(10, Math.floor(Math.log10(Math.abs(val))))) : 1;
+        }
+
+        val = Math.max(0, val - step);
+        this.propValInput!.value = formatSpiceValue(val);
         this.propValSlider!.value = val.toString();
+        this.btnApplyProperties?.click();
       });
     }
 
@@ -599,6 +628,14 @@ export class PropertyEditor {
           const oldId = selected.id;
           const newId = this.propIdInput!.value.trim();
           const parsed = parseSpiceValue(this.propValInput!.value);
+
+          if (!parsed.valid || parsed.value === undefined || !Number.isFinite(parsed.value)) {
+            if (!ACTUATOR_MODEL_EDITORS.has(selected.type) && selected.type !== "net_label" && selected.type !== "text_note" && selected.type !== "dmm") {
+              this.callbacks.addLog(`Valor inválido para [${selected.id}]: ${parsed.error || this.propValInput!.value}`, "error");
+              return;
+            }
+          }
+
           const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
 
           if (newId.length > 0 && newId !== oldId) {
