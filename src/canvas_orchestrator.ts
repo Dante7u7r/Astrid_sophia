@@ -292,6 +292,8 @@ export interface PinInstance {
   pinIndex: number;
   x: number; // World X
   y: number; // World Y
+  label?: string;
+  name?: string;
   isJunction?: boolean;
   junctionPos?: Point2D;
 }

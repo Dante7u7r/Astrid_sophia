@@ -105,17 +105,63 @@ export const CapacitorDefinition: ComponentDefinition = {
   prefix: "C",
   defaultProperties: { value: 0.000001 },
   halfExtents: { halfW: 40, halfH: 40 },
-  getPins: () => STANDARD_TWO_PINS,
+  getPins: (comp) => {
+    const isPolarized = comp?.dielectricType === "electrolytic" || comp?.dielectricType === "tantalum" || Boolean((comp as any)?.polarized);
+    if (isPolarized) {
+      return [
+        { index: 0, x: -40, y: 0, label: "+", name: "Positivo (+)" },
+        { index: 1, x: 40, y: 0, label: "-", name: "Negativo (-)" },
+      ];
+    }
+    return [
+      { index: 0, x: -40, y: 0, label: "1", name: "Terminal 1" },
+      { index: 1, x: 40, y: 0, label: "2", name: "Terminal 2" },
+    ];
+  },
   render: (ctx, comp, state, options) => {
     if (options.detail === "compact") {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
+
+    const isPolarized = comp.dielectricType === "electrolytic" || comp.dielectricType === "tantalum" || Boolean((comp as any)?.polarized);
+
+    // Conectores internos desde los extremos (-20 y +20) hasta las placas
+    ctx.moveTo(-20, 0);
+    ctx.lineTo(-6, 0);
+
+    // Placa izquierda (Pin 0 / Positivo en polarizados)
     ctx.moveTo(-6, -14);
     ctx.lineTo(-6, 14);
-    ctx.moveTo(6, -14);
-    ctx.lineTo(6, 14);
+
+    if (isPolarized) {
+      // Placa derecha (Pin 1 / Negativo): Placa curva cóncava clásica de capacitor electrolítico (ANSI / IEC)
+      ctx.moveTo(8, -14);
+      ctx.quadraticCurveTo(4, 0, 8, 14);
+
+      // Lead derecho desde el centro de la placa curva al terminal
+      ctx.moveTo(5, 0);
+      ctx.lineTo(20, 0);
+    } else {
+      // Placa derecha plana (Cerámico, Film, etc.)
+      ctx.moveTo(6, -14);
+      ctx.lineTo(6, 14);
+      ctx.moveTo(6, 0);
+      ctx.lineTo(20, 0);
+    }
     ctx.stroke();
+
+    if (isPolarized) {
+      // Indicadores estáticos '+' y '-' claros y nítidos grabados en la simbología
+      ctx.save();
+      ctx.fillStyle = state.color || "#38BDF8";
+      ctx.font = "bold 10px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("+", -14, -9);
+      ctx.fillText("-", 14, -9);
+      ctx.restore();
+    }
 
     const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
     const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
@@ -129,13 +175,15 @@ export const CapacitorDefinition: ComponentDefinition = {
         : `rgba(168, 85, 247, ${0.15 + intensity * 0.35})`;
       ctx.fillRect(-5, -13, 10, 26);
 
-      // Polaridad (+) en la placa de mayor potencial
-      ctx.fillStyle = vDiff > 0 ? "#38BDF8" : "#C084FC";
-      ctx.font = "bold 8px 'Inter', sans-serif";
-      if (vDiff > 0) {
-        ctx.fillText("+", -13, -7);
-      } else {
-        ctx.fillText("+", 8, -7);
+      if (!isPolarized) {
+        // Polaridad dinámica (+) en la placa de mayor potencial para cerámicos
+        ctx.fillStyle = vDiff > 0 ? "#38BDF8" : "#C084FC";
+        ctx.font = "bold 8px 'Inter', sans-serif";
+        if (vDiff > 0) {
+          ctx.fillText("+", -13, -7);
+        } else {
+          ctx.fillText("+", 8, -7);
+        }
       }
       ctx.restore();
     }

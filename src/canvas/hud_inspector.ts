@@ -161,7 +161,9 @@ export function renderPinTelemetryHud(
   current: number | undefined,
   history?: readonly TelemetryHistorySample[],
 ): void {
-  const nodeTitle = nodeId === "0" ? "Nodo 0 (GND)" : `Nodo ${nodeId}`;
+  const pinDescriptor = pin.name ? ` [${pin.name}]` : (pin.label ? ` [${pin.label}]` : "");
+  const pinHeader = `${pin.componentId}${pinDescriptor}`;
+  const nodeTitle = nodeId === "0" ? `${pinHeader} ➔ GND (0V)` : `${pinHeader} ➔ Nodo ${nodeId}`;
   const voltText = `V: ${formatEngineeringValue(voltage, "V")}`;
   const currText = `I: ${formatEngineeringValue(current, "A")}`;
 

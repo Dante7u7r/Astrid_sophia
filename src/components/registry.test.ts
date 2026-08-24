@@ -164,4 +164,37 @@ describe("ComponentRegistry & ComponentDescriptor System", () => {
     expect(customRegistry.has("resistor")).toBe(true);
     expect(customRegistry.getPrefix("resistor")).toBe("SR");
   });
+
+  it("resuelve etiquetas y nombres de terminales positivo/negativo en capacitores polarizados y diodos", () => {
+    // 1. Capacitor electrolítico polarizado
+    const elecCap: ComponentInstance = {
+      id: "C_ELEC",
+      type: "capacitor",
+      value: 10e-6,
+      dielectricType: "electrolytic",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    const capPins = globalComponentRegistry.getPins(elecCap);
+    expect(capPins[0].label).toBe("+");
+    expect(capPins[0].name).toContain("Positivo");
+    expect(capPins[1].label).toBe("-");
+    expect(capPins[1].name).toContain("Negativo");
+
+    // 2. Diodo rectificador
+    const diode: ComponentInstance = {
+      id: "D1",
+      type: "diode",
+      value: 0,
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    const diodePins = globalComponentRegistry.getPins(diode);
+    expect(diodePins[0].label).toBe("A");
+    expect(diodePins[0].name).toContain("Ánodo");
+    expect(diodePins[1].label).toBe("K");
+    expect(diodePins[1].name).toContain("Cátodo");
+  });
 });

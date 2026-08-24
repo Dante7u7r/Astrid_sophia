@@ -499,6 +499,18 @@ export class PropertyEditor {
 
     bindActuatorsSubformEvents(this.callbacks);
 
+    const capDielectricSelect = document.querySelector("#prop-capacitor-dielectric") as HTMLSelectElement;
+    if (capDielectricSelect) {
+      capDielectricSelect.addEventListener("change", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedComponent && orchestrator.selectedComponent.type === "capacitor") {
+          orchestrator.selectedComponent.dielectricType = capDielectricSelect.value as any;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
+      });
+    }
+
     if (this.propValInput && this.propValSlider) {
       this.propValSlider.addEventListener("input", (e) => {
         const val = (e.target as HTMLInputElement).value;
