@@ -84,7 +84,11 @@ const COMPONENT_TYPES = new Set<ComponentInstance["type"]>([
   "nmos", "opamp", "opamp_ideal", "pmos", "npn", "pnp", "lamp", "relay", "buzzer",
   "mcu_8051", "mcu_avr", "arduino_uno", "esp32", "raspberry_pi_pico",
   "isource", "led", "transformer", "switch", "x", "potentiometer",
-  "ldr", "thermistor", "dmm",
+  "ldr", "thermistor", "dmm", "fuse",
+  "zener_diode", "schottky_diode", "njf", "pjf", "opto",
+  "bsim3nmos", "bsim3pmos", "bsim4nmos", "bsim4pmos",
+  "and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate",
+  "net_label", "power_port", "text_note",
 ]);
 
 const ANALYSIS_MODES = new Set<AnalysisMode>([
@@ -111,18 +115,78 @@ const NUMERIC_COMPONENT_FIELDS = [
   "switchVh",
   "pinCount",
   "voltage",
+  "phase",
+  "modFrequency",
+  "modIndex",
+  "sourceResistance",
+  "acMag",
+  "acPhase",
+  "tolerance",
+  "powerRating",
+  "voltageRating",
+  "esr",
+  "dcResistance",
+  "currentRating",
+  "isat",
+  "forwardVoltage",
+  "maxCurrent",
+  "diodeBv",
+  "diodeIs",
+  "diodeRs",
+  "diodeN",
+  "diodeCjo",
+  "diodeTt",
+  "diodeIbv",
+  "bjtIs",
+  "bjtBf",
+  "bjtVaf",
+  "bjtRb",
+  "bjtRc",
+  "bjtCje",
+  "bjtCjc",
+  "mosVth",
+  "mosRon",
+  "mosCgs",
+  "mosCgd",
+  "jfetVto",
+  "jfetBeta",
+  "jfetLambda",
+  "jfetCgs",
+  "jfetCgd",
+  "opampAol",
+  "opampGbw",
+  "opampSr",
+  "opampRin",
+  "opampRout",
+  "opampVos",
+  "opampIb",
+  "gateTrise",
+  "gateTfall",
+  "gateRout",
+  "gateVhigh",
+  "gateVlow",
+  "riseDelay",
+  "fallDelay",
 ] as const;
 
 const BOOLEAN_COMPONENT_FIELDS = [
   "mirror",
   "relayClosed",
   "switchState",
+  "isSubcircuitBlock",
 ] as const;
 
 const STRING_COMPONENT_FIELDS = [
   "waveType",
   "firmwareHex",
   "spiceMacro",
+  "spiceNetlist",
+  "subcircuitTabId",
+  "subcircuitName",
+  "modelName",
+  "dielectricType",
+  "potTaper",
+  "ledColor",
 ] as const;
 
 const VALID_TERMINAL_TYPES = new Set<string>([
@@ -188,6 +252,9 @@ function serializeComponent(component: ComponentInstance): Record<string, unknow
   for (const field of STRING_COMPONENT_FIELDS) {
     if (component[field] !== undefined) serialized[field] = component[field];
   }
+  if (component.terminalType) serialized.terminalType = component.terminalType;
+  if (component.params) serialized.params = component.params;
+  if (component.pinLabels) serialized.pinLabels = component.pinLabels;
   if (component.firmware) serialized.firmwareBytes = Array.from(component.firmware);
 
   return serialized;
@@ -218,14 +285,14 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
   const writable: WritableParsedComponent = component;
 
   for (const field of NUMERIC_COMPONENT_FIELDS) {
-    if (value[field] !== undefined) writable[field] = finiteNumber(value[field], `${path}.${field}`);
+    if (value[field] !== undefined) (writable as any)[field] = finiteNumber(value[field], `${path}.${field}`);
   }
   for (const field of BOOLEAN_COMPONENT_FIELDS) {
     if (value[field] !== undefined) {
       if (typeof value[field] !== "boolean") {
         throw new CircuitFileValidationError(`${path}.${field} debe ser booleano.`);
       }
-      writable[field] = value[field];
+      (writable as any)[field] = value[field];
     }
   }
   for (const field of STRING_COMPONENT_FIELDS) {
@@ -233,7 +300,7 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
       if (typeof value[field] !== "string") {
         throw new CircuitFileValidationError(`${path}.${field} debe ser texto.`);
       }
-      writable[field] = value[field];
+      (writable as any)[field] = value[field];
     }
   }
 
@@ -242,6 +309,14 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
       throw new CircuitFileValidationError(`${path}.terminalType no es valido.`);
     }
     component.terminalType = value.terminalType as any;
+  }
+
+  if (isRecord(value.params)) {
+    component.params = { ...value.params } as Record<string, number | string>;
+  }
+
+  if (isRecord(value.pinLabels)) {
+    component.pinLabels = { ...value.pinLabels } as Record<number, string>;
   }
 
   if (value.firmwareBytes !== undefined) {

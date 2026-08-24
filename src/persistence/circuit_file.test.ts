@@ -126,6 +126,60 @@ describe("archivo .astryd 3.0", () => {
     expect(cloned[0].selected).toBeUndefined();
   });
 
+  test("clonado entre pestanas y persistencia conserva dielectricType, rating y propiedades extendidas", () => {
+    const source: ComponentInstance[] = [
+      {
+        id: "C1",
+        type: "capacitor",
+        value: 100e-6,
+        x: 100,
+        y: 200,
+        rotation: 0,
+        dielectricType: "electrolytic",
+        voltageRating: 50,
+        esr: 0.12,
+      },
+      {
+        id: "R1",
+        type: "resistor",
+        value: 4700,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        tolerance: 1,
+        powerRating: 0.5,
+      },
+      {
+        id: "LED1",
+        type: "led",
+        value: 0,
+        x: 50,
+        y: 50,
+        rotation: 0,
+        ledColor: "blue",
+        forwardVoltage: 3.2,
+      },
+      {
+        id: "F1",
+        type: "fuse",
+        value: 2.5,
+        x: -50,
+        y: -50,
+        rotation: 0,
+      },
+    ];
+
+    const cloned = cloneCircuitComponents(source);
+    expect(cloned[0].dielectricType).toBe("electrolytic");
+    expect(cloned[0].voltageRating).toBe(50);
+    expect(cloned[0].esr).toBe(0.12);
+    expect(cloned[1].tolerance).toBe(1);
+    expect(cloned[1].powerRating).toBe(0.5);
+    expect(cloned[2].ledColor).toBe("blue");
+    expect(cloned[2].forwardVoltage).toBe(3.2);
+    expect(cloned[3].type).toBe("fuse");
+  });
+
   test("migra archivos 2.0 y conserva propiedades legacy disponibles", () => {
     const legacy = JSON.stringify({
       version: "2.0",
