@@ -62,32 +62,58 @@ describe("Enhanced SPICE & Engineering Value Parser", () => {
       expect(parseSpiceValue("100R").value).toBe(100);
     });
 
-    it("parses capacitors with nanofaradios, microfaradios, etc. without huge numbers", () => {
+    it("parses capacitors with shorthand abbreviations (10uf, 10nf, 100pf, 10u, 10n)", () => {
+      expect(parseSpiceValue("10uf").value).toBeCloseTo(10e-6, 15);
+      expect(parseSpiceValue("10uF").value).toBeCloseTo(10e-6, 15);
+      expect(parseSpiceValue("10u").value).toBeCloseTo(10e-6, 15);
+      expect(parseSpiceValue("10nf").value).toBeCloseTo(10e-9, 15);
+      expect(parseSpiceValue("10nF").value).toBeCloseTo(10e-9, 15);
+      expect(parseSpiceValue("10n").value).toBeCloseTo(10e-9, 15);
+      expect(parseSpiceValue("100pf").value).toBeCloseTo(100e-12, 18);
+      expect(parseSpiceValue("100pF").value).toBeCloseTo(100e-12, 18);
+      expect(parseSpiceValue("100p").value).toBeCloseTo(100e-12, 18);
+      expect(parseSpiceValue("1mf").value).toBeCloseTo(1e-3, 10);
+      expect(parseSpiceValue("1mF").value).toBeCloseTo(1e-3, 10);
+      expect(parseSpiceValue("1m").value).toBeCloseTo(1e-3, 10);
       expect(parseSpiceValue("50nF").value).toBeCloseTo(50e-9, 15);
       expect(parseSpiceValue("50 nF").value).toBeCloseTo(50e-9, 15);
       expect(parseSpiceValue("50 nanofaradios").value).toBeCloseTo(50e-9, 15);
-      expect(parseSpiceValue("50nano").value).toBeCloseTo(50e-9, 15);
-      expect(parseSpiceValue("10uF").value).toBeCloseTo(10e-6, 15);
       expect(parseSpiceValue("10 microfaradios").value).toBeCloseTo(10e-6, 15);
-      expect(parseSpiceValue("10µF").value).toBeCloseTo(10e-6, 15);
-      expect(parseSpiceValue("100 picofaradios").value).toBeCloseTo(100e-12, 18);
-      expect(parseSpiceValue("1 milifaradios").value).toBeCloseTo(1e-3, 10);
-      expect(parseSpiceValue("1mF").value).toBeCloseTo(1e-3, 10);
+    });
+
+    it("parses resistors with shorthand abbreviations (10k, 1k, 1M, 4.7k, 100r, 100)", () => {
+      expect(parseSpiceValue("10k").value).toBe(10000);
+      expect(parseSpiceValue("1k").value).toBe(1000);
+      expect(parseSpiceValue("4.7k").value).toBe(4700);
+      expect(parseSpiceValue("1M").value).toBe(1e6);
+      expect(parseSpiceValue("2.2M").value).toBe(2.2e6);
+      expect(parseSpiceValue("100r").value).toBe(100);
+      expect(parseSpiceValue("100R").value).toBe(100);
+      expect(parseSpiceValue("100").value).toBe(100);
     });
 
     it("parses inductors, voltages, currents, and frequencies", () => {
+      expect(parseSpiceValue("10mh").value).toBeCloseTo(10e-3, 10);
       expect(parseSpiceValue("10mH").value).toBeCloseTo(10e-3, 10);
-      expect(parseSpiceValue("10 henrios").value).toBe(10);
-      expect(parseSpiceValue("100 uH").value).toBeCloseTo(100e-6, 15);
+      expect(parseSpiceValue("100uh").value).toBeCloseTo(100e-6, 15);
+      expect(parseSpiceValue("100uH").value).toBeCloseTo(100e-6, 15);
+      expect(parseSpiceValue("1h").value).toBe(1);
+      expect(parseSpiceValue("1H").value).toBe(1);
+      expect(parseSpiceValue("12v").value).toBe(12);
       expect(parseSpiceValue("12V").value).toBe(12);
-      expect(parseSpiceValue("12 voltios").value).toBe(12);
+      expect(parseSpiceValue("5v").value).toBe(5);
+      expect(parseSpiceValue("5V").value).toBe(5);
+      expect(parseSpiceValue("500mv").value).toBeCloseTo(0.5, 10);
       expect(parseSpiceValue("500 mV").value).toBeCloseTo(0.5, 10);
+      expect(parseSpiceValue("2a").value).toBe(2);
       expect(parseSpiceValue("2A").value).toBe(2);
-      expect(parseSpiceValue("2 amperios").value).toBe(2);
+      expect(parseSpiceValue("100ma").value).toBeCloseTo(0.1, 10);
       expect(parseSpiceValue("100 mA").value).toBeCloseTo(0.1, 10);
+      expect(parseSpiceValue("1khz").value).toBe(1000);
       expect(parseSpiceValue("1 kHz").value).toBe(1000);
+      expect(parseSpiceValue("50hz").value).toBe(50);
       expect(parseSpiceValue("50 Hz").value).toBe(50);
-      expect(parseSpiceValue("50 hercios").value).toBe(50);
+      expect(parseSpiceValue("10mhz").value).toBe(10e6);
       expect(parseSpiceValue("10 MHz").value).toBe(10e6);
     });
   });

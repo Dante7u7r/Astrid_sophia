@@ -36,7 +36,7 @@ const EUROPEAN_NOTATION_REGEX = /^([+-]?\d+)\s*([rkmgtunpf]|meg|mega|kilo|micro|
 // Nombres de unidades físicas y símbolos a reconocer (español, inglés y símbolos estándar)
 const KNOWN_UNITS = [
   "ohmios", "ohmio", "ohms", "ohm", "homs", "hom", "ω", "Ω",
-  "faradios", "faradio", "farads", "farad", "f",
+  "faradios", "faradio", "farads", "farad",
   "henrios", "henrio", "henrys", "henry", "h",
   "voltios", "voltio", "volts", "volt", "v",
   "amperios", "amperio", "amperes", "ampere", "amps", "amp", "a",
@@ -53,7 +53,7 @@ export function parseSpiceValue(input: string): ParseResult {
 
   // 1. Detección de notación europea embebida (ej. 4k7, 1M5, 2u2, 4R7, 100R)
   const eurMatch = trimmed.match(EUROPEAN_NOTATION_REGEX);
-  if (eurMatch) {
+  if (eurMatch && (eurMatch[3] !== undefined || eurMatch[2].toLowerCase() === "r")) {
     const intPart = eurMatch[1];
     const rawMult = eurMatch[2];
     const multLower = rawMult.toLowerCase();
@@ -91,7 +91,7 @@ export function parseSpiceValue(input: string): ParseResult {
   if (sciMatch) {
     const val = Number(sciMatch[1]);
     const tail = sciMatch[2].trim().toLowerCase();
-    const isTailValid = tail === "" || KNOWN_UNITS.some(u => tail === u || tail.startsWith(u));
+    const isTailValid = tail === "" || tail === "f" || tail === "v" || tail === "a" || tail === "h" || tail === "s" || tail === "hz" || KNOWN_UNITS.some(u => tail === u || tail.startsWith(u));
     if (Number.isFinite(val) && isTailValid) {
       return { valid: true, value: val, suffix: "" };
     }
@@ -115,20 +115,38 @@ export function parseSpiceValue(input: string): ParseResult {
 
   const lowerRest = rawRest.toLowerCase();
 
-  // Si el texto es directamente una unidad conocida sin prefijo multiplicador (ej. "ohms", "homs", "faradios", "V", "Hz")
+  // Si el texto es directamente una unidad conocida sin prefijo multiplicador (ej. "ohms", "homs", "faradios", "V", "Hz", "F")
+  if (rawRest === "F") {
+    return { valid: true, value: baseValue, suffix: "" };
+  }
   for (const unit of KNOWN_UNITS) {
     if (lowerRest === unit) {
       return { valid: true, value: baseValue, suffix: "" };
     }
   }
 
-  // Tratamiento explícito de Mega (M mayúscula, Meg, Mega) para evitar ambigüedad con mili
-  if (rawRest.startsWith("M") || lowerRest.startsWith("meg") || lowerRest.startsWith("mega")) {
-    const afterM = lowerRest.startsWith("mega")
-      ? lowerRest.slice(4).trim()
-      : lowerRest.startsWith("meg")
-      ? lowerRest.slice(3).trim()
-      : rawRest.slice(1).trim().toLowerCase();
+  // Tratamiento explícito de Mega (M mayúscula, Meg, Mega, MHz, MOhm)
+  if (
+    rawRest.startsWith("M") ||
+    lowerRest.startsWith("meg") ||
+    lowerRest.startsWith("mega") ||
+    lowerRest.startsWith("mhz") ||
+    lowerRest.startsWith("mohm")
+  ) {
+    let afterM = "";
+    if (lowerRest.startsWith("megahertz") || lowerRest.startsWith("megahz")) {
+      afterM = "";
+    } else if (lowerRest.startsWith("mega")) {
+      afterM = lowerRest.slice(4).trim();
+    } else if (lowerRest.startsWith("meg")) {
+      afterM = lowerRest.slice(3).trim();
+    } else if (lowerRest.startsWith("mhz")) {
+      afterM = lowerRest.slice(3).trim();
+    } else if (lowerRest.startsWith("mohm")) {
+      afterM = lowerRest.slice(4).trim();
+    } else {
+      afterM = rawRest.slice(1).trim().toLowerCase();
+    }
 
     const isAfterValid = afterM === "" || KNOWN_UNITS.some(u => afterM === u || afterM.startsWith(u)) || /^[a-zωΩµ]*$/.test(afterM);
     if (isAfterValid) {
