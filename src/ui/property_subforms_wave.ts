@@ -1,5 +1,13 @@
 import type { ComponentInstance } from "../canvas_orchestrator";
-import { formatSpiceValue } from "../simulation/spice_value_parser";
+import { formatSpiceValue, parseSpiceValue } from "../simulation/spice_value_parser";
+
+function parseSafeValue(raw: string | undefined, defaultValue: number): number {
+  if (!raw || raw.trim() === "") return defaultValue;
+  const parsed = parseSpiceValue(raw);
+  return parsed.valid && parsed.value !== undefined && Number.isFinite(parsed.value)
+    ? parsed.value
+    : (parseFloat(raw) || defaultValue);
+}
 
 export function toggleWaveFieldsVisibility(waveType: string): void {
   const gAmp = document.querySelector("#group-wave-amp") as HTMLElement | null;
@@ -133,16 +141,16 @@ export function applyWaveSubform(
   const waveAcPhaseInput = document.querySelector("#prop-wave-ac-phase") as HTMLInputElement | null;
 
   if (waveTypeSelect) selected.waveType = waveTypeSelect.value;
-  if (waveAmpInput) selected.amplitude = parseFloat(waveAmpInput.value) || 0;
-  if (waveFreqInput) selected.frequency = parseFloat(waveFreqInput.value) || 1000;
-  if (waveModFreqInput) selected.modFrequency = parseFloat(waveModFreqInput.value) || 100;
-  if (waveModIndexInput) selected.modIndex = Math.max(0, Math.min(1, parseFloat(waveModIndexInput.value) || 0.8));
-  if (wavePhaseInput) selected.phase = parseFloat(wavePhaseInput.value) || 0;
-  if (waveOffsetInput) selected.offset = parseFloat(waveOffsetInput.value) || 0;
-  if (waveDutyInput) selected.dutyCycle = parseFloat(waveDutyInput.value) || 0.5;
-  if (waveRsInput) selected.sourceResistance = Math.max(0, parseFloat(waveRsInput.value) || 0);
-  if (waveAcMagInput) selected.acMag = parseFloat(waveAcMagInput.value) || 0;
-  if (waveAcPhaseInput) selected.acPhase = parseFloat(waveAcPhaseInput.value) || 0;
+  if (waveAmpInput) selected.amplitude = parseSafeValue(waveAmpInput.value, 0);
+  if (waveFreqInput) selected.frequency = parseSafeValue(waveFreqInput.value, 1000);
+  if (waveModFreqInput) selected.modFrequency = parseSafeValue(waveModFreqInput.value, 100);
+  if (waveModIndexInput) selected.modIndex = Math.max(0, Math.min(1, parseSafeValue(waveModIndexInput.value, 0.8)));
+  if (wavePhaseInput) selected.phase = parseSafeValue(wavePhaseInput.value, 0);
+  if (waveOffsetInput) selected.offset = parseSafeValue(waveOffsetInput.value, 0);
+  if (waveDutyInput) selected.dutyCycle = parseSafeValue(waveDutyInput.value, 0.5);
+  if (waveRsInput) selected.sourceResistance = Math.max(0, parseSafeValue(waveRsInput.value, 0));
+  if (waveAcMagInput) selected.acMag = parseSafeValue(waveAcMagInput.value, 0);
+  if (waveAcPhaseInput) selected.acPhase = parseSafeValue(waveAcPhaseInput.value, 0);
 
   if (selected.waveType === "dc") {
     selected.value = newVal;

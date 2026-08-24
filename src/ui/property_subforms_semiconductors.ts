@@ -1,4 +1,5 @@
 import type { ComponentInstance } from "../canvas_orchestrator";
+import { parseSpiceValue } from "../simulation/spice_value_parser";
 import {
   COMMERCIAL_BJTS,
   COMMERCIAL_DIODES,
@@ -113,7 +114,8 @@ export function applySemiconductorsSubform(selected: ComponentInstance): void {
     if (selected.type === "diode") {
       const diodeBvInput = document.querySelector("#prop-diode-bv") as HTMLInputElement | null;
       if (diodeBvInput) {
-        const bvVal = parseFloat(diodeBvInput.value) || 0;
+        const parsed = parseSpiceValue(diodeBvInput.value);
+        const bvVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(diodeBvInput.value) || 0);
         selected.diodeBv = bvVal > 0 ? bvVal : undefined;
       }
     }
@@ -123,10 +125,12 @@ export function applySemiconductorsSubform(selected: ComponentInstance): void {
     const logicVohSelect = document.querySelector("#prop-logic-voh") as HTMLSelectElement | null;
     const logicVthInput = document.querySelector("#prop-logic-vth") as HTMLInputElement | null;
     if (logicVohSelect) {
-      selected.value = parseFloat(logicVohSelect.value) || 5.0;
+      const parsed = parseSpiceValue(logicVohSelect.value);
+      selected.value = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(logicVohSelect.value) || 5.0);
     }
     if (logicVthInput) {
-      selected.offset = parseFloat(logicVthInput.value) || 2.5;
+      const parsed = parseSpiceValue(logicVthInput.value);
+      selected.offset = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(logicVthInput.value) || 2.5);
     }
   }
 }
