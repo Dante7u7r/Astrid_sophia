@@ -952,4 +952,46 @@ describe("extractElectricalNetlist", () => {
     expect(res.error).toContain("Nodo huérfano detectado");
     expect(res.error).toContain("R1 [Terminal 2]");
   });
+
+  test("permite salida de opamp conectada a un puerto/etiqueta net_label sin error de nodo huerfano", () => {
+    const components: ComponentInstance[] = [
+      { id: "U3", type: "opamp", value: 100000, x: 200, y: 100, rotation: 0 },
+      { id: "V1", type: "vsource", value: 5, x: 0, y: 100, rotation: 0 },
+      { id: "GND", type: "ground", value: 0, x: 100, y: 200, rotation: 0 },
+      { id: "NET1", type: "net_label", label: "NET1", value: "NET1", x: 300, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y, name: "Tierra (GND)" }];
+      }
+      if (c.type === "net_label") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y, name: "NET1" }];
+      }
+      if (c.type === "opamp") {
+        return [
+          { componentId: c.id, pinIndex: 0, x: c.x - 40, y: c.y - 15, name: "In+" },
+          { componentId: c.id, pinIndex: 1, x: c.x - 40, y: c.y + 15, name: "In-" },
+          { componentId: c.id, pinIndex: 2, x: c.x, y: c.y - 40, name: "V+" },
+          { componentId: c.id, pinIndex: 3, x: c.x, y: c.y + 40, name: "V-" },
+          { componentId: c.id, pinIndex: 4, x: c.x + 40, y: c.y, name: "Salida" },
+        ];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x - 20, y: c.y, name: "Terminal 1" },
+        { componentId: c.id, pinIndex: 1, x: c.x + 20, y: c.y, name: "Terminal 2" },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "U3", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "U3", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "U3", pinIndex: 4 }, to: { componentId: "NET1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+    expect(res.pinToNodeMap["NET1:0"]).toBe(res.pinToNodeMap["U3:4"]);
+  });
 });

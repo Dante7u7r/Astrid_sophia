@@ -975,13 +975,17 @@ export function extractElectricalNetlist(
 
       const allowedFloatingNodes = new Set<string>();
       for (const comp of components) {
+        if (comp.type === "net_label" || comp.type === "power_port" || comp.type === "text_note") {
+          const key = pinKey(comp.id, 0);
+          const assignedNode = pinToNodeMap[key];
+          if (assignedNode) allowedFloatingNodes.add(assignedNode);
+          continue;
+        }
         for (const pin of getPins(comp)) {
           if (allowsFloatingPins(comp.type, pin.pinIndex)) {
             const key = pinKey(comp.id, pin.pinIndex);
-            if (!connectedPinKeys.has(key)) {
-              const assignedNode = pinToNodeMap[key];
-              if (assignedNode) allowedFloatingNodes.add(assignedNode);
-            }
+            const assignedNode = pinToNodeMap[key];
+            if (assignedNode) allowedFloatingNodes.add(assignedNode);
           }
         }
       }

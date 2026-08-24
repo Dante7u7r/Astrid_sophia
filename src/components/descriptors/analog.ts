@@ -18,7 +18,7 @@ export const OpampDefinition: ComponentDefinition = {
   defaultProperties: { value: 0, openLoopGain: 100000 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  optionalFloatingPins: [2, 3], // Alimentaciones V+ y V- opcionales en macromodelo ideal
+  optionalFloatingPins: [2, 3, 4], // Alimentaciones V+, V- y Salida (Out) opcionales / nodo abierto
   getPins: () => [
     { index: 0, x: -40, y: -15, label: "+", name: "In+" },
     { index: 1, x: -40, y: 15, label: "-", name: "In-" },
@@ -126,6 +126,7 @@ export const OpampIdealDefinition: ComponentDefinition = {
   defaultProperties: { value: 0, openLoopGain: 100000 },
   halfExtents: { halfW: 45, halfH: 35 },
   hasStandardLeads: false,
+  optionalFloatingPins: [2], // Salida (Out) abierta / punto de prueba
   getPins: () => [
     { index: 0, x: -40, y: -15, label: "+", name: "In+" },
     { index: 1, x: -40, y: 15, label: "-", name: "In-" },
