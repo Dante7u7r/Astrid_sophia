@@ -14,9 +14,9 @@ import {
 import type { ComponentDefinition, LocalPinDefinition } from "../types";
 
 const TWO_INPUT_GATE_PINS: readonly LocalPinDefinition[] = [
-  { index: 0, x: -40, y: -10, label: "A" },
-  { index: 1, x: -40, y: 10, label: "B" },
-  { index: 2, x: 40, y: 0, label: "Y" },
+  { index: 0, x: -40, y: -10, label: "A", name: "Entrada A" },
+  { index: 1, x: -40, y: 10, label: "B", name: "Entrada B" },
+  { index: 2, x: 40, y: 0, label: "Y", name: "Salida Y" },
 ];
 
 function getLogicLevel(voltage?: number): "1" | "0" | "X" | undefined {
@@ -80,8 +80,8 @@ export const NotGateDefinition: ComponentDefinition = {
   halfExtents: { halfW: 45, halfH: 30 },
   hasStandardLeads: false,
   getPins: () => [
-    { index: 0, x: -40, y: 0, label: "A" },
-    { index: 1, x: 40, y: 0, label: "Y" },
+    { index: 0, x: -40, y: 0, label: "A", name: "Entrada A" },
+    { index: 1, x: 40, y: 0, label: "Y", name: "Salida Y" },
   ],
   render: (ctx, comp, _state, options) => {
     const vA = options.voltageMap?.[`${comp.id}:0`];

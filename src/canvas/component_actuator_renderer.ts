@@ -129,6 +129,15 @@ export function drawBuzzer(
   ctx.lineTo(-12, 0);
   ctx.stroke();
 
+  // Signo '+' indicativo en el terminal positivo del buzzer
+  ctx.save();
+  ctx.fillStyle = "#38BDF8";
+  ctx.font = "bold 9px 'Inter', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("+", -16, -8);
+  ctx.restore();
+
   if (level > 0.05) {
     ctx.save();
     ctx.strokeStyle = `rgba(56, 189, 248, ${level * 0.85})`;

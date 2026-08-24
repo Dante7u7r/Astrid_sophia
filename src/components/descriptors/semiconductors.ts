@@ -8,14 +8,21 @@ import { drawJfet, drawOptocoupler } from "../../canvas/component_discrete_exten
 import type { ComponentDefinition, LocalPinDefinition } from "../types";
 
 const STANDARD_TWO_PINS: readonly LocalPinDefinition[] = [
-  { index: 0, x: -40, y: 0, label: "A", name: "Ánodo" },
-  { index: 1, x: 40, y: 0, label: "K", name: "Cátodo" },
+  { index: 0, x: -40, y: 0, label: "A", name: "Ánodo (+)" },
+  { index: 1, x: 40, y: 0, label: "K", name: "Cátodo (-)" },
 ];
 
-const THREE_TERMINAL_PINS = (gateLabel: string, dLabel: string, sLabel: string): readonly LocalPinDefinition[] => [
-  { index: 0, x: -40, y: 0, label: gateLabel },
-  { index: 1, x: 20, y: -40, label: dLabel },
-  { index: 2, x: 20, y: 40, label: sLabel },
+const THREE_TERMINAL_PINS = (
+  gateLabel: string,
+  dLabel: string,
+  sLabel: string,
+  gateName?: string,
+  dName?: string,
+  sName?: string,
+): readonly LocalPinDefinition[] => [
+  { index: 0, x: -40, y: 0, label: gateLabel, name: gateName },
+  { index: 1, x: 20, y: -40, label: dLabel, name: dName },
+  { index: 2, x: 20, y: 40, label: sLabel, name: sName },
 ];
 
 export const DiodeDefinition: ComponentDefinition = {
@@ -122,7 +129,7 @@ export const NmosDefinition: ComponentDefinition = {
   defaultProperties: { value: 1.5 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  getPins: () => THREE_TERMINAL_PINS("G", "D", "S"),
+  getPins: () => THREE_TERMINAL_PINS("G", "D", "S", "Puerta (G / Gate)", "Drenador (D / Drain)", "Fuente (S / Source)"),
   render: (ctx, comp, state, options) => {
     if (options.detail === "compact") {
       drawCompactComponent(ctx, comp, state.color);
@@ -188,7 +195,7 @@ export const PmosDefinition: ComponentDefinition = {
   defaultProperties: { value: -1.5 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  getPins: () => THREE_TERMINAL_PINS("G", "D", "S"),
+  getPins: () => THREE_TERMINAL_PINS("G", "D", "S", "Puerta (G / Gate)", "Drenador (D / Drain)", "Fuente (S / Source)"),
   render: (ctx, comp, state, options) => {
     if (options.detail === "compact") {
       drawCompactComponent(ctx, comp, state.color);
@@ -258,7 +265,7 @@ export const NpnDefinition: ComponentDefinition = {
   defaultProperties: { value: 100 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  getPins: () => THREE_TERMINAL_PINS("B", "C", "E"),
+  getPins: () => THREE_TERMINAL_PINS("B", "C", "E", "Base (B)", "Colector (C)", "Emisor (E)"),
   render: (ctx, comp, state, options) => {
     if (options.detail === "compact") {
       drawCompactComponent(ctx, comp, state.color);
@@ -326,7 +333,7 @@ export const PnpDefinition: ComponentDefinition = {
   defaultProperties: { value: 100 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  getPins: () => THREE_TERMINAL_PINS("B", "C", "E"),
+  getPins: () => THREE_TERMINAL_PINS("B", "C", "E", "Base (B)", "Colector (C)", "Emisor (E)"),
   render: (ctx, comp, state, options) => {
     if (options.detail === "compact") {
       drawCompactComponent(ctx, comp, state.color);
@@ -392,7 +399,7 @@ export const NjfDefinition: ComponentDefinition = {
   defaultProperties: { value: -2 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  getPins: () => THREE_TERMINAL_PINS("G", "D", "S"),
+  getPins: () => THREE_TERMINAL_PINS("G", "D", "S", "Puerta (G / Gate)", "Drenador (D / Drain)", "Fuente (S / Source)"),
   render: (ctx, comp, state) => {
     drawJfet(ctx, comp, false, state.color);
   },
@@ -406,7 +413,7 @@ export const PjfDefinition: ComponentDefinition = {
   defaultProperties: { value: 2 },
   halfExtents: { halfW: 45, halfH: 45 },
   hasStandardLeads: false,
-  getPins: () => THREE_TERMINAL_PINS("G", "D", "S"),
+  getPins: () => THREE_TERMINAL_PINS("G", "D", "S", "Puerta (G / Gate)", "Drenador (D / Drain)", "Fuente (S / Source)"),
   render: (ctx, comp, state) => {
     drawJfet(ctx, comp, true, state.color);
   },
@@ -421,10 +428,10 @@ export const OptoDefinition: ComponentDefinition = {
   halfExtents: { halfW: 45, halfH: 35 },
   hasStandardLeads: false,
   getPins: () => [
-    { index: 0, x: -40, y: -20, label: "A" },
-    { index: 1, x: -40, y: 20, label: "K" },
-    { index: 2, x: 40, y: -20, label: "C" },
-    { index: 3, x: 40, y: 20, label: "E" },
+    { index: 0, x: -40, y: -20, label: "A", name: "Ánodo LED (+)" },
+    { index: 1, x: -40, y: 20, label: "K", name: "Cátodo LED (-)" },
+    { index: 2, x: 40, y: -20, label: "C", name: "Colector (C)" },
+    { index: 3, x: 40, y: 20, label: "E", name: "Emisor (E)" },
   ],
   render: (ctx, comp, state) => {
     drawOptocoupler(ctx, comp, state.color);

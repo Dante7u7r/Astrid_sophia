@@ -240,9 +240,9 @@ export const PotentiometerDefinition: ComponentDefinition = {
   defaultProperties: { value: 10000, wiperPosition: 0.5 },
   halfExtents: { halfW: 40, halfH: 40 },
   getPins: () => [
-    { index: 0, x: -40, y: 0, label: "A" },
-    { index: 1, x: 0, y: 40, label: "W" },
-    { index: 2, x: 40, y: 0, label: "B" },
+    { index: 0, x: -40, y: 0, label: "A", name: "Terminal Extremo A" },
+    { index: 1, x: 0, y: 40, label: "W", name: "Cursor / Wiper (W)" },
+    { index: 2, x: 40, y: 0, label: "B", name: "Terminal Extremo B" },
   ],
   render: (ctx, comp, state, options) => {
     if (options.detail === "compact") {
@@ -433,10 +433,10 @@ export const TransformerDefinition: ComponentDefinition = {
   defaultProperties: { value: 0.001 },
   halfExtents: { halfW: 45, halfH: 25 },
   getPins: () => [
-    { index: 0, x: -40, y: -20, label: "P1" },
-    { index: 1, x: -40, y: 20, label: "P2" },
-    { index: 2, x: 40, y: -20, label: "S1" },
-    { index: 3, x: 40, y: 20, label: "S2" },
+    { index: 0, x: -40, y: -20, label: "P1", name: "Primario 1 (Fase •)" },
+    { index: 1, x: -40, y: 20, label: "P2", name: "Primario 2" },
+    { index: 2, x: 40, y: -20, label: "S1", name: "Secundario 1 (Fase •)" },
+    { index: 3, x: 40, y: 20, label: "S2", name: "Secundario 2" },
   ],
   render: (ctx, _comp, state) => {
     drawTransformer(ctx, state.color);
@@ -453,8 +453,8 @@ export const DmmDefinition: ComponentDefinition = {
   hasStandardLeads: false,
   hasValueLabel: false,
   getPins: () => [
-    { index: 0, x: -30, y: 0, label: "+" },
-    { index: 1, x: 30, y: 0, label: "-" },
+    { index: 0, x: -30, y: 0, label: "+", name: "Terminal Positivo (V·Ω·mA)" },
+    { index: 1, x: 30, y: 0, label: "-", name: "Terminal Común (COM)" },
   ],
   render: (ctx, comp, state) => {
     const rawMode = typeof comp.value === "string" ? comp.value : "V";

@@ -46,10 +46,10 @@ export const RelayDefinition: ComponentDefinition = {
   halfExtents: { halfW: 45, halfH: 25 },
   hasStandardLeads: false,
   getPins: () => [
-    { index: 0, x: -40, y: -20, label: "COIL1" },
-    { index: 1, x: -40, y: 20, label: "COIL2" },
-    { index: 2, x: 40, y: -20, label: "COM" },
-    { index: 3, x: 40, y: 20, label: "NO" },
+    { index: 0, x: -40, y: -20, label: "COIL1", name: "Bobina 1 (+)" },
+    { index: 1, x: -40, y: 20, label: "COIL2", name: "Bobina 2 (-)" },
+    { index: 2, x: 40, y: -20, label: "COM", name: "Terminal Común (COM)" },
+    { index: 3, x: 40, y: 20, label: "NO", name: "Contacto Normalmente Abierto (NO)" },
   ],
   render: (ctx, comp) => {
     drawRelay(ctx, comp);
@@ -74,7 +74,10 @@ export const BuzzerDefinition: ComponentDefinition = {
   prefix: "BZ",
   defaultProperties: { value: "90;ron=65;roff=252;vnom=5;vstart=1.1;tone=2400;q=1.8;ton=7;toff=18" },
   halfExtents: { halfW: 40, halfH: 40 },
-  getPins: () => STANDARD_TWO_PINS,
+  getPins: () => [
+    { index: 0, x: -40, y: 0, label: "+", name: "Positivo (+)" },
+    { index: 1, x: 40, y: 0, label: "-", name: "Negativo (-)" },
+  ],
   render: (ctx, comp) => {
     drawBuzzer(ctx, comp);
   },
@@ -100,7 +103,10 @@ export const SwitchDefinition: ComponentDefinition = {
   prefix: "SW",
   defaultProperties: { value: 0, switchState: false },
   halfExtents: { halfW: 45, halfH: 15 },
-  getPins: () => STANDARD_TWO_PINS,
+  getPins: () => [
+    { index: 0, x: -40, y: 0, label: "T1", name: "Terminal 1" },
+    { index: 1, x: 40, y: 0, label: "T2", name: "Terminal 2" },
+  ],
   render: (ctx, comp) => {
     drawSwitch(ctx, comp);
   },
