@@ -90,23 +90,27 @@ export function shouldDrawValueLabel(type: ComponentInstance["type"]): boolean {
   return type !== "ground" && type !== "net_label" && type !== "text_note" && type !== "dmm" && type !== "x";
 }
 
+function cleanFloat(val: number): string {
+  return Number(val.toPrecision(6)).toString();
+}
+
 export function formatComponentValue(comp: ComponentInstance): string {
   let formattedVal = comp.value ? comp.value.toString() : "";
   if (comp.type === "resistor") {
     const numericVal = Number(comp.value);
-    formattedVal = numericVal >= 1000 ? `${numericVal / 1000} kOhm` : `${numericVal} Ohm`;
+    formattedVal = numericVal >= 1000 ? `${cleanFloat(numericVal / 1000)} kOhm` : `${cleanFloat(numericVal)} Ohm`;
     if (comp.tolerance !== undefined) {
       formattedVal += ` \u00B1${comp.tolerance}%`;
     }
   } else if (comp.type === "capacitor") {
     const numericVal = Number(comp.value);
-    formattedVal = numericVal < 1e-6 ? `${numericVal * 1e9} nF` : `${numericVal * 1e6} uF`;
+    formattedVal = numericVal < 1e-6 ? `${cleanFloat(numericVal * 1e9)} nF` : `${cleanFloat(numericVal * 1e6)} uF`;
     if (comp.voltageRating !== undefined) {
       formattedVal += ` ${comp.voltageRating}V`;
     }
   } else if (comp.type === "inductor") {
     const numericVal = Number(comp.value);
-    formattedVal = numericVal < 1e-3 ? `${numericVal * 1e6} uH` : `${numericVal * 1e3} mH`;
+    formattedVal = numericVal < 1e-3 ? `${cleanFloat(numericVal * 1e6)} uH` : `${cleanFloat(numericVal * 1e3)} mH`;
     if (comp.currentRating !== undefined) {
       formattedVal += ` ${comp.currentRating}A`;
     }
