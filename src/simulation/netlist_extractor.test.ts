@@ -884,4 +884,72 @@ describe("extractElectricalNetlist", () => {
     expect(v2?.pins[1]).toBe("0");
     expect(v3?.pins[1]).toBe("0");
   });
+
+  test("permite opamp con pines de alimentacion V+/V- flotantes sin falso positivo de nodo huerfano", () => {
+    const components: ComponentInstance[] = [
+      { id: "U1", type: "opamp", value: 100000, x: 100, y: 100, rotation: 0 },
+      { id: "V1", type: "vsource", value: 5, x: 0, y: 100, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 200, y: 100, rotation: 0 },
+      { id: "GND", type: "ground", value: 0, x: 100, y: 200, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y, name: "Tierra (GND)" }];
+      }
+      if (c.type === "opamp") {
+        return [
+          { componentId: c.id, pinIndex: 0, x: c.x - 40, y: c.y - 15, name: "In+" },
+          { componentId: c.id, pinIndex: 1, x: c.x - 40, y: c.y + 15, name: "In-" },
+          { componentId: c.id, pinIndex: 2, x: c.x, y: c.y - 40, name: "V+" },
+          { componentId: c.id, pinIndex: 3, x: c.x, y: c.y + 40, name: "V-" },
+          { componentId: c.id, pinIndex: 4, x: c.x + 40, y: c.y, name: "Salida" },
+        ];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x - 20, y: c.y, name: "Terminal 1" },
+        { componentId: c.id, pinIndex: 1, x: c.x + 20, y: c.y, name: "Terminal 2" },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "U1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "U1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "U1", pinIndex: 4 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w5", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+  });
+
+  test("proporciona mensaje de error detallado indicando componente y pin exacto en caso de nodo huerfano", () => {
+    const components: ComponentInstance[] = [
+      { id: "V1", type: "vsource", value: 5, x: 0, y: 100, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 100, y: 100, rotation: 0 },
+      { id: "GND", type: "ground", value: 0, x: 0, y: 200, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y, name: "Tierra (GND)" }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x - 20, y: c.y, name: "Terminal 1" },
+        { componentId: c.id, pinIndex: 1, x: c.x + 20, y: c.y, name: "Terminal 2" },
+      ];
+    };
+
+    // R1:1 se deja flotante sin conectar
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeDefined();
+    expect(res.error).toContain("Nodo huérfano detectado");
+    expect(res.error).toContain("R1 [Terminal 2]");
+  });
 });

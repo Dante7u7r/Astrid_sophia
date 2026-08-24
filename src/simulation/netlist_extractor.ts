@@ -975,11 +975,30 @@ export function extractElectricalNetlist(
 
       const allowedFloatingNodes = new Set<string>();
       for (const comp of components) {
-        if (!allowsFloatingPins(comp.type)) continue;
         for (const pin of getPins(comp)) {
+          if (allowsFloatingPins(comp.type, pin.pinIndex)) {
+            const key = pinKey(comp.id, pin.pinIndex);
+            if (!connectedPinKeys.has(key)) {
+              const assignedNode = pinToNodeMap[key];
+              if (assignedNode) allowedFloatingNodes.add(assignedNode);
+            }
+          }
+        }
+      }
+
+      const nodeToComponentPinsMap: Record<string, string[]> = {};
+      for (const comp of components) {
+        if (comp.type === "text_note") continue;
+        const pins = getPins(comp);
+        for (const pin of pins) {
           const key = pinKey(comp.id, pin.pinIndex);
-          if (!connectedPinKeys.has(key)) {
-            allowedFloatingNodes.add(pinToNodeMap[key]);
+          const nodeId = pinToNodeMap[key];
+          if (nodeId) {
+            if (!nodeToComponentPinsMap[nodeId]) {
+              nodeToComponentPinsMap[nodeId] = [];
+            }
+            const pinName = pin.name || pin.label || `Terminal ${pin.pinIndex + 1}`;
+            nodeToComponentPinsMap[nodeId].push(`${comp.id} [${pinName}]`);
           }
         }
       }
@@ -992,7 +1011,11 @@ export function extractElectricalNetlist(
       }
 
       if (lowDegreeNodes.length > 0) {
-        ercError = `Pre-flight ERC fallido: Nodo huérfano detectado (Nodo ${lowDegreeNodes.join(", ")} tiene grado de conexión < 2). Verifica que no haya cables flotantes o componentes desconectados.`;
+        const lowDegreeDetails = lowDegreeNodes.map(nodeId => {
+          const attached = nodeToComponentPinsMap[nodeId]?.join(", ") || "Terminal no identificado";
+          return `Nodo ${nodeId} (${attached})`;
+        });
+        ercError = `Pre-flight ERC fallido: Nodo huérfano detectado (${lowDegreeDetails.join("; ")} tiene grado de conexión < 2). Verifica que no haya cables flotantes o componentes desconectados.`;
       }
     }
 
