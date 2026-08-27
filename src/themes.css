@@ -665,10 +665,40 @@
 }
 
 [data-theme="classroom"] .prop-input,
-[data-theme="classroom"] .prop-snap-select {
-  background: #FFFFFF !important;
+[data-theme="classroom"] .prop-snap-select,
+[data-theme="classroom"] select.prop-input,
+[data-theme="classroom"] #prop-wave-type {
+  background-color: #FFFFFF !important;
   border: 1px solid #CBD5E1 !important;
   color: #0F172A !important;
+}
+
+[data-theme="classroom"] select.prop-input,
+[data-theme="classroom"] #prop-wave-type {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+}
+
+[data-theme="classroom"] .prop-input:focus,
+[data-theme="classroom"] .prop-snap-select:focus,
+[data-theme="classroom"] select.prop-input:focus,
+[data-theme="classroom"] #prop-wave-type:focus {
+  border-color: #0284C7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .prop-input option,
+[data-theme="classroom"] .prop-snap-select option,
+[data-theme="classroom"] select.prop-input option,
+[data-theme="classroom"] #prop-wave-type option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] #wave-properties-container {
+  border-top: 1px dashed #CBD5E1 !important;
+  background: #F8FAFC !important;
 }
 
 [data-theme="classroom"] .btn-adj {

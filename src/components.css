@@ -1926,6 +1926,24 @@ body.palette-drag-active * {
   transition: all 0.18s ease;
 }
 
+select.prop-input,
+.prop-snap-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 30px;
+  cursor: pointer;
+}
+
+select.prop-input option,
+.prop-snap-select option,
+.prop-input option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
 .prop-input:focus {
   outline: none;
   border-color: var(--cyan-dim);
@@ -3288,43 +3306,43 @@ select.btn-text-only.sim-locked {
 
 #prop-wave-type {
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235bf3e4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 14px;
-  padding-right: 32px !important;
-  border: 1px solid rgba(91, 243, 228, 0.15) !important;
-  color: var(--cyan) !important;
+  padding-right: 32px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--cyan, #38bdf8);
   font-weight: 600;
   cursor: pointer;
-  background-color: rgba(4, 6, 14, 0.6) !important;
-  transition: all 0.22s ease !important;
+  background-color: rgba(4, 6, 14, 0.6);
+  transition: all 0.22s ease;
 }
 
 #prop-wave-type:hover {
-  border-color: rgba(91, 243, 228, 0.35) !important;
-  box-shadow: 0 0 8px rgba(91, 243, 228, 0.1);
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.15);
 }
 
 #prop-wave-type:focus {
-  border-color: var(--cyan) !important;
-  box-shadow: 0 0 12px rgba(91, 243, 228, 0.22) !important;
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
   outline: none;
 }
 
 #prop-wave-type option {
-  background: hsl(225, 28%, 7%);
-  color: var(--text-main);
+  background-color: #0f172a;
+  color: #f8fafc;
 }
 
 #wave-properties-container .prop-input {
-  border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.45);
 }
 
 #wave-properties-container .prop-input:focus {
-  border-color: var(--purple);
-  box-shadow: 0 0 10px rgba(155,100,255,0.2);
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 
 #wave-properties-container .property-group:focus-within .property-label {
