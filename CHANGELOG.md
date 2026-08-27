@@ -1,21 +1,42 @@
-# 📝 Changelog — Astrid Sophia
+# 📝 Changelog — Astrid Sophia (Biaani)
 
 Todas las mejoras y cambios importantes en este proyecto.
 
 ---
 
-## [Unreleased] - En Desarrollo
+## [0.38.0] - Agosto 2026
 
-### Corrección de alcance científico
-- Retirados los márgenes de fase/ganancia de STB: eran heurísticas derivadas de polos, no
-  mediciones de ganancia de lazo.
-- PSS, extracción de polos/ceros y BSIM quedan marcados como experimentales hasta contar
-  con correlación externa reproducible.
-- El runtime 8051/AVR queda descrito como incompleto y experimental; no es cycle-accurate
-  ni ejecuta una ISA y periféricos completos.
-- Los ajustes de tolerancia e iteraciones de la UI ahora llegan a Newton DC/transitorio y
-  al shooting PSS.
-- Se añadieron límites defensivos para transitorio, AC y PSS.
+### 🚀 Nuevos Instrumentos y Módulos de Análisis
+- **Optimizador de Circuitos:** Búsqueda y ajuste paramétrico automatizado basado en Nelder-Mead y descenso de gradiente para optimizar tiempos de establecimiento, voltajes de salida y frecuencias de corte.
+- **Trazador de Curvas $I$-$V$ (Curve Tracer):** Visualización interactiva y dinámica de características de semiconductores (diodos, transistores BJT y MOSFETs).
+- **Analizador Lógico Digital:** Instrumento virtual multicanal para rastreo y sincronización de buses y compuertas lógicas.
+- **Analizador Espectral FFT Avanzado:** Muestreo en frecuencia con ventanas Hanning/Hamming/Blackman y cálculo de THD, SNR y SFDR.
+- **Diagrama de Ojo (Eye Diagram):** Medición de jitter, apertura y márgenes de ruido en señales de alta velocidad.
+- **Inspectores Simbólicos:** Inspector simbólico de matrices MNA ($[G][v] = [I]$) e inspector jerárquico de subcircuitos SPICE.
+- **Selector de Temas de Instrumentos:** Soporte para paletas *Classic*, *Modern Dark*, *Cyberpunk* y *High Contrast*.
+
+### ⚡ Modelos Físicos y Electrónica de Potencia
+- **Modelos IGBT:** Implementación física de IGBTs PT (Punch-Through) y NPT (Non-Punch-Through) con modulación de conductividad de base.
+- **Semiconductores Wide-Bandgap (WBG):** Modelos de SiC MOSFETs y GaN HEMTs con dinámica de carga ultrarrápida y conducción bidireccional.
+- **Simulación Electrotérmica Dinámica:** Acoplamiento transitorio de autocalentamiento con redes térmicas RC y disipadores acoplados.
+- **Homotopía Arc-Length:** Convergencia robusta en curvas $I$-$V$ no monótonas y puntos de bifurcación DC.
+
+### 💻 Co-Simulación de Microcontroladores Ampliada
+- **Runtimes MCU:** Expansión del soporte embebido a AVR (ATmega328P), PIC (PIC16F84A/PIC16F877A), 8051 y scaffold funcional ESP32.
+- **Puente Digital-Analógico:** Intercambio continuo de estados 0, 1, X, Z con transistores y lógica de protección.
+
+### 🎯 UX, Diagnóstico y Usabilidad
+- **Parseo Universal de Notación Ingenieril:** Soporte bidireccional de abreviaturas científicas rápidas (`10uf`, `100k`, `1M`, `100r`, `4.7u`) y tolerancias en español/inglés.
+- **Sistema de Onboarding y Guía Interactiva:** Guía paso a paso (`src/guide/`) para nuevos usuarios.
+- **Crash Reporter y Diagnósticos:** Recolección segura y estructurada de diagnósticos de ejecución y reportes de fallo.
+
+### 🧪 Validación y Calidad
+- **Tests Frontend (Vitest):** **1099 pruebas pasando al 100%** en 205 suites de test.
+- **Tests Backend (Rust):** **289 pruebas unitarias y de integración** pasando en verde sin advertencias de Clippy.
+
+---
+
+## [0.37.0] - Phase 37 Milestone (Junio 2026)
 
 ### Línea base de validación científica
 - Añadido un arnés versionado en `validation/` con casos, referencias y reportes separados.

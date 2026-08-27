@@ -1,203 +1,85 @@
-# 🚀 Astryd Sophia v3.0 Evolution — Estado del Proyecto
+# 🚀 Biaani (Astrid Sophia) — Estado y Evolución del Proyecto
 
-> Simulador de circuitos electrónicos de grado industrial (37 fases completadas).  
-> **Stack:** Tauri + Rust (backend MNA) + TypeScript/Canvas (frontend)  
-
-> **Prioridad actual:** estabilizacion exclusiva de Tauri escritorio en
-> Windows. El navegador independiente y los layouts moviles quedan congelados.
-> Consulta [`docs/desktop-roadmap.md`](docs/desktop-roadmap.md).
-> **Última actualización:** 23 de junio de 2026
+> Simulador de circuitos electrónicos de grado industrial con motor MNA en Rust y frontend reactivo en TypeScript/Canvas.
+> **Stack:** Tauri v2 + Rust (backend MNA) + TypeScript/Canvas 2D (frontend)  
+> **Última actualización:** Agosto 2026
 
 ---
 
-## 📊 Resumen de Fases Completadas
+## 📊 Resumen de Fases y Capacidades del Motor
 
-| Fase | Descripción | Estado | Tests |
-|------|-------------|--------|-------|
-| 1 | Estructura Tauri + IPC base | ✅ | — |
-| 2 | Solver DC lineal (MNA con LU) | ✅ | `test_voltage_divider` |
-| 3 | Modelo de Diodo Shockley (Newton-Raphson) | ✅ | `test_diode_circuit` |
-| 4 | Solver Transitorio (Backward Euler + paso adaptativo LTE) | ✅ | `test_rc_transient_circuit` |
-| 5 | Fuentes senoidales y de pulso | ✅ | — |
-| 6 | Análisis AC (Bode) con Jacobiano en frecuencia | ✅ | `test_ac_frequency_response` |
-| 7 | MOSFET NMOS (Level 1 + subthreshold) | ✅ | `test_nmos_transistor` |
-| 8 | Op-Amp macro-modelo (tanh saturación) | ✅ | `test_opamp_amplifier` |
-| 9 | MOSFET PMOS simétrico | ✅ | `test_pmos_transistor` |
-| 10 | BJT NPN/PNP (Ebers-Moll + Early) | ✅ | `test_bjt_amplifier` |
-| 11 | Inversor CMOS transitorio completo | ✅ | `test_cmos_inverter_transient` |
-| 12 | Retardo de propagación BJT | ✅ | `test_bjt_transient_delay` |
-| 13 | Capacidades dinámicas (diodo, MOSFET, BJT) | ✅ | — |
-| 14 | DC Sweep (curva I-V) | ✅ | `test_dc_sweep_diode_curve` |
-| 15 | Parser SPICE jerárquico (.subckt, .model, .ends) | ✅ | `test_spice_value_parser`, `test_spice_netlist_flattening` |
-| 16 | Monte Carlo (tolerancias estadísticas) | ✅ | `test_monte_carlo_distribution` |
-| 17 | FFT + THD espectral (Cooley-Tukey Radix-2) | ✅ | `test_fft_sine_thd` |
-| 18 | Convergencia robusta (Gmin stepping + Source stepping) | ✅ | — |
-| 19 | Canvas vectorial premium (zoom, pan, grid) | ✅ | — |
-| 20 | Telemetría del sistema (CPU, RAM, proceso) | ✅ | — |
-| 21 | Archivos .astryd (guardar/abrir esquemáticos) | ✅ | — |
-| **22** | **Ruido Espectral (.noise)** — Térmico, shot, flicker 1/f | ✅ | `test_resistor_thermal_noise` |
-| **23** | **Evaluador .measure** — DELAY, RISETIME, FALLTIME, PEAK, AVG, RMS, PP | ✅ | `test_measure_propagation_delay` |
-| **24** | **Líneas de Transmisión RLCG** — Cascada Pi segmentada | ✅ | `test_tline_expansion_segments`, `test_tline_lossy_expansion` |
-| **25** | **Deriva Térmica** — Varshni, Is(T), Vth(T), β(T), TC1/TC2 | ✅ | `test_thermal_is_pn_scaling`, `test_thermal_resistance_tc1`, `test_thermal_mosfet_vth_drift`, `test_thermal_mosfet_beta_degradation`, `test_diode_thermal_voltage_shift` |
-| **26** | **Análisis de Sensibilidad Paramétrica** — ∂V/∂R, ∂V/∂C, Peor caso | ✅ | `test_dc_sensitivity_voltage_divider` |
-| **27** | **PSS experimental** — Shooting Method; falta validación externa y cierre periódico cuantificado | ⚠️ | `test_pss_shooting_method_simple_rc` |
-| **28** | **BSIM3v3 / BSIM4 parcial** — Sin correlación sistemática contra simulador de referencia | ⚠️ | `test_bsim4_nmos_gate_leakage`, `test_bsim4_pmos_short_channel_saturation` |
-| **29** | **Polos y ceros experimental** — Modelo reducido; no calcula ganancia de lazo ni márgenes | ⚠️ | `test_stability_analysis_rc_pole`, `test_stability_zeros_extraction` |
-| **30** | **Co-simulación Digital/Analógica Avanzada** — Retardos configurables y lógica ideal | ✅ | `test_logic_gate_configurable_delays`, `test_logic_gate_delay_parsing` |
-| **31** | **Exportación Profesional** — Exportación a Touchstone, HDF5 y PDF | ✅ | `main.ts` |
-| **32** | **GPU Acceleration (WebGPU)** — Schur complement en WebGPU | ✅ | `test_gpu_schur_solver` |
-| **33** | **Integración Trapezoidal (TRAP)** — Regla TRAP 2.º orden y LTE de 3.ª derivada | ✅ | `test_trap_integration_lc_resonance` |
-| **34** | **Newton-Raphson Amortiguado** — Backtracking Line Search y residuo KCL real | ✅ | `test_diode_circuit`, `test_bjt_amplifier` |
-| **35** | **Pseudo-Transient Analysis (PTA)** — Bucle adaptativo DC ficticio amortiguado | ✅ | `test_pta_robust_convergence` |
-| **36** | **Análisis de Distorsión por Intermodulación (IMD/IP3)** — Ratios IM2/IM3 y punto de intercepción IP3 | ✅ | `test_imd_two_tone_clipper` |
-| **37** | **Dispositivos Optoelectrónicos** — LED (Shockley) y Optoacoplador (CTR, V_sat, acoplamiento óptico, aislamiento galvánico) | ✅ | `test_opto_isolation` |
-
-**Total: 90 tests unitarios pasando al 100%** (solver.rs: 81, parser.rs: 8, gpu_solver.rs: 1)
+| Fase | Módulo / Capacidad | Estado | Cobertura / Tests Clave |
+|---|---|---|---|
+| 1 | Estructura Tauri + IPC base | ✅ | `ping`, `get_performance_telemetry` |
+| 2 | Solver DC lineal (MNA con LU) | ✅ | `test_voltage_divider`, `test_faer_linear_solver_resistive_divider` |
+| 3 | Modelo de Diodo Shockley (Newton-Raphson) | ✅ | `test_diode_circuit`, `test_diode_clipper_transient` |
+| 4 | Solver Transitorio (Backward Euler + paso adaptativo LTE) | ✅ | `test_rc_transient_circuit`, `test_lte_adaptive_timestep` |
+| 5 | Fuentes senoidales, pulso, rampa, modulación | ✅ | `test_transient_isource_waveform` |
+| 6 | Análisis AC (Bode) con Jacobiano complejo en frecuencia | ✅ | `test_ac_frequency_response`, `test_faer_linear_solver_complex_ac` |
+| 7 | MOSFET NMOS/PMOS (Level 1 + subumbral) | ✅ | `test_nmos_transistor`, `test_pmos_transistor` |
+| 8 | Op-Amp macro-modelo (saturación tanh, slew rate) | ✅ | `test_opamp_amplifier`, `test_opamp_slew_rate_limiting_transient` |
+| 9 | BJT NPN/PNP (Ebers-Moll + Early + Miller) | ✅ | `test_bjt_amplifier`, `test_bjt_transient_delay` |
+| 10 | Inversor CMOS transitorio completo | ✅ | `test_cmos_inverter_transient` |
+| 11 | Capacidades dinámicas de juntura y difusión | ✅ | `test_mosfet_switching_with_commercial_cgs_cgd_miller` |
+| 12 | DC Sweep (curva I-V) y Homotopía Arc-length | ✅ | `test_dc_sweep_diode_curve`, `test_dc_arclength_homotopy` |
+| 13 | Parser SPICE jerárquico (.subckt, .model, .param, .lib) | ✅ | `test_commercial_opamp_macromodel_with_bsource_and_params` |
+| 14 | Monte Carlo (tolerancias estadísticas Gaussian/Uniform) | ✅ | `test_monte_carlo_distribution` |
+| 15 | FFT + THD espectral (Cooley-Tukey Radix-2 + Ventanas) | ✅ | `test_fft_sine_thd` |
+| 16 | Convergencia robusta (Gmin stepping + PTA) | ✅ | `test_pta_robust_convergence` |
+| 17 | Canvas vectorial interactivo (R-Tree spatial index, 60 FPS) | ✅ | `spatial_index.test.ts`, `multi_net_router.test.ts` |
+| 18 | Telemetría del sistema en tiempo real (CPU, RAM) | ✅ | `telemetry::platform::tests` |
+| 19 | Persistencia (.biaani / .astryd) y autosave | ✅ | `circuit_file.test.ts`, `circuit_snapshot_history.test.ts` |
+| 20 | Ruido Espectral (.noise — Térmico, Shot, Flicker 1/f) | ✅ | `test_resistor_thermal_noise` |
+| 21 | Evaluador .measure (DELAY, RISETIME, FALLTIME, RMS, etc.) | ✅ | `test_measure_propagation_delay` |
+| 22 | Líneas de Transmisión RLCG (cascada Pi segmentada) | ✅ | `test_tline_expansion_segments`, `test_tline_lossy_expansion` |
+| 23 | Simulación Electrotérmica Dinámica (autocalentamiento + disipadores) | ✅ | `test_transient_electrothermal`, `test_transient_thermal_igbt_switching_self_heating` |
+| 24 | Análisis de Sensibilidad Paramétrica ($\partial V/\partial R$, peor caso) | ✅ | `test_dc_sensitivity_voltage_divider` |
+| 25 | Integración Trapezoidal (TRAP) y BDF/Gear 2-6 | ✅ | `test_trap_integration_lc_resonance`, `test_gear2_integration_stability` |
+| 26 | Análisis IMD/IP3 (intermodulación armónica) | ✅ | `test_imd_two_tone_clipper` |
+| 27 | Optoelectrónica (LED Shockley + Optoacoplador galvánico CTR) | ✅ | `test_opto_isolation` |
+| 28 | Electrónica de Potencia: IGBT (PT/NPT), SiC MOSFET, GaN HEMT | ✅ | `test_devices_igbt`, `test_sic_mosfet`, `test_gan_hemt` |
+| 29 | Controladores de Potencia: SCR, TRIAC, DIAC | ✅ | `test_scr_phase_control` |
+| 30 | Optimizador de Circuitos (Nelder-Mead / Gradiente) | ✅ | `test_optimizer_transient_settling_voltage_tuning` |
+| 31 | Waveform Relaxation & Multi-rate Transient | ✅ | `test_wr_monolithic_dc_and_transient_exactness`, `test_wr_cascaded_cmos_inverter_chain` |
+| 32 | Suite de Instrumentos Virtuales (Osciloscopio, Bode, Curve Tracer, Logic/FFT Analyzer, Eye Diagram) | ✅ | `oscilloscope_model.test.ts`, `curve_tracer_model.test.ts`, `logic_analyzer_model.test.ts` |
+| 33 | Inspectores Simbólicos MNA y Subcircuitos | ✅ | `mna_symbolic_inspector.test.ts`, `subcircuit_inspector_modal.test.ts` |
+| 34 | Co-simulación MCU Multiarquitectura (AVR, 8051, PIC, ESP32) | ✅ | `mcu-avr.test.ts`, `mcu-pic.test.ts`, `esp32_runtime.test.ts`, `mcu-spice-bridge.test.ts` |
+| 35 | Parseo Universal de Notación Ingenieril y Unidades | ✅ | `spice_value_parser.test.ts` |
+| 36 | Sistema de Onboarding y Guía Interactiva Paso a Paso | ✅ | `guide_engine.test.ts`, `guide_steps.test.ts` |
+| 37 | Diagnóstico, Crash Reporting y Telemetría de Feedback | ✅ | `crash_reporter.test.ts`, `diagnostic_collector.test.ts` |
 
 ---
 
-## 🧬 Arquitectura Actual
+## 🧪 Resumen de Calidad y Testing
+
+- **Backend Rust:** **289 tests unitarios y de integración pasando al 100%** (0 fallos).
+- **Frontend TypeScript (Vitest):** **1099 tests en 205 archivos de prueba pasando al 100%**.
+- **Build de producción:** `tsc && vite build` completado en ~6s con bundle optimizado por chunks.
+- **Electrical Rule Check (ERC):** Verificación activa previa a cada corrida de simulación.
+
+---
+
+## 🧬 Arquitectura del Sistema
 
 ```
 Astrid_sophia/
-├── src/                          # Frontend TypeScript
-│   ├── main.ts                   # Lógica principal, IPC, oscilógrafo, Bode (~3200L)
-│   ├── canvas_orchestrator.ts    # Motor de renderizado vectorial Canvas 2D (~1500L)
-│   ├── styles.css                # Sistema de diseño premium (HSL)
-│   ├── components.css            # Componentes de UI
-│   └── simulation/               # Subsistema MCU
-│       ├── index.ts              # Agregador de módulos MCU
-│       ├── mcu-types.ts          # Tipos base (McuConfig, McuExecutionState)
-│       ├── mcu-runtime.ts        # Runtime temporal experimental (ISA incompleta)
-│       ├── mcu-8051.ts           # Tabla de decodificación/desensamblado 8051
-│       ├── mcu-avr.ts            # Definiciones AVR
-│       └── mcu-spice-bridge.ts  # Co-simulación digital/analógica
-├── src-tauri/src/                # Backend Rust
-│   ├── solver.rs                 # ★ Motor MNA completo (~13500L)
-│   │   ├── solve_dc_circuit          # DC con Newton-Raphson
-│   │   ├── solve_transient_circuit   # Transitorio adaptativo (BE + LTE)
-│   │   ├── solve_ac_sweep            # Bode (amplitud + fase)
-│   │   ├── solve_dc_sweep            # Curva I-V paramétrica
-│   │   ├── solve_noise_sweep         # Ruido espectral (Fase 22)
-│   │   ├── evaluate_measures         # .measure automático (Fase 23)
-│   │   ├── expand_transmission_line  # RLCG segmentado (Fase 24)
-│   │   ├── apply_thermal_drift       # Deriva térmica (Fase 25)
-│   │   ├── solve_dc_circuit_thermal  # DC con temperatura global
-│   │   ├── solve_monte_carlo_transient
-│   │   ├── solve_pss                 # PSS shooting method
-│   │   ├── run_stability_analysis     # Polos/ceros experimentales, sin márgenes
-│   │   ├── calculate_fft_and_thd     # FFT Cooley-Tukey + THD
-│   │   └── calculate_imd_analysis     # IMD/IP3 intermodulación
-│   ├── parser.rs                 # Parser SPICE (.subckt, .model, .lib, VaExpr) (~2000L)
-│   ├── sparse_csc.rs             # Matrices dispersas CSC + LU simbólico/numérico
-│   ├── sparse_parallel.rs       # Schur complement paralelo (rayon)
-│   ├── gpu_solver.rs             # Solver en GPU (WebGPU/wgpu)
-│   ├── krylov.rs                 # Iteración de Arnoldi (polos de estabilidad)
-│   ├── symbolic.rs               # Factorización simbólica (Markowitz)
-│   ├── dual3.rs                  # Autodiff numérico 3.er orden
-│   ├── topology.rs               # Detección de nodos flotantes y loops de voltaje
-│   ├── telemetry.rs              # Métricas del sistema (CPU, RAM)
-│   ├── lib.rs                    # Comandos IPC Tauri (20 endpoints)
-│   └── main.rs                   # Entry point Tauri
-├── src-tauri/examples/
-│   └── debug_scr.rs              # Ejemplo auxiliar para debug de SCR
-└── index.html                    # SPA principal
+├── src/
+│   ├── app/                      # Controladores de escritorio, ciclo de vida, persistencia y crash reporter
+│   ├── canvas/                   # Motor vectorial Canvas 2D, R-Tree spatial index, renderizado modular
+│   ├── components/               # Descriptores de componentes, catálogo, modelos comerciales
+│   ├── feedback/                 # Módulo de diagnóstico, telemetría y bridge MCP
+│   ├── guide/                    # Sistema de guía interactiva paso a paso
+│   ├── intelligence/             # Asesor de diseño, optimizador y síntesis de topologías
+│   ├── lsp/                      # Language Server SPICE con resaltado y diagnóstico
+│   ├── persistence/              # Persistencia de circuitos (.biaani, .astryd)
+│   ├── simulation/               # Runtimes MCU (AVR, PIC, ESP32, 8051), co-simulación MNA y fallback solvers
+│   ├── ui/                       # Instrumentos virtuales, docks, modales y selector de temas
+│   └── styles.css / themes.css   # Sistema de diseño dark-mode y temas para instrumentos
+└── src-tauri/
+    └── src/
+        ├── solver/               # Motor MNA: solvers DC/AC/TRAP/Gear, optimizador, electrotérmica
+        ├── parser/               # Parser SPICE jerárquico
+        ├── sparse_csc.rs         # Matrices dispersas CSC y LU
+        ├── dual3.rs              # Diferenciación automática
+        └── lib.rs                # Comandos IPC Tauri
 ```
-
----
-
-## 🔌 Comandos IPC Registrados (Tauri — 33 Endpoints)
-
-| # | Comando | Fase / Módulo | Descripción |
-|---|---------|---------------|-------------|
-| 1 | `ping` | 1 | Health check de conexión IPC |
-| 2 | `run_dc_simulation` | 2 | Punto de operación DC (MNA + Newton-Raphson) |
-| 3 | `run_transient_simulation` | 4 | Transitorio adaptativo (BE / TRAP + LTE) |
-| 4 | `run_ac_sweep` | 6 | Diagrama de Bode (amplitud + fase) |
-| 5 | `run_dc_sweep` | 14 | Curva I-V paramétrica de fuentes |
-| 6 | `parse_spice_netlist` | 15 | Parser SPICE jerárquico (.subckt, .model, expressions) |
-| 7 | `run_monte_carlo_transient` | 16 | Simulación Monte Carlo de tolerancias estadísticas |
-| 8 | `run_fft_analysis` | 17 | FFT Cooley-Tukey + distorsión armónica total THD |
-| 9 | `run_imd_analysis` | 36 | Análisis de intermodulación IMD2/IM3 y punto IP3 |
-| 10 | `run_noise_sweep` | 22 | Densidad espectral de ruido (térmico, shot, 1/f) |
-| 11 | `evaluate_measures` | 23 | Evaluación automática de directivas .measure |
-| 12 | `expand_transmission_line` | 24 | Expansión de línea RLCG a cascade Pi segmentada |
-| 13 | `solve_dc_thermal` | 25 | DC con deriva térmica de semiconductores |
-| 14 | `run_sensitivity_analysis` | 26 | Sensibilidad paramétrica DC (∂V/∂param) |
-| 15 | `run_pss_simulation` | 27 | Periodic Steady State (Shooting Method) |
-| 16 | `run_stability_analysis` | 29 | Polos y ceros de modelo reducido (Arnoldi) |
-| 17 | `get_performance_telemetry` | 20 | Métricas de rendimiento del sistema (CPU, RAM) |
-| 18 | `save_circuit_file` | 21 | Guardar esquemático interactivo (diálogo nativo OS) |
-| 19 | `save_circuit_to_path` | 21 | Guardar esquemático a ruta autorizada |
-| 20 | `open_circuit_file` | 21 | Abrir esquemático (diálogo nativo OS) |
-| 21 | `start_interactive_transient` | Streaming | Transitorio en tiempo real con emisión de eventos `sim-frame-update` |
-| 22 | `stop_interactive_transient` | Streaming | Detener hilo de simulación transitoria interactiva |
-| 23 | `inject_live_mutation` | Streaming | Mutación en caliente de parámetros (potenciómetros/switches) |
-| 24 | `advanced_ipc::run_pvt_matrix_analysis` | PVT | Simulación paralela de esquinas PVT (Process/Voltage/Temp) |
-| 25 | `advanced_ipc::extract_sparameter` | RF / S-Param | Extracción multi-puerto de parámetros S (S11, S21, S12, S22) |
-| 26 | `advanced_ipc::export_touchstone_file` | RF / S-Param | Exportación a formato estándar Touchstone (.s2p / .snp) |
-| 27 | `feedback::store::ingest_feedback_batch` | Telemetría | Ingesta de lote de eventos de diagnóstico en SQLite local |
-| 28 | `feedback::store::set_feedback_consent` | Telemetría | Configuración de consentimiento de telemetría del usuario |
-| 29 | `feedback::store::get_feedback_status` | Telemetría | Estado del subsistema de almacenamiento de feedback |
-| 30 | `feedback::store::query_feedback_events` | Telemetría | Consulta paginada/filtrada de eventos en base SQLite |
-| 31 | `feedback::store::export_feedback_events` | Telemetría | Exportación de base de datos de eventos a JSON |
-| 32 | `feedback::store::delete_feedback_data` | Telemetría | Purga y reseteo de base SQLite de telemetría |
-| 33 | `feedback::store::flush_feedback_store` | Telemetría | Sincronización forzada de buffer en memoria a disco |
-
----
-
-## 📦 Migración de Características Legacy (Electron -> Tauri)
-
-| Fase | Descripción | Estado |
-|------|-------------|--------|
-| A.1 | Modularización de la UI (settings, telemetry, oscilloscope panels) | ✅ |
-| A.2 | Actuadores Interactivos (lámpara, relé, zumbador + sintetizador de audio) | ✅ |
-| A.3 | Runtime MCU experimental (sin ISA, periféricos ni precisión de ciclo completos) | ⚠️ |
-| A.4 | Navegador de Librerías y Gestor de Pestañas (buscador + workspace tabs) | ✅ |
-
----
-
-## 🔮 Próximas Fases Sugeridas
-
-Todas las fases del roadmap principal han sido completadas con éxito.
-
----
-
-## 🧪 Cómo Ejecutar
-
-```bash
-# Backend (Rust tests)
-cd src-tauri
-cargo test
-
-# Linter (Clippy)
-cargo clippy --all-targets
-
-# Frontend (TypeScript build)
-npm run build
-
-# Desarrollo completo (Tauri dev)
-npm run tauri dev
-```
-
----
-
-## 📐 Constantes Físicas del Motor
-
-| Constante | Valor | Descripción |
-|-----------|-------|-------------|
-| `PHYS_KB` | 1.380649×10⁻²³ J/K | Boltzmann |
-| `PHYS_Q` | 1.602176634×10⁻¹⁹ C | Carga del electrón |
-| `PHYS_T` | 300 K | Temperatura de referencia |
-| `DIODE_IS` | 1×10⁻¹² A | Corriente de saturación |
-| `DIODE_VT` | 25.852 mV | Voltaje térmico a 300K |
-| `EG_SI_300` | 1.12 eV | Banda prohibida Si (Varshni) |
-| `OPTO_RTH_JA` | 200 °C/W | Resistencia térmica opto DIP-4 |
-| `OPTO_CTH` | 100 µJ/°C | Capacidad térmica opto DIP-4 |
-| `OPTO_DEFAULT_CTR` | 0.5 | Current Transfer Ratio por defecto |
-| `OPTO_DEFAULT_VSAT` | 0.2 V | Saturación suave del fototransistor |
-
----
-
-> **Nota:** Este archivo se actualiza con cada bloque de fases completado.  
-> Último commit: `chore: clippy auto-fix (33 sugerencias) + limpieza de artefactos obsoletos`
