@@ -1,5 +1,6 @@
 import type { PinInstance, WireInstance } from "../canvas_orchestrator";
 import { calculateWireMidpoint } from "./wiring_model";
+import { getInstrumentThemeColors } from "../ui/instrument_theme";
 
 export interface TelemetryHistorySample {
   readonly time?: number;
@@ -76,9 +77,12 @@ export function drawSparkline(
   width: number,
   height: number,
   points: readonly number[],
-  strokeColor = "#38BDF8",
+  strokeColor?: string,
 ): void {
   if (points.length < 2) return;
+
+  const theme = getInstrumentThemeColors();
+  const effectiveStroke = strokeColor ?? (theme.isClassroom ? "#0284C7" : "#38BDF8");
 
   let min = points[0];
   let max = points[0];
@@ -90,9 +94,9 @@ export function drawSparkline(
 
   ctx.save();
 
-  // Mini pantalla de osciloscopio
-  ctx.fillStyle = "rgba(10, 15, 26, 0.90)";
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.30)";
+  // Mini pantalla de osciloscopio adaptada al tema
+  ctx.fillStyle = theme.isClassroom ? "#F8FAFC" : "rgba(10, 15, 26, 0.90)";
+  ctx.strokeStyle = theme.isClassroom ? "rgba(2, 132, 199, 0.35)" : "rgba(56, 189, 248, 0.30)";
   ctx.lineWidth = 0.8;
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, 3);
@@ -100,7 +104,7 @@ export function drawSparkline(
   ctx.stroke();
 
   // Retícula central
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.strokeStyle = theme.isClassroom ? "rgba(2, 132, 199, 0.12)" : "rgba(255, 255, 255, 0.08)";
   ctx.beginPath();
   ctx.moveTo(x, y + height / 2);
   ctx.lineTo(x + width, y + height / 2);
@@ -116,7 +120,7 @@ export function drawSparkline(
   // Línea de referencia 0V si la señal cruza por cero
   if (min < 0 && max > 0 && span > 1e-9) {
     const zeroY = plotY + plotH * (1 - (0 - min) / span);
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.4)";
+    ctx.strokeStyle = theme.isClassroom ? "rgba(100, 116, 139, 0.5)" : "rgba(148, 163, 184, 0.4)";
     ctx.setLineDash([2, 2]);
     ctx.beginPath();
     ctx.moveTo(x, zeroY);
@@ -136,13 +140,13 @@ export function drawSparkline(
     else ctx.lineTo(ptX, ptY);
   }
 
-  ctx.strokeStyle = strokeColor;
+  ctx.strokeStyle = effectiveStroke;
   ctx.lineWidth = 1.3;
   ctx.stroke();
 
   // Indicador de amplitud pico a pico (Vpp / Ipp)
   ctx.font = "6px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "rgba(226, 232, 240, 0.75)";
+  ctx.fillStyle = theme.isClassroom ? "rgba(51, 65, 85, 0.85)" : "rgba(226, 232, 240, 0.75)";
   ctx.textAlign = "right";
   const ppLabel = span >= 1 ? `${span.toFixed(2)}V` : `${(span * 1000).toFixed(0)}mV`;
   ctx.fillText(ppLabel, x + width - 3, y + 8);
@@ -161,20 +165,25 @@ export function renderPinTelemetryHud(
   current: number | undefined,
   history?: readonly TelemetryHistorySample[],
 ): void {
+  const theme = getInstrumentThemeColors();
   const pinDescriptor = pin.name ? ` [${pin.name}]` : (pin.label ? ` [${pin.label}]` : "");
   const pinHeader = `${pin.componentId}${pinDescriptor}`;
   const nodeTitle = nodeId === "0" ? `${pinHeader} ➔ GND (0V)` : `${pinHeader} ➔ Nodo ${nodeId}`;
   const voltText = `V: ${formatEngineeringValue(voltage, "V")}`;
   const currText = `I: ${formatEngineeringValue(current, "A")}`;
 
+  const headerColor = theme.isClassroom ? "#0284C7" : "#38BDF8";
+  const voltColor = theme.isClassroom ? "#0F172A" : "#E6EAF0";
+  const currColor = theme.isClassroom ? "#B45309" : "#F2C94C";
+
   const lines = [
-    { text: nodeTitle, color: "#38BDF8", font: "bold 9px 'Inter', sans-serif" },
-    { text: voltText, color: "#E6EAF0", font: "600 9px 'JetBrains Mono', monospace" },
-    { text: currText, color: "#F2C94C", font: "600 9px 'JetBrains Mono', monospace" },
+    { text: nodeTitle, color: headerColor, font: "bold 9px 'Inter', sans-serif" },
+    { text: voltText, color: voltColor, font: "600 9px 'JetBrains Mono', monospace" },
+    { text: currText, color: currColor, font: "600 9px 'JetBrains Mono', monospace" },
   ];
 
   const sparkPoints = extractSparklinePoints(history, nodeId, false, 35);
-  const sparkline = sparkPoints.length >= 2 ? { points: sparkPoints, color: "#38BDF8" } : undefined;
+  const sparkline = sparkPoints.length >= 2 ? { points: sparkPoints, color: headerColor } : undefined;
 
   renderHudBox(ctx, pin.x, pin.y - 12, lines, "bottom", sparkline);
 }
@@ -193,6 +202,7 @@ export function renderWireTelemetryHud(
   const mid = calculateWireMidpoint(wire.points);
   if (!mid) return;
 
+  const theme = getInstrumentThemeColors();
   const arrow = current !== undefined && Math.abs(current) > 1e-7
     ? (current >= 0 ? " ➔" : " ⬅")
     : "";
@@ -200,15 +210,19 @@ export function renderWireTelemetryHud(
   const voltText = `V: ${formatEngineeringValue(voltage, "V")}`;
   const currText = `I: ${formatEngineeringValue(Math.abs(current ?? 0), "A")}${arrow}`;
 
+  const headerColor = theme.isClassroom ? "#0284C7" : "#38BDF8";
+  const voltColor = theme.isClassroom ? "#0F172A" : "#E6EAF0";
+  const currColor = theme.isClassroom ? "#B45309" : "#F2C94C";
+
   const lines = [
-    { text: wire.label ? `Red: ${wire.label}` : "Pista Conductora", color: "#38BDF8", font: "bold 9px 'Inter', sans-serif" },
-    { text: voltText, color: "#E6EAF0", font: "600 9px 'JetBrains Mono', monospace" },
-    { text: currText, color: "#F2C94C", font: "600 9px 'JetBrains Mono', monospace" },
+    { text: wire.label ? `Red: ${wire.label}` : "Pista Conductora", color: headerColor, font: "bold 9px 'Inter', sans-serif" },
+    { text: voltText, color: voltColor, font: "600 9px 'JetBrains Mono', monospace" },
+    { text: currText, color: currColor, font: "600 9px 'JetBrains Mono', monospace" },
   ];
 
   const lookupKey = nodeId || `${wire.from.componentId}:${wire.from.pinIndex}`;
   const sparkPoints = extractSparklinePoints(history, lookupKey, false, 35);
-  const sparkline = sparkPoints.length >= 2 ? { points: sparkPoints, color: "#38BDF8" } : undefined;
+  const sparkline = sparkPoints.length >= 2 ? { points: sparkPoints, color: headerColor } : undefined;
 
   renderHudBox(ctx, mid.x, mid.y - 10, lines, "bottom", sparkline);
 }
@@ -221,6 +235,7 @@ function renderHudBox(
   placement: "bottom" | "top" = "bottom",
   sparkline?: { points: readonly number[]; color: string },
 ): void {
+  const theme = getInstrumentThemeColors();
   ctx.save();
 
   const lineHeight = 13;
@@ -243,9 +258,9 @@ function renderHudBox(
   const boxX = anchorX - boxW / 2;
   const boxY = placement === "bottom" ? anchorY - boxH : anchorY;
 
-  // Fondo oscuro CAD nítido
-  ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
-  ctx.strokeStyle = "#334155";
+  // Fondo adaptativo de alto contraste
+  ctx.fillStyle = theme.isClassroom ? "rgba(255, 255, 255, 0.96)" : "rgba(15, 23, 42, 0.96)";
+  ctx.strokeStyle = theme.isClassroom ? "#CBD5E1" : "#334155";
   ctx.lineWidth = 1;
 
   ctx.beginPath();

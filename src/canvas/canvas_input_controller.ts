@@ -1140,23 +1140,9 @@ function attachProbePointerDrag(
     ghost = document.createElement("div");
     ghost.className = "probe-drag-ghost";
     ghost.textContent = `📍 ${ch}`;
-    ghost.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      pointer-events: none;
-      z-index: 100000;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      font-weight: bold;
-      color: ${info.color};
-      background: rgba(10, 15, 28, 0.95);
-      border: 1.5px solid ${info.color};
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 10px ${info.bg};
-      transform: translate3d(${clientX + 10}px, ${clientY + 10}px, 0);
-    `;
+    ghost.style.color = info.color;
+    ghost.style.borderColor = info.color;
+    ghost.style.transform = `translate3d(${clientX + 10}px, ${clientY + 10}px, 0)`;
     document.body.appendChild(ghost);
     document.body.style.cursor = "grabbing";
     updateDragVisuals(clientX, clientY);

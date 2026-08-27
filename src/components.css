@@ -556,18 +556,54 @@
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid rgba(91, 243, 228, 0.52);
+  border: 1px solid var(--cyan, rgba(56, 189, 248, 0.52));
   border-radius: 8px;
-  background: hsl(225, 23%, 11%);
-  color: var(--text-main);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65), 0 0 18px rgba(91, 243, 228, 0.18);
-  opacity: 0.94;
+  background: var(--bg-card, #1D242C);
+  color: var(--text-bright);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65), 0 0 18px rgba(56, 189, 248, 0.18);
+  opacity: 0.96;
   pointer-events: none;
   will-change: transform;
 }
 
+.component-drag-ghost .comp-icon-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--toolbar-group-bg, rgba(0, 0, 0, 0.4));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+
+.component-drag-ghost .comp-name {
+  color: var(--text-bright);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
 .component-drag-ghost .comp-desc {
   display: none;
+}
+
+.probe-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 100000;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: bold;
+  background: var(--bg-elevated, rgba(10, 15, 28, 0.95));
+  border: 1.5px solid currentColor;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  will-change: transform;
 }
 
 body.palette-drag-active,
@@ -636,8 +672,8 @@ body.palette-drag-active * {
 
 .palette-top-sticky {
   flex-shrink: 0;
-  background: rgba(11, 15, 25, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--sidebar-bg, var(--bg-void));
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   z-index: 10;
 }
 

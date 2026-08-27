@@ -581,6 +581,33 @@
   border: 1px solid #cbd5e1 !important;
 }
 
+/* Fantasma de Arrastre de Componentes y Sondas en Modo Aula */
+[data-theme="classroom"] .component-drag-ghost {
+  background: #FFFFFF !important;
+  border: 1.5px solid #0284C7 !important;
+  color: #0F172A !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 0 14px rgba(2, 132, 199, 0.25) !important;
+}
+
+[data-theme="classroom"] .component-drag-ghost .comp-icon-box {
+  background: #E0F2FE !important;
+  border: 1px solid #BAE6FD !important;
+  color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .component-drag-ghost .comp-name {
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .canvas-viewport.palette-drop-target {
+  box-shadow: inset 0 0 0 2px #0284C7, inset 0 0 28px rgba(2, 132, 199, 0.14) !important;
+}
+
+[data-theme="classroom"] .probe-drag-ghost {
+  background: #FFFFFF !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15) !important;
+}
+
 /* Barra Flotante de Herramientas del Lienzo en Modo Aula */
 [data-theme="classroom"] .canvas-controls-floating {
   background: #FFFFFF !important;
