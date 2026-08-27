@@ -363,7 +363,7 @@ export function exportEyeDiagramReportToCsv(
   metadata: { circuitName?: string } = {},
 ): string {
   const rows: string[] = [
-    `# Reporte de Diagrama de Ojo y Análisis de Jitter - Astryd Sophia`,
+    `# Reporte de Diagrama de Ojo y Análisis de Jitter - Biaani`,
     `# Circuito: ${metadata.circuitName || "Circuito Mixto/Digital"}`,
     `# Nodo Analizado: V(${result.node})`,
     `# Velocidad (Baud Rate): ${formatSpiceValue(result.baudRate)}bps (${(result.unitInterval * 1e9).toFixed(3)} ns/UI)`,

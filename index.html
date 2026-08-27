@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Astryd Sophia - Simulador Físico de Circuitos Electrónicos</title>
-    <meta name="description" content="Astryd Sophia Evolution combina la precisión analítica de un solver en Rust mediante MNA con un motor de lienzo en TypeScript y diseño estético Glassmorphic." />
+    <title>Biaani - Simulador Físico de Circuitos Electrónicos</title>
+    <meta name="description" content="Biaani combina la precisión analítica de un solver en Rust mediante MNA con un motor de lienzo en TypeScript y diseño estético Glassmorphic." />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
 
@@ -13,22 +13,56 @@
     <div class="app-container" id="app-viewport">
       <!-- 1. BARRA DE HERRAMIENTAS SUPERIOR (HEADER) -->
       <header class="main-header" id="app-header">
-        <div class="logo-area">
-          <span class="logo-icon" id="logo-electric-icon">⚡</span>
-          <h1 class="logo-title" id="logo-main-title">ASTryD SOPHIA</h1>
-          <span class="badge" id="app-version-badge">v2.0 Evolution</span>
+        <!-- CLUSTER 1: IDENTIDAD & GESTIÓN DE PROYECTO (IZQUIERDA) -->
+        <div class="header-left-cluster">
+          <div class="logo-area">
+            <span class="logo-icon" id="logo-electric-icon">⚡</span>
+            <h1 class="logo-title" id="logo-main-title">BIAANI</h1>
+            <span class="badge" id="app-version-badge">v2.0 Evolution</span>
+          </div>
+
+          <div class="header-separator"></div>
+
+          <div class="header-project-group" role="toolbar" aria-label="Gestión de Proyecto">
+            <button id="btn-new-circuit" class="btn-text-only" type="button" data-tooltip="Nuevo circuito" aria-label="Nuevo circuito">
+              <span aria-hidden="true">📄</span><span class="header-action-label">Nuevo</span>
+            </button>
+            <button id="btn-open-circuit" class="btn-text-only" type="button" data-tooltip="Abrir circuito (.biaani o .spice)" aria-label="Abrir circuito">
+              <span aria-hidden="true">📂</span><span class="header-action-label">Abrir</span>
+            </button>
+            <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo" aria-label="Cargar circuito de ejemplo">
+              <option value="">📋 Demos…</option>
+              <option value="01_filtro_rc.biaani">Filtro RC pasa-bajos</option>
+              <option value="02_puente_rectificador.biaani">Puente rectificador</option>
+              <option value="03_arduino_led.biaani">Arduino + LED</option>
+              <option value="04_amp_bjt_bode.biaani">Amp BJT (Bode)</option>
+              <option value="05_amplificador_opamp.biaani">Amp Op-Amp Inversor</option>
+              <option value="06_inversor_cmos.biaani">Inversor Digital CMOS</option>
+              <option value="07_rlc_resonante.biaani">Circuito RLC Resonante</option>
+              <option value="08_control_rele_interactivo.biaani">Control con Relé Interactivo</option>
+              <option value="09_integrador_opamp.biaani">Integrador Op-Amp</option>
+            </select>
+            <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
+              <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
+            </button>
+          </div>
         </div>
 
+        <!-- CLUSTER 2: NÚCLEO DE SIMULACIÓN Y ANÁLISIS (CENTRO) -->
         <div class="simulation-controls" id="simulation-bar">
-          <select id="analysis-mode-select" class="prop-input" aria-label="Tipo de análisis" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-bright); border-radius: 8px; font-size: 0.72rem; padding: 4px 10px; cursor: pointer; outline: none;">
-            <option value="DC">⚖️ Análisis CC</option>
-            <option value="AC">📈 Barrido CA</option>
-            <option value="TRAN">⏱️ Transitorio</option>
-            <option value="SENS">🔍 Sensibilidad</option>
-            <option value="PSS">⚠️ PSS (Shooting — Experimental)</option>
-            <option value="STB">⚠️ Polos/Ceros (Reducido — Experimental)</option>
-            <option value="PVT">🔬 PVT</option>
-            <option value="SPAR">📡 S-Param</option>
+          <select id="analysis-mode-select" class="header-mode-select" aria-label="Tipo de análisis">
+            <optgroup label="── Simulación Básica (Laboratorio) ──">
+              <option value="DC">⚖️ Análisis CC</option>
+              <option value="AC">📈 Barrido CA</option>
+              <option value="TRAN" selected>⏱️ Transitorio</option>
+            </optgroup>
+            <optgroup label="── Análisis Avanzado & I+D ──">
+              <option value="SENS">🔍 Sensibilidad</option>
+              <option value="PSS">⚠️ PSS (Shooting — Exp.)</option>
+              <option value="STB">⚠️ Polos/Ceros (Reducido — Exp.)</option>
+              <option value="PVT">🔬 PVT</option>
+              <option value="SPAR">📡 S-Param</option>
+            </optgroup>
           </select>
           <div class="header-separator"></div>
           <button id="run-sim-btn" class="btn-ctrl btn-run" type="button" data-tooltip="Iniciar simulación activa" aria-label="Iniciar simulación">
@@ -41,34 +75,28 @@
           </button>
         </div>
 
+        <!-- CLUSTER 3: SISTEMA, AJUSTES Y TELEMETRÍA (DERECHA) -->
         <div class="system-status" id="app-status-bar">
-          <button id="btn-new-circuit" class="btn-text-only" type="button" data-tooltip="Nuevo circuito" aria-label="Nuevo circuito">
-            <span aria-hidden="true">📄</span><span class="header-action-label">Nuevo</span>
+          <button id="btn-mna-inspector" class="btn-text-only" type="button" data-tooltip="Inspector Pedagógico de Matriz MNA (Formulación Simbólica/LaTeX)" aria-label="Inspector MNA">
+            <span aria-hidden="true">📐</span><span class="header-action-label">Matriz MNA</span>
           </button>
-          <button id="btn-open-circuit" class="btn-text-only" type="button" data-tooltip="Abrir circuito (.astryd o .spice)" aria-label="Abrir circuito">
-            <span aria-hidden="true">📂</span><span class="header-action-label">Abrir</span>
+          <button id="btn-guide-tour" class="btn-text-only" type="button" data-tooltip="Guía interactiva del simulador (F1)" aria-label="Guía interactiva">
+            <span aria-hidden="true">📖</span><span class="header-action-label">Guía</span>
           </button>
-          <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo" aria-label="Cargar circuito de ejemplo">
-            <option value="">📋 Demos…</option>
-            <option value="01_filtro_rc.astryd">Filtro RC pasa-bajos</option>
-            <option value="02_puente_rectificador.astryd">Puente rectificador</option>
-            <option value="03_arduino_led.astryd">Arduino + LED</option>
-            <option value="04_amp_bjt_bode.astryd">Amp BJT (Bode)</option>
-            <option value="05_amplificador_opamp.astryd">Amp Op-Amp Inversor</option>
-            <option value="06_inversor_cmos.astryd">Inversor Digital CMOS</option>
-            <option value="07_rlc_resonante.astryd">Circuito RLC Resonante</option>
-            <option value="08_control_rele_interactivo.astryd">Control con Relé Interactivo</option>
-          </select>
-          <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
-            <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
+          <button id="btn-feedback-trigger" class="btn-text-only" type="button" data-tooltip="Enviar comentarios o reportar un error técnico (F7)" aria-label="Enviar comentarios y reporte">
+            <span aria-hidden="true">💬</span><span class="header-action-label">Feedback</span>
           </button>
-
-          <div class="header-separator"></div>
+          <button id="btn-zen-mode" class="btn-text-only" type="button" data-tooltip="Modo Lienzo Inmersivo / Pantalla Completa (Ctrl+Shift+F)" aria-label="Modo Inmersivo">
+            <span aria-hidden="true">🔲</span><span class="header-action-label">Zen</span>
+          </button>
           <button id="settings-trigger-btn" class="btn-text-only" type="button" data-tooltip="Configuración de simulación" aria-label="Ajustes de simulación">
             <span aria-hidden="true">⚙️</span><span class="header-action-label">Ajustes</span>
           </button>
-          <span class="status-indicator active" id="ipc-status-dot"></span>
-          <span class="status-text" id="ipc-status-text">Conexión Lista</span>
+          <div class="header-separator"></div>
+          <div class="ipc-status-pill" data-tooltip="Estado de conexión con el motor de simulación Rust">
+            <span class="status-indicator active" id="ipc-status-dot"></span>
+            <span class="status-text" id="ipc-status-text">Conexión Lista</span>
+          </div>
         </div>
       </header>
 
@@ -78,714 +106,13 @@
         <aside class="sidebar-panel sidebar-left" id="sidebar-left">
           <div class="panel-header" id="left-panel-header">
             <h3>Componentes</h3>
-            <button id="btn-toggle-left" class="btn-text-only" type="button" aria-controls="sidebar-left" aria-expanded="true">◀ Colapsar</button>
+            <div class="panel-header-actions">
+              <button id="btn-pin-left" class="btn-pin-toggle" type="button" data-tooltip="Auto-ocultar: Activado (Haz clic para fijar)" aria-label="Fijar panel de componentes">🔓</button>
+              <button id="btn-toggle-left" class="btn-text-only" type="button" aria-controls="sidebar-left" aria-expanded="true">◀ Colapsar</button>
+            </div>
           </div>
           <div class="panel-body" id="left-panel-body">
-            <div class="search-box">
-              <input type="text" id="component-search" class="search-input" placeholder="🔍 Buscar componentes..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
-            </div>
-
-            <div class="components-categories" id="components-categories">
-              <!-- Categoria: Pasivos -->
-              <div class="category-group">
-                <div class="category-header active" data-category="pasivos">
-                  <span>Pasivos</span>
-                  <span class="category-arrow">▼</span>
-                </div>
-                <div class="category-content open" id="cat-pasivos">
-                  <!-- Resistor -->
-                  <div class="component-card" draggable="true" id="comp-resistor" data-type="resistor" data-default="1000">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Resistencia</span>
-                      <span class="comp-desc">Resistencia Pasiva (Ω)</span>
-                    </div>
-                  </div>
-                  <!-- Capacitor -->
-                  <div class="component-card" draggable="true" id="comp-capacitor" data-type="capacitor" data-default="0.000001">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 20 L 15 20" />
-                        <path d="M 25 20 L 36 20" />
-                        <path d="M 15 8 L 15 32" />
-                        <path d="M 25 8 L 25 32" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Condensador</span>
-                      <span class="comp-desc">Almacén de Carga (F)</span>
-                    </div>
-                  </div>
-                  <!-- Inductor -->
-                  <div class="component-card" draggable="true" id="comp-inductor" data-type="inductor" data-default="0.001">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 20 C 4 10, 12 10, 12 20 C 12 10, 20 10, 20 20 C 20 10, 28 10, 28 20 C 28 10, 36 10, 36 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Bobina</span>
-                      <span class="comp-desc">Bobina Magnética (H)</span>
-                    </div>
-                  </div>
-                  <!-- Potentiometer -->
-                  <div class="component-card" draggable="true" id="comp-potentiometer" data-type="potentiometer" data-default="10000">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
-                        <path d="M 20 36 L 20 28 L 17 25" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Potenciómetro</span>
-                      <span class="comp-desc">Resistencia Variable (Ω)</span>
-                    </div>
-                  </div>
-                  <!-- Fotoresistencia (LDR) -->
-                  <div class="component-card" draggable="true" id="comp-ldr" data-type="ldr" data-default="100">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <!-- Outer circle -->
-                        <circle cx="20" cy="20" r="13" />
-                        <!-- Resistor zig-zag inside -->
-                        <path d="M 11 20 L 14 20 L 16 17 L 18 23 L 20 17 L 22 23 L 24 20 L 29 20" />
-                        <!-- Incoming light arrows -->
-                        <path d="M 8 8 L 13 13" />
-                        <path d="M 12 8 L 16 12" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Fotoresistencia</span>
-                      <span class="comp-desc">Sensor de Luz (LDR)</span>
-                    </div>
-                  </div>
-                  <!-- Termistor (NTC) -->
-                  <div class="component-card" draggable="true" id="comp-thermistor" data-type="thermistor" data-default="25">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <!-- Resistor zig-zag inside -->
-                        <path d="M 4 20 L 10 20 L 13 12 L 18 28 L 22 12 L 27 28 L 30 20 L 36 20" />
-                        <!-- Diagonal bar with small flat foot -->
-                        <path d="M 10 32 L 13 32 L 28 8" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Termistor</span>
-                      <span class="comp-desc">Sensor de Temp. (NTC)</span>
-                    </div>
-                  </div>
-                  <!-- GND -->
-                  <div class="component-card" draggable="true" id="comp-ground" data-type="ground" data-default="0">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 20 6 L 20 20" />
-                        <path d="M 8 20 L 32 20" />
-                        <path d="M 13 27 L 27 27" />
-                        <path d="M 18 34 L 22 34" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Tierra (GND)</span>
-                      <span class="comp-desc">Referencia Eléctrica (0V)</span>
-                    </div>
-                  </div>
-                  <!-- Multimetro Digital (DMM) -->
-                  <div class="component-card" draggable="true" id="comp-dmm" data-type="dmm" data-default="V">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="8" y="4" width="24" height="32" rx="3" />
-                        <rect x="12" y="8" width="16" height="10" rx="1" fill="currentColor" fill-opacity="0.15" />
-                        <circle cx="20" cy="26" r="4" />
-                        <path d="M 20 26 L 20 23" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Multímetro</span>
-                      <span class="comp-desc">Voltímetro/Amperímetro DMM</span>
-                    </div>
-                  </div>
-                  <!-- VSource -->
-                  <div class="component-card" draggable="true" id="comp-vsource" data-type="vsource" data-default="5">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="20" cy="20" r="14" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 10 20 L 18 20" />
-                        <path d="M 14 16 L 14 24" />
-                        <path d="M 22 20 L 30 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Fuente de Tensión</span>
-                      <span class="comp-desc">Voltaje CC/CA (V)</span>
-                    </div>
-                  </div>
-                  <!-- ISource -->
-                  <div class="component-card" draggable="true" id="comp-isource" data-type="isource" data-default="0.01">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="20" cy="20" r="14" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 14 14 L 20 20 L 14 26" />
-                        <path d="M 20 20 L 26 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Fuente de Corriente</span>
-                      <span class="comp-desc">Corriente CC/CA (A)</span>
-                    </div>
-                  </div>
-                  <!-- Transformador -->
-                  <div class="component-card" draggable="true" id="comp-transformer" data-type="transformer" data-default="0.001">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 6 12 C 6 8, 12 8, 12 12 C 12 8, 18 8, 18 12 C 18 8, 24 8, 24 12 C 24 8, 30 8, 30 12" />
-                        <path d="M 12 18 L 12 22" />
-                        <path d="M 24 18 L 24 22" />
-                        <circle cx="9" cy="12" r="2" fill="currentColor" />
-                        <circle cx="27" cy="12" r="2" fill="currentColor" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Transformador</span>
-                      <span class="comp-desc">Acoplamiento Magnético (H/k)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Categoria: Semiconductores -->
-              <div class="category-group">
-                <div class="category-header" data-category="semiconductores">
-                  <span>Semiconductores</span>
-                  <span class="category-arrow">▲</span>
-                </div>
-                <div class="category-content" id="cat-semiconductores">
-                  <!-- Diodo -->
-                  <div class="component-card" draggable="true" id="comp-diode" data-type="diode" data-default="0">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M 4 20 L 14 20" />
-                        <path d="M 26 20 L 36 20" />
-                        <path d="M 14 10 L 26 20 L 14 30 Z" fill="currentColor" fill-opacity="0.15" />
-                        <path d="M 26 10 L 26 30" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Diodo PN</span>
-                      <span class="comp-desc">Rectificador No Lineal</span>
-                    </div>
-                  </div>
-                  <!-- MOSFET NMOS -->
-                  <div class="component-card" draggable="true" id="comp-nmos" data-type="nmos" data-default="1.5">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 23 10 L 23 30" />
-                        <path d="M 15 12 L 15 28" />
-                        <path d="M 15 20 L 4 20" />
-                        <path d="M 23 12 L 29 12 L 29 4" />
-                        <path d="M 23 28 L 29 28 L 29 36" />
-                        <path d="M 23 28 L 26 25" />
-                        <path d="M 23 28 L 26 31" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">MOSFET NMOS</span>
-                      <span class="comp-desc">Canal N Activo</span>
-                    </div>
-                  </div>
-                  <!-- MOSFET PMOS -->
-                  <div class="component-card" draggable="true" id="comp-pmos" data-type="pmos" data-default="-1.5">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 23 10 L 23 30" />
-                        <path d="M 17 12 L 17 28" />
-                        <path d="M 13 20 L 4 20" />
-                        <circle cx="15" cy="20" r="2" />
-                        <path d="M 23 12 L 29 12 L 29 4" />
-                        <path d="M 23 28 L 29 28 L 29 36" />
-                        <path d="M 23 12 L 26 15" />
-                        <path d="M 23 12 L 26 9" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">MOSFET PMOS</span>
-                      <span class="comp-desc">Canal P Activo</span>
-                    </div>
-                  </div>
-                  <!-- Transistor BJT NPN -->
-                  <div class="component-card" draggable="true" id="comp-npn" data-type="npn" data-default="100">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 14 10 L 14 30" />
-                        <path d="M 14 20 L 4 20" />
-                        <path d="M 14 14 L 28 6 L 28 4" />
-                        <path d="M 14 26 L 28 34 L 28 36" />
-                        <path d="M 28 34 L 21 34" />
-                        <path d="M 28 34 L 26 27" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Transistor NPN</span>
-                      <span class="comp-desc">Transistor BJT (NPN)</span>
-                    </div>
-                  </div>
-                  <!-- Transistor BJT PNP -->
-                  <div class="component-card" draggable="true" id="comp-pnp" data-type="pnp" data-default="100">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 14 10 L 14 30" />
-                        <path d="M 14 20 L 4 20" />
-                        <path d="M 14 14 L 28 6 L 28 4" />
-                        <path d="M 14 26 L 28 34 L 28 36" />
-                        <path d="M 14 26 L 21 23" />
-                        <path d="M 14 26 L 17 31" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Transistor PNP</span>
-                      <span class="comp-desc">Transistor BJT (PNP)</span>
-                    </div>
-                  </div>
-                  <!-- LED -->
-                  <div class="component-card" draggable="true" id="comp-led" data-type="led" data-default="0">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M 4 20 L 14 20" />
-                        <path d="M 26 20 L 36 20" />
-                        <path d="M 14 10 L 26 20 L 14 30 Z" fill="currentColor" fill-opacity="0.15" />
-                        <path d="M 26 10 L 26 30" />
-                        <path d="M 28 14 L 32 10" />
-                        <path d="M 28 14 L 34 14" />
-                        <path d="M 28 14 L 32 18" />
-                        <path d="M 28 26 L 32 30" />
-                        <path d="M 28 26 L 34 26" />
-                        <path d="M 28 26 L 32 22" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">LED</span>
-                      <span class="comp-desc">Diodo Emisor de Luz</span>
-                    </div>
-                  </div>
-                  <!-- Optoacoplador -->
-                  <div class="component-card" draggable="true" id="comp-opto" data-type="opto" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="6" y="8" width="28" height="24" rx="2" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 12 14 L 12 26" />
-                        <path d="M 28 14 L 28 26" />
-                        <path d="M 16 20 L 24 20" stroke-dasharray="2 2" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Optoacoplador</span>
-                      <span class="comp-desc">Aislamiento Óptico (DIP-4)</span>
-                    </div>
-                  </div>
-                  <!-- JFET Canal N -->
-                  <div class="component-card" draggable="true" id="comp-njf" data-type="njf" data-default="-2">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 23 10 L 23 30" />
-                        <path d="M 14 20 L 23 20" />
-                        <path d="M 23 12 L 29 12 L 29 4" />
-                        <path d="M 23 28 L 29 28 L 29 36" />
-                        <path d="M 18 16 L 22 20 L 18 24" fill="currentColor" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">JFET Canal N</span>
-                      <span class="comp-desc">Junction FET (N-Ch)</span>
-                    </div>
-                  </div>
-                  <!-- JFET Canal P -->
-                  <div class="component-card" draggable="true" id="comp-pjf" data-type="pjf" data-default="2">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 23 10 L 23 30" />
-                        <path d="M 14 20 L 23 20" />
-                        <path d="M 23 12 L 29 12 L 29 4" />
-                        <path d="M 23 28 L 29 28 L 29 36" />
-                        <path d="M 18 20 L 14 16 L 14 24 Z" fill="currentColor" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">JFET Canal P</span>
-                      <span class="comp-desc">Junction FET (P-Ch)</span>
-                    </div>
-                  </div>
-                  <!-- BSIM3 NMOS (Experimental) -->
-                  <div class="component-card" draggable="true" id="comp-bsim3nmos" data-type="bsim3nmos" data-default="1.0" data-tooltip="⚠️ EXPERIMENTAL: Modelo submicrónico BSIM3v3 NMOS (error ~98% vs ngspice). Requiere activar 'Habilitar análisis y modelos experimentales' en Ajustes.">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 23 10 L 23 30" />
-                        <path d="M 15 12 L 15 28" />
-                        <path d="M 15 20 L 4 20" />
-                        <path d="M 23 12 L 29 12 L 29 4" />
-                        <path d="M 23 28 L 29 28 L 29 36" />
-                        <path d="M 23 20 L 36 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">BSIM3 NMOS <span class="badge-experimental">EXPERIMENTAL</span></span>
-                      <span class="comp-desc">4 Term (G, D, S, B)</span>
-                    </div>
-                  </div>
-                  <!-- BSIM3 PMOS (Experimental) -->
-                  <div class="component-card" draggable="true" id="comp-bsim3pmos" data-type="bsim3pmos" data-default="-1.0" data-tooltip="⚠️ EXPERIMENTAL: Modelo submicrónico BSIM3v3 PMOS (error ~98% vs ngspice). Requiere activar 'Habilitar análisis y modelos experimentales' en Ajustes.">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 23 10 L 23 30" />
-                        <path d="M 17 12 L 17 28" />
-                        <path d="M 13 20 L 4 20" />
-                        <circle cx="15" cy="20" r="2" />
-                        <path d="M 23 12 L 29 12 L 29 4" />
-                        <path d="M 23 28 L 29 28 L 29 36" />
-                        <path d="M 23 20 L 36 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">BSIM3 PMOS <span class="badge-experimental">EXPERIMENTAL</span></span>
-                      <span class="comp-desc">4 Term (G, D, S, B)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Categoria: Analógicos -->
-              <div class="category-group">
-                <div class="category-header" data-category="analogicos">
-                  <span>Analógicos</span>
-                  <span class="category-arrow">▲</span>
-                </div>
-                <div class="category-content" id="cat-analogicos">
-                  <!-- Op-Amp Ideal (3 pines) -->
-                  <div class="component-card" draggable="true" id="comp-opamp-ideal" data-type="opamp_ideal" data-default="0">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 12 10 L 12 30 L 28 20 Z" fill="currentColor" fill-opacity="0.15" />
-                        <path d="M 4 15 L 12 15" />
-                        <path d="M 4 25 L 12 25" />
-                        <path d="M 28 20 L 36 20" />
-                        <path d="M 14 15 L 18 15" stroke-width="1.5" />
-                        <path d="M 16 13 L 16 17" stroke-width="1.5" />
-                        <path d="M 14 25 L 18 25" stroke-width="1.5" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Op-Amp Ideal</span>
-                      <span class="comp-desc">3 pines (+, -, OUT)</span>
-                    </div>
-                  </div>
-                  <!-- Amplificador Operacional (Op-Amp) -->
-                  <div class="component-card" draggable="true" id="comp-opamp" data-type="opamp" data-default="0">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 12 10 L 12 30 L 28 20 Z" fill="currentColor" fill-opacity="0.15" />
-                        <path d="M 4 15 L 12 15" />
-                        <path d="M 4 25 L 12 25" />
-                        <path d="M 28 20 L 36 20" />
-                        <path d="M 20 14 L 20 4" />
-                        <path d="M 20 26 L 20 36" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Op-Amp</span>
-                      <span class="comp-desc">Amplificador Operacional (5 pines)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Categoria: Actuadores -->
-              <div class="category-group">
-                <div class="category-header" data-category="actuadores">
-                  <span>Actuadores</span>
-                  <span class="category-arrow">▲</span>
-                </div>
-                <div class="category-content" id="cat-actuadores">
-                  <!-- Lámpara -->
-                  <div class="component-card" draggable="true" id="comp-lamp" data-type="lamp" data-default="120;rhot=120;rcold=26.4;vnom=12;pnom=1.2;heat=90;cool=160">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <circle cx="20" cy="20" r="12" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 11.5 11.5 L 28.5 28.5" />
-                        <path d="M 28.5 11.5 L 11.5 28.5" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Lámpara</span>
-                      <span class="comp-desc">Luz Incandescente (Animado)</span>
-                    </div>
-                  </div>
-                  <!-- Relé -->
-                  <div class="component-card" draggable="true" id="comp-relay" data-type="relay" data-default="80m;rcoil=120;pull=30m;hold=16m;ron=50m;roff=100Meg;ton=2.5;toff=1.2">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <rect x="8" y="12" width="12" height="16" rx="2" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 8 16 L 20 24" />
-                        <path d="M 28 12 L 28 18" />
-                        <path d="M 28 28 L 28 22" />
-                        <path d="M 28 18 L 34 20" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Relé</span>
-                      <span class="comp-desc">Interruptor Magnético</span>
-                    </div>
-                  </div>
-                  <!-- Zumbador -->
-                  <div class="component-card" draggable="true" id="comp-buzzer" data-type="buzzer" data-default="90;ron=65;roff=252;vnom=5;vstart=1.1;tone=2400;q=1.8;ton=7;toff=18">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 10 12 H 18 L 28 6 V 34 L 18 28 H 10 Z" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 32 15 C 34 17, 34 23, 32 25" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Zumbador</span>
-                      <span class="comp-desc">Aviso Sonoro (Audio API)</span>
-                    </div>
-                  </div>
-                  <!-- Interruptor (Switch) -->
-                  <div class="component-card" draggable="true" id="comp-switch" data-type="switch" data-default="0">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 20 L 15 20" />
-                        <path d="M 15 15 L 15 25" />
-                        <path d="M 25 20 L 36 20" />
-                        <path d="M 25 12 L 20 20 L 25 28" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Interruptor</span>
-                      <span class="comp-desc">Abre/Cierra Circuito</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Categoria: Lógica Digital -->
-              <div class="category-group">
-                <div class="category-header" data-category="logica-digital">
-                  <span>Lógica Digital</span>
-                  <span class="category-arrow">▲</span>
-                </div>
-                <div class="category-content" id="cat-logica-digital">
-                  <!-- Compuerta AND -->
-                  <div class="component-card" draggable="true" id="comp-and-gate" data-type="and_gate" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 14 L 14 14" />
-                        <path d="M 4 26 L 14 26" />
-                        <path d="M 30 20 L 36 20" />
-                        <path d="M 14 8 L 22 8 C 28 8, 30 14, 30 20 C 30 26, 28 32, 22 32 L 14 32 Z" fill="currentColor" fill-opacity="0.1" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Compuerta AND</span>
-                      <span class="comp-desc">Y Lógica (2 entradas)</span>
-                    </div>
-                  </div>
-                  <!-- Compuerta OR -->
-                  <div class="component-card" draggable="true" id="comp-or-gate" data-type="or_gate" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 14 L 16 14" />
-                        <path d="M 4 26 L 16 26" />
-                        <path d="M 32 20 L 36 20" />
-                        <path d="M 12 8 Q 24 9 32 20 Q 24 31 12 32 Q 18 20 12 8 Z" fill="currentColor" fill-opacity="0.1" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Compuerta OR</span>
-                      <span class="comp-desc">O Lógica (2 entradas)</span>
-                    </div>
-                  </div>
-                  <!-- Inversor NOT -->
-                  <div class="component-card" draggable="true" id="comp-not-gate" data-type="not_gate" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 20 L 14 20" />
-                        <path d="M 30 20 L 36 20" />
-                        <path d="M 14 10 L 26 20 L 14 30 Z" fill="currentColor" fill-opacity="0.1" />
-                        <circle cx="28" cy="20" r="2" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Inversor NOT</span>
-                      <span class="comp-desc">Negación Lógica</span>
-                    </div>
-                  </div>
-                  <!-- Compuerta NAND -->
-                  <div class="component-card" draggable="true" id="comp-nand-gate" data-type="nand_gate" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 14 L 14 14" />
-                        <path d="M 4 26 L 14 26" />
-                        <path d="M 32 20 L 36 20" />
-                        <path d="M 14 8 L 22 8 C 27 8, 28 14, 28 20 C 28 26, 27 32, 22 32 L 14 32 Z" fill="currentColor" fill-opacity="0.1" />
-                        <circle cx="30" cy="20" r="2" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Compuerta NAND</span>
-                      <span class="comp-desc">Y Negada (2 entradas)</span>
-                    </div>
-                  </div>
-                  <!-- Compuerta NOR -->
-                  <div class="component-card" draggable="true" id="comp-nor-gate" data-type="nor_gate" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 14 L 16 14" />
-                        <path d="M 4 26 L 16 26" />
-                        <path d="M 34 20 L 36 20" />
-                        <path d="M 12 8 Q 23 9 30 20 Q 23 31 12 32 Q 18 20 12 8 Z" fill="currentColor" fill-opacity="0.1" />
-                        <circle cx="32" cy="20" r="2" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Compuerta NOR</span>
-                      <span class="comp-desc">O Negada (2 entradas)</span>
-                    </div>
-                  </div>
-                  <!-- Compuerta XOR -->
-                  <div class="component-card" draggable="true" id="comp-xor-gate" data-type="xor_gate" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M 4 14 L 16 14" />
-                        <path d="M 4 26 L 16 26" />
-                        <path d="M 32 20 L 36 20" />
-                        <path d="M 9 8 Q 15 20 9 32" />
-                        <path d="M 13 8 Q 24 9 32 20 Q 24 31 13 32 Q 19 20 13 8 Z" fill="currentColor" fill-opacity="0.1" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Compuerta XOR</span>
-                      <span class="comp-desc">O Exclusiva (2 entradas)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Categoria: Digitales y MCUs -->
-              <div class="category-group">
-                <div class="category-header" data-category="digitales-mcus">
-                  <span>Digitales y MCUs</span>
-                  <span class="category-arrow">▲</span>
-                </div>
-                <div class="category-content" id="cat-digitales-mcus">
-                  <!-- Arduino Uno -->
-                  <div class="component-card" draggable="true" id="comp-arduino-uno" data-type="arduino_uno" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="6" y="8" width="28" height="24" rx="2" fill="currentColor" fill-opacity="0.1" />
-                        <circle cx="12" cy="14" r="2" />
-                        <path d="M 12 24 H 28" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">Arduino Uno</span>
-                      <span class="comp-desc">Modelo funcional, sin firmware</span>
-                    </div>
-                  </div>
-                  <!-- ESP32 -->
-                  <div class="component-card" draggable="true" id="comp-esp32" data-type="esp32" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="8" y="8" width="24" height="24" rx="2" fill="currentColor" fill-opacity="0.1" />
-                        <path d="M 14 14 H 26 V 26 H 14 Z" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">ESP32 SoC</span>
-                      <span class="comp-desc">Modelo funcional, sin firmware</span>
-                    </div>
-                  </div>
-                  <!-- RPI Pico -->
-                  <div class="component-card" draggable="true" id="comp-rpi-pico" data-type="raspberry_pi_pico" data-default="1">
-                    <div class="comp-icon-box">
-                      <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="12" y="6" width="16" height="28" rx="2" fill="currentColor" fill-opacity="0.1" />
-                        <circle cx="20" cy="14" r="2" />
-                      </svg>
-                    </div>
-                    <div class="comp-details">
-                      <span class="comp-name">RPI Pico</span>
-                      <span class="comp-desc">Modelo funcional, sin firmware</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- CATEGORÍA: PUERTOS Y TERMINALES EDA (PROTEUS) -->
-            <div class="category-group">
-              <div class="category-header" data-category="anotaciones">
-                <span>Puertos y Terminales EDA</span>
-                <span class="category-arrow">▲</span>
-              </div>
-              <div class="category-content" id="cat-anotaciones">
-                <!-- Puerto de Red / Terminal Configurable (Net Label) -->
-                <div class="component-card" draggable="true" id="comp-net_label" data-type="net_label" data-default="NET_A" data-tooltip="Puerto de Red: Conecta de forma virtual e invisible todos los terminales que compartan el mismo nombre. Totalmente configurable como Alimentación (VCC/VDD/V-), Tierra (GND), Señal, Generador de reloj o Bus desde el panel de propiedades.">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polygon points="6,20 14,10 34,10 34,30 14,30" fill="#38BDF8" fill-opacity="0.15" />
-                      <circle cx="6" cy="20" r="2.5" fill="#38BDF8" />
-                      <text x="22" y="23" text-anchor="middle" font-size="8" font-family="monospace" font-weight="bold" fill="#38BDF8">NET</text>
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Puerto de Red</span>
-                    <span class="comp-desc">Configurable (Alim, GND, Señal, Bus)</span>
-                  </div>
-                </div>
-
-                <!-- Bloque de Nota de Ingeniería -->
-                <div class="component-card" draggable="true" id="comp-text_note" data-type="text_note" data-default="Nota de Ingeniería">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="6" y="8" width="28" height="24" rx="3" fill="currentColor" fill-opacity="0.12" />
-                      <line x1="10" y1="14" x2="30" y2="14" stroke-width="2.5" />
-                      <line x1="10" y1="20" x2="26" y2="20" />
-                      <line x1="10" y1="25" x2="20" y2="25" />
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Nota de Ingeniería</span>
-                    <span class="comp-desc">Texto y Documentación Markdown</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- CATEGORÍA: MACROMODELOS SPICE -->
-            <div class="category-group">
-              <div class="category-header" data-category="macromodelos" style="display: flex; align-items: center; justify-content: space-between;">
-                <span>Macromodelos</span>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <button id="btn-open-spice-import" class="btn-category-action" title="Importar Biblioteca SPICE (.lib, .subckt)" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38BDF8; border-radius: 4px; font-size: 10px; font-weight: 600; padding: 2px 6px; cursor: pointer;">+ SPICE</button>
-                  <span class="category-arrow">▲</span>
-                </div>
-              </div>
-              <div class="category-content" id="cat-macromodelos">
-                <div class="component-card" draggable="true" id="comp-subcircuit" data-type="x" data-default="1">
-                  <div class="comp-icon-box">
-                    <svg viewBox="0 0 40 40" class="comp-svg-icon" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="6" y="6" width="28" height="28" rx="3" stroke-dasharray="3 2" />
-                      <text x="20" y="24" text-anchor="middle" font-size="10" fill="currentColor">X</text>
-                    </svg>
-                  </div>
-                  <div class="comp-details">
-                    <span class="comp-name">Subcircuito Genérico</span>
-                    <span class="comp-desc">Macromodelo SPICE (.subckt)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <!-- Renderizado dinámico desde component_palette_controller.ts -->
           </div>
         </aside>
 
@@ -807,17 +134,32 @@
             <button id="btn-expand-left" class="btn-sidebar-edge-toggle left" aria-label="Mostrar panel de componentes" data-tooltip="Mostrar Componentes" type="button" style="display: none;">›</button>
             <button id="btn-expand-right" class="btn-sidebar-edge-toggle right" aria-label="Mostrar panel de propiedades" data-tooltip="Mostrar Propiedades" type="button" style="display: none;">‹</button>
 
-            <div class="canvas-controls-floating" id="canvas-floater-menu">
-              <button id="btn-wire-mode" class="btn-floating" data-tooltip="Trazar Cables (W)" aria-label="Modo de conexión de cables" type="button">✏️</button>
-              <button id="btn-undo-action" class="btn-floating" data-tooltip="Deshacer (Ctrl+Z)" aria-label="Deshacer última acción" type="button">↩️</button>
-              <button id="btn-redo-action" class="btn-floating" data-tooltip="Rehacer (Ctrl+Y)" aria-label="Rehacer última acción" type="button">↪️</button>
-              <button id="btn-floater-instruments" class="btn-floating" data-tooltip="Abrir centro de instrumentos" aria-label="Abrir centro de instrumentos" type="button">🛠️</button>
-              <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" aria-label="Aumentar zoom" type="button">+</button>
-              <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" aria-label="Disminuir zoom" type="button">-</button>
-              <button id="btn-zoom-fit" class="btn-floating" data-tooltip="Ajustar y Centrar Esquema" aria-label="Ajustar y centrar esquema al lienzo" type="button">⛶</button>
-              <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" aria-label="Desactivar ajuste a rejilla" aria-pressed="true" type="button">🌐</button>
-              <button id="btn-toggle-labels" class="btn-floating" data-tooltip="Mostrar/Ocultar Etiquetas de Cables" aria-label="Mostrar etiquetas de cables" aria-pressed="false" type="button">🏷️</button>
-              <button id="btn-clear-canvas" class="btn-floating" data-tooltip="Limpiar Todo" aria-label="Limpiar esquema" style="color: var(--danger);" type="button">🗑️</button>
+            <div class="canvas-controls-floating" id="canvas-floater-menu" role="toolbar" aria-label="Herramientas del Lienzo">
+              <!-- Cluster Edición y Trazado -->
+              <div class="floater-group">
+                <button id="btn-wire-mode" class="btn-floating" data-tooltip="Trazar Cables (W)" aria-label="Modo de conexión de cables" type="button">✏️</button>
+                <button id="btn-undo-action" class="btn-floating" data-tooltip="Deshacer (Ctrl+Z)" aria-label="Deshacer última acción" type="button">↩️</button>
+                <button id="btn-redo-action" class="btn-floating" data-tooltip="Rehacer (Ctrl+Y)" aria-label="Rehacer última acción" type="button">↪️</button>
+              </div>
+
+              <div class="floater-separator"></div>
+
+              <!-- Cluster Navegación, Zoom y Rejilla -->
+              <div class="floater-group">
+                <button id="btn-zoom-in" class="btn-floating" data-tooltip="Aumentar Zoom" aria-label="Aumentar zoom" type="button">+</button>
+                <button id="btn-zoom-out" class="btn-floating" data-tooltip="Disminuir Zoom" aria-label="Disminuir zoom" type="button">-</button>
+                <button id="btn-zoom-fit" class="btn-floating" data-tooltip="Ajustar y Centrar Esquema" aria-label="Ajustar y centrar esquema al lienzo" type="button">⛶</button>
+                <button id="btn-snap-grid" class="btn-floating btn-active" data-tooltip="Alinear a Rejilla" aria-label="Desactivar ajuste a rejilla" aria-pressed="true" type="button">🌐</button>
+                <button id="btn-toggle-labels" class="btn-floating" data-tooltip="Mostrar/Ocultar Etiquetas de Cables" aria-label="Mostrar etiquetas de cables" aria-pressed="false" type="button">🏷️</button>
+              </div>
+
+              <div class="floater-separator"></div>
+
+              <!-- Cluster Instrumentos y Peligro -->
+              <div class="floater-group">
+                <button id="btn-floater-instruments" class="btn-floating" data-tooltip="Abrir centro de instrumentos" aria-label="Abrir centro de instrumentos" type="button">🛠️</button>
+                <button id="btn-clear-canvas" class="btn-floating btn-danger-action" data-tooltip="Limpiar Todo" aria-label="Limpiar esquema" type="button">🗑️</button>
+              </div>
             </div>
             
             <!-- Canvas Interactivo Principal (Capa Base Estática/Interactiva) -->
@@ -828,7 +170,7 @@
           <!-- ALMACÉN DE CONTENIDOS DE INSTRUMENTOS (OCULTO - NUNCA VISIBLE EN EL DOCK) -->
           <div id="instruments-storage-pool" hidden style="display: none !important;">
             <!-- 1. Osciloscopio Digital de Nivel Profesional -->
-            <div class="inst-content-box osc-theme-rack" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; flex: 1 1 0; background: #070a14;">
+            <div class="inst-content-box osc-theme-rack" id="inst-oscilloscope" style="display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; flex: 1 1 0; background: var(--floating-window-bg);">
               <!-- Scope Header Console -->
               <div class="osc-header-bar" id="osc-header">
                 <div class="osc-panel-controls" id="osc-controls">
@@ -846,31 +188,11 @@
                   <button id="osc-mode-split" class="btn-osc-mini" type="button" title="Alternar cuadrícula dividida para separar los canales">⊞ Split</button>
                   <button id="osc-math-btn" class="btn-osc-mini" type="button" title="Canal Matemático (CH1 - CH2)">🧮 MATH</button>
                   <button id="osc-cursors-btn" class="btn-osc-mini" type="button">📏 Cursores: OFF</button>
-
-                  <select id="osc-interpolation-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px;" title="Tipo de interpolación de traza">
-                    <option value="linear" selected>Traza: Lineal</option>
-                    <option value="sinc">Traza: Sinc (Lanczos)</option>
-                  </select>
-                  <select id="osc-phosphor-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px;" title="Persistencia de fósforo digital">
-                    <option value="off" selected>Fósforo: Off</option>
-                    <option value="short">Fósforo: Corto</option>
-                    <option value="medium">Fósforo: Medio</option>
-                    <option value="infinite">Fósforo: Infinito</option>
-                  </select>
-
-                  <select id="osc-speed-select" class="osc-select-mini" style="font-size: 0.7rem; padding: 2px 4px;" title="Velocidad de simulación interactiva">
-                    <option value="0.5">Vel: 0.5x</option>
-                    <option value="1" selected>Vel: 1x (Real)</option>
-                    <option value="2">Vel: 2x</option>
-                    <option value="5">Vel: 5x</option>
-                    <option value="10">Vel: 10x</option>
-                    <option value="100">Vel: Turbo</option>
-                  </select>
                   
                   <span class="osc-v-divider"></span>
                   
                   <button id="osc-pause-btn" class="btn-osc-mini osc-btn-action" type="button">⏸ Pausa</button>
-                  <button id="osc-autofit-btn" class="btn-osc-mini osc-btn-autofit" type="button" data-tooltip="Auto-escalar Volts/div y Tiempo/div">✨ Auto</button>
+                  <button id="osc-autofit-btn" class="btn-osc-mini osc-btn-autofit" type="button" data-tooltip="Auto-Set Inteligente: Escala vertical, tiempo y disparo óptimo">✨ Auto-Set</button>
                   <button id="osc-snapshot-btn" class="btn-osc-mini" type="button" title="Descargar captura PNG limpia del osciloscopio">📸 PNG</button>
                   <button id="osc-csv-btn" class="btn-osc-mini" type="button" title="Exportar trazas a CSV">💾 CSV</button>
                 </div>
@@ -887,6 +209,7 @@
                       <div class="hud-item ch3"><span class="hud-lbl">CH3:</span> <span id="osc-hud-ch3-val">1.0 V/div</span></div>
                       <div class="hud-item ch4"><span class="hud-lbl">CH4:</span> <span id="osc-hud-ch4-val">1.0 V/div</span></div>
                       <div class="hud-item time"><span class="hud-lbl">TIME:</span> <span id="osc-hud-time-val">20 ms/div</span></div>
+                      <div class="hud-item speed"><span class="hud-lbl">VEL:</span> <span id="osc-hud-speed-val">1.0x</span></div>
                     </div>
 
                     <!-- Floating Fallback Solver Warning Badge on Scope -->
@@ -895,8 +218,8 @@
                     <canvas class="osc-canvas" id="osc-canvas"></canvas>
                   </div>
 
-                  <!-- Telemetry Bottom Bar (Digital Instrument Readout) -->
-                  <div class="osc-measurements-bar" id="osc-measurements-bar">
+                  <!-- Telemetry Bottom Bar (Dynamic High-Density Digital Readout) -->
+                  <div class="osc-measurements-bar osc-measurements-bar-dynamic" id="osc-measurements-bar">
                     <!-- CH1 Readout -->
                     <div id="osc-meas-ch1" class="meas-digital-card ch1 active">
                       <div class="meas-card-header">
@@ -909,6 +232,8 @@
                         <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch1">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch1">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tr</span><span class="cell-num" id="meas-tr-ch1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tf</span><span class="cell-num" id="meas-tf-ch1">--</span></div>
                       </div>
                     </div>
 
@@ -924,6 +249,8 @@
                         <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch2">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch2">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tr</span><span class="cell-num" id="meas-tr-ch2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Δϕ</span><span class="cell-num" id="meas-phase-ch2">--</span></div>
                       </div>
                     </div>
 
@@ -939,6 +266,8 @@
                         <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch3">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch3">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch3">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tr</span><span class="cell-num" id="meas-tr-ch3">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tf</span><span class="cell-num" id="meas-tf-ch3">--</span></div>
                       </div>
                     </div>
 
@@ -954,6 +283,8 @@
                         <div class="meas-cell"><span class="cell-lbl">Vavg</span><span class="cell-num" id="meas-vavg-ch4">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Freq</span><span class="cell-num" id="meas-freq-ch4">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch4">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tr</span><span class="cell-num" id="meas-tr-ch4">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">Tf</span><span class="cell-num" id="meas-tf-ch4">--</span></div>
                       </div>
                     </div>
                   </div>
@@ -967,6 +298,12 @@
                     <div class="rack-row">
                       <label for="osc-time-div" class="rack-label">Tiempo / Div</label>
                       <select id="osc-time-div" class="osc-select" aria-label="Tiempo por división">
+                        <option value="1e-8">10 ns/div</option>
+                        <option value="2e-8">20 ns/div</option>
+                        <option value="5e-8">50 ns/div</option>
+                        <option value="1e-7">100 ns/div</option>
+                        <option value="2e-7">200 ns/div</option>
+                        <option value="5e-7">500 ns/div</option>
                         <option value="0.000001">1 µs/div</option>
                         <option value="0.000002">2 µs/div</option>
                         <option value="0.000005">5 µs/div</option>
@@ -985,6 +322,23 @@
                         <option value="0.1">100 ms/div</option>
                         <option value="0.2">200 ms/div</option>
                         <option value="0.5">500 ms/div</option>
+                        <option value="1">1 s/div</option>
+                        <option value="2">2 s/div</option>
+                        <option value="5">5 s/div</option>
+                        <option value="10">10 s/div</option>
+                      </select>
+                    </div>
+                    <div class="rack-row style-margin-top">
+                      <label for="osc-sim-speed" class="rack-label">Velocidad Sim.</label>
+                      <select id="osc-sim-speed" class="osc-select" aria-label="Velocidad de simulación interactiva">
+                        <option value="0.1">0.1x (Cámara lenta)</option>
+                        <option value="0.25">0.25x</option>
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1.0x (Tiempo Real)</option>
+                        <option value="2">2.0x (Rápido)</option>
+                        <option value="5">5.0x (Acelerado)</option>
+                        <option value="10">10.0x (Ultra)</option>
+                        <option value="100">Turbo (Máx CPU)</option>
                       </select>
                     </div>
                   </div>
@@ -1013,9 +367,12 @@
                     <div class="rack-row style-margin-top">
                       <div class="rack-label-group">
                         <label for="osc-trigger-level" class="rack-label">Nivel Disparo</label>
-                        <span id="osc-trigger-level-val" class="rack-val-badge">0.0 V</span>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                          <button id="osc-trigger-50-btn" class="btn-osc-mini" type="button" style="padding: 1px 6px; font-size: 0.7rem;" title="Fijar nivel automáticamente al 50% de la señal">⚡ 50%</button>
+                          <span id="osc-trigger-level-val" class="rack-val-badge">0.0 V</span>
+                        </div>
                       </div>
-                      <input id="osc-trigger-level" type="range" class="osc-slider" min="-150" max="150" value="0" aria-label="Nivel de disparo" />
+                      <input id="osc-trigger-level" type="range" class="osc-slider" min="-4" max="4" step="0.05" value="0" aria-label="Nivel de disparo en divisiones" />
                     </div>
                     <div class="rack-row style-margin-top">
                       <label for="osc-trigger-sweep-mode" class="rack-label">Modo Disparo</label>
@@ -1055,7 +412,18 @@
                         <input id="osc-focused-node" type="text" class="osc-select" value="1" placeholder="Ej. 1, out..." />
                       </div>
 
-                      <div class="rack-row">
+                      <!-- Math Quick Presets (Visible only in MATH tab) -->
+                      <div id="osc-math-presets-row" class="rack-row" style="display: none;">
+                        <label class="rack-label">Presets Matemáticos</label>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%;">
+                          <button id="osc-math-preset-diff" class="btn-osc-mini" type="button" title="Diferencial CH1 - CH2">CH1-CH2</button>
+                          <button id="osc-math-preset-mult" class="btn-osc-mini" type="button" title="Potencia Instantánea CH1 * CH2">CH1*CH2</button>
+                          <button id="osc-math-preset-deriv" class="btn-osc-mini" type="button" title="Derivada d/dt(CH1)">d/dt</button>
+                          <button id="osc-math-preset-integ" class="btn-osc-mini" type="button" title="Integral integ(CH1)">∫dt</button>
+                        </div>
+                      </div>
+
+                      <div class="rack-row" id="osc-coupling-row">
                         <label class="rack-label">Acoplamiento</label>
                         <div class="ch-quick-toggles">
                           <div class="btn-group-coupling">
@@ -1108,22 +476,25 @@
               </div>
             </div>
             <!-- 2. Generador de Funciones Virtual -->
-            <div class="inst-content-box" id="inst-generator" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+            <div class="inst-content-box" id="inst-generator" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
 
             <!-- 3. Analizador Lógico Digital (8 Canales) -->
-            <div class="inst-content-box" id="inst-logic" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+            <div class="inst-content-box" id="inst-logic" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
 
             <!-- 4. Analizador de Espectro FFT -->
-            <div class="inst-content-box" id="inst-fft" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+            <div class="inst-content-box" id="inst-fft" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
 
             <!-- 5. Trazador de Curvas I-V -->
-            <div class="inst-content-box" id="inst-tracer" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+            <div class="inst-content-box" id="inst-tracer" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
 
             <!-- 6. Asistente e Inteligencia de Simulación -->
-            <div class="inst-content-box" id="inst-intelligence" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+            <div class="inst-content-box" id="inst-intelligence" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
 
             <!-- 7. Analizador de Respuesta en Frecuencia y Bode -->
-            <div class="inst-content-box" id="inst-bode" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #070a14;"></div>
+            <div class="inst-content-box" id="inst-bode" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
+
+            <!-- 8. Optimizador Paramétrico y Auto-Tuning -->
+            <div class="inst-content-box" id="inst-optimizer" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
           </div>
 
           <!-- DOCK INFERIOR (COMPACT INSTRUMENT LAUNCHER HUB) -->
@@ -1143,16 +514,27 @@
               <button class="inst-tab" data-tab="fft" data-short-label="FFT">📈 Espectro (FFT)</button>
               <button class="inst-tab" data-tab="tracer" data-short-label="I-V">🔬 Trazador I-V</button>
               <button class="inst-tab" data-tab="bode" data-short-label="BOD">📈 Bode / AC</button>
+              <button class="inst-tab" data-tab="optimizer" data-short-label="OPT">🎯 Auto-Tuning</button>
               <button class="inst-tab" data-tab="intelligence" data-short-label="IA">◈ Inteligencia</button>
             </div>
-            <button
-              id="instrument-center-close"
-              class="instrument-center-close"
-              type="button"
-              tabindex="0"
-              aria-label="Cerrar centro de instrumentos"
-              data-tooltip="Ocultar barra de instrumentos"
-            >×</button>
+            <div class="instrument-dock-actions">
+              <button
+                id="instrument-center-pin"
+                class="instrument-center-pin btn-pin-toggle"
+                type="button"
+                tabindex="0"
+                aria-label="Alternar auto-ocultar barra de instrumentos"
+                data-tooltip="Auto-ocultar: Activado (Haz clic para fijar)"
+              >🔓</button>
+              <button
+                id="instrument-center-close"
+                class="instrument-center-close"
+                type="button"
+                tabindex="0"
+                aria-label="Cerrar centro de instrumentos"
+                data-tooltip="Ocultar barra de instrumentos"
+              >×</button>
+            </div>
           </section>
 
           <div class="canvas-help-tip" id="canvas-help-tip">
@@ -1164,35 +546,158 @@
         <aside class="sidebar-panel sidebar-right" id="sidebar-right">
           <div class="panel-header" id="right-panel-header">
             <h3>Propiedades</h3>
-            <button id="btn-toggle-right" class="btn-text-only" type="button" aria-controls="sidebar-right" aria-expanded="true">Colapsar ▶</button>
+            <div class="panel-header-actions">
+              <button id="btn-pin-right" class="btn-pin-toggle" type="button" data-tooltip="Auto-ocultar: Activado (Haz clic para fijar)" aria-label="Fijar panel de propiedades">🔓</button>
+              <button id="btn-toggle-right" class="btn-text-only" type="button" aria-controls="sidebar-right" aria-expanded="true">Colapsar ▶</button>
+            </div>
           </div>
           <div class="panel-body" id="right-panel-body">
             <div class="properties-form" id="properties-form">
-              <div class="property-group" id="group-comp-id">
-                <label class="property-label">Identificador</label>
-                <input id="prop-id-input" class="prop-input" type="text" value="R1" placeholder="Ej. R1, C1" />
+              <!-- Banner informativo de Selección Múltiple (Batch Editing) -->
+              <div id="prop-batch-header" class="prop-batch-banner" style="display: none;">
+                <span id="prop-batch-title" style="font-weight: 700; color: var(--cyan);">Selección Múltiple</span>
+                <span id="prop-batch-subtitle" style="font-size: 11px; color: var(--text-muted);">0 elementos</span>
               </div>
 
-              <div class="property-group" id="group-comp-val">
-                <label class="property-label">Valor Nominal</label>
-                <div class="property-input-wrapper">
-                <input id="prop-val-input" class="prop-input" type="text" inputmode="decimal" value="1000" />
-                  <button id="btn-snap-standard" class="btn-adj" type="button" title="Ajustar al valor comercial estándar más cercano (E24)" style="width: auto; padding: 0 6px; font-size: 11px; font-weight: bold; color: var(--accent-color);">E24</button>
-                  <button id="prop-val-dec" class="btn-adj" type="button" aria-label="Disminuir valor">-</button>
-                  <button id="prop-val-inc" class="btn-adj" type="button" aria-label="Aumentar valor">+</button>
+              <!-- 1. SECCIÓN PRIMARIA / PARÁMETROS FUNDAMENTALES -->
+              <div class="prop-section prop-section-primary">
+                <div class="property-group" id="group-comp-id">
+                  <label class="property-label" for="prop-id-input">Identificador</label>
+                  <input id="prop-id-input" class="prop-input" type="text" value="R1" placeholder="Ej. R1, C1" />
                 </div>
-                <input id="prop-val-slider" class="prop-slider" type="range" min="1" max="10000" value="1000" aria-label="Valor nominal" />
+
+                <div class="property-group" id="group-comp-val">
+                  <label class="property-label" for="prop-val-input">Valor Nominal / Expresión</label>
+                  <div class="property-input-wrapper">
+                    <input id="prop-val-input" class="prop-input prop-val-main" type="text" value="1000" placeholder="Ej. 4.7k, 100n, {R_LOAD}" />
+                    <div class="prop-val-step-group">
+                      <button id="prop-val-dec" class="btn-adj" type="button" aria-label="Disminuir valor" title="Disminuir valor">−</button>
+                      <button id="prop-val-inc" class="btn-adj" type="button" aria-label="Aumentar valor" title="Aumentar valor">+</button>
+                    </div>
+                  </div>
+                  <div class="prop-snap-controls">
+                    <select id="prop-snap-series" class="prop-input prop-snap-select" title="Serie normalizada comercial" aria-label="Serie comercial">
+                      <option value="E24">E24 (5%)</option>
+                      <option value="E12">E12 (10%)</option>
+                      <option value="E96">E96 (1%)</option>
+                    </select>
+                    <button id="btn-snap-standard" class="btn-snap" type="button" title="Ajustar al valor comercial estándar más cercano">⚡ Ajustar</button>
+                  </div>
+                  <!-- Badge de interpretación de notación de ingeniería en tiempo real -->
+                  <div id="prop-val-badge" class="prop-badge" style="display: none;"></div>
+                  <input id="prop-val-slider" class="prop-slider" type="range" min="1" max="10000" value="1000" style="display: none;" aria-label="Valor nominal" />
+                </div>
+
+                <div class="property-group" id="group-comp-unit">
+                  <label class="property-label" for="prop-unit-input">Unidad Física</label>
+                  <input id="prop-unit-input" class="prop-input" type="text" value="Ohmios (Ω)" readonly />
+                </div>
               </div>
 
-               <div class="property-group" id="group-comp-unit">
-                <label class="property-label">Unidad Física</label>
-                <input id="prop-unit-input" class="prop-input" type="text" value="Ohms (Ω)" readonly />
+              <!-- 2. TELEMETRÍA DEL PUNTO DE OPERACIÓN (.OP / Simulación Activa) -->
+              <div id="prop-op-telemetry-container" class="prop-op-card" style="display: none;">
+                <div class="prop-op-header">
+                  <span class="prop-op-title">⚡ Punto de Operación (.OP)</span>
+                  <span id="prop-op-region-badge" class="prop-region-pill" style="display: none;">Activa</span>
+                </div>
+                <div class="prop-op-grid">
+                  <div class="prop-op-item">
+                    <span class="prop-op-key">Tensión Caída (V)</span>
+                    <span id="prop-op-vdrop" class="prop-op-val">-- V</span>
+                  </div>
+                  <div class="prop-op-item">
+                    <span class="prop-op-key">Corriente Rama (I)</span>
+                    <span id="prop-op-ibranch" class="prop-op-val">-- A</span>
+                  </div>
+                  <div class="prop-op-item">
+                    <span class="prop-op-key">Potencia Disipada</span>
+                    <span id="prop-op-power" class="prop-op-val">-- W</span>
+                  </div>
+                  <div class="prop-op-item" id="prop-op-small-signal-item" style="display: none;">
+                    <span class="prop-op-key">Transconductancia (gm)</span>
+                    <span id="prop-op-gm" class="prop-op-val">-- mS</span>
+                  </div>
+                </div>
               </div>
+
+              <!-- 3. SECCIONES AVANZADAS / DIVULGACIÓN PROGRESIVA (COLAPSABLES) -->
+              <!-- Mapeo de Terminales y Nodos Eléctricos con Cross-Probing -->
+              <details id="details-pins" class="prop-details-section" style="display: none;">
+                <summary>
+                  <span class="summary-title">Conexiones de Pines y Nodos</span>
+                  <span class="prop-summary-badge">NETS</span>
+                </summary>
+                <div class="prop-details-body">
+                  <table class="prop-pins-table" id="prop-pins-table">
+                    <thead>
+                      <tr>
+                        <th>Pin / Terminal</th>
+                        <th>Nodo</th>
+                        <th>Tensión</th>
+                        <th style="text-align: right; width: 70px;">Sondas</th>
+                      </tr>
+                    </thead>
+                    <tbody id="prop-pins-tbody"></tbody>
+                  </table>
+                </div>
+              </details>
+
+              <!-- Parásitos Físicos y Alta Frecuencia (Colapsable) -->
+              <details id="details-parasitics" class="prop-details-section" style="display: none;">
+                <summary>
+                  <span class="summary-title">Modelado Físico y Parásitos</span>
+                  <span class="prop-summary-badge">HF/RF</span>
+                </summary>
+                <div class="prop-details-body">
+                  <div class="property-group" id="group-comp-esl" style="display: none;">
+                    <label class="property-label" for="prop-comp-esl">Inductancia Serie Parásita ESL (H)</label>
+                    <input id="prop-comp-esl" class="prop-input" type="text" placeholder="Ej. 1.5n, 2nH" />
+                  </div>
+                  <div class="property-group" id="group-comp-cpar" style="display: none;">
+                    <label class="property-label" for="prop-comp-cpar">Capacitancia Parásita Paralelo Cp (F)</label>
+                    <input id="prop-comp-cpar" class="prop-input" type="text" placeholder="Ej. 0.2p, 1pF" />
+                  </div>
+                  <div class="property-group" id="group-comp-tc1" style="display: none;">
+                    <label class="property-label" for="prop-comp-tc1">Coeficiente Térmico TC1 (ppm/°C)</label>
+                    <input id="prop-comp-tc1" class="prop-input" type="text" placeholder="Ej. 50, 100" />
+                  </div>
+                  <div class="property-group" id="group-comp-rleak" style="display: none;">
+                    <label class="property-label" for="prop-comp-rleak">Resistencia de Fuga Dieléctrica Rleak (Ω)</label>
+                    <input id="prop-comp-rleak" class="prop-input" type="text" placeholder="Ej. 100Meg, 1G" />
+                  </div>
+                </div>
+              </details>
+
+              <!-- Condiciones Iniciales de Arranque (.IC / Transitorio) -->
+              <details id="details-initial-conditions" class="prop-details-section" style="display: none;">
+                <summary>
+                  <span class="summary-title">Condición Inicial Transitoria</span>
+                  <span class="prop-summary-badge">.IC</span>
+                </summary>
+                <div class="prop-details-body">
+                  <div class="property-group">
+                    <label class="property-label" for="prop-comp-ic">Estado Inicial al Tiempo t = 0</label>
+                    <input id="prop-comp-ic" class="prop-input" type="text" placeholder="Ej. 0 V, 5.0 V, 100 mA" />
+                  </div>
+                </div>
+              </details>
+
+              <!-- Directiva SPICE del Modelo (Colapsable) -->
+              <details id="details-spice-card" class="prop-details-section" style="display: none;">
+                <summary>
+                  <span class="summary-title">Directiva SPICE del Modelo</span>
+                  <span class="prop-summary-badge">SPICE</span>
+                </summary>
+                <div class="prop-details-body">
+                  <pre id="prop-spice-card-text" class="prop-spice-preview" style="background: rgba(0,0,0,0.6); padding: 8px; border-radius: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--cyan); white-space: pre-wrap; word-break: break-all; margin: 0; border: 1px solid rgba(255,255,255,0.06);"></pre>
+                  <button id="btn-copy-spice-card" class="btn-secondary-action" type="button" style="width: 100%; font-size: 11px; padding: 6px; margin-top: 6px; cursor: pointer; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text-bright);">📋 Copiar Directiva SPICE</button>
+                </div>
+              </details>
 
               <!-- Selector de Plantillas / Presets Rápidos -->
               <div class="property-group" id="group-comp-preset" style="display: none;">
-                <label class="property-label">Plantilla / Preset Rápido</label>
-                <select id="prop-preset-select" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                <label class="property-label" for="prop-preset-select">Plantilla / Preset Rápido</label>
+                <select id="prop-preset-select" class="prop-input" style="cursor: pointer; width: 100%;">
                   <option value="">-- Cargar Plantilla Comercial --</option>
                 </select>
               </div>
@@ -1207,7 +712,7 @@
                 <div class="property-group">
                   <label class="property-label">Color Personalizado</label>
                   <div style="display: flex; gap: 8px; align-items: center;">
-                    <input id="prop-wire-color" type="color" value="#66fcf1" style="width: 44px; height: 32px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; background: rgba(0,0,0,0.4);" />
+                    <input id="prop-wire-color" type="color" value="#66fcf1" style="width: 44px; height: 32px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;" />
                     <button id="btn-reset-wire-color" type="button" class="btn-secondary" style="font-size: 11px; padding: 4px 8px; height: 32px;">Restablecer Color</button>
                   </div>
                 </div>
@@ -1225,34 +730,62 @@
                 </div>
                 <div class="property-group">
                   <label class="property-label" for="prop-note-theme">Estilo Visual</label>
-                  <select id="prop-note-theme" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-note-theme" class="prop-input" style="cursor: pointer;">
                     <option value="card">Tarjeta con Franja (Estándar)</option>
                     <option value="plain">Texto Plano (Sin Caja)</option>
-                    <option value="warning">Aviso / Advertencia</option>
+                    <option value="warning">Aviso / Advertencia (Ámbar)</option>
+                    <option value="info">Información Técnica (Azul)</option>
+                    <option value="success">Verificado / Aprobado (Verde)</option>
                     <option value="outline">Contorno Punteado</option>
                   </select>
                 </div>
               </div>
 
-              <!-- Contenedor de Propiedades de Terminal / Etiqueta EDA (Proteus) -->
+              <!-- Contenedor de Propiedades de Terminal / Etiqueta EDA (Proteus / Altium / KiCad) -->
               <div id="terminal-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
-                  <label class="property-label" for="prop-terminal-type">Tipo de Terminal</label>
-                  <select id="prop-terminal-type" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <label class="property-label" for="prop-terminal-type">Tipo de Puerto / Terminal</label>
+                  <select id="prop-terminal-type" class="prop-input" style="cursor: pointer;">
                     <option value="signal">Etiqueta de Señal / Red (Net Label)</option>
+                    <option value="input">Puerto de Entrada (Input Port)</option>
+                    <option value="output">Puerto de Salida (Output Port)</option>
+                    <option value="bidirectional">Puerto Bidireccional (In/Out Port)</option>
+                    <option value="bus_tap">Puerto de Bus Vectorial (Bus [N:0])</option>
                     <option value="power">Alimentación / Tensión DC (Power Port)</option>
-                    <option value="ground">Terminal de Tierra (GND / 0V)</option>
-                    <option value="input">Puerto de Entrada (Input)</option>
-                    <option value="output">Puerto de Salida (Output)</option>
+                    <option value="ground">Terminal de Tierra (Ground Port)</option>
+                    <option value="test_point">Punto de Prueba (Test Point TP)</option>
                     <option value="generator">Generador de Señal / Reloj (CLK)</option>
                     <option value="no_connect">Sin Conexión / No Conectar (NC / ✕)</option>
+                  </select>
+                </div>
+
+                <!-- Estilo de Masa / Tierra (Ground Style) -->
+                <div id="terminal-ground-group" class="property-group" style="display: none;">
+                  <label class="property-label" for="prop-terminal-ground-style">Variante de Tierra</label>
+                  <select id="prop-terminal-ground-style" class="prop-input" style="cursor: pointer;">
+                    <option value="standard">Tierra Común (GND / 0V - 3 Barras)</option>
+                    <option value="analog">Tierra Analógica (AGND - Triángulo)</option>
+                    <option value="digital">Tierra Digital (DGND - Triángulo Hueco)</option>
+                    <option value="chassis">Masa de Chasis (Frame / Carcasa)</option>
+                    <option value="earth">Tierra de Protección (Earth PE)</option>
+                  </select>
+                </div>
+
+                <!-- Estilo Gráfico de Alimentación (Power Style) -->
+                <div id="terminal-power-style-group" class="property-group" style="display: none;">
+                  <label class="property-label" for="prop-terminal-power-style">Estilo de Riel</label>
+                  <select id="prop-terminal-power-style" class="prop-input" style="cursor: pointer;">
+                    <option value="arrow">Flecha Direccional (Estándar)</option>
+                    <option value="circle">Círculo de Tensión (Proteus V-Port)</option>
+                    <option value="bar">Barra T (IEEE)</option>
+                    <option value="triangle">Triángulo IEEE</option>
                   </select>
                 </div>
                 
                 <!-- Opciones para Terminal de Alimentación (Power Port) -->
                 <div id="terminal-power-group" class="property-group" style="display: none;">
                   <label class="property-label" for="prop-terminal-preset">Tensión Predefinida (Presets)</label>
-                  <select id="prop-terminal-preset" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-terminal-preset" class="prop-input" style="cursor: pointer;">
                     <option value="custom">-- Tensión Personalizada --</option>
                     <option value="+5V">+5 V (VCC TTL / Arduino)</option>
                     <option value="+3.3V">+3.3 V (VDD Lógica 3.3V / ESP32)</option>
@@ -1285,7 +818,7 @@
               <div id="wave-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label">Tipo de Onda</label>
-                  <select id="prop-wave-type" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-wave-type" class="prop-input" style="cursor: pointer;">
                     <option value="dc">Corriente Continua (CC)</option>
                     <option value="sine">Senoidal (AC)</option>
                     <option value="square">Cuadrada</option>
@@ -1351,7 +884,7 @@
               <div id="resistor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label" for="prop-resistor-tolerance">Tolerancia Nominal</label>
-                  <select id="prop-resistor-tolerance" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-resistor-tolerance" class="prop-input" style="cursor: pointer;">
                     <option value="0.1">±0.1% (Ultra precisión)</option>
                     <option value="0.5">±0.5% (Precisión)</option>
                     <option value="1" selected>±1% (Metal Film estándar)</option>
@@ -1362,7 +895,7 @@
                 </div>
                 <div class="property-group">
                   <label class="property-label" for="prop-resistor-power">Potencia Máxima (W)</label>
-                  <select id="prop-resistor-power" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-resistor-power" class="prop-input" style="cursor: pointer;">
                     <option value="0.125">1/8 W (0.125 W - SMD 0805)</option>
                     <option value="0.25" selected>1/4 W (0.25 W - Through-hole estándar)</option>
                     <option value="0.5">1/2 W (0.5 W)</option>
@@ -1378,7 +911,7 @@
               <div id="capacitor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label" for="prop-capacitor-voltage">Tensión Máxima Nominal (V)</label>
-                  <select id="prop-capacitor-voltage" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-capacitor-voltage" class="prop-input" style="cursor: pointer;">
                     <option value="6.3">6.3 V</option>
                     <option value="10">10 V</option>
                     <option value="16">16 V</option>
@@ -1397,7 +930,7 @@
                 </div>
                 <div class="property-group">
                   <label class="property-label" for="prop-capacitor-dielectric">Tipo Dieléctrico / Tecnología</label>
-                  <select id="prop-capacitor-dielectric" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-capacitor-dielectric" class="prop-input" style="cursor: pointer;">
                     <option value="ceramic" selected>Cerámico (MLCC X7R / C0G)</option>
                     <option value="electrolytic">Electrolítico de Aluminio</option>
                     <option value="tantalum">Tántalo (Bajo ESR)</option>
@@ -1422,7 +955,7 @@
               <div id="led-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label" for="prop-led-color">Color de Emisión y Vf Física</label>
-                  <select id="prop-led-color" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-led-color" class="prop-input" style="cursor: pointer;">
                     <option value="red" selected>🔴 Rojo (Vf ≈ 1.8 V, 630 nm)</option>
                     <option value="green">🟢 Verde (Vf ≈ 2.1 V, 565 nm)</option>
                     <option value="blue">🔵 Azul (Vf ≈ 3.2 V, 470 nm)</option>
@@ -1450,7 +983,7 @@
                 </div>
                 <div class="property-group">
                   <label class="property-label" for="prop-pot-taper">Curva de Variación (Taper)</label>
-                  <select id="prop-pot-taper" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer;">
+                  <select id="prop-pot-taper" class="prop-input" style="cursor: pointer;">
                     <option value="linear" selected>Lineal (Tipo B - Estándar)</option>
                     <option value="log">Logarítmica (Tipo A - Control de Volumen)</option>
                     <option value="antilog">Antilogarítmica (Tipo C)</option>
@@ -1484,7 +1017,7 @@
               <div id="dmm-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label">Modo de Medición del Multímetro</label>
-                  <select id="prop-dmm-mode" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                  <select id="prop-dmm-mode" class="prop-input" style="cursor: pointer; width: 100%;">
                     <option value="V">⚖️ Voltímetro (V)</option>
                     <option value="A">⚡ Amperímetro (A)</option>
                     <option value="R">Ω Ohmiómetro (Ω)</option>
@@ -1541,7 +1074,7 @@
                 </div>
                 <div class="property-group">
                   <label class="property-label">Ganancia de Lazo Abierto (Aol)</label>
-                  <select id="prop-opamp-gain" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                  <select id="prop-opamp-gain" class="prop-input" style="cursor: pointer; width: 100%;">
                     <option value="10000">10k (Bajo / Pruebas)</option>
                     <option value="100000" selected>100k (Estándar LM741)</option>
                     <option value="200000">200k (Alta ganancia)</option>
@@ -1554,7 +1087,7 @@
               <div id="macro-spice-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px;">
                 <div class="property-group">
                   <label class="property-label">Código de Macromodelo SPICE (.subckt)</label>
-                  <textarea id="prop-spice-macro" class="prop-input" rows="8" style="width:100%; resize:vertical; font-family:var(--font-mono); font-size:11px; background:rgba(0,0,0,0.4); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; padding:8px;" placeholder="Ej:&#10;.subckt OpAmp IN+ IN- OUT&#10;Rin IN+ IN- 1Meg&#10;E1 OUT 0 IN+ IN- 100K&#10;.ends OpAmp"></textarea>
+                  <textarea id="prop-spice-macro" class="prop-input" rows="8" style="width:100%; resize:vertical; font-family:var(--font-mono); font-size:11px;" placeholder="Ej:&#10;.subckt OpAmp IN+ IN- OUT&#10;Rin IN+ IN- 1Meg&#10;E1 OUT 0 IN+ IN- 100K&#10;.ends OpAmp"></textarea>
                 </div>
                 <div class="property-group" style="margin-top:8px;">
                   <label class="property-label">Número de Pines</label>
@@ -1566,32 +1099,75 @@
               <div id="semiconductor-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
                 <div class="property-group">
                   <label class="property-label" for="prop-semi-model">Modelo Comercial Calibrado</label>
-                  <select id="prop-semi-model" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
+                  <select id="prop-semi-model" class="prop-input" style="cursor: pointer; width: 100%;">
                     <option value="custom">-- Modelo Genérico / Personalizado --</option>
                   </select>
                 </div>
-                <div id="prop-semi-desc" style="font-size: var(--font-2xs, 11px); color: var(--text-muted); line-height: 1.4; padding: 6px 8px; background: rgba(0,0,0,0.3); border-radius: 4px; display: none;"></div>
+                <div id="prop-semi-desc" style="font-size: var(--font-2xs, 11px); color: var(--text-muted); line-height: 1.4; padding: 6px 8px; border-radius: 4px; display: none;"></div>
                 <div id="group-diode-bv" class="property-group" style="display: none;">
                   <label class="property-label" for="prop-diode-bv">Tensión Zener Vz (V: 0 = Diodo Común)</label>
                   <input id="prop-diode-bv" class="prop-input" type="number" min="0" step="0.1" value="0" placeholder="Ej. 3.3, 5.1, 12.0" />
                 </div>
+                <!-- Ajuste Fino de Parámetros Físicos SPICE -->
+                <details id="details-semi-advanced" class="details-accordion" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 6px; padding: 8px 10px;">
+                  <summary style="cursor: pointer; font-size: 11px; font-weight: 600; color: var(--accent-cyan, #38bdf8); outline: none;">
+                    ⚙️ Parámetros SPICE Avanzados
+                  </summary>
+                  <div id="semi-advanced-fields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 11px;">
+                    <!-- Campos dinámicos poblados por TypeScript según tipo de semiconductor -->
+                  </div>
+                </details>
               </div>
 
               <!-- Contenedor de Lógica Digital -->
-              <div id="logic-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 14px; flex-direction: column;">
-                <div class="property-group">
-                  <label class="property-label" for="prop-logic-voh">Nivel Lógico Alto VOH (V)</label>
-                  <select id="prop-logic-voh" class="prop-input" style="background: rgba(0, 0, 0, 0.4); cursor: pointer; width: 100%;">
-                    <option value="5.0" selected>5.0 V (TTL / CMOS 5V)</option>
-                    <option value="3.3">3.3 V (LVCMOS 3.3V)</option>
-                    <option value="2.5">2.5 V (CMOS 2.5V)</option>
-                    <option value="1.8">1.8 V (CMOS 1.8V)</option>
-                    <option value="12.0">12.0 V (CMOS Serie 4000)</option>
+              <div id="logic-properties-container" class="properties-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px; gap: 12px; flex-direction: column;">
+                <div id="group-logic-inputs" class="property-group">
+                  <label class="property-label" for="prop-logic-inputs">Número de Entradas</label>
+                  <select id="prop-logic-inputs" class="prop-input" style="cursor: pointer; width: 100%;">
+                    <option value="2" selected>2 Entradas (Estándar)</option>
+                    <option value="3">3 Entradas (74xx10 / 74xx27)</option>
+                    <option value="4">4 Entradas (74xx20 / 74xx40)</option>
+                    <option value="8">8 Entradas (74xx30 / NAND-8)</option>
                   </select>
                 </div>
+
                 <div class="property-group">
-                  <label class="property-label" for="prop-logic-vth">Tensión de Umbral Vth (V)</label>
-                  <input id="prop-logic-vth" class="prop-input" type="number" min="0.1" max="10" step="0.1" value="2.5" />
+                  <label class="property-label" for="prop-logic-family">Familia Lógica Estándar</label>
+                  <select id="prop-logic-family" class="prop-input" style="cursor: pointer; width: 100%;">
+                    <option value="74hc" selected>74HC (CMOS 5.0V - Vth=2.5V, tpd=8ns)</option>
+                    <option value="74ls">74LS (TTL 5.0V - Vth=1.4V, tpd=10ns)</option>
+                    <option value="cmos3v3">LVCMOS 3.3V (Vth=1.65V, tpd=5ns)</option>
+                    <option value="lvcmos1v8">LVCMOS 1.8V (Vth=0.9V, tpd=3ns)</option>
+                    <option value="cmos12v">Serie 4000 (CMOS 12V - Vth=6.0V, tpd=50ns)</option>
+                    <option value="custom">-- Personalizado --</option>
+                  </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div class="property-group">
+                    <label class="property-label" for="prop-logic-voh">Nivel Alto VOH (V)</label>
+                    <input id="prop-logic-voh" class="prop-input" type="text" value="5.0" style="font-size: 11px; padding: 4px 6px;" />
+                  </div>
+                  <div class="property-group">
+                    <label class="property-label" for="prop-logic-vth">Umbral Vth (V)</label>
+                    <input id="prop-logic-vth" class="prop-input" type="text" value="2.5" style="font-size: 11px; padding: 4px 6px;" />
+                  </div>
+                </div>
+
+                <div class="property-group">
+                  <label class="property-label" for="prop-logic-tpd">Retardo de Propagación tpd (s)</label>
+                  <input id="prop-logic-tpd" class="prop-input" type="text" value="8n" placeholder="Ej. 8n, 10n, 50n" style="font-size: 11px; padding: 4px 6px; font-family: monospace;" />
+                </div>
+
+                <div style="display: flex; gap: 14px; margin-top: 2px;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                    <input id="prop-logic-schmitt" type="checkbox" style="cursor: pointer;" />
+                    <span>Schmitt-Trigger</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                    <input id="prop-logic-opendrain" type="checkbox" style="cursor: pointer;" />
+                    <span>Open-Drain / Colector Abierto</span>
+                  </label>
                 </div>
               </div>
 
@@ -1622,6 +1198,13 @@
         </div>
         <div class="panel-body">
           <form class="properties-form" id="settings-form">
+            <div class="property-group">
+              <label class="property-label" for="settings-theme-mode-input">Perfil Visual / Modo de Pantalla</label>
+              <select id="settings-theme-mode-input" class="prop-input">
+                <option value="dark" selected>🌙 Modo Laboratorio (Oscuro Estándar)</option>
+                <option value="classroom">☀️ Modo Proyector / Aula (Alto Contraste)</option>
+              </select>
+            </div>
             <div class="property-group">
               <label class="property-label" for="settings-default-mode-input">Modo de Simulación por Defecto</label>
               <select id="settings-default-mode-input" class="prop-input">
@@ -1747,6 +1330,25 @@
         <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
           <button id="btn-exp-cancel" class="btn-cancel" type="button">Cancelar</button>
           <button id="btn-exp-confirm" class="btn-save" type="button" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #fbbf24; color: #fbbf24;">Habilitar y Continuar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. MODAL INSPECTOR PEDAGÓGICO DE MATRIZ MNA -->
+    <div class="modal-overlay" id="mna-inspector-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="mna-inspector-title">
+      <div class="modal-box" style="max-width: 840px; width: 90vw; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 id="mna-inspector-title" style="display: flex; align-items: center; gap: 8px;">
+            📐 Inspector Pedagógico de la Matriz MNA
+          </h3>
+          <button id="btn-close-mna-inspector" class="btn-icon-only" type="button" aria-label="Cerrar modal">✕</button>
+        </div>
+        <div class="panel-body" id="mna-inspector-content" style="padding: 16px; overflow-y: auto; flex: 1;">
+          <!-- Renderizado dinámico desde MnaInspectorModal -->
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <button id="btn-copy-mna-latex" class="btn-ctrl" type="button">📋 Copiar LaTeX</button>
+          <button id="btn-done-mna-inspector" class="btn-save" type="button" onclick="document.getElementById('mna-inspector-modal')?.classList.remove('open'); document.getElementById('mna-inspector-modal')?.setAttribute('aria-hidden', 'true');">Listo</button>
         </div>
       </div>
     </div>

@@ -84,7 +84,7 @@ export class McuDebugPanel {
       <!-- 3. Registros de CPU y Banderas -->
       <div class="property-group">
         <label class="property-label">Registros de la CPU</label>
-        <div id="mcu-registers-container" class="mcu-registers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-family: var(--font-mono); font-size: 0.75rem;">
+        <div id="mcu-registers-container" class="mcu-registers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px; border-radius: 8px; font-family: var(--font-mono); font-size: 0.75rem;">
           <div>PC: <span id="mcu-reg-pc" style="color: var(--accent-cyan);">0000</span></div>
           <div>SP: <span id="mcu-reg-sp" style="color: var(--accent-cyan);">00</span></div>
           <div>ACC: <span id="mcu-reg-acc" style="color: var(--accent-purple);">00</span></div>
@@ -103,7 +103,7 @@ export class McuDebugPanel {
           <label class="property-label" style="margin-bottom: 0;">Desensamblado (Click para Breakpoint)</label>
           <span id="mcu-bp-count" class="badge" style="font-size: 0.65rem; background: rgba(239, 68, 68, 0.2); color: #f87171;">0 BPs</span>
         </div>
-        <div id="mcu-disasm-list" class="console-output" style="height: 140px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.7rem; padding: 6px; overflow-y: auto; background: rgba(0,0,0,0.5);">
+        <div id="mcu-disasm-list" class="console-output" style="height: 140px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.7rem; padding: 6px; overflow-y: auto;">
           <!-- Instrucciones generadas dinámicamente -->
         </div>
         <div id="mcu-asm-explainer" class="comp-desc" style="margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); font-size: 0.72rem; color: var(--text-main); display: none;">
@@ -115,7 +115,7 @@ export class McuDebugPanel {
       <div class="property-group">
         <label class="property-label">Expresiones de Inspección (Watch)</label>
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-          <input type="text" id="mcu-watch-input" placeholder="Ej: ACC, R16, RAM[0x20], SREG.Z" style="flex-grow: 1; padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-main);" />
+          <input type="text" id="mcu-watch-input" placeholder="Ej: ACC, R16, RAM[0x20], SREG.Z" style="flex-grow: 1; padding: 4px 8px; font-size: 0.75rem; border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-main);" />
           <button id="mcu-btn-add-watch" class="btn-adj" style="padding: 0 12px; height: 28px;">Añadir</button>
         </div>
         <div id="mcu-watch-list" style="display: flex; flex-direction: column; gap: 4px; max-height: 110px; overflow-y: auto;">
@@ -133,7 +133,7 @@ export class McuDebugPanel {
             <button id="mcu-tab-flash" class="btn-adj" style="height: 22px; padding: 0 6px; font-size: 0.65rem;">Flash</button>
           </div>
         </div>
-        <div id="mcu-memory-hex" class="console-output" style="height: 120px; font-family: var(--font-mono); font-size: 0.65rem; padding: 6px; overflow-y: auto; background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); border-radius: 6px; white-space: pre;">
+        <div id="mcu-memory-hex" class="console-output" style="height: 120px; font-family: var(--font-mono); font-size: 0.65rem; padding: 6px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; white-space: pre;">
           <!-- Hex dump dinámico -->
         </div>
       </div>

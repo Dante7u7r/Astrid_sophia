@@ -427,14 +427,24 @@ pub fn solve_noise_sweep(
                             comp.pins[2].parse::<usize>().unwrap()
                         };
 
-                        let r_in = 1e7;
-                        let r_out = 100.0;
-                        let g_in = Complex::new(1.0 / r_in, 0.0);
-                        let g_out = Complex::new(1.0 / r_out, 0.0);
-                        let g_m_opamp_val = *opamp_gm.get(&comp.id).unwrap_or(&1000.0);
-                        // Aplicar polo dominante a 10 Hz: g_m = g_m_static / (1 + j * f_val / 10.0)
-                        let pole_factor = Complex::new(1.0, f_val / 10.0);
-                        let g_m_opamp = Complex::new(g_m_opamp_val, 0.0) / pole_factor;
+                        let a_ol = comp.opamp_aol.unwrap_or(if comp.value > 0.0 {
+                            comp.value
+                        } else {
+                            1e5
+                        });
+                        let gbw = comp.opamp_gbw.unwrap_or(1e6);
+                        let r_in = comp.opamp_rin.unwrap_or(1e7);
+                        let r_out = comp.opamp_rout.unwrap_or(75.0);
+                        let g_in = Complex::new(1.0 / r_in.max(1.0), 0.0);
+                        let g_out = Complex::new(1.0 / r_out.max(1e-3), 0.0);
+                        let g_m_opamp_val = *opamp_gm.get(&comp.id).unwrap_or(&(a_ol / r_out));
+
+                        let f_p1 = (gbw / a_ol.max(1.0)).max(0.01);
+                        let f_p2 = (2.0 * gbw).max(1e3);
+                        let pole_factor1 = Complex::new(1.0, f_val / f_p1);
+                        let pole_factor2 = Complex::new(1.0, f_val / f_p2);
+                        let g_m_opamp =
+                            (Complex::new(g_m_opamp_val, 0.0) / pole_factor1) / pole_factor2;
 
                         stamp_conductance(&mut matrix_a, pin_in_pos, pin_in_pos, g_in);
                         stamp_conductance(&mut matrix_a, pin_in_neg, pin_in_neg, g_in);
@@ -826,15 +836,22 @@ pub fn solve_noise_sweep(
                         (0, 0, 0.0)
                     }
                     "opamp" | "opamp_ideal" => {
+                        let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
+                        let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
                         let pin_out = if comp.pins.len() >= 5 {
                             comp.pins[4].parse::<usize>().unwrap()
                         } else {
                             comp.pins[2].parse::<usize>().unwrap()
                         };
 
-                        // Ruido térmico de la resistencia interna de salida Rout (100 Ohm)
+                        let r_out = comp.opamp_rout.unwrap_or(75.0);
+                        let en_val = comp.opamp_en.unwrap_or(20e-9); // Default 20 nV/sqrt(Hz) (LM741)
+                        let in_val = comp.opamp_in.unwrap_or(0.5e-12); // Default 0.5 pA/sqrt(Hz)
+                        let fc_val = comp.opamp_fc.unwrap_or(100.0); // 100 Hz 1/f corner
+
+                        // 1. Ruido térmico de la resistencia interna de salida Rout
                         if pin_out > 0 {
-                            let s_rout = 4.0 * PHYS_KB * circuit_temp / 100.0;
+                            let s_rout = 4.0 * PHYS_KB * circuit_temp * r_out;
                             let mut z_out = DVector::<Complex<f64>>::zeros(size);
                             z_out[pin_out - 1] += Complex::new(1.0, 0.0);
                             let v_out_tf = symbolic
@@ -850,6 +867,57 @@ pub fn solve_noise_sweep(
                                 Complex::new(0.0, 0.0)
                             });
                             total_output_noise_sq += s_rout * v_out_diff.norm_sqr();
+                        }
+
+                        // 2. Ruido espectral de tensión de entrada En con esquina 1/f
+                        if en_val > 0.0 && (pin_in_pos > 0 || pin_in_neg > 0) {
+                            let f_safe = f_val.max(0.1);
+                            let s_en = en_val * en_val * (1.0 + fc_val / f_safe);
+                            let mut z_in = DVector::<Complex<f64>>::zeros(size);
+                            if pin_in_pos > 0 {
+                                z_in[pin_in_pos - 1] += Complex::new(1.0, 0.0);
+                            }
+                            if pin_in_neg > 0 {
+                                z_in[pin_in_neg - 1] -= Complex::new(1.0, 0.0);
+                            }
+                            let v_tf = symbolic
+                                .solve_complex(workspace, &z_in)
+                                .unwrap_or_else(|| DVector::zeros(size));
+                            let v_diff = (if n_out > 0 {
+                                v_tf[n_out - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            }) - (if n_ref > 0 {
+                                v_tf[n_ref - 1]
+                            } else {
+                                Complex::new(0.0, 0.0)
+                            });
+                            total_output_noise_sq += s_en * v_diff.norm_sqr();
+                        }
+
+                        // 3. Ruido espectral de corriente de entrada In
+                        if in_val > 0.0 {
+                            let f_safe = f_val.max(0.1);
+                            let s_in = in_val * in_val * (1.0 + (0.5 * fc_val) / f_safe);
+                            for &pin in &[pin_in_pos, pin_in_neg] {
+                                if pin > 0 {
+                                    let mut z_i = DVector::<Complex<f64>>::zeros(size);
+                                    z_i[pin - 1] += Complex::new(1.0, 0.0);
+                                    let v_tf = symbolic
+                                        .solve_complex(workspace, &z_i)
+                                        .unwrap_or_else(|| DVector::zeros(size));
+                                    let v_diff = (if n_out > 0 {
+                                        v_tf[n_out - 1]
+                                    } else {
+                                        Complex::new(0.0, 0.0)
+                                    }) - (if n_ref > 0 {
+                                        v_tf[n_ref - 1]
+                                    } else {
+                                        Complex::new(0.0, 0.0)
+                                    });
+                                    total_output_noise_sq += s_in * v_diff.norm_sqr();
+                                }
+                            }
                         }
 
                         (0, 0, 0.0)

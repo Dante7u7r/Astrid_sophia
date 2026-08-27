@@ -56,14 +56,20 @@ export const ResistorDefinition: ComponentDefinition = {
       ctx.restore();
     }
 
-    // 2. Trazo en zigzag
+    const isIec = (options.symbolStandard ?? comp.symbolStandard) === "IEC";
+
+    // 2. Trazo del cuerpo: IEC (Caja Rectangular Europea) vs IEEE (Zigzag Americano)
     ctx.beginPath();
-    ctx.moveTo(-20, 0);
-    ctx.lineTo(-15, -8);
-    ctx.lineTo(-5, 8);
-    ctx.lineTo(5, -8);
-    ctx.lineTo(15, 8);
-    ctx.lineTo(20, 0);
+    if (isIec) {
+      ctx.rect(-18, -6, 36, 12);
+    } else {
+      ctx.moveTo(-20, 0);
+      ctx.lineTo(-15, -8);
+      ctx.lineTo(-5, 8);
+      ctx.lineTo(5, -8);
+      ctx.lineTo(15, 8);
+      ctx.lineTo(20, 0);
+    }
 
     if (stress > 3.0) {
       // Color quemado con alerta
@@ -249,20 +255,26 @@ export const PotentiometerDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    ctx.moveTo(-20, 0);
-    ctx.lineTo(-15, -8);
-    ctx.lineTo(-5, 8);
-    ctx.lineTo(5, -8);
-    ctx.lineTo(15, 8);
-    ctx.lineTo(20, 0);
+    const isIec = (options.symbolStandard ?? comp.symbolStandard) === "IEC";
+    ctx.beginPath();
+    if (isIec) {
+      ctx.rect(-18, -6, 36, 12);
+    } else {
+      ctx.moveTo(-20, 0);
+      ctx.lineTo(-15, -8);
+      ctx.lineTo(-5, 8);
+      ctx.lineTo(5, -8);
+      ctx.lineTo(15, 8);
+      ctx.lineTo(20, 0);
+    }
     ctx.stroke();
 
     ctx.beginPath();
     ctx.moveTo(0, 40);
-    ctx.lineTo(0, 16);
-    ctx.lineTo(-4, 20);
-    ctx.moveTo(0, 16);
-    ctx.lineTo(4, 20);
+    ctx.lineTo(0, isIec ? 10 : 16);
+    ctx.lineTo(-4, isIec ? 14 : 20);
+    ctx.moveTo(0, isIec ? 10 : 16);
+    ctx.lineTo(4, isIec ? 14 : 20);
     ctx.stroke();
 
     const wiper = Math.max(0.01, Math.min(0.99, comp.wiperPosition ?? 0.5));
@@ -303,12 +315,18 @@ export const LdrDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
-    ctx.moveTo(-20, 0);
-    ctx.lineTo(-15, -8);
-    ctx.lineTo(-5, 8);
-    ctx.lineTo(5, -8);
-    ctx.lineTo(15, 8);
-    ctx.lineTo(20, 0);
+    const isIec = (options.symbolStandard ?? comp.symbolStandard) === "IEC";
+    ctx.beginPath();
+    if (isIec) {
+      ctx.rect(-18, -6, 36, 12);
+    } else {
+      ctx.moveTo(-20, 0);
+      ctx.lineTo(-15, -8);
+      ctx.lineTo(-5, 8);
+      ctx.lineTo(5, -8);
+      ctx.lineTo(15, 8);
+      ctx.lineTo(20, 0);
+    }
     ctx.stroke();
 
     ctx.beginPath();

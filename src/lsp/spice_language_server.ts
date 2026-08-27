@@ -348,7 +348,7 @@ export function getHoverInfo(text: string, position: LspPosition): LspHover | nu
     return {
       contents: {
         kind: "markdown",
-        value: `### Componente \`${word}\`\n\n**Tipo:** ${desc}\n\n**Sintaxis Estándar:**\n- \`${firstChar} <nodo_a> <nodo_b> [valor/modelo]\`\n\n*Haz clic o edita en Astryd Sophia para simular.*`,
+        value: `### Componente \`${word}\`\n\n**Tipo:** ${desc}\n\n**Sintaxis Estándar:**\n- \`${firstChar} <nodo_a> <nodo_b> [valor/modelo]\`\n\n*Haz clic o edita en Biaani para simular.*`,
       },
     };
   }

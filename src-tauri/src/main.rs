@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    astryd_sophia_lib::run()
+    biaani_lib::run()
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  autoDetectActiveChannels,
+  calculateDigitalBusMetrics,
+  exportDecodedPacketsCsv,
   decodeParallelBus,
   decodeUartProtocol,
   decodeSpiProtocol,
@@ -173,5 +176,44 @@ describe("LogicAnalyzerModel", () => {
     expect(packets.length).toBe(1);
     expect(packets[0].mosiByte).toBe(0xA5);
     expect(packets[0].label).toContain("MOSI: 0xA5");
+  });
+
+  it("auto-detecta canales digitales activos y calcula frecuencia de reloj", () => {
+    // Canal 0: señal con reloj periódico a 1 MHz
+    const ch0: LogicSample[] = [];
+    for (let i = 0; i < 20; i++) {
+      ch0.push({ time: i * 0.5e-6, val: i % 2 === 0 ? 0.0 : 5.0 });
+    }
+    // Canal 1: línea estática en 0V
+    const ch1: LogicSample[] = [{ time: 0, val: 0.0 }, { time: 10e-6, val: 0.0 }];
+    const channels = [ch0, ch1, [], [], [], [], [], []];
+
+    const result = autoDetectActiveChannels(channels, ttlThreshold);
+    expect(result.activeChannels[0]).toBe(true);
+    expect(result.activeChannels[1]).toBe(false);
+    expect(result.transitionCounts[0]).toBeGreaterThan(10);
+    expect(result.clockFrequencyHz).toBeDefined();
+    expect(result.clockFrequencyHz!).toBeGreaterThan(500_000);
+  });
+
+  it("calcula métricas de integridad de bus digital y exporta paquetes a CSV", () => {
+    const samples: LogicSample[] = [
+      { time: 0.0, val: 0.0 },
+      { time: 1e-6, val: 5.0 },
+      { time: 2e-6, val: 0.0 },
+      { time: 3e-6, val: 5.0 },
+    ];
+    const metrics = calculateDigitalBusMetrics(samples, ttlThreshold);
+    expect(metrics.transitionCount).toBe(4);
+    expect(metrics.approxFreqHz).toBeGreaterThan(0);
+
+    const packets = [
+      { startTime: 0.0, endTime: 1e-6, label: "0xAA" },
+      { startTime: 1e-6, endTime: 2e-6, label: "0x55" },
+    ];
+    const csv = exportDecodedPacketsCsv(packets, "SPI");
+    expect(csv).toContain("Index,Protocol,StartTime_s");
+    expect(csv).toContain("0xAA");
+    expect(csv).toContain("0x55");
   });
 });

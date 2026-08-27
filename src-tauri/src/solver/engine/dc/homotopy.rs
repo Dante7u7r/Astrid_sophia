@@ -4,7 +4,7 @@ use crate::solver::SolverNumericalSettings;
 use nalgebra::DVector;
 use std::collections::HashMap;
 
-mod stamps;
+pub(super) mod stamps;
 
 use super::super::devices::get_thermal_parameters;
 use super::{diagnose_convergence_failure, stamp_linear_components_sparse};

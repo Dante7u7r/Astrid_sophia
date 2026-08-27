@@ -98,7 +98,47 @@ describe("solveCircuitTS", () => {
     expect(typeof result).not.toBe("string");
     if (typeof result === "string") return;
 
-    // V_nodo2 = 10V * (1kΩ / (1kΩ + 1kΩ)) = 5.0 V
-    expect(result.nodeVoltages["2"]).toBeCloseTo(5.0, 4);
+    expect(result.nodeVoltages["1"]).toBeCloseTo(10, 8);
+    expect(result.nodeVoltages["2"]).toBeCloseTo(5, 8);
+    expect(result.nodeVoltages["0"]).toBe(0.0);
+    expect(result.branchCurrents["V1"]).toBeCloseTo(-0.005, 8); // 10V / 2kΩ = 5mA saliendo de V1
+    expect(result.convergenceIterations).toBe(1);
+  });
+
+  test("nodo flotante con alta impedancia es rescatado o diagnosticado con precisión", () => {
+    const netlist: CircuitNetlist = {
+      components: [
+        { id: "V1", type: "vsource", value: 10, pins: ["1", "0"], frequency: 0 },
+        { id: "R1", type: "resistor", value: 1000, pins: ["1", "0"] },
+        { id: "R2", type: "resistor", value: 1000, pins: ["2", "3"] }, // Nodos 2 y 3 flotantes aislados
+      ] as ExtractedComponent[],
+      wires: [],
+    };
+
+    const result = solveCircuitTS(netlist);
+    // Debe o rescatar con Gmin o emitir diagnóstico topológico claro sobre el nodo flotante
+    if (typeof result === "string") {
+      expect(result).toContain("nodo");
+    } else {
+      expect(result.nodeVoltages["1"]).toBeCloseTo(10, 6);
+    }
+  });
+
+  test("fuentes de voltaje en conflicto directo reportan error topológico descriptivo", () => {
+    const netlist: CircuitNetlist = {
+      components: [
+        { id: "V1", type: "vsource", value: 10, pins: ["1", "0"], frequency: 0 },
+        { id: "V2", type: "vsource", value: 5, pins: ["1", "0"], frequency: 0 },
+      ] as ExtractedComponent[],
+      wires: [],
+    };
+
+    const result = solveCircuitTS(netlist);
+    expect(typeof result).toBe("string");
+    if (typeof result === "string") {
+      expect(result).toContain("Error topológico");
+      expect(result).toContain("V1");
+      expect(result).toContain("V2");
+    }
   });
 });

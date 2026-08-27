@@ -80,4 +80,22 @@ describe("TabFileActions", () => {
     expect(tab.unsaved).toBe(false);
     expect(dependencies.renderTabsBar).toHaveBeenCalledOnce();
   });
+
+  it("delega a fallbackToSaveAs cuando save_circuit_to_path falla (ruta no autorizada)", async () => {
+    const invokeTauri = vi.fn().mockRejectedValueOnce(new Error("La ruta no fue autorizada"));
+    const { dependencies } = createDependencies({ invokeTauri });
+    const tab = createWorkspaceTab("tab-1", "Circuito");
+    tab.filePath = "C:/tmp/antiguo.astryd";
+    tab.unsaved = true;
+    const fallback = vi.fn(async () => undefined);
+    const actions = new TabFileActions(dependencies);
+
+    await actions.saveDirect(tab, fallback);
+
+    expect(fallback).toHaveBeenCalledOnce();
+    expect(dependencies.addLog).toHaveBeenCalledWith(
+      expect.stringContaining("No se pudo guardar directamente"),
+      "system",
+    );
+  });
 });

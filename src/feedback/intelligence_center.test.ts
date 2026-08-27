@@ -73,7 +73,7 @@ describe("paquete redactado de soporte", () => {
     });
     expect(bundle.manifest.contentSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(bundle.manifest.formatVersion).toBe(2);
-    expect(bundle.summaryMarkdown).toContain("# Diagnóstico de Astryd Sophia");
+    expect(bundle.summaryMarkdown).toContain("# Diagnóstico de Biaani");
     expect(bundle.summaryMarkdown).toContain("0.1.0");
     const ajv = new Ajv2020({ strict: true });
     ajv.addSchema(eventSchema);

@@ -69,8 +69,9 @@ export class ComponentRegistry {
 
     return localPins.map((pin) => {
       const finalLx = comp.mirror ? -pin.x : pin.x;
-      const worldX = comp.x + (finalLx * cos - pin.y * sin);
-      const worldY = comp.y + (finalLx * sin + pin.y * cos);
+      const finalLy = comp.mirrorY ? -pin.y : pin.y;
+      const worldX = comp.x + (finalLx * cos - finalLy * sin);
+      const worldY = comp.y + (finalLx * sin + finalLy * cos);
 
       return {
         componentId: comp.id,
@@ -182,9 +183,10 @@ export class ComponentRegistry {
 
     const transform = (lx: number, ly: number): Point2D => {
       const finalLx = comp.mirror ? -lx : lx;
+      const finalLy = comp.mirrorY ? -ly : ly;
       return {
-        x: comp.x + (finalLx * cos - ly * sin),
-        y: comp.y + (finalLx * sin + ly * cos),
+        x: comp.x + (finalLx * cos - finalLy * sin),
+        y: comp.y + (finalLx * sin + finalLy * cos),
       };
     };
 

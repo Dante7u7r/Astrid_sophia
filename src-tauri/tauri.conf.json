@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Astryd Sophia",
+  "productName": "Biaani",
   "version": "0.1.0",
-  "identifier": "com.astrydsophia.desktop",
+  "identifier": "com.biaani.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "Astryd Sophia",
+        "title": "Biaani",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
@@ -22,8 +22,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ipc:; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
-      "devCsp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ipc: http://localhost:1420 ws://localhost:1420 ws://localhost:1421; script-src 'self' 'unsafe-eval'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ipc: https://discord.com https://*.discord.com; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "devCsp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ipc: http://localhost:1420 ws://localhost:1420 ws://localhost:1421 https://discord.com https://*.discord.com; script-src 'self' 'unsafe-eval'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
       "capabilities": ["default"]
     }
   },

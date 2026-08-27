@@ -1,4 +1,4 @@
-use astryd_sophia_lib::solver::{
+use biaani_lib::solver::{
     run_stability_analysis, solve_ac_sweep, solve_dc_circuit_with_numerical_settings,
     solve_dc_sweep, solve_pss, solve_transient_circuit_with_numerical_settings, AcSweepResult,
     AcSweepSettings, CircuitNetlist, DcSweepResult, DcSweepSettings, PssSettings, SimulationResult,

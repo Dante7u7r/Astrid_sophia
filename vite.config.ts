@@ -161,7 +161,12 @@ export default defineConfig(async () => ({
             return "canvas-tools";
           }
 
-          // 7. Language Server y Plugins
+          // 7. Núcleo de Aplicación, Controladores, Inteligencia y Persistencia
+          if (norm.includes("src/intelligence/") || norm.includes("src/app/") || norm.includes("src/persistence/")) {
+            return "app-core";
+          }
+
+          // 8. Language Server y Plugins
           if (norm.includes("src/lsp/")) {
             return "feature-lsp";
           }

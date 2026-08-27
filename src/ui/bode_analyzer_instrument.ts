@@ -140,8 +140,9 @@ export class BodeAnalyzerInstrument {
             </div>
           </div>
 
-          <!-- Botones de Cursores y Exportación -->
+          <!-- Botones de Cursores, Auto-Escala y Exportación -->
           <div style="display: flex; gap: 4px; margin-top: 4px;">
+            <button id="bode-btn-autorange" type="button" class="bode-btn" style="flex: 1; justify-content: center;" title="Ajustar automáticamente el rango de frecuencias al ancho de banda">✨ Auto-Escala</button>
             <button id="bode-btn-cursors" type="button" class="bode-btn" style="flex: 1; justify-content: center;">📍 Cursores</button>
             <button id="bode-btn-csv" type="button" class="bode-btn" style="flex: 1; justify-content: center;">📥 CSV</button>
             <button id="bode-btn-png" type="button" class="bode-btn" style="flex: 1; justify-content: center;">📸 PNG</button>
@@ -168,6 +169,12 @@ export class BodeAnalyzerInstrument {
   }
 
   private bindEvents(): void {
+    if (typeof window !== "undefined") {
+      window.addEventListener("astryd-theme-changed", () => {
+        this.draw();
+      });
+    }
+
     // Selector de Modo de Visualización
     const btnBode = this.container.querySelector("#bode-btn-mode-bode");
     const btnNyquist = this.container.querySelector("#bode-btn-mode-nyquist");
@@ -236,6 +243,11 @@ export class BodeAnalyzerInstrument {
       this.draw();
     });
 
+    // Botón Auto-Escala (Auto-Range)
+    this.container.querySelector("#bode-btn-autorange")?.addEventListener("click", () => {
+      this.autoRange();
+    });
+
     // Botón Exportar CSV
     this.container.querySelector("#bode-btn-csv")?.addEventListener("click", () => {
       this.exportCsv();
@@ -245,6 +257,22 @@ export class BodeAnalyzerInstrument {
     this.container.querySelector("#bode-btn-png")?.addEventListener("click", () => {
       this.exportPng();
     });
+  }
+
+  public autoRange(): void {
+    if (!this.bodeData) return;
+    const fc = this.bodeData.metrics.cutoffFreq3dB || this.bodeData.metrics.gainCrossoverFreq;
+    if (fc && fc > 0) {
+      const logFc = Math.log10(fc);
+      this.fStart = Math.max(0.1, Math.pow(10, Math.floor(logFc - 2)));
+      this.fEnd = Math.pow(10, Math.ceil(logFc + 2));
+
+      const inputStart = this.container.querySelector("#bode-input-fstart") as HTMLInputElement | null;
+      const inputEnd = this.container.querySelector("#bode-input-fend") as HTMLInputElement | null;
+      if (inputStart) inputStart.value = this.fStart.toString();
+      if (inputEnd) inputEnd.value = this.fEnd.toString();
+    }
+    this.draw();
   }
 
   public setViewMode(mode: BodeViewMode): void {

@@ -274,4 +274,31 @@ describe("archivo .astryd 3.0", () => {
       oscilloscope: { channelsEnabled: [true] },
     })).ok).toBe(false);
   });
+
+  test("desempaqueta automaticamente un paquete de diagnostico (Biaani Diagnostic Bundle)", () => {
+    const rawCircuit = serializeCircuitFile({
+      components: [{ id: "R1", type: "resistor", value: 1000, x: 50, y: 50, rotation: 0 }],
+      wires: [],
+    });
+
+    const diagnosticBundle = {
+      format: "biaani-diagnostic-bundle",
+      schemaVersion: 1,
+      category: "simulation",
+      userNote: "Reporte de prueba",
+      circuit: {
+        componentCount: 1,
+        wireCount: 0,
+        rawFileJson: rawCircuit,
+      },
+    };
+
+    const result = parseCircuitFile(JSON.stringify(diagnosticBundle));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.components).toHaveLength(1);
+      expect(result.data.components[0]?.id).toBe("R1");
+      expect(result.migratedFrom).toContain("paquete de diagnóstico");
+    }
+  });
 });

@@ -371,27 +371,59 @@ export async function dispatchSimulation(
 
       case 'STB': {
         if (!config.simSettings.enableExperimentalPhysics) {
-          throw new Error("El análisis de Polos y Ceros (STB) está bloqueado: requiere activar el flag 'Habilitar análisis y modelos experimentales' en Ajustes.");
+          throw new Error("El análisis de Polos y Ceros / Estabilidad de Lazo (STB) está bloqueado: requiere activar el flag 'Habilitar análisis y modelos experimentales' en Ajustes.");
         }
-        callbacks.addLog(
-          "POLOS/CEROS EXPERIMENTAL: modelo reducido. No calcula ganancia de lazo ni márgenes de fase/ganancia.",
-          "system",
-        );
-        callbacks.addLog("Enviando conexiones al extractor experimental de polos y ceros de Rust...", "send");
+        callbacks.addLog("Ejecutando análisis de Estabilidad y Ganancia de Lazo (Tian / Middlebrook) en Rust...", "send");
         const results = await invokeTyped("run_stability_analysis", { netlist });
         dispatchResult = results;
         callbacks.addLog("¡Resultados de Estabilidad calculados exitosamente en Rust!", "receive");
 
         callbacks.addLog("----------------------------------------------------------------", "system");
-        callbacks.addLog("=== EXTRACCIÓN EXPERIMENTAL DE POLOS Y CEROS ===", "system");
+        callbacks.addLog("=== ANÁLISIS DE ESTABILIDAD Y GANANCIA DE LAZO (TIAN / STB) ===", "system");
         callbacks.addLog(
-          `Polos del modelo reducido: ${results.isStable ? "todos en el semiplano izquierdo" : "hay polos en el semiplano derecho"}`,
-          "system",
+          `Estado Global del Sistema: ${results.isStable ? "ESTABLE (Realimentación Negativa Segura)" : "INESTABLE / MARGINALMENTE OSCILATORIO"}`,
+          results.isStable ? "receive" : "error",
         );
-        callbacks.addLog("Lista de Polos del Sistema en el Plano de Laplace (s):", "receive");
-        results.poles.forEach((p, idx) => {
-          callbacks.addLog(`  • Polo ${idx + 1}: ${p.re.toFixed(2)} ${p.im >= 0 ? "+" : "-"} ${Math.abs(p.im).toFixed(2)}j rad/s`, "receive");
-        });
+
+        if (results.loopPhaseMarginDeg !== undefined) {
+          const freqStr = results.unityGainFrequencyHz
+            ? (results.unityGainFrequencyHz >= 1e6
+                ? `${(results.unityGainFrequencyHz / 1e6).toFixed(2)} MHz`
+                : results.unityGainFrequencyHz >= 1e3
+                ? `${(results.unityGainFrequencyHz / 1e3).toFixed(2)} kHz`
+                : `${results.unityGainFrequencyHz.toFixed(2)} Hz`)
+            : "N/A";
+          callbacks.addLog(
+            `  • Margen de Fase (PM): ${results.loopPhaseMarginDeg.toFixed(2)}° @ ${freqStr}`,
+            "receive",
+          );
+        }
+        if (results.loopGainMarginDb !== undefined) {
+          const freqStr = results.phaseCrossoverFrequencyHz
+            ? (results.phaseCrossoverFrequencyHz >= 1e6
+                ? `${(results.phaseCrossoverFrequencyHz / 1e6).toFixed(2)} MHz`
+                : results.phaseCrossoverFrequencyHz >= 1e3
+                ? `${(results.phaseCrossoverFrequencyHz / 1e3).toFixed(2)} kHz`
+                : `${results.phaseCrossoverFrequencyHz.toFixed(2)} Hz`)
+            : "N/A";
+          callbacks.addLog(
+            `  • Margen de Ganancia (GM): ${results.loopGainMarginDb.toFixed(2)} dB @ ${freqStr}`,
+            "receive",
+          );
+        }
+
+        if (results.poles.length > 0) {
+          callbacks.addLog("Polos en el Plano de Laplace (s):", "receive");
+          results.poles.forEach((p, idx) => {
+            callbacks.addLog(`  • Polo ${idx + 1}: ${p.re.toFixed(2)} ${p.im >= 0 ? "+" : "-"} ${Math.abs(p.im).toFixed(2)}j rad/s`, "receive");
+          });
+        }
+        if (results.zeros && results.zeros.length > 0) {
+          callbacks.addLog("Ceros en el Plano de Laplace (s):", "receive");
+          results.zeros.forEach((z, idx) => {
+            callbacks.addLog(`  • Cero ${idx + 1}: ${z.re.toFixed(2)} ${z.im >= 0 ? "+" : "-"} ${Math.abs(z.im).toFixed(2)}j rad/s`, "receive");
+          });
+        }
         callbacks.addLog("----------------------------------------------------------------", "system");
 
         callbacks.onResultsReady(mode, results);

@@ -24,6 +24,7 @@ function dcConnectivityPairs(type: string, pinCount: number): readonly (readonly
       return [[0, 1]];
     case "nmos":
     case "pmos":
+    case "igbt":
     case "bsim3nmos":
     case "bsim3pmos":
     case "bsim4nmos":
@@ -193,7 +194,9 @@ export function evaluateRealtimeErcIssues(
   if (components.length === 0) return issues;
 
   // 1. Verificación de presencia de Tierra (GND) en el esquema
-  const GND_ALIASES = ["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"];
+  const GND_ALIASES = [
+    "GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS", "VSS-", "EARTH", "CHASSIS", "CHASIS", "PE", "MASA"
+  ];
   const hasGnd = components.some(c =>
     c.type === "ground" ||
     (c.type === "net_label" && (c.terminalType === "ground" || GND_ALIASES.includes(String(c.label || c.value || "").trim().toUpperCase())))

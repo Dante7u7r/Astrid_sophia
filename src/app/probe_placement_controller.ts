@@ -17,6 +17,7 @@ export interface ProbePlacementController {
   setNodes(nodes: ProbeNodes): void;
   getNode(channel: ProbeChannel): string | null;
   placeProbe(channel: ProbeChannel, nodeId: string): string;
+  placeDifferentialProbe(channel: ProbeChannel, posNode: string, negNode: string): string;
 }
 
 export interface ProbePlacementControllerDeps {
@@ -91,6 +92,16 @@ export function createProbePlacementController(
       }
       syncOscilloscopePanel();
       return `Sonda del Canal ${channelIndex(channel)} (${channelColor(channel)}) conectada al Nodo ${nodeId}.`;
+    },
+    placeDifferentialProbe: (channel, posNode, negNode) => {
+      const spec = posNode === negNode || negNode === "0" ? posNode : `V(${posNode},${negNode})`;
+      nodes = { ...nodes, [probeKey(channel)]: spec };
+      const panel = deps.getOscilloscopePanel();
+      if (panel) {
+        panel.setChannelActive?.(channel.toLowerCase() as "ch1" | "ch2" | "ch3" | "ch4", true);
+      }
+      syncOscilloscopePanel();
+      return `Sonda Diferencial del Canal ${channelIndex(channel)} (${channelColor(channel)}) conectada entre Nodos ${posNode} y ${negNode}.`;
     },
   };
 }

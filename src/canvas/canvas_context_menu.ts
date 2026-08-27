@@ -217,11 +217,19 @@ function populateComponentMenu(
     callbacks.onCanvasModified();
   }, "📐"));
 
-  menu.appendChild(createMenuItem("Espejar (Mirror)", "M", () => {
+  menu.appendChild(createMenuItem("Espejo Horizontal (Flip H)", "M", () => {
     orchestrator.mirrorSelectedComponent();
     callbacks.requestRender(true);
     callbacks.onCanvasModified();
+    callbacks.onNetlistSync();
   }, "🪞"));
+
+  menu.appendChild(createMenuItem("Espejo Vertical (Flip V)", "Shift+M", () => {
+    orchestrator.mirrorSelectedComponentVertical();
+    callbacks.requestRender(true);
+    callbacks.onCanvasModified();
+    callbacks.onNetlistSync();
+  }, "↕️"));
 
   menu.appendChild(createMenuItem("Duplicar", "Ctrl+D", () => {
     orchestrator.duplicateSelected();
@@ -247,6 +255,145 @@ function populateComponentMenu(
     }, p.icon));
   }
   menu.appendChild(probeWrapper);
+
+  // Submenú Conversión de Tipo de Terminal (si es net_label)
+  if (clickedComp.type === "net_label") {
+    const { wrapper: terminalWrapper, submenu: terminalSubmenu } = createSubmenu("Convertir Puerto / Terminal", "⚡");
+    const terminalOptions: { label: string; icon: string; action: () => void }[] = [
+      {
+        label: "Puerto de Señal (Net Label)",
+        icon: "🔷",
+        action: () => {
+          clickedComp.terminalType = "signal";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Puerto de Entrada (Input)",
+        icon: "📥",
+        action: () => {
+          clickedComp.terminalType = "input";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Puerto de Salida (Output)",
+        icon: "📤",
+        action: () => {
+          clickedComp.terminalType = "output";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Puerto Bidireccional (In/Out)",
+        icon: "↔️",
+        action: () => {
+          clickedComp.terminalType = "bidirectional";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Puerto de Bus (Bus [N:0])",
+        icon: "🚍",
+        action: () => {
+          clickedComp.terminalType = "bus_tap";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Terminal VCC (+5V)",
+        icon: "⚡",
+        action: () => {
+          clickedComp.terminalType = "power";
+          clickedComp.voltage = 5.0;
+          clickedComp.label = "+5V";
+          clickedComp.value = "+5V";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Terminal VDD (+3.3V)",
+        icon: "⚡",
+        action: () => {
+          clickedComp.terminalType = "power";
+          clickedComp.voltage = 3.3;
+          clickedComp.label = "+3.3V";
+          clickedComp.value = "+3.3V";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Terminal Tierra (GND / 0V)",
+        icon: "⏚",
+        action: () => {
+          clickedComp.terminalType = "ground";
+          clickedComp.terminalStyle = "standard";
+          clickedComp.label = "GND";
+          clickedComp.value = "GND";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Tierra Analógica (AGND)",
+        icon: "⏚",
+        action: () => {
+          clickedComp.terminalType = "ground";
+          clickedComp.terminalStyle = "analog";
+          clickedComp.label = "AGND";
+          clickedComp.value = "AGND";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Punto de Prueba (Test Point TP)",
+        icon: "⦿",
+        action: () => {
+          clickedComp.terminalType = "test_point";
+          if (!clickedComp.label || clickedComp.label === "NET" || clickedComp.label === "GND") {
+            clickedComp.label = "TP1";
+            clickedComp.value = "TP1";
+          }
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+      {
+        label: "Sin Conexión (NC ✕)",
+        icon: "✕",
+        action: () => {
+          clickedComp.terminalType = "no_connect";
+          clickedComp.label = "NC";
+          clickedComp.value = "NC";
+          callbacks.requestRender(true);
+          callbacks.onCanvasModified();
+          callbacks.onNetlistSync();
+        },
+      },
+    ];
+    for (const opt of terminalOptions) {
+      terminalSubmenu.appendChild(createMenuItem(opt.label, "", opt.action, opt.icon));
+    }
+    menu.appendChild(terminalWrapper);
+  }
 
   // Submenú Alineación (si hay selección múltiple)
   if (orchestrator.selectedComponents.length > 1) {

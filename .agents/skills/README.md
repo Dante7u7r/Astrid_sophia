@@ -1,7 +1,7 @@
-# Astryd Sophia Skills — v2.2
+# Astryd Sophia Skills — v2.3
 **Engineering reference package**
 
-Nine domain-specific skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
+Eleven domain-specific and meta-reasoning skill definitions and reference implementations for the Astryd Sophia electronic simulation desktop application (Tauri + TypeScript + Rust).
 
 ---
 
@@ -10,6 +10,16 @@ Nine domain-specific skill definitions and reference implementations for the Ast
 ```
 Astryd_Sophia_Skills/
 ├── README.md                          ← this file
+│
+├── adversarial-self-reflection/
+│   ├── SKILL.md                       ← 4-phase ASR loop, anti-placebo audit, edge-case attacks
+│   └── references/
+│       └── critique-rubric.md         ← domain-specific heuristic check matrix (MNA, Canvas, IPC)
+│
+├── multi-agent-debate-consensus/
+│   ├── SKILL.md                       ← dialectical multi-model debate, subagent roles, consensus matrix
+│   └── references/
+│       └── debate-protocols.md        ← argumentation levels, anti-groupthink rules, empirical tie-breaks
 │
 ├── canvas-vector-render/
 │   ├── SKILL.md                       ← viewport affine math, culling, grid, hit-test
@@ -49,9 +59,9 @@ Astryd_Sophia_Skills/
 │       └── subcircuit_expander.rs     ← lexer, hierarchical flattener, ParamContext, MNA output
 │
 ├── realtime-cosimulation-runtime/
-    ├── SKILL.md                       ← solver thread, lock-step MCU sync, 60 FPS telemetry, hot mutation
-    └── examples/
-        └── runtime_orchestrator.rs    ← native thread loop, MPSC drain, binary telemetry, cancel flag
+│   ├── SKILL.md                       ← solver thread, lock-step MCU sync, 60 FPS telemetry, hot mutation
+│   └── examples/
+│       └── runtime_orchestrator.rs    ← native thread loop, MPSC drain, binary telemetry, cancel flag
 │
 └── circuit-sim-ux/
     ├── SKILL.md                       ← 4-domain UX skill: canvas/wiring, sim feedback, inspector, selection
@@ -71,6 +81,15 @@ Astryd_Sophia_Skills/
         ├── command-history.ts         ← Command pattern, beginGroup/endGroup drag aggregation, batch move
         └── INTEGRATION-EXAMPLE.tsx   ← end-to-end: streaming → NetGraph → colorForNet → CurrentFlowAnimation
 ```
+
+---
+
+## What changed from v2.2
+
+| Skill | Key additions |
+|---|---|
+| **adversarial-self-reflection** | New meta-engineering skill. Enforces a 4-phase Adversarial Self-Reflection (ASR) loop before and after changes: explicit invariant formulation, devil's advocate attack (boundary conditions, zero divisions, placebo code smell checks, resource leaks), severity rubric (P0-P3), and empirical verification gates. Includes domain-specific critique matrix for MNA solvers, Canvas 2D UX, and Tauri IPC. |
+| **multi-agent-debate-consensus** | New meta-collaboration skill. Orchestrates structured multi-agent / multi-model debates (Architect, Adversarial Critic, Physics Specialist, Performance Auditor) with 4-phase dialectic convergence (Thesis, Antithesis, Empirical Cross-Examination, Pareto-Consensus). Strictly enforces evidence-first resolution (tests and mathematical proofs over LLM voting) and eliminates groupthink/analysis paralysis. |
 
 ---
 

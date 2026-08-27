@@ -1,0 +1,86 @@
+{
+  "version": "3.0",
+  "components": [
+    {
+      "id": "V1",
+      "type": "vsource",
+      "x": 100,
+      "y": 150,
+      "rotation": 0,
+      "value": 5.0,
+      "label": "V1",
+      "waveType": "sine",
+      "amplitude": 5.0,
+      "frequency": 1000.0,
+      "offset": 0.0,
+      "pins": [
+        { "id": "0", "name": "+", "type": "passive", "direction": "up", "x": 100, "y": 110 },
+        { "id": "1", "name": "-", "type": "passive", "direction": "down", "x": 100, "y": 190 }
+      ]
+    },
+    {
+      "id": "R1",
+      "type": "resistor",
+      "x": 200,
+      "y": 110,
+      "rotation": 0,
+      "value": 1000.0,
+      "label": "R1",
+      "pins": [
+        { "id": "0", "name": "1", "type": "passive", "direction": "left", "x": 160, "y": 110 },
+        { "id": "1", "name": "2", "type": "passive", "direction": "right", "x": 240, "y": 110 }
+      ]
+    },
+    {
+      "id": "C1",
+      "type": "capacitor",
+      "x": 240,
+      "y": 180,
+      "rotation": 90,
+      "value": 1e-6,
+      "label": "C1",
+      "pins": [
+        { "id": "0", "name": "1", "type": "passive", "direction": "up", "x": 240, "y": 140 },
+        { "id": "1", "name": "2", "type": "passive", "direction": "down", "x": 240, "y": 220 }
+      ]
+    },
+    {
+      "id": "GND1",
+      "type": "ground",
+      "x": 100,
+      "y": 240,
+      "rotation": 0,
+      "value": 0,
+      "label": "GND",
+      "pins": [
+        { "id": "0", "name": "GND", "type": "passive", "direction": "up", "x": 100, "y": 220 }
+      ]
+    }
+  ],
+  "wires": [
+    {
+      "id": "W1",
+      "from": { "componentId": "V1", "pinIndex": 0 },
+      "to": { "componentId": "R1", "pinIndex": 0 },
+      "points": []
+    },
+    {
+      "id": "W2",
+      "from": { "componentId": "R1", "pinIndex": 1 },
+      "to": { "componentId": "C1", "pinIndex": 0 },
+      "points": []
+    },
+    {
+      "id": "W3",
+      "from": { "componentId": "V1", "pinIndex": 1 },
+      "to": { "componentId": "GND1", "pinIndex": 0 },
+      "points": []
+    },
+    {
+      "id": "W4",
+      "from": { "componentId": "C1", "pinIndex": 1 },
+      "to": { "componentId": "GND1", "pinIndex": 0 },
+      "points": []
+    }
+  ]
+}

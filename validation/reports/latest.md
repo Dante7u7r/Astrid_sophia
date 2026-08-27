@@ -5,7 +5,7 @@ Observaciones: **50/50** dentro de tolerancia.
 
 - Suite: `phase4-external-correlation`
 - Solver: `0.1.0`
-- Git: `3ba487476e26` (`dirty`)
+- Git: `05532fbe19ac` (`dirty`)
 - Plataforma: `windows-x86_64`
 - ngspice: `** ngspice-47 : Circuit level simulation program`
 
@@ -23,7 +23,7 @@ Observaciones: **50/50** dentro de tolerancia.
 | ac-rc-low-pass-cutoff | AC | kcl_at_fc | 2.1684043450e-19 A | 0.0000000000e0 A | 2.168e-19 | 1.000e-10 | PASS |
 | ac-rl-low-pass-sweep | AC | gain_fc_over_10 | -4.3213737826e-2 dB | -4.3213737826e-2 dB | 1.943e-16 | 2.000e-3 | PASS |
 | ac-rl-low-pass-sweep | AC | phase_fc_over_10 | -5.7105931375e0 deg | -5.7105931375e0 deg | 8.882e-16 | 2.000e-2 | PASS |
-| ac-rl-low-pass-sweep | AC | kcl_fc_over_10 | 3.4964469463e-18 A | 0.0000000000e0 A | 3.496e-18 | 1.000e-10 | PASS |
+| ac-rl-low-pass-sweep | AC | kcl_fc_over_10 | 1.9394798072e-18 A | 0.0000000000e0 A | 1.939e-18 | 1.000e-10 | PASS |
 | ac-rl-low-pass-sweep | AC | gain_fc | -3.0102999566e0 dB | -3.0102999566e0 dB | 4.441e-16 | 3.010e-3 | PASS |
 | ac-rl-low-pass-sweep | AC | phase_fc | -4.5000000000e1 deg | -4.5000000000e1 deg | 0.000e0 | 4.500e-2 | PASS |
 | ac-rl-low-pass-sweep | AC | kcl_fc | 1.7347234760e-18 A | 0.0000000000e0 A | 1.735e-18 | 1.000e-10 | PASS |
@@ -34,13 +34,13 @@ Observaciones: **50/50** dentro de tolerancia.
 | ac-rlc-band-pass-resonance | AC | phase_at_resonance | 0.0000000000e0 deg | 0.0000000000e0 deg | 0.000e0 | 2.000e-2 | PASS |
 | ac-rlc-band-pass-resonance | AC | kcl_at_resonance | 2.8177377798e-18 A | 0.0000000000e0 A | 2.818e-18 | 1.000e-10 | PASS |
 | transient-rc-step-tau | TRAN | vc_at_tau | 3.1514439384e0 V | 3.1606027941e0 V | 9.159e-3 | 3.000e-2 | PASS |
-| transient-rc-step-tau | TRAN | kcl_at_tau | 6.5052130349e-18 A | 0.0000000000e0 A | 6.505e-18 | 1.000e-9 | PASS |
+| transient-rc-step-tau | TRAN | kcl_at_tau | 4.2283884727e-17 A | 0.0000000000e0 A | 4.228e-17 | 1.000e-9 | PASS |
 | transient-rc-step-trap | TRAN | vc_at_0_25tau | 1.1058104565e0 V | 1.1059960846e0 V | 1.856e-4 | 1.106e-3 | PASS |
 | transient-rc-step-trap | TRAN | vc_at_1tau | 3.1605266065e0 V | 3.1606027941e0 V | 7.619e-5 | 3.161e-3 | PASS |
 | transient-rc-step-trap | TRAN | vc_at_2tau | 4.3233011952e0 V | 4.3233235838e0 V | 2.239e-5 | 4.323e-3 | PASS |
-| transient-rc-step-gear2 | TRAN | vc_at_0_25tau | 1.1055399832e0 V | 1.1059960846e0 V | 4.561e-4 | 1.106e-3 | PASS |
-| transient-rc-step-gear2 | TRAN | vc_at_1tau | 3.1604336880e0 V | 3.1606027941e0 V | 1.691e-4 | 3.161e-3 | PASS |
-| transient-rc-step-gear2 | TRAN | vc_at_2tau | 4.3232841030e0 V | 4.3233235838e0 V | 3.948e-5 | 4.323e-3 | PASS |
+| transient-rc-step-gear2 | TRAN | vc_at_0_25tau | 1.1057347209e0 V | 1.1059960846e0 V | 2.614e-4 | 1.106e-3 | PASS |
+| transient-rc-step-gear2 | TRAN | vc_at_1tau | 3.1605256733e0 V | 3.1606027941e0 V | 7.712e-5 | 3.161e-3 | PASS |
+| transient-rc-step-gear2 | TRAN | vc_at_2tau | 4.3233179414e0 V | 4.3233235838e0 V | 5.642e-6 | 4.323e-3 | PASS |
 | transient-rl-step-sweep | TRAN | source_current_0_25tau | -1.1035696590e-2 A | -1.1059960846e-2 A | 2.426e-5 | 3.000e-4 | PASS |
 | transient-rl-step-sweep | TRAN | source_current_0_5tau | -1.9635661193e-2 A | -1.9673467014e-2 A | 3.781e-5 | 3.000e-4 | PASS |
 | transient-rl-step-sweep | TRAN | source_current_1tau | -3.1560138574e-2 A | -3.1606027941e-2 A | 4.589e-5 | 3.161e-4 | PASS |

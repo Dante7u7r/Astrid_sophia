@@ -8,6 +8,11 @@ export interface AppKeyboardShortcutsDeps {
   getSidePanelController(): SidePanelController | null;
   isTypingInFormField(): boolean;
   getOpenCircuitButton(): HTMLElement | null;
+  getGuideTourButton?(): HTMLElement | null;
+  onOpenGuide?(): void;
+  getFeedbackButton?(): HTMLElement | null;
+  onOpenFeedback?(): void;
+  onToggleZenMode?(): void;
 }
 
 export function initAppKeyboardShortcuts(deps: AppKeyboardShortcutsDeps): void {
@@ -25,9 +30,29 @@ export function initAppKeyboardShortcuts(deps: AppKeyboardShortcutsDeps): void {
       if (event.key === "Backspace") {
         event.preventDefault();
       }
+      if (event.key === "F1") {
+        event.preventDefault();
+        if (deps.onOpenGuide) {
+          deps.onOpenGuide();
+        } else if (deps.getGuideTourButton) {
+          deps.getGuideTourButton()?.click();
+        } else {
+          document.querySelector<HTMLElement>("#btn-guide-tour")?.click();
+        }
+      }
     }
 
     if (typing) return;
+
+    if (event.key === "F11" || (ctrl && event.shiftKey && event.key.toLowerCase() === "f")) {
+      event.preventDefault();
+      if (deps.onToggleZenMode) {
+        deps.onToggleZenMode();
+      } else {
+        document.querySelector<HTMLElement>("#btn-zen-mode")?.click();
+      }
+      return;
+    }
 
     if (ctrl && event.key === "n") {
       event.preventDefault();
@@ -56,6 +81,16 @@ export function initAppKeyboardShortcuts(deps: AppKeyboardShortcutsDeps): void {
     if (event.key === "F10") {
       event.preventDefault();
       deps.getSidePanelController()?.toggleSidePanel("right");
+    }
+    if (event.key === "F7" || (ctrl && event.shiftKey && event.key.toLowerCase() === "b")) {
+      event.preventDefault();
+      if (deps.onOpenFeedback) {
+        deps.onOpenFeedback();
+      } else if (deps.getFeedbackButton) {
+        deps.getFeedbackButton()?.click();
+      } else {
+        document.querySelector<HTMLElement>("#btn-feedback-trigger")?.click();
+      }
     }
     if (event.key === "F8") {
       event.preventDefault();

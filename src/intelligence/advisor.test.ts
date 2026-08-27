@@ -5,6 +5,7 @@ import type { SimulationSettings } from "../ui/settings_modal";
 import {
   ADVISOR_RULES,
   evaluateAdvisor,
+  evaluateCircuitHealth,
   type AdvisorContext,
 } from "./advisor";
 import {
@@ -103,5 +104,19 @@ describe("asesor determinista", () => {
       context({ settings: { ...defaultSettings, tolerance: 1e-2 } }),
       disabled,
     )).toEqual([]);
+  });
+
+  it("evalúa el puntaje global de salud del circuito (Circuit Health Score)", () => {
+    // Caso sano: 100% -> Grado A+
+    const healthyHealth = evaluateCircuitHealth(context());
+    expect(healthyHealth.score).toBe(100);
+    expect(healthyHealth.grade).toBe("A+");
+
+    // Caso con error de tierra (ERC error -25 pts + rec -3 pts)
+    const errHealth = evaluateCircuitHealth(context({
+      erc: { passed: false, errors: ["Referencia a Tierra ausente (GND)"], warnings: [] },
+    }));
+    expect(errHealth.score).toBeLessThanOrEqual(75);
+    expect(errHealth.grade).not.toBe("A+");
   });
 });

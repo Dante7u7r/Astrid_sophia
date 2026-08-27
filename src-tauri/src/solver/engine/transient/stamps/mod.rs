@@ -38,13 +38,18 @@ pub(super) fn stamp_component(comp: &ComponentData, ctx: &mut StampContext<'_>) 
     match comp.comp_type.as_str() {
         "diode" | "led" => junctions::stamp_diode(comp, ctx),
         "opto" => junctions::stamp_opto(comp, ctx),
-        "nmos" | "bsim3nmos" | "bsim4nmos" => mos::stamp_nmos(comp, ctx),
+        "nmos" | "bsim3nmos" | "bsim4nmos" | "sic_mosfet" | "gan_hemt" | "igbt" => {
+            mos::stamp_nmos(comp, ctx)
+        }
         "pmos" | "bsim3pmos" | "bsim4pmos" => mos::stamp_pmos(comp, ctx),
         "npn" | "pnp" => bipolar::stamp_bipolar(comp, ctx),
         "njf" | "pjf" => jfet::stamp_jfet(comp, ctx),
         "opamp" | "opamp_ideal" => opamp::stamp_opamp(comp, ctx),
         kind if kind.ends_with("_gate") => logic::stamp_logic(comp, ctx),
-        "arduino_uno" | "esp32" | "raspberry_pi_pico" if comp.pins.len() >= 6 => {
+        "arduino_uno" | "esp32" | "raspberry_pi_pico" | "atmega328p" | "mcu_avr" | "mcu_8051"
+        | "8051"
+            if comp.pins.len() >= 6 =>
+        {
             mcu::stamp_mcu(comp, ctx)
         }
         _ => {}

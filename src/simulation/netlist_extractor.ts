@@ -33,6 +33,7 @@ import {
   COMMERCIAL_JFETS,
   COMMERCIAL_OPAMPS,
 } from "./commercial_models_catalog";
+import { getCommercialDiscreteModel } from "./commercial_discrete_models";
 import {
   getTerminalType,
   parsePowerRailVoltage,
@@ -89,6 +90,12 @@ export interface ExtractedComponent {
   readonly mosRon?: number;
   readonly mosCgs?: number;
   readonly mosCgd?: number;
+  readonly igbtKp?: number;
+  readonly igbtAlpha?: number;
+  readonly igbtTau?: number;
+  readonly igbtWb?: number;
+  readonly igbtCge?: number;
+  readonly igbtCgc?: number;
   readonly jfetVto?: number;
   readonly jfetBeta?: number;
   readonly jfetLambda?: number;
@@ -101,6 +108,15 @@ export interface ExtractedComponent {
   readonly opampRout?: number;
   readonly opampVos?: number;
   readonly opampIb?: number;
+  readonly opampIsc?: number;
+  readonly opampIq?: number;
+  readonly opampVdrop?: number;
+  readonly opampIos?: number;
+  readonly opampCmrr?: number;
+  readonly opampPsrr?: number;
+  readonly opampEn?: number;
+  readonly opampIn?: number;
+  readonly opampFc?: number;
   readonly gateTrise?: number;
   readonly gateTfall?: number;
   readonly gateRout?: number;
@@ -114,8 +130,14 @@ export interface ExtractedComponent {
   readonly switchVth?: number;
   readonly switchVh?: number;
   readonly subcircuitName?: string;
+  readonly instanceParams?: Record<string, number | string>;
   readonly firmware?: Uint8Array;
   readonly mcuClockSpeed?: number;
+  readonly controlling_source?: string;
+  readonly holdingCurrent?: number;
+  readonly gateTriggerVoltage?: number;
+  readonly breakoverVoltage?: number;
+  readonly refVoltage?: number;
 }
 
 export interface MutualInductance {
@@ -372,7 +394,9 @@ export function extractElectricalNetlist(
       }
     }
 
-    const GND_ALIASES = ["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"];
+    const GND_ALIASES = [
+      "GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS", "VSS-", "EARTH", "CHASSIS", "CHASIS", "PE", "MASA"
+    ];
 
     // Unión virtual para componentes de Tierra (GND global de referencia en esquemático)
     for (const comp of components) {
@@ -595,6 +619,73 @@ export function extractElectricalNetlist(
         value: contactVal,
         pins: [pin2Node, pin3Node],
       });
+    } else if (comp.type === 'speaker') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: 8.0,
+        pins: pinsMapped,
+      });
+    } else if (comp.type === 'solenoid') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      extractedComponents.push({
+        id: comp.id,
+        type: 'resistor',
+        value: 24.0,
+        pins: pinsMapped,
+      });
+    } else if (comp.type === 'servo_motor') {
+      const pinPwm = resolveNode(`${comp.id}:0`);
+      const pinVcc = resolveNode(`${comp.id}:1`);
+      const pinGnd = resolveNode(`${comp.id}:2`);
+      extractedComponents.push({
+        id: `${comp.id}__pwm_in`,
+        type: 'resistor',
+        value: 100000.0,
+        pins: [pinPwm, pinGnd],
+      });
+      extractedComponents.push({
+        id: `${comp.id}__supply`,
+        type: 'resistor',
+        value: 100.0,
+        pins: [pinVcc, pinGnd],
+      });
+    } else if (comp.type === 'stepper_motor') {
+      const pinA1 = resolveNode(`${comp.id}:0`);
+      const pinA2 = resolveNode(`${comp.id}:1`);
+      const pinB1 = resolveNode(`${comp.id}:2`);
+      const pinB2 = resolveNode(`${comp.id}:3`);
+      extractedComponents.push({
+        id: `${comp.id}__phaseA`,
+        type: 'resistor',
+        value: 30.0,
+        pins: [pinA1, pinA2],
+      });
+      extractedComponents.push({
+        id: `${comp.id}__phaseB`,
+        type: 'resistor',
+        value: 30.0,
+        pins: [pinB1, pinB2],
+      });
+    } else if (comp.type === 'ssr') {
+      const pinIn1 = resolveNode(`${comp.id}:0`);
+      const pinIn2 = resolveNode(`${comp.id}:1`);
+      const pinOut1 = resolveNode(`${comp.id}:2`);
+      const pinOut2 = resolveNode(`${comp.id}:3`);
+      extractedComponents.push({
+        id: `${comp.id}__in`,
+        type: 'resistor',
+        value: 600.0,
+        pins: [pinIn1, pinIn2],
+      });
+      const isSsrActive = comp.ssrActive ?? false;
+      extractedComponents.push({
+        id: `${comp.id}__out`,
+        type: 'resistor',
+        value: isSsrActive ? 0.05 : 1e8,
+        pins: [pinOut1, pinOut2],
+      });
     } else if (comp.type === 'transformer') {
       const priNode1 = resolveNode(`${comp.id}:0`);
       const priNode2 = resolveNode(`${comp.id}:1`);
@@ -657,6 +748,15 @@ export function extractElectricalNetlist(
       let opampRout = comp.opampRout ?? 75.0;
       let opampVos = comp.opampVos ?? (comp.offsetVoltage !== undefined ? Number(comp.offsetVoltage) : 0.0);
       let opampIb = comp.opampIb ?? 80e-9;
+      let opampIos = comp.opampIos;
+      let opampIq = comp.opampIq;
+      let opampIsc = comp.opampIsc;
+      let opampVdrop = comp.opampVdrop;
+      let opampCmrr = comp.opampCmrr;
+      let opampPsrr = comp.opampPsrr;
+      let opampEn = comp.opampEn;
+      let opampIn = comp.opampIn;
+      let opampFc = comp.opampFc;
 
       if (modelKey && COMMERCIAL_OPAMPS[modelKey]) {
         const om = COMMERCIAL_OPAMPS[modelKey];
@@ -667,6 +767,15 @@ export function extractElectricalNetlist(
         opampRout = om.rout;
         opampVos = om.vos;
         opampIb = om.ib ?? opampIb;
+        opampIos = om.ios ?? opampIos;
+        opampIq = om.iq ?? opampIq;
+        opampIsc = om.isc ?? opampIsc;
+        opampVdrop = om.vdrop ?? opampVdrop;
+        opampCmrr = om.cmrr ?? opampCmrr;
+        opampPsrr = om.psrr ?? opampPsrr;
+        opampEn = om.en ?? opampEn;
+        opampIn = om.in ?? opampIn;
+        opampFc = om.fc ?? opampFc;
       }
 
       extractedComponents.push({
@@ -682,6 +791,15 @@ export function extractElectricalNetlist(
         opampRout,
         opampVos,
         opampIb,
+        opampIsc,
+        opampIq,
+        opampVdrop,
+        opampIos,
+        opampCmrr,
+        opampPsrr,
+        opampEn,
+        opampIn,
+        opampFc,
       });
     } else if (comp.type === 'power_port') {
       const pinsMapped = getComponentNodes(pinsKeys);
@@ -739,6 +857,82 @@ export function extractElectricalNetlist(
           dutyCycle: duty,
         });
       }
+    } else if (comp.type === 'vcvs') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      const outPos = pinsMapped[0] || "0";
+      const outNeg = pinsMapped[1] || "0";
+      const inPos = pinsMapped[2] || "0";
+      const inNeg = pinsMapped[3] || "0";
+      const gain = typeof comp.value === 'number' ? comp.value : (parseFloat(String(comp.value)) || 1.0);
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'vcvs',
+        value: gain,
+        pins: [outPos, outNeg, inPos, inNeg],
+      });
+    } else if (comp.type === 'vccs') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      const outPos = pinsMapped[0] || "0";
+      const outNeg = pinsMapped[1] || "0";
+      const inPos = pinsMapped[2] || "0";
+      const inNeg = pinsMapped[3] || "0";
+      const gm = typeof comp.value === 'number' ? comp.value : (parseFloat(String(comp.value)) || 0.001);
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'vccs',
+        value: gm,
+        pins: [outPos, outNeg, inPos, inNeg],
+      });
+    } else if (comp.type === 'ccvs') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      const outPos = pinsMapped[0] || "0";
+      const outNeg = pinsMapped[1] || "0";
+      const inPos = pinsMapped[2] || "0";
+      const inNeg = pinsMapped[3] || "0";
+      const rm = typeof comp.value === 'number' ? comp.value : (parseFloat(String(comp.value)) || 1000.0);
+      const vSenseId = `V_SENSE_${comp.id}`;
+
+      extractedComponents.push({
+        id: vSenseId,
+        type: 'vsource',
+        value: 0.0,
+        pins: [inPos, inNeg],
+        waveType: 'dc',
+      });
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'ccvs',
+        value: rm,
+        pins: [outPos, outNeg],
+        controlling_source: vSenseId,
+      });
+    } else if (comp.type === 'cccs') {
+      const pinsMapped = getComponentNodes(pinsKeys);
+      const outPos = pinsMapped[0] || "0";
+      const outNeg = pinsMapped[1] || "0";
+      const inPos = pinsMapped[2] || "0";
+      const inNeg = pinsMapped[3] || "0";
+      const ai = typeof comp.value === 'number' ? comp.value : (parseFloat(String(comp.value)) || 1.0);
+      const vSenseId = `V_SENSE_${comp.id}`;
+
+      extractedComponents.push({
+        id: vSenseId,
+        type: 'vsource',
+        value: 0.0,
+        pins: [inPos, inNeg],
+        waveType: 'dc',
+      });
+
+      extractedComponents.push({
+        id: comp.id,
+        type: 'cccs',
+        value: ai,
+        pins: [outPos, outNeg],
+        controlling_source: vSenseId,
+      });
     } else {
       if (comp.type === 'text_note') {
         continue;
@@ -746,7 +940,9 @@ export function extractElectricalNetlist(
 
       const pinsMapped = getComponentNodes(pinsKeys);
 
-      let subcircuitName: string | undefined;
+      let subcircuitName: string | undefined =
+        comp.subcircuitName ||
+        (comp.type === "x" && typeof comp.value === "string" ? comp.value : undefined);
       if (comp.type === 'x' && comp.spiceMacro) {
         for (const line of comp.spiceMacro.split('\n')) {
           const t = line.trim();
@@ -794,6 +990,15 @@ export function extractElectricalNetlist(
       let opampRout = comp.opampRout;
       let opampVos = comp.opampVos;
       let opampIb = comp.opampIb;
+      let opampIsc = comp.opampIsc;
+      let opampIq = comp.opampIq;
+      let opampVdrop = comp.opampVdrop;
+      let opampIos = comp.opampIos;
+      let opampCmrr = comp.opampCmrr;
+      let opampPsrr = comp.opampPsrr;
+      let opampEn = comp.opampEn;
+      let opampIn = comp.opampIn;
+      let opampFc = comp.opampFc;
 
       if (modelKey) {
         if (comp.type === "diode" || comp.type === "led") {
@@ -886,6 +1091,12 @@ export function extractElectricalNetlist(
         mosRon,
         mosCgs,
         mosCgd,
+        igbtKp: comp.igbtKp,
+        igbtAlpha: comp.igbtAlpha,
+        igbtTau: comp.igbtTau,
+        igbtWb: comp.igbtWb,
+        igbtCge: comp.igbtCge,
+        igbtCgc: comp.igbtCgc,
         jfetVto,
         jfetBeta,
         jfetLambda,
@@ -898,6 +1109,15 @@ export function extractElectricalNetlist(
         opampRout,
         opampVos,
         opampIb,
+        opampIsc,
+        opampIq,
+        opampVdrop,
+        opampIos,
+        opampCmrr,
+        opampPsrr,
+        opampEn,
+        opampIn,
+        opampFc,
         gateTrise: comp.gateTrise,
         gateTfall: comp.gateTfall,
         gateRout: comp.gateRout,
@@ -911,8 +1131,13 @@ export function extractElectricalNetlist(
         switchVth: comp.switchVth,
         switchVh: comp.switchVh,
         subcircuitName,
+        instanceParams: comp.instanceParams,
         firmware: comp.firmware,
         mcuClockSpeed: comp.mcuClockSpeed,
+        holdingCurrent: comp.holdingCurrent,
+        gateTriggerVoltage: comp.gateTriggerVoltage,
+        breakoverVoltage: comp.breakoverVoltage,
+        refVoltage: comp.refVoltage,
       });
     }
   }
@@ -933,11 +1158,23 @@ export function extractElectricalNetlist(
     };
   });
 
-  // Concatenar todos los bloques spiceMacro de los Subcircuitos Genéricos (tipo 'x')
+  // Concatenar todos los bloques spiceMacro de los Subcircuitos Genéricos (tipo 'x') y modelos .MODEL comerciales
   const macroBlocks: string[] = [];
+  const registeredModels = new Set<string>();
+
   for (const comp of components) {
-    if (comp.type === 'x' && comp.spiceMacro && comp.spiceMacro.trim().length > 0) {
+    if (comp.type === "x" && comp.spiceMacro && comp.spiceMacro.trim().length > 0) {
       macroBlocks.push(comp.spiceMacro.trim());
+    }
+
+    // Inyección automática de modelos discretos (.MODEL)
+    const candidateModelName = comp.modelName || (typeof comp.value === "string" ? comp.value : undefined);
+    if (candidateModelName) {
+      const discreteModel = getCommercialDiscreteModel(candidateModelName);
+      if (discreteModel && !registeredModels.has(discreteModel.name.toUpperCase())) {
+        registeredModels.add(discreteModel.name.toUpperCase());
+        macroBlocks.push(discreteModel.rawDefinition);
+      }
     }
   }
   const subcircuitDefinitions = macroBlocks.length > 0 ? macroBlocks.join("\n\n") : undefined;

@@ -118,7 +118,7 @@ export function extractMetricValue(
 export function buildCornerAnalysisReport(
   pvtResults: readonly PvtRunResult[],
   specs: readonly CornerSpec[],
-  circuitName = "Circuito Astryd Sophia",
+  circuitName = "Circuito Biaani",
   primarySpecMetric?: CornerSpec["metricKey"],
 ): CornerAnalysisReport {
   const cornersSet = new Set<ProcessCorner>();
@@ -239,7 +239,7 @@ export function generateFullPvtMatrixConfigs(
  */
 export function exportCornerAnalysisToCsv(report: CornerAnalysisReport): string {
   const lines: string[] = [
-    `# Dashboard de Análisis de Esquinas PVT - Astryd Sophia`,
+    `# Dashboard de Análisis de Esquinas PVT - Biaani`,
     `# Circuito: ${report.circuitName}`,
     `# Fecha: ${report.timestamp}`,
     `# Esquinas Totales: ${report.totalCorners} | Aprobadas: ${report.passedCorners} | Fallidas: ${report.failedCorners} | Rendimiento (Yield): ${report.yieldPercent.toFixed(1)}%`,

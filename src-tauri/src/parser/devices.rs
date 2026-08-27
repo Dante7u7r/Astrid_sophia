@@ -276,7 +276,9 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
         }
 
         let id = tokens[0].clone();
-        let first_char = id.chars().next().unwrap().to_ascii_lowercase();
+        let Some(first_char) = id.chars().next().map(|c| c.to_ascii_lowercase()) else {
+            continue;
+        };
 
         if id.starts_with('.') {
             // Directivas globales (.dc, .tran, .ac) - Se pueden ignorar para el netlist estático
@@ -309,41 +311,55 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 return Err(format!("Línea de subcircuito inválida: {}", line));
             }
 
-            // Detectar si hay PARAMS: en la línea de instanciación X
-            let _line_lower_joined = tokens
-                .iter()
-                .map(|t| t.to_lowercase())
-                .collect::<Vec<_>>()
-                .join(" ");
-            let params_keyword_pos = tokens.iter().position(|t| t.to_lowercase() == "params:");
+            let mut params_start_idx = None;
+            let mut is_params_keyword = false;
 
-            let (subckt_name, sub_pins, override_params) = if let Some(pk_pos) = params_keyword_pos
-            {
-                if pk_pos < 3 {
+            for (i, tok) in tokens.iter().enumerate().skip(1) {
+                let lower = tok.to_lowercase();
+                if lower == "params:" || lower == "params" {
+                    params_start_idx = Some(i);
+                    is_params_keyword = true;
+                    break;
+                } else if tok.contains('=') {
+                    params_start_idx = Some(i);
+                    break;
+                }
+            }
+
+            let (subckt_name, sub_pins, param_tokens) = if let Some(p_idx) = params_start_idx {
+                if p_idx < 3 {
                     return Err(format!(
-                        "Instancia de subcircuito inválida: se requiere al menos un pin y el nombre del subcircuito antes de PARAMS: en '{}'.",
+                        "Instancia de subcircuito inválida: se requiere al menos un pin y el nombre del subcircuito antes de los parámetros en '{}'.",
                         line
                     ));
                 }
-                // El nombre del subcircuito es el token justo antes de PARAMS:
-                let name = tokens[pk_pos - 1].clone();
-                let pins = &tokens[1..pk_pos - 1];
-                let mut params = HashMap::new();
-                for tok in &tokens[pk_pos + 1..] {
-                    if let Some(eq_idx) = tok.find('=') {
-                        let key = tok[..eq_idx].trim().to_lowercase();
-                        let val_str = tok[eq_idx + 1..].trim();
-                        if let Ok(val) = parse_spice_value(val_str) {
-                            params.insert(key, val);
-                        }
-                    }
-                }
-                (name, pins.to_vec(), params)
+                let name = tokens[p_idx - 1].clone();
+                let pins = tokens[1..p_idx - 1].to_vec();
+                let p_toks = if is_params_keyword {
+                    &tokens[p_idx + 1..]
+                } else {
+                    &tokens[p_idx..]
+                };
+                (name, pins, p_toks)
             } else {
                 let name = tokens.last().unwrap().clone();
                 let pins = tokens[1..tokens.len() - 1].to_vec();
-                (name, pins, HashMap::new())
+                (name, pins, &tokens[tokens.len()..])
             };
+
+            let mut override_params = HashMap::new();
+            let joined_params = param_tokens.join(" ");
+            for part in joined_params.split_whitespace() {
+                if let Some(eq_idx) = part.find('=') {
+                    let key = part[..eq_idx].trim().to_lowercase();
+                    let val_str = part[eq_idx + 1..].trim();
+                    if let Ok(val) = evaluate_expression(val_str, &global_params) {
+                        override_params.insert(key, val);
+                    } else if let Ok(val) = parse_spice_value(val_str) {
+                        override_params.insert(key, val);
+                    }
+                }
+            }
 
             // Aplanar subcircuito
             if let Some((tpl, local_models)) = get_subckt_template_and_models(

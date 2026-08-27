@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "campaignId": "phase5-local-solver-diversity-v1",
-  "generatedAtUnixSeconds": 1787349601,
+  "generatedAtUnixSeconds": 1787645714,
   "solverVersion": "0.1.0",
-  "datasetSha256": "fd0b35761ecb2784be1a11735819f13dee70ab26d6244469e7eaea56889ecd2f",
+  "datasetSha256": "2974f095cdefefb853821a886f8cf91307bfa3d8c3a6da06ffc60d0b40e1f91a",
   "executionCount": 500,
   "uniqueParameterSets": 500,
   "sessionCount": 20,
@@ -16,21 +16,21 @@
   "passed": true,
   "passedExecutions": 500,
   "failedExecutions": 0,
-  "elapsedMilliseconds": 1105,
+  "elapsedMilliseconds": 1143,
   "families": [
     {
       "family": "ac-rc-cutoff",
       "analysis": "AC",
       "executions": 100,
       "passed": 100,
-      "maximumAbsoluteError": 2.220446049250313e-15
+      "maximumAbsoluteError": 3.552713678800501e-15
     },
     {
       "family": "ac-rl-cutoff",
       "analysis": "AC",
       "executions": 100,
       "passed": 100,
-      "maximumAbsoluteError": 2.1316282072803006e-14
+      "maximumAbsoluteError": 1.4210854715202004e-14
     },
     {
       "family": "dc-loaded-bridge",
@@ -3766,9 +3766,9 @@
         "frequency": 1348.7707041686044,
         "resistance": 0.01
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -3800,7 +3800,7 @@
         "frequency": 1348.7707041686047,
         "resistance": 1.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -3817,7 +3817,7 @@
         "frequency": 1348.7707041686047,
         "resistance": 10.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -3834,9 +3834,9 @@
         "frequency": 1348.7707041686044,
         "resistance": 100.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -3868,9 +3868,9 @@
         "frequency": 1348.7707041686044,
         "resistance": 10000.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -3936,7 +3936,7 @@
         "frequency": 1338.5613380310797,
         "resistance": 0.010249999999999999
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -3970,9 +3970,9 @@
         "frequency": 1338.5613380310797,
         "resistance": 1.025
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398143,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4038,7 +4038,7 @@
         "frequency": 1338.5613380310795,
         "resistance": 10250.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4055,7 +4055,7 @@
         "frequency": 1338.5613380310797,
         "resistance": 102499.99999999999
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4106,9 +4106,9 @@
         "frequency": 1329.6152305087328,
         "resistance": 0.0105
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.010299956639815,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 3.1086244689504383e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4191,7 +4191,7 @@
         "frequency": 1329.615230508733,
         "resistance": 1050.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4242,9 +4242,9 @@
         "frequency": 1329.6152305087328,
         "resistance": 1050000.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4310,9 +4310,9 @@
         "frequency": 1321.884909401124,
         "resistance": 1.075
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4361,7 +4361,7 @@
         "frequency": 1321.884909401124,
         "resistance": 1075.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4378,9 +4378,9 @@
         "frequency": 1321.884909401124,
         "resistance": 10750.0
       },
-      "actual": -3.0102999566398143,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
-      "absoluteError": 2.220446049250313e-15,
+      "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4480,9 +4480,9 @@
         "frequency": 1315.3301081974819,
         "resistance": 1.1
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4548,9 +4548,9 @@
         "frequency": 1315.3301081974823,
         "resistance": 11000.0
       },
-      "actual": -3.0102999566398143,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
-      "absoluteError": 2.220446049250313e-15,
+      "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4599,7 +4599,7 @@
         "frequency": 1315.3301081974819,
         "resistance": 11000000.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4701,7 +4701,7 @@
         "frequency": 1309.9172270937886,
         "resistance": 1125.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4718,7 +4718,7 @@
         "frequency": 1309.9172270937886,
         "resistance": 11250.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4837,9 +4837,9 @@
         "frequency": 1305.618893288723,
         "resistance": 11.5
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398143,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4888,9 +4888,9 @@
         "frequency": 1305.6188932887228,
         "resistance": 11500.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398085,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 3.552713678800501e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4922,7 +4922,7 @@
         "frequency": 1305.6188932887228,
         "resistance": 1150000.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -4973,9 +4973,9 @@
         "frequency": 1302.413609589978,
         "resistance": 0.11750000000000001
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -4990,9 +4990,9 @@
         "frequency": 1302.4136095899783,
         "resistance": 1.175
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -5041,7 +5041,7 @@
         "frequency": 1302.4136095899783,
         "resistance": 1175.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5075,9 +5075,9 @@
         "frequency": 1302.413609589978,
         "resistance": 117500.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -5092,7 +5092,7 @@
         "frequency": 1302.4136095899783,
         "resistance": 1175000.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5126,7 +5126,7 @@
         "frequency": 1300.2854827769227,
         "resistance": 0.012
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5143,9 +5143,9 @@
         "frequency": 1300.2854827769227,
         "resistance": 0.12
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398143,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -5160,9 +5160,9 @@
         "frequency": 1300.285482776923,
         "resistance": 1.2
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398143,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -5177,7 +5177,7 @@
         "frequency": 1300.285482776923,
         "resistance": 12.0
       },
-      "actual": -3.0102999566398125,
+      "actual": -3.0102999566398116,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5245,7 +5245,7 @@
         "frequency": 1300.2854827769227,
         "resistance": 120000.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5296,9 +5296,9 @@
         "frequency": 1299.224025239962,
         "resistance": 0.01225
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.01029995663981,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 2.220446049250313e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -5381,7 +5381,7 @@
         "frequency": 1299.224025239962,
         "resistance": 1225.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5415,9 +5415,9 @@
         "frequency": 1299.2240252399615,
         "resistance": 122500.00000000001
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398085,
       "expected": -3.010299956639812,
-      "absoluteError": 4.440892098500626e-16,
+      "absoluteError": 3.552713678800501e-15,
       "allowedError": 2e-6,
       "passed": true
     },
@@ -5449,7 +5449,7 @@
         "frequency": 1299.2240252399617,
         "resistance": 12250000.0
       },
-      "actual": -3.0102999566398116,
+      "actual": -3.0102999566398125,
       "expected": -3.010299956639812,
       "absoluteError": 4.440892098500626e-16,
       "allowedError": 2e-6,
@@ -5585,9 +5585,9 @@
         "inductance": 0.00011619999999999999,
         "resistance": 10000.0
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -5602,9 +5602,9 @@
         "inductance": 0.00001162,
         "resistance": 100000.0
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -5721,9 +5721,9 @@
         "inductance": 0.01144,
         "resistance": 102.0
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -5891,9 +5891,9 @@
         "inductance": 0.011260000000000001,
         "resistance": 104.0
       },
-      "actual": -45.00000000000001,
+      "actual": -45.000000000000014,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 1.4210854715202004e-14,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6044,9 +6044,9 @@
         "inductance": 0.11080000000000001,
         "resistance": 10.600000000000001
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6061,9 +6061,9 @@
         "inductance": 0.011080000000000003,
         "resistance": 106.0
       },
-      "actual": -44.99999999999999,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6146,9 +6146,9 @@
         "inductance": 1090.0,
         "resistance": 0.00108
       },
-      "actual": -45.000000000000014,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 1.4210854715202004e-14,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6163,9 +6163,9 @@
         "inductance": 109.00000000000001,
         "resistance": 0.0108
       },
-      "actual": -44.99999999999999,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6180,9 +6180,9 @@
         "inductance": 10.9,
         "resistance": 0.10800000000000001
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6282,9 +6282,9 @@
         "inductance": 0.000010900000000000002,
         "resistance": 108000.0
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6316,7 +6316,7 @@
         "inductance": 1072.0,
         "resistance": 0.0011
       },
-      "actual": -45.00000000000001,
+      "actual": -44.99999999999999,
       "expected": -45.0,
       "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
@@ -6333,9 +6333,9 @@
         "inductance": 107.2,
         "resistance": 0.011000000000000001
       },
-      "actual": -44.99999999999999,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6435,9 +6435,9 @@
         "inductance": 0.00010720000000000002,
         "resistance": 11000.0
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6452,9 +6452,9 @@
         "inductance": 0.00001072,
         "resistance": 110000.00000000001
       },
-      "actual": -44.99999999999999,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6469,9 +6469,9 @@
         "inductance": 1.0720000000000003e-6,
         "resistance": 1100000.0
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6503,9 +6503,9 @@
         "inductance": 105.4,
         "resistance": 0.011200000000000002
       },
-      "actual": -44.99999999999999,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6690,9 +6690,9 @@
         "inductance": 10.36,
         "resistance": 0.11400000000000002
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6741,9 +6741,9 @@
         "inductance": 0.010360000000000003,
         "resistance": 114.00000000000001
       },
-      "actual": -45.00000000000001,
+      "actual": -45.000000000000014,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 1.4210854715202004e-14,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6775,9 +6775,9 @@
         "inductance": 0.00010360000000000001,
         "resistance": 11400.000000000002
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6826,9 +6826,9 @@
         "inductance": 1018.0,
         "resistance": 0.00116
       },
-      "actual": -45.00000000000002,
+      "actual": -45.00000000000001,
       "expected": -45.0,
-      "absoluteError": 2.1316282072803006e-14,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6860,9 +6860,9 @@
         "inductance": 10.18,
         "resistance": 0.11599999999999999
       },
-      "actual": -45.0,
+      "actual": -45.00000000000001,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6877,9 +6877,9 @@
         "inductance": 1.018,
         "resistance": 1.16
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6911,9 +6911,9 @@
         "inductance": 0.010180000000000002,
         "resistance": 115.99999999999999
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -6945,9 +6945,9 @@
         "inductance": 0.00010180000000000001,
         "resistance": 11600.0
       },
-      "actual": -45.00000000000001,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -7013,9 +7013,9 @@
         "inductance": 100.0,
         "resistance": 0.0118
       },
-      "actual": -45.000000000000014,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 1.4210854715202004e-14,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -7030,9 +7030,9 @@
         "inductance": 10.0,
         "resistance": 0.118
       },
-      "actual": -44.99999999999999,
+      "actual": -45.0,
       "expected": -45.0,
-      "absoluteError": 7.105427357601002e-15,
+      "absoluteError": 0.0,
       "allowedError": 0.00002,
       "passed": true
     },
@@ -7132,9 +7132,9 @@
         "inductance": 0.00001,
         "resistance": 118000.0
       },
-      "actual": -45.0,
+      "actual": -44.99999999999999,
       "expected": -45.0,
-      "absoluteError": 0.0,
+      "absoluteError": 7.105427357601002e-15,
       "allowedError": 0.00002,
       "passed": true
     },

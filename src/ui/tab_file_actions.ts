@@ -52,7 +52,11 @@ export class TabFileActions {
       this.dependencies.renderTabsBar();
       this.dependencies.addLog("Esquematico guardado con exito.", "receive");
     } catch (err) {
-      this.dependencies.addLog(`Error al guardar esquematico: ${err}`, "error");
+      this.dependencies.addLog(
+        `No se pudo guardar directamente en [${tab.filePath}]. Abriendo diálogo Guardar Como... (${err})`,
+        "system",
+      );
+      await fallbackToSaveAs();
     }
   }
 
@@ -72,11 +76,16 @@ export class TabFileActions {
       tab.unsaved = false;
       this.dependencies.renderTabsBar();
       this.dependencies.addLog(`Esquematico guardado con exito en: [${savedPath}]`, "receive");
-    } catch (err) {
-      if (err !== "Operacion cancelada por el usuario") {
-        this.dependencies.addLog(`Error al guardar esquematico: ${err}`, "error");
-      } else {
+    } catch (err: unknown) {
+      const errStr = String(err);
+      if (
+        errStr.includes("cancelada por el usuario") ||
+        errStr.includes("canceled") ||
+        errStr.includes("cancelled")
+      ) {
         this.dependencies.addLog("Operacion de guardado cancelada.", "system");
+      } else {
+        this.dependencies.addLog(`Error al guardar esquematico: ${err}`, "error");
       }
     }
   }

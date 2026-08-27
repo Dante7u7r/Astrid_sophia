@@ -70,8 +70,24 @@ mod core_tests {
         include!("tests/wbg_power_tests.rs");
     }
 
+    mod igbt {
+        include!("tests/devices_igbt_tests.rs");
+    }
+
     mod thermal_network {
         include!("tests/thermal_network_tests.rs");
+    }
+
+    mod transient_electrothermal {
+        include!("tests/transient_electrothermal_tests.rs");
+    }
+
+    mod dc_arclength_homotopy {
+        include!("tests/dc_arclength_homotopy_tests.rs");
+    }
+
+    mod optimizer {
+        include!("tests/optimizer_tests.rs");
     }
 
     mod aging {

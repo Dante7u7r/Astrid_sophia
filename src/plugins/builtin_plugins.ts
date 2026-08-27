@@ -98,7 +98,7 @@ export const MEMRISTOR_PLUGIN: AstrydPlugin = {
     id: "org.astryd.device.memristor-hp",
     name: "HP Memristor Device Model",
     version: "1.0.0",
-    author: "Astryd Sophia Core Team",
+    author: "Biaani Core Team",
     description: "Modelo físico de memristor basado en transporte de vacantes de oxígeno con función ventana de Joglekar.",
     type: "custom-device",
     tags: ["memristor", "nanoelectronics", "neuromorphic", "nonlinear"],
@@ -221,7 +221,7 @@ export const POWER_THD_PLUGIN: AstrydPlugin = {
     id: "org.astryd.postproc.power-thd",
     name: "Power & THD Harmonic Analyzer",
     version: "1.1.0",
-    author: "Astryd Sophia Core Team",
+    author: "Biaani Core Team",
     description: "Post-procesador de calidad de energía, potencia RMS y distorsión armónica.",
     type: "analysis-post-proc",
     tags: ["power", "thd", "rms", "energy", "harmonics"],
@@ -254,7 +254,7 @@ export class VcdExportFormat implements CustomExportFormat {
 
     const lines: string[] = [
       `$date ${dateStr} $end`,
-      `$version Astryd Sophia VCD Exporter v1.0 $end`,
+      `$version Biaani VCD Exporter v1.0 $end`,
       `$timescale 1ns $end`,
       `$scope module top $end`,
     ];
@@ -301,7 +301,7 @@ export class MatlabExportFormat implements CustomExportFormat {
     const nodeNames = results[0] ? Object.keys(results[0].nodeVoltages).filter(k => k !== "0") : [];
 
     const lines: string[] = [
-      `%% Astryd Sophia — Script de Simulación Generado Automáticamente`,
+      `%% Biaani — Script de Simulación Generado Automáticamente`,
       `%% Fecha: ${new Date().toISOString()}`,
       `clear; clc; close all;`,
       ``,
@@ -318,7 +318,7 @@ export class MatlabExportFormat implements CustomExportFormat {
     lines.push(
       ``,
       `% Graficar Formas de Onda`,
-      `figure('Name', 'Astryd Sophia Simulation Results', 'NumberTitle', 'off');`,
+      `figure('Name', 'Biaani Simulation Results', 'NumberTitle', 'off');`,
       `hold on; grid on; box on;`,
       ...nodeNames.map(node => `plot(t * 1e3, V_${node}, 'LineWidth', 1.5, 'DisplayName', 'V(${node})');`),
       `xlabel('Tiempo (ms)', 'FontSize', 12);`,
@@ -342,7 +342,7 @@ export const VCD_EXPORT_PLUGIN: AstrydPlugin = {
     id: "org.astryd.export.vcd",
     name: "IEEE 1364 VCD Exporter",
     version: "1.0.0",
-    author: "Astryd Sophia Core Team",
+    author: "Biaani Core Team",
     description: "Exportador estándar VCD para análisis en GTKWave.",
     type: "export-format",
     tags: ["vcd", "gtkwave", "mixed-signal", "digital"],
@@ -355,7 +355,7 @@ export const MATLAB_EXPORT_PLUGIN: AstrydPlugin = {
     id: "org.astryd.export.matlab",
     name: "MATLAB / GNU Octave Exporter",
     version: "1.0.0",
-    author: "Astryd Sophia Core Team",
+    author: "Biaani Core Team",
     description: "Generador de scripts .m para análisis matricial en MATLAB u Octave.",
     type: "export-format",
     tags: ["matlab", "octave", "matrix", "analysis"],

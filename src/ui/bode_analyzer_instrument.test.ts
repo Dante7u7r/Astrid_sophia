@@ -109,4 +109,18 @@ describe("BodeAnalyzerInstrument — Tests de Integración UI", () => {
 
     expect(container.querySelector("#bode-canvas")).not.toBeNull();
   });
+
+  it("ajusta automáticamente el rango de frecuencias al ancho de banda con Auto-Escala", () => {
+    const autoRangeBtn = container.querySelector("#bode-btn-autorange") as HTMLButtonElement;
+    expect(autoRangeBtn).not.toBeNull();
+
+    // Filtro con fc ~ 1.59 kHz
+    autoRangeBtn.click();
+
+    const inputStart = container.querySelector("#bode-input-fstart") as HTMLInputElement;
+    const inputEnd = container.querySelector("#bode-input-fend") as HTMLInputElement;
+
+    expect(parseFloat(inputStart.value)).toBeLessThan(100);
+    expect(parseFloat(inputEnd.value)).toBeGreaterThan(10000);
+  });
 });

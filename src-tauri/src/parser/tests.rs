@@ -358,4 +358,178 @@ mod parser_tests {
             "La instancia malformada debe producir un error accionable"
         );
     }
+
+    #[test]
+    fn test_subcircuit_numeric_internal_node_isolation() {
+        // Circuito con nodo raíz '1' y 2 subcircuitos idénticos que contienen internamente el nodo '1' y '2'.
+        // Deben aislarse completamente sin colisionar ni puentearse.
+        let spice_text = "
+        * Test de aislamiento de nodos internos numéricos
+        .subckt voltage_divider in out
+        R1 in 1 10k
+        R2 1 out 10k
+        .ends voltage_divider
+
+        V1 1 0 10.0
+        X1 1 2 voltage_divider
+        X2 1 3 voltage_divider
+        R_load1 2 0 10k
+        R_load2 3 0 20k
+        ";
+
+        let parsed = parse_spice_netlist_to_native(spice_text).unwrap();
+        assert_eq!(parsed.components.len(), 7); // V1, R_load1, R_load2, + (R1, R2)*2 = 7 comps
+
+        let res = crate::solver::solve_dc_circuit(&parsed).unwrap();
+        // Verificar que out1 y out2 tienen sus respectivos voltajes divisores independientes
+        let v_out1 = *res.node_voltages.get("2").unwrap();
+        let v_out2 = *res.node_voltages.get("3").unwrap();
+
+        // X1: nodo 2 conectado a R_load1 (10k) en serie con R1(10k)+R2(10k) = 10V * (10k / 30k) = 3.333V
+        assert!(
+            (v_out1 - 3.333333).abs() < 1e-4,
+            "v_out1 incorrecto: {}",
+            v_out1
+        );
+        // X2: nodo 3 conectado a R_load2 (20k) en serie con R1(10k)+R2(10k) = 10V * (20k / 40k) = 5.0V
+        assert!((v_out2 - 5.0).abs() < 1e-4, "v_out2 incorrecto: {}", v_out2);
+    }
+
+    #[test]
+    fn test_commercial_opamp_macromodel_with_bsource_and_params() {
+        // Macromodelo SPICE tipo fabricante (B-Source diferencial + etapa de ganancia parametrizada)
+        let spice_text = "
+        * Macromodelo de OpAmp Comercial
+        .subckt OpAmp_Pro in_p in_n out PARAMS: Avol=100000 Rout=50
+        B_diff mid 0 V=tanh(V(in_p, in_n) * 1000) * {Avol}
+        R_out mid out {Rout}
+        .ends OpAmp_Pro
+
+        V_sig 1 0 0.001
+        X_opamp 1 0 2 OpAmp_Pro PARAMS: Avol=100 Rout=10
+        R_load 2 0 100
+        ";
+
+        let parsed = parse_spice_netlist_to_native(spice_text).unwrap();
+        let res = crate::solver::solve_dc_circuit(&parsed).unwrap();
+
+        // V(1)=1mV -> V(in_p, in_n)=1mV -> tanh(0.001*1000)*100 = tanh(1)*100 = 76.1594V
+        // Divisor de salida: 76.1594 * (100 / (100 + 10)) = 69.2358V
+        let v2 = *res.node_voltages.get("2").unwrap();
+        let expected = (1.0f64.tanh() * 100.0) * (100.0 / 110.0);
+        assert!(
+            (v2 - expected).abs() < 0.1,
+            "Tensión V(2) esperada ~{:.3}V, obtenida: {:.3}V",
+            expected,
+            v2
+        );
+    }
+
+    #[test]
+    fn test_bsource_extended_math_functions() {
+        // B-sources con funciones matemáticas industriales: smooth_max, table, if, hypot
+        let spice_text = "
+        * Test de B-Sources con funciones extendidas
+        V1 1 0 3.0
+        B_hypot 2 0 V=hypot(V(1), 4.0)
+        B_smax 3 0 V=smooth_max(V(1), 5.0, 0.1)
+        B_tbl 4 0 V=table(V(1), 0, 0, 2, 10, 4, 20)
+        B_if 5 0 V=if(V(1) - 2.0, 15.0, -15.0)
+        ";
+
+        let parsed = parse_spice_netlist_to_native(spice_text).unwrap();
+        let res = crate::solver::solve_dc_circuit(&parsed).unwrap();
+
+        // 1. hypot(3, 4) = 5.0
+        let v_h = *res.node_voltages.get("2").unwrap();
+        assert!(
+            (v_h - 5.0).abs() < 1e-4,
+            "hypot esperado 5.0V, obtenido: {}",
+            v_h
+        );
+
+        // 2. smooth_max(3, 5, 0.1) ≈ 5.001
+        let v_m = *res.node_voltages.get("3").unwrap();
+        assert!(
+            (v_m - 5.0).abs() < 0.05,
+            "smooth_max esperado ~5.0V, obtenido: {}",
+            v_m
+        );
+
+        // 3. table(3, [0->0, 2->10, 4->20]) -> 3 está en [2,4], interpolación lineal = 15.0
+        let v_t = *res.node_voltages.get("4").unwrap();
+        assert!(
+            (v_t - 15.0).abs() < 1e-4,
+            "table esperado 15.0V, obtenido: {}",
+            v_t
+        );
+
+        // 4. if(3 - 2 > 0, 15, -15) = 15.0
+        let v_if = *res.node_voltages.get("5").unwrap();
+        assert!(
+            (v_if - 15.0).abs() < 1e-4,
+            "if esperado 15.0V, obtenido: {}",
+            v_if
+        );
+    }
+
+    #[test]
+    fn test_evaluate_expression_nested_parentheses_and_units() {
+        use std::collections::HashMap;
+        let mut env = HashMap::new();
+        env.insert("r1".to_string(), 1000.0);
+        env.insert("r2".to_string(), 4000.0);
+        env.insert("mult".to_string(), 2.5);
+
+        // Aritmética con unidades SPICE y paréntesis
+        let val1 = evaluate_expression("((r1 + r2) * mult) / 2", &env).unwrap();
+        assert_eq!(val1, 6250.0);
+
+        let val2 = evaluate_expression("{10k * (2 + 3)}", &env).unwrap();
+        assert_eq!(val2, 50000.0);
+
+        let val3 = evaluate_expression("1 / (2 * pi * 1k * 10n)", &env).unwrap();
+        assert!((val3 - 15915.4943).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_evaluate_expression_functions_and_constants() {
+        use std::collections::HashMap;
+        let env = HashMap::new();
+
+        let val_sqrt = evaluate_expression("sqrt(100) + pow(2, 3)", &env).unwrap();
+        assert_eq!(val_sqrt, 18.0);
+
+        let val_trig = evaluate_expression("sin(pi / 2) + cos(0)", &env).unwrap();
+        assert!((val_trig - 2.0).abs() < 1e-12);
+
+        let val_exp = evaluate_expression("ln(exp(4))", &env).unwrap();
+        assert!((val_exp - 4.0).abs() < 1e-12);
+
+        let val_minmax = evaluate_expression("max(min(10, 20), 5)", &env).unwrap();
+        assert_eq!(val_minmax, 10.0);
+    }
+
+    #[test]
+    fn test_evaluate_expression_in_subcircuit_flattening() {
+        let netlist_str = "
+        * Subcircuit with arithmetic parameters in braces
+        .subckt divider in out gnd params: R_TOP=1k FACTOR=4
+        R1 in out {R_TOP * (FACTOR + 1)}
+        R2 out gnd {R_TOP}
+        .ends
+
+        V1 1 0 10
+        X1 1 2 0 divider R_TOP=2k FACTOR=3
+        ";
+
+        let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+        let r1 = parsed.components.iter().find(|c| c.id == "X1.R1").unwrap();
+        let r2 = parsed.components.iter().find(|c| c.id == "X1.R2").unwrap();
+
+        // R1 = 2k * (3 + 1) = 8000
+        assert_eq!(r1.value, 8000.0);
+        // R2 = 2k = 2000
+        assert_eq!(r2.value, 2000.0);
+    }
 }

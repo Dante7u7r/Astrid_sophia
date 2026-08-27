@@ -5,8 +5,8 @@
 //! 10-bit ADC multiplexer, USART and vector interrupt controller.
 
 use super::{
-    binary::parse_firmware_image,
-    GpioInputs, GpioOutputs, GpioState, McuCore, McuError, McuState, McuType,
+    binary::parse_firmware_image, GpioInputs, GpioOutputs, GpioState, McuCore, McuError, McuState,
+    McuType,
 };
 
 // I/O Register Addresses (Data space offset: +0x20)
@@ -42,12 +42,12 @@ pub const SREG_T: u8 = 0x40; // Transfer bit
 pub const SREG_I: u8 = 0x80; // Global interrupt enable
 
 pub struct Atmega328p {
-    pub pc: u16,              // Program counter (word address: 0x0000..0x3FFF)
-    pub regs: [u8; 32],       // General Purpose Registers R0..R31
-    pub io: [u8; 64],         // Standard I/O registers (0x00..0x3F)
-    pub ext_io: [u8; 160],    // Extended I/O registers (0x60..0xFF)
-    pub sram: [u8; 2048],     // Internal SRAM (0x0100..0x08FF)
-    pub flash: Vec<u8>,       // 32KB Flash (16K words)
+    pub pc: u16,           // Program counter (word address: 0x0000..0x3FFF)
+    pub regs: [u8; 32],    // General Purpose Registers R0..R31
+    pub io: [u8; 64],      // Standard I/O registers (0x00..0x3F)
+    pub ext_io: [u8; 160], // Extended I/O registers (0x60..0xFF)
+    pub sram: [u8; 2048],  // Internal SRAM (0x0100..0x08FF)
+    pub flash: Vec<u8>,    // 32KB Flash (16K words)
     pub cycle_count: u64,
     pub is_sleeping: bool,
     pub irq_in_service: bool,
@@ -164,12 +164,24 @@ impl Atmega328p {
         self.regs[low_idx + 1] = ((val >> 8) & 0xFF) as u8;
     }
 
-    pub fn read_x(&self) -> u16 { self.get_reg_pair(26) }
-    pub fn write_x(&mut self, val: u16) { self.set_reg_pair(26, val); }
-    pub fn read_y(&self) -> u16 { self.get_reg_pair(28) }
-    pub fn write_y(&mut self, val: u16) { self.set_reg_pair(28, val); }
-    pub fn read_z(&self) -> u16 { self.get_reg_pair(30) }
-    pub fn write_z(&mut self, val: u16) { self.set_reg_pair(30, val); }
+    pub fn read_x(&self) -> u16 {
+        self.get_reg_pair(26)
+    }
+    pub fn write_x(&mut self, val: u16) {
+        self.set_reg_pair(26, val);
+    }
+    pub fn read_y(&self) -> u16 {
+        self.get_reg_pair(28)
+    }
+    pub fn write_y(&mut self, val: u16) {
+        self.set_reg_pair(28, val);
+    }
+    pub fn read_z(&self) -> u16 {
+        self.get_reg_pair(30)
+    }
+    pub fn write_z(&mut self, val: u16) {
+        self.set_reg_pair(30, val);
+    }
 
     pub fn fetch_word(&mut self) -> u16 {
         let byte_addr = (self.pc as usize) * 2;
@@ -527,7 +539,11 @@ impl Atmega328p {
             let s = (op & 0x0007) as u8;
             let mask = 1 << s;
             let is_set = (op & 0x0400) == 0;
-            let condition = if is_set { self.get_flag(mask) } else { !self.get_flag(mask) };
+            let condition = if is_set {
+                self.get_flag(mask)
+            } else {
+                !self.get_flag(mask)
+            };
 
             let mut k = ((op >> 3) & 0x007F) as i8;
             if (k & 0x40) != 0 {

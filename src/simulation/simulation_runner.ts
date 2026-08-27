@@ -134,6 +134,14 @@ export interface SimulationRunner {
   /** Detiene la simulación, desregistra el stream IPC, limpia los
    *  runtimes MCU y notifica el cambio de estado. */
   stopInteractiveTransient(): Promise<void>;
+  /** Pausa temporalmente la simulación interactiva sin destruir estados de energía. */
+  pauseInteractiveTransient(): Promise<void>;
+  /** Reanuda la simulación interactiva pausada. */
+  resumeInteractiveTransient(): Promise<void>;
+  /** Avanza un número discreto de pasos o frames cuando la simulación está pausada. */
+  stepInteractiveTransient(steps?: number): Promise<void>;
+  /** Indica si la simulación activa se encuentra actualmente pausada. */
+  isSimulationPaused(): boolean;
   /** Retorna true si hay un listener IPC activo. */
   isSimulationActive(): boolean;
   /** Libera todos los recursos: stop + limpieza de runtimes. */
@@ -165,8 +173,10 @@ let nextRunId = 1;
 
 export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): SimulationRunner {
   let activeContext: SimulationRunContext | null = null;
+  let isPaused: boolean = false;
 
   const releaseLocalResources = (): void => {
+    isPaused = false;
     if (coSimulationWorker) {
       coSimulationWorker.terminate();
       coSimulationWorker = null;
@@ -379,6 +389,48 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       }
     },
 
+    async pauseInteractiveTransient(): Promise<void> {
+      const context = activeContext;
+      if (!context) return;
+      try {
+        await invoke('pause_interactive_transient', { runId: context.runId });
+        isPaused = true;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(`[Simulation Pause] Error al pausar simulación: ${errorMsg}`);
+      }
+    },
+
+    async resumeInteractiveTransient(): Promise<void> {
+      const context = activeContext;
+      if (!context) return;
+      try {
+        await invoke('resume_interactive_transient', { runId: context.runId });
+        isPaused = false;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(`[Simulation Resume] Error al reanudar simulación: ${errorMsg}`);
+      }
+    },
+
+    async stepInteractiveTransient(steps: number = 1): Promise<void> {
+      const context = activeContext;
+      if (!context) return;
+      try {
+        await invoke('step_interactive_transient', {
+          runId: context.runId,
+          steps: Math.max(1, steps),
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        TelemetryPanel.logError(`[Simulation Step] Error en avance de paso: ${errorMsg}`);
+      }
+    },
+
+    isSimulationPaused(): boolean {
+      return isPaused;
+    },
+
     async mutateComponent(
       componentId: string,
       field: InteractiveMutationField,
@@ -387,7 +439,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       invalidateTopologicalCache();
       if (!activeContext) return;
       try {
-        await invoke("mutate_interactive_component", {
+        await invoke("inject_live_mutation", {
           mutation: {
             componentId,
             field,

@@ -473,6 +473,110 @@ export function findPatternTriggerMatch(
   return 0;
 }
 
+/**
+ * Auto-detecta qué canales tienen actividad digital real (transiciones > 0) y calcula
+ * la frecuencia de reloj estimada del bus.
+ */
+export function autoDetectActiveChannels(
+  channelsHistory: readonly (readonly LogicSample[])[],
+  threshold: LogicThresholdConfig,
+): { activeChannels: boolean[]; transitionCounts: number[]; clockFrequencyHz: number | null } {
+  const activeChannels: boolean[] = [];
+  const transitionCounts: number[] = [];
+  let maxTransitions = 0;
+  let fastestChIndex = -1;
+
+  for (let ch = 0; ch < 8; ch++) {
+    const history = channelsHistory[ch];
+    if (!history || history.length < 2) {
+      activeChannels.push(false);
+      transitionCounts.push(0);
+      continue;
+    }
+
+    const transitions = extractTransitions(history, threshold);
+    const count = transitions.length;
+    transitionCounts.push(count);
+    const hasActivity = count > 1;
+    activeChannels.push(hasActivity);
+
+    if (count > maxTransitions) {
+      maxTransitions = count;
+      fastestChIndex = ch;
+    }
+  }
+
+  let clockFrequencyHz: number | null = null;
+  if (fastestChIndex >= 0) {
+    const history = channelsHistory[fastestChIndex];
+    if (history && history.length >= 2) {
+      const dt = history[history.length - 1].time - history[0].time;
+      if (dt > 0 && maxTransitions > 2) {
+        // Frecuencia = número de ciclos completos / dt
+        clockFrequencyHz = (maxTransitions / 2) / dt;
+      }
+    }
+  }
+
+  return { activeChannels, transitionCounts, clockFrequencyHz };
+}
+
+/**
+ * Calcula métricas de integridad digital (conteo de transiciones, glitches y frecuencia).
+ */
+export function calculateDigitalBusMetrics(
+  samples: readonly LogicSample[],
+  threshold: LogicThresholdConfig,
+): { transitionCount: number; glitchCount: number; approxFreqHz: number; dutyCycle: number } {
+  if (samples.length < 2) {
+    return { transitionCount: 0, glitchCount: 0, approxFreqHz: 0, dutyCycle: 50 };
+  }
+
+  const transitions = extractTransitions(samples, threshold);
+  const transitionCount = transitions.length;
+  if (transitionCount < 2) {
+    return { transitionCount: 0, glitchCount: 0, approxFreqHz: 0, dutyCycle: 50 };
+  }
+
+  const totalTime = samples[samples.length - 1].time - samples[0].time;
+  const approxFreqHz = totalTime > 0 ? (transitionCount / 2) / totalTime : 0;
+
+  // Detección de Glitches: pulsos con ancho menor a 1/20 del período medio estimado
+  const avgPulseWidth = totalTime / transitionCount;
+  let glitchCount = 0;
+  let highTime = 0;
+
+  for (let i = 0; i < transitions.length - 1; i++) {
+    const width = transitions[i + 1].time - transitions[i].time;
+    if (transitions[i].level === 1) {
+      highTime += width;
+    }
+    if (width < avgPulseWidth * 0.15 && width > 0) {
+      glitchCount++;
+    }
+  }
+
+  const dutyCycle = totalTime > 0 ? Math.max(0, Math.min(100, (highTime / totalTime) * 100)) : 50;
+
+  return { transitionCount, glitchCount, approxFreqHz, dutyCycle };
+}
+
+/**
+ * Exporta paquetes decodificados (I2C, SPI, UART, Bus Paralelo) en formato CSV estructurado.
+ */
+export function exportDecodedPacketsCsv(
+  packets: readonly { startTime: number; endTime: number; label?: string; hexLabel?: string; charLabel?: string }[],
+  protocolName: string,
+): string {
+  let csv = `Index,Protocol,StartTime_s,EndTime_s,Duration_us,Data\n`;
+  packets.forEach((pkt, idx) => {
+    const durationUs = (pkt.endTime - pkt.startTime) * 1e6;
+    const dataStr = (pkt.label || pkt.hexLabel || pkt.charLabel || "").replace(/,/g, ";");
+    csv += `${idx + 1},${protocolName},${pkt.startTime.toFixed(8)},${pkt.endTime.toFixed(8)},${durationUs.toFixed(3)},"${dataStr}"\n`;
+  });
+  return csv;
+}
+
 /** Formatea una escala de tiempo a texto legible (ns/div, µs/div, ms/div, s/div). */
 export function formatTimeDiv(secondsPerDiv: number): string {
   if (secondsPerDiv >= 1) return `${secondsPerDiv.toFixed(secondsPerDiv % 1 === 0 ? 0 : 2)} s/div`;

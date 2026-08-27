@@ -58,7 +58,7 @@ export class ExporterPanel {
 
   public exportarMedicionesCSV(): void {
     const snapshot = this.createExportSnapshot();
-    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Biaani";
     const { filename, content } = buildMeasurementsCsvExport(snapshot, title);
     this.downloadBlob(new Blob([content], { type: "text/csv;charset=utf-8;" }), filename);
     this.callbacks.addLog(`Mediciones automáticas exportadas a ${filename}`, "receive");
@@ -67,7 +67,7 @@ export class ExporterPanel {
 
   public exportarMedicionesJSON(): void {
     const snapshot = this.createExportSnapshot();
-    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Biaani";
     const { filename, content } = buildMeasurementsJsonExport(snapshot, title);
     this.downloadBlob(new Blob([content], { type: "application/json;charset=utf-8;" }), filename);
     this.callbacks.addLog(`Mediciones automáticas exportadas a ${filename}`, "receive");
@@ -85,7 +85,7 @@ export class ExporterPanel {
   public exportarEsquemaCAD_SVG(theme: CadExportOptions["theme"] = "print_clean"): void {
     const components = this.callbacks.getComponents ? this.callbacks.getComponents() : [];
     const wires = this.callbacks.getWires ? this.callbacks.getWires() : [];
-    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Biaani";
 
     const options: CadExportOptions = {
       theme,
@@ -95,7 +95,7 @@ export class ExporterPanel {
       titleBlockInfo: {
         title,
         author: "Ingeniería Electrónica",
-        organization: "ASTRYD SOPHIA CAD",
+        organization: "BIAANI",
         revision: "1.0",
         date: new Date().toISOString().split("T")[0],
         sheet: "1 / 1",
@@ -110,7 +110,7 @@ export class ExporterPanel {
 
   public exportarListaMaterialesBOM(): void {
     const components = this.callbacks.getComponents ? this.callbacks.getComponents() : [];
-    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Astryd Sophia";
+    const title = this.callbacks.getCircuitTitle ? this.callbacks.getCircuitTitle() : "Circuito Biaani";
 
     const { filename, content } = buildBomExport(components, title);
     this.downloadBlob(new Blob([content], { type: "text/csv;charset=utf-8;" }), filename);
@@ -344,12 +344,12 @@ export class ExporterPanel {
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(22);
       doc.setTextColor(102, 252, 241);
-      doc.text("ASTRYD SOPHIA", 20, 25);
+      doc.text("BIAANI", 20, 25);
       
       doc.setFontSize(10);
       doc.setFont("Helvetica", "normal");
       doc.setTextColor(168, 85, 247);
-      doc.text("SIMULADOR DE CIRCUITOS ELECTRÓNICOS PREMIUM v2.0 EVOLUTION", 20, 31);
+      doc.text("SIMULADOR DE CIRCUITOS ELECTRÓNICOS", 20, 31);
 
       doc.setDrawColor(168, 85, 247);
       doc.setLineWidth(0.5);
@@ -387,7 +387,7 @@ export class ExporterPanel {
       doc.setFontSize(8);
       doc.setFont("Helvetica", "italic");
       doc.setTextColor(100, 100, 100);
-      doc.text("Astryd Sophia - Reporte Científico Generado Localmente", 20, pageHeight - 12);
+      doc.text("Biaani - Reporte Científico Generado Localmente", 20, pageHeight - 12);
       doc.text("Página 1 de 2", pageWidth - 35, pageHeight - 12);
 
       // PÁGINA 2
@@ -449,10 +449,10 @@ export class ExporterPanel {
       doc.setFontSize(8);
       doc.setFont("Helvetica", "italic");
       doc.setTextColor(100, 100, 100);
-      doc.text("Astryd Sophia - Reporte Científico Generado Localmente", 20, pageHeight - 12);
+      doc.text("Biaani - Reporte Científico Generado Localmente", 20, pageHeight - 12);
       doc.text("Página 2 de 2", pageWidth - 35, pageHeight - 12);
 
-      doc.save(`reporte_astryd_sophia_${activeAnalysisMode.toLowerCase()}.pdf`);
+      doc.save(`reporte_biaani_${activeAnalysisMode.toLowerCase()}.pdf`);
       this.callbacks.addLog("Reporte científico PDF descargado exitosamente.", "receive");
       recordExport("pdf", 2);
     } catch (err: unknown) {

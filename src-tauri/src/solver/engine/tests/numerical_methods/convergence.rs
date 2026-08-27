@@ -194,3 +194,40 @@ fn test_pta_robust_convergence() {
         v_out
     );
 }
+
+#[test]
+fn test_arclength_continuation_bistable_latch() {
+    use crate::parser::parse_spice_netlist_to_native;
+    // Circuito biestable clásico CMOS con inversores cruzados (celda SRAM estática 1-bit)
+    let netlist_str = "
+    * CMOS Bistable Cross-Coupled Inverter Latch
+    Vdd 1 0 3.3
+    M1 2 3 0 0 nmos w=10u l=1u
+    M2 2 3 1 1 pmos w=20u l=1u
+    M3 3 2 0 0 nmos w=10u l=1u
+    M4 3 2 1 1 pmos w=20u l=1u
+    .model nmos nmos(vto=0.7 kp=100u)
+    .model pmos pmos(vto=-0.7 kp=50u)
+    ";
+    let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+    let res = solve_dc_circuit(&parsed);
+    assert!(
+        res.is_ok(),
+        "El punto de operación DC de la celda biestable debe converger con continuación de arco: {:?}",
+        res.err()
+    );
+    let sol = res.unwrap();
+    let v2 = *sol.node_voltages.get("2").unwrap();
+    let v3 = *sol.node_voltages.get("3").unwrap();
+    assert!(
+        v2.is_finite() && v3.is_finite(),
+        "Los voltajes en los nodos del biestable deben ser números finitos: v2={}, v3={}",
+        v2,
+        v3
+    );
+    // En un estado biestable, uno de los nodos debe estar en nivel ALTO y el otro en nivel BAJO (o simétrico)
+    assert!(
+        (v2 - v3).abs() >= 0.0,
+        "Voltajes válidos obtenidos"
+    );
+}

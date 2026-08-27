@@ -6,6 +6,7 @@ import {
   type MaskTestResult,
 } from "./oscilloscope_model";
 import type { AcSweepResult, PvtTrace, TimeStepResult } from "./oscilloscope_panel";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface OscilloscopeChannelView {
   node: string | null;
@@ -27,7 +28,8 @@ export function drawAcSweep(
   const logRange = Math.log10(fMax) - logMin;
   if (!Number.isFinite(logRange) || logRange <= 0) return;
 
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.08)";
+  const theme = getInstrumentThemeColors();
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
   for (const decade of [10, 100, 1_000, 10_000, 100_000]) {
     if (decade < fMin || decade > fMax) continue;
@@ -36,7 +38,7 @@ export function drawAcSweep(
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height - 15);
     ctx.stroke();
-    ctx.fillStyle = "rgba(102, 252, 241, 0.4)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "9px var(--font-sans)";
     ctx.textAlign = "center";
     ctx.fillText(decade >= 1_000 ? `${decade / 1_000} kHz` : `${decade} Hz`, x, height - 4);
@@ -73,7 +75,8 @@ export function drawXyTrace(
   xOffset: number,
   yOffset: number,
 ): void {
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.05)";
+  const theme = getInstrumentThemeColors();
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
   for (let x = 0; x < width; x += 40) {
     ctx.beginPath();
@@ -88,7 +91,7 @@ export function drawXyTrace(
     ctx.stroke();
   }
 
-  ctx.strokeStyle = "#38BDF8";
+  ctx.strokeStyle = theme.traceColors.ch2;
   ctx.lineWidth = 2.2;
   ctx.beginPath();
   const indices = selectTraceSampleIndices(
@@ -133,10 +136,11 @@ export function drawTyReticle(
 ): { divWidth: number; divHeight: number } {
   const divWidth = width / 10;
   const divHeight = height / 8;
+  const theme = getInstrumentThemeColors();
 
   // 1. High-precision Dotted Sub-grid
   ctx.save();
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.12)";
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
   ctx.setLineDash([1, 4]);
 
@@ -161,7 +165,7 @@ export function drawTyReticle(
   const centerX = Math.floor(width / 2) + 0.5;
   const centerY = Math.floor(height / 2) + 0.5;
 
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+  ctx.strokeStyle = theme.axisLine;
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.moveTo(0, centerY);
@@ -172,7 +176,7 @@ export function drawTyReticle(
 
   // 3. Calibration Tick marks along center axes (5 sub-ticks per division)
   const subDivX = divWidth / 5;
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.55)";
+  ctx.strokeStyle = theme.axisLine;
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = 0; x <= width; x += subDivX) {
@@ -491,10 +495,27 @@ export function drawOscilloscopeCursors(
   const frequency = deltaTime > 0 ? 1 / deltaTime : 0;
   const deltaSymbol = "\u0394";
   const prefix = sourceLabel ? `[${sourceLabel.toUpperCase()}] ` : "";
-  let label = `${prefix}${deltaSymbol}t: ${(deltaTime * 1_000).toFixed(2)} ms | 1/${deltaSymbol}t: ${frequency.toFixed(1)} Hz | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
+
+  let dtFormatted = `${(deltaTime * 1_000).toFixed(2)} ms`;
+  if (deltaTime < 1e-6) {
+    dtFormatted = `${(deltaTime * 1e9).toFixed(1)} ns`;
+  } else if (deltaTime < 1e-3) {
+    dtFormatted = `${(deltaTime * 1e6).toFixed(1)} µs`;
+  } else if (deltaTime >= 1.0) {
+    dtFormatted = `${deltaTime.toFixed(2)} s`;
+  }
+
+  let freqFormatted = `${frequency.toFixed(1)} Hz`;
+  if (frequency >= 1e6) {
+    freqFormatted = `${(frequency / 1e6).toFixed(2)} MHz`;
+  } else if (frequency >= 1e3) {
+    freqFormatted = `${(frequency / 1e3).toFixed(2)} kHz`;
+  }
+
+  let label = `${prefix}${deltaSymbol}t: ${dtFormatted} | 1/${deltaSymbol}t: ${freqFormatted} | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
   if (signalPeriod && signalPeriod > 0) {
     const phaseDeg = ((deltaTime / signalPeriod) * 360) % 360;
-    label += ` | Phase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
+    label += ` | Fase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
   }
 
   ctx.font = "bold 9px var(--font-sans)";

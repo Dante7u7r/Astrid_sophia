@@ -2,6 +2,8 @@ import type { AnalysisMode } from "./simulation_controls";
 
 export const DEFAULT_TRANSIENT_DURATION_SECONDS = 10;
 
+export type ThemeMode = "dark" | "classroom";
+
 export interface SimulationSettings {
   dt: number;
   tolerance: number;
@@ -9,6 +11,7 @@ export interface SimulationSettings {
   /** Duración física de una corrida TRAN. Opcional para abrir archivos previos. */
   transientDuration?: number;
   defaultAnalysisMode?: AnalysisMode;
+  themeMode?: ThemeMode;
   currentFlowMode?: "conventional" | "electron";
   currentAnimationSpeed?: number;
   showCurrentAnimation?: boolean;
@@ -23,12 +26,32 @@ export interface SimulationSettings {
   speedMultiplier?: number;
 }
 
+export function applyThemeMode(theme: ThemeMode): void {
+  if (typeof document === "undefined") return;
+  if (theme === "classroom") {
+    document.documentElement.setAttribute("data-theme", "classroom");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem("astryd_theme_mode", theme);
+    } catch {
+      /* ignore quota errors */
+    }
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("astryd-theme-changed", { detail: { theme } }));
+  }
+}
+
 export class SettingsModal {
   private settingsModal: HTMLElement | null = null;
   private settingsTriggerBtn: HTMLButtonElement | null = null;
   private btnCancelSettings: HTMLButtonElement | null = null;
   private btnSaveSettings: HTMLButtonElement | null = null;
 
+  private themeModeInput: HTMLSelectElement | null = null;
   private defaultModeInput: HTMLSelectElement | null = null;
   private dtInput: HTMLInputElement | null = null;
   private transientDurationInput: HTMLInputElement | null = null;
@@ -49,10 +72,15 @@ export class SettingsModal {
   private onSaveCallback: (newSettings: SimulationSettings) => void;
 
   constructor(initialSettings: SimulationSettings, onSave: (newSettings: SimulationSettings) => void) {
+    const savedTheme: ThemeMode = (typeof localStorage !== "undefined" && localStorage.getItem("astryd_theme_mode") === "classroom")
+      ? "classroom"
+      : "dark";
+
     this.settings = {
       ...initialSettings,
       transientDuration: initialSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS,
       defaultAnalysisMode: initialSettings.defaultAnalysisMode ?? "DC",
+      themeMode: initialSettings.themeMode ?? savedTheme,
       currentFlowMode: initialSettings.currentFlowMode ?? "conventional",
       currentAnimationSpeed: initialSettings.currentAnimationSpeed ?? 1.0,
       showCurrentAnimation: initialSettings.showCurrentAnimation ?? true,
@@ -64,11 +92,14 @@ export class SettingsModal {
     };
     this.onSaveCallback = onSave;
 
+    applyThemeMode(this.settings.themeMode ?? "dark");
+
     this.settingsModal = document.querySelector("#settings-modal");
     this.settingsTriggerBtn = document.querySelector("#settings-trigger-btn");
     this.btnCancelSettings = document.querySelector("#btn-cancel-settings");
     this.btnSaveSettings = document.querySelector("#btn-save-settings");
 
+    this.themeModeInput = document.querySelector("#settings-theme-mode-input");
     this.defaultModeInput = document.querySelector("#settings-default-mode-input");
     this.dtInput = document.querySelector("#settings-dt-input");
     this.transientDurationInput = document.querySelector("#settings-transient-duration-input");
@@ -111,6 +142,13 @@ export class SettingsModal {
       this.btnSaveSettings.addEventListener("click", () => this.save());
     }
 
+    if (this.themeModeInput) {
+      this.themeModeInput.addEventListener("change", () => {
+        const selectedTheme = (this.themeModeInput?.value as ThemeMode) || "dark";
+        applyThemeMode(selectedTheme);
+      });
+    }
+
     this.settingsModal?.addEventListener("click", (event) => {
       if (event.target === this.settingsModal) this.close();
     });
@@ -126,6 +164,9 @@ export class SettingsModal {
 
   private open(): void {
     if (!this.settingsModal) return;
+    if (this.themeModeInput) {
+      this.themeModeInput.value = this.settings.themeMode ?? "dark";
+    }
     if (this.defaultModeInput) {
       this.defaultModeInput.value = this.settings.defaultAnalysisMode ?? "DC";
     }
@@ -150,7 +191,7 @@ export class SettingsModal {
     this.settingsModal.classList.add("open");
     this.settingsModal.setAttribute("aria-hidden", "false");
     if (this.appViewport) this.appViewport.inert = true;
-    requestAnimationFrame(() => (this.defaultModeInput ?? this.dtInput)?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => (this.themeModeInput ?? this.defaultModeInput ?? this.dtInput)?.focus({ preventScroll: true }));
   }
 
   private close(): void {
@@ -203,6 +244,11 @@ export class SettingsModal {
       this.settings.transientDuration = transientDuration;
       this.settings.tolerance = tolerance;
       this.settings.maxIterations = maxIterations;
+      if (this.themeModeInput) {
+        const theme: ThemeMode = this.themeModeInput.value === "classroom" ? "classroom" : "dark";
+        this.settings.themeMode = theme;
+        applyThemeMode(theme);
+      }
       if (this.defaultModeInput) {
         this.settings.defaultAnalysisMode = this.defaultModeInput.value as AnalysisMode;
       }

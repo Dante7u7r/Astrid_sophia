@@ -1,5 +1,5 @@
-use astryd_sophia_lib::parser::parse_spice_netlist_to_native;
-use astryd_sophia_lib::solver::{solve_transient_circuit, TransientSettings};
+use biaani_lib::parser::parse_spice_netlist_to_native;
+use biaani_lib::solver::{solve_transient_circuit, TransientSettings};
 
 fn main() {
     let netlist_str = "

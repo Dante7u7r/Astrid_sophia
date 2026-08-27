@@ -5,6 +5,7 @@ interface WindowWithWebkitAudio extends Window {
 export class AudioOrchestrator {
   private ctx: AudioContext | null = null;
   private activeBuzzers = new Map<string, { osc: OscillatorNode; gain: GainNode }>();
+  private activeSpeakers = new Map<string, { gain: GainNode; lastPlayTime: number }>();
   private isMuted = false;
 
   private initContext() {
@@ -79,9 +80,68 @@ export class AudioOrchestrator {
     this.activeBuzzers.delete(id);
   }
 
+  /**
+   * Reproduce en tiempo real un búfer de muestras PCM procedentes de la simulación transitoria de un altavoz.
+   */
+  public updateSpeakerPcmBuffer(
+    id: string,
+    samples: readonly number[] | Float32Array,
+    sampleRate: number = 44100,
+    volume: number = 1.0,
+  ) {
+    this.initContext();
+    if (!this.ctx || this.isMuted || samples.length === 0 || volume <= 0.005) {
+      this.stopSpeaker(id);
+      return;
+    }
+
+    const safeSampleRate = Math.max(8000, Math.min(96000, sampleRate));
+    const audioBuffer = this.ctx.createBuffer(1, samples.length, safeSampleRate);
+    const channelData = audioBuffer.getChannelData(0);
+
+    // Normalización con limitador suave (tanh) para evitar saturación acústica digital
+    for (let i = 0; i < samples.length; i++) {
+      const v = samples[i];
+      // Escalar tensión (ej. +/- 5V nominal a +/- 1.0 con compresión suave)
+      channelData[i] = Math.tanh(v * 0.25);
+    }
+
+    let speaker = this.activeSpeakers.get(id);
+    if (!speaker) {
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(Math.min(1.0, volume) * 0.3, this.ctx.currentTime);
+      gain.connect(this.ctx.destination);
+      speaker = { gain, lastPlayTime: this.ctx.currentTime };
+      this.activeSpeakers.set(id, speaker);
+    } else {
+      speaker.gain.gain.setValueAtTime(Math.min(1.0, volume) * 0.3, this.ctx.currentTime);
+    }
+
+    const bufferSource = this.ctx.createBufferSource();
+    bufferSource.buffer = audioBuffer;
+    bufferSource.connect(speaker.gain);
+
+    const startTime = Math.max(this.ctx.currentTime, speaker.lastPlayTime);
+    bufferSource.start(startTime);
+    speaker.lastPlayTime = startTime + audioBuffer.duration;
+  }
+
+  public stopSpeaker(id: string) {
+    const speaker = this.activeSpeakers.get(id);
+    if (speaker) {
+      try {
+        speaker.gain.disconnect();
+      } catch (e) {}
+      this.activeSpeakers.delete(id);
+    }
+  }
+
   public stopAll() {
     for (const id of Array.from(this.activeBuzzers.keys())) {
       this.stopBuzzer(id);
+    }
+    for (const id of Array.from(this.activeSpeakers.keys())) {
+      this.stopSpeaker(id);
     }
   }
 

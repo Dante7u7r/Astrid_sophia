@@ -615,3 +615,145 @@ fn test_middlebrook_loop_gain_direct_sweep() {
         p_dc.magnitude_db
     );
 }
+
+#[test]
+fn test_stability_tian_probe_explicit_buffer() {
+    // Seguidor de tensión OpAmp con sonda stb_probe insertada explícitamente en el lazo
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "OP1".to_string(),
+                comp_type: "opamp".to_string(),
+                value: 100000.0, // Aol = 100 dB
+                pins: vec![
+                    "0".to_string(), // In+ = GND
+                    "2".to_string(), // In- = retorno del lazo desde sonda
+                    "3".to_string(), // V+
+                    "4".to_string(), // V-
+                    "1".to_string(), // Out = salida directa
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_POS".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_NEG".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -15.0,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "STB1".to_string(),
+                comp_type: "stb_probe".to_string(),
+                value: 0.0,
+                pins: vec![
+                    "1".to_string(), // Pin A (origen en OpAmp Out)
+                    "2".to_string(), // Pin B (destino en OpAmp In-)
+                ],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let res = calculate_middlebrook_loop_gain(&netlist, Some("STB1"), None);
+    assert!(res.is_ok(), "El análisis Tian con sonda STB1 debe ejecutarse");
+    let lg = res.unwrap();
+
+    assert!(lg.is_stable, "El seguidor con OpAmp debe ser estable");
+    assert!(lg.sweep_points.len() > 50, "Debe generar barrido denso de frecuencias");
+
+    // Margen de fase debe ser positivo y cercano a 90 grados para polo dominante único
+    if let Some(pm) = lg.phase_margin_deg {
+        assert!(pm > 45.0 && pm < 100.0, "Margen de fase esperado entre 45° y 100°, obtenido: {:.2}°", pm);
+    }
+}
+
+#[test]
+fn test_stability_tian_probe_feedback_divider() {
+    // Amplificador con red de realimentación R1 = 1k, R2 = 9k (Ganancia en lazo cerrado = 10, beta = 0.1)
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "OP1".to_string(),
+                comp_type: "opamp".to_string(),
+                value: 100000.0,
+                pins: vec![
+                    "0".to_string(), // In+ = GND
+                    "3".to_string(), // In- (nodo suma)
+                    "4".to_string(), // V+
+                    "5".to_string(), // V-
+                    "1".to_string(), // Out
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_POS".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 15.0,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_NEG".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -15.0,
+                pins: vec!["5".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "STB1".to_string(),
+                comp_type: "stb_probe".to_string(),
+                value: 0.0,
+                pins: vec!["1".to_string(), "2".to_string()], // Sonda entre salida (1) y red de realimentación (2)
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R2".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 9000.0,
+                pins: vec!["2".to_string(), "3".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let res = calculate_middlebrook_loop_gain(&netlist, Some("STB1"), None);
+    assert!(res.is_ok(), "El análisis Tian con sonda STB1 debe ejecutarse");
+    let lg = res.unwrap();
+
+    assert!(lg.is_stable, "El amplificador con realimentación negativa debe ser estable");
+    // Ganancia DC de lazo esperada: Aol * beta = 100000 * (1/10) = 10000 (80 dB)
+    let p_dc = &lg.sweep_points[0];
+    assert!(
+        p_dc.magnitude_db > 60.0,
+        "La ganancia de lazo DC debe ser > 60 dB con beta=0.1, obtenido: {:.2} dB",
+        p_dc.magnitude_db
+    );
+}

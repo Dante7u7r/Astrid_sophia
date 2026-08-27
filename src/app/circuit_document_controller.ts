@@ -100,7 +100,7 @@ export class CircuitDocumentController implements CircuitDocumentPort {
       component => orchestrator.getComponentPins(component),
     );
     if (integrityError) {
-      const message = `Archivo .astryd rechazado: ${integrityError}`;
+      const message = `Archivo de circuito rechazado: ${integrityError}`;
       this.dependencies.addLog(message, "error");
       this.dependencies.logError(message);
       return null;
@@ -181,7 +181,7 @@ export class CircuitDocumentController implements CircuitDocumentPort {
       }
       return true;
     } catch (err) {
-      this.dependencies.addLog(`Error al aplicar el archivo .astryd: ${(err as Error).message}`, "error");
+      this.dependencies.addLog(`Error al aplicar el archivo de circuito: ${(err as Error).message}`, "error");
       return false;
     }
   }

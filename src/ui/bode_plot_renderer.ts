@@ -6,6 +6,7 @@
  */
 
 import type { BodeDataSet } from "./bode_plot_model";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface BodeRenderOptions {
   readonly fMin?: number;
@@ -27,8 +28,10 @@ export function drawBodePlot(
   dataSet: BodeDataSet | null,
   options: BodeRenderOptions = {},
 ): void {
-  // Fondo oscuro de laboratorio
-  ctx.fillStyle = "#070a14";
+  const theme = getInstrumentThemeColors();
+
+  // Fondo de laboratorio / aula
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   const padLeft = 55;
@@ -83,7 +86,7 @@ export function drawBodePlot(
   };
 
   // 1. Fondos de los dos paneles
-  ctx.fillStyle = "rgba(10, 15, 29, 0.75)";
+  ctx.fillStyle = theme.plotAreaBg;
   ctx.fillRect(padLeft, padTop, plotWidth, magHeight);
   ctx.fillRect(padLeft, phaseTop, plotWidth, phaseHeight);
 
@@ -99,7 +102,7 @@ export function drawBodePlot(
       const x = freqToX(freq);
 
       const isMainDecade = sub === 1;
-      ctx.strokeStyle = isMainDecade ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.04)";
+      ctx.strokeStyle = isMainDecade ? theme.axisLine : theme.gridLine;
       ctx.beginPath();
       ctx.moveTo(x, padTop);
       ctx.lineTo(x, padTop + magHeight);
@@ -109,7 +112,7 @@ export function drawBodePlot(
 
       // Etiquetas en décadas principales
       if (isMainDecade) {
-        ctx.fillStyle = "rgba(226, 232, 240, 0.65)";
+        ctx.fillStyle = theme.axisText;
         ctx.font = "9px 'JetBrains Mono', Consolas, monospace";
         ctx.textAlign = "center";
         const fStr = formatFreq(freq);
@@ -123,7 +126,7 @@ export function drawBodePlot(
   ctx.font = "9px 'JetBrains Mono', Consolas, monospace";
   for (let db = Math.ceil(dbMin / 20) * 20; db <= dbMax; db += 20) {
     const y = dbToY(db);
-    ctx.strokeStyle = db === 0 ? "rgba(56, 189, 248, 0.6)" : "rgba(255, 255, 255, 0.06)";
+    ctx.strokeStyle = db === 0 ? theme.axisLine : theme.gridLine;
     ctx.setLineDash(db === 0 ? [4, 3] : []);
     ctx.beginPath();
     ctx.moveTo(padLeft, y);
@@ -131,22 +134,22 @@ export function drawBodePlot(
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = db === 0 ? "#38bdf8" : "rgba(226, 232, 240, 0.55)";
+    ctx.fillStyle = db === 0 ? theme.traceColors.ch2 : theme.axisText;
     ctx.fillText(`${db > 0 ? "+" : ""}${db} dB`, padLeft - 6, y + 3);
   }
 
   // 4. Retícula y Escalas de Fase (Grados)
   for (let ph = Math.ceil(phaseMin / 45) * 45; ph <= phaseMax; ph += 45) {
     const y = phaseToY(ph);
-    ctx.strokeStyle = ph === -180 ? "rgba(239, 68, 68, 0.6)" : "rgba(255, 255, 255, 0.06)";
-    ctx.setLineDash(ph === -180 ? [4, 3] : []);
+    ctx.strokeStyle = ph === 0 || ph === -180 ? theme.axisLine : theme.gridLine;
+    ctx.setLineDash(ph === -180 ? [3, 3] : []);
     ctx.beginPath();
     ctx.moveTo(padLeft, y);
     ctx.lineTo(padLeft + plotWidth, y);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = ph === -180 ? "#f87171" : "rgba(226, 232, 240, 0.55)";
+    ctx.fillStyle = ph === -180 ? theme.traceColors.ch3 : theme.axisText;
     ctx.fillText(`${ph}°`, padLeft - 6, y + 3);
   }
 

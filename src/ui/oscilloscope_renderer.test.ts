@@ -233,6 +233,34 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
       expect.any(Number),
     );
   });
+
+  it("formatea correctamente cursores en escalas de nanosegundos y MHz", () => {
+    const ctx = createMockContext();
+    // DeltaT = 0.5 * 1e-8 * 10 = 50 ns -> freq = 20 MHz
+    drawOscilloscopeCursors(
+      ctx,
+      800,
+      400,
+      50,
+      0.1,
+      0.6,
+      1.0,
+      2.0,
+      1.0,
+      0,
+      1e-8,
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("50.0 ns"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("20.00 MHz"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+  });
 });
 
 describe("OscilloscopeRenderer — drawWaveformHistogram", () => {

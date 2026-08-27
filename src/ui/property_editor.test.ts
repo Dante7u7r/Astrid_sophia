@@ -7,17 +7,48 @@ import { PropertyEditor } from "./property_editor";
 function installPropertyDom(): void {
   document.body.innerHTML = `
     <div id="properties-form">
+    <div id="prop-batch-header"><span id="prop-batch-title"></span><span id="prop-batch-subtitle"></span></div>
     <input id="prop-id-input" />
     <div id="group-comp-val"><span class="property-label"></span>
       <input id="prop-val-input" />
-      <button id="btn-snap-standard">E24</button>
+      <select id="prop-snap-series"><option value="E24">E24</option><option value="E12">E12</option><option value="E96">E96</option></select>
+      <button id="btn-snap-standard">Ajustar</button>
       <button id="prop-val-dec"></button>
       <button id="prop-val-inc"></button>
+      <div id="prop-val-badge"></div>
       <input id="prop-val-slider" type="range" />
     </div>
     <div id="group-comp-unit"><input id="prop-unit-input" /></div>
+    <div id="prop-op-telemetry-container">
+      <span id="prop-op-region-badge"></span>
+      <span id="prop-op-vdrop"></span>
+      <span id="prop-op-ibranch"></span>
+      <span id="prop-op-power"></span>
+      <div id="prop-op-small-signal-item"><span id="prop-op-gm"></span></div>
+    </div>
+    <details id="details-pins">
+      <table id="prop-pins-table"><tbody id="prop-pins-tbody"></tbody></table>
+    </details>
+    <details id="details-parasitics">
+      <div id="group-comp-esl"><input id="prop-comp-esl" /></div>
+      <div id="group-comp-cpar"><input id="prop-comp-cpar" /></div>
+      <div id="group-comp-tc1"><input id="prop-comp-tc1" /></div>
+      <div id="group-comp-rleak"><input id="prop-comp-rleak" /></div>
+    </details>
+    <details id="details-initial-conditions">
+      <input id="prop-comp-ic" />
+    </details>
+    <details id="details-spice-card">
+      <pre id="prop-spice-card-text"></pre>
+      <button id="btn-copy-spice-card"></button>
+    </details>
     <div id="group-comp-preset">
       <select id="prop-preset-select"></select>
+    </div>
+    <div id="wire-properties-container">
+      <input id="prop-wire-label" />
+      <input id="prop-wire-color" />
+      <button id="btn-reset-wire-color"></button>
     </div>
     <div id="wave-properties-container">
       <select id="prop-wave-type"><option value="dc">CC</option><option value="sine">Seno</option><option value="am">AM</option></select>
@@ -325,5 +356,224 @@ describe("PropertyEditor componentes especiales", () => {
     document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
 
     expect(diode.diodeBv).toBe(5.1);
+  });
+
+  test("actualiza el badge de ingeniería en tiempo real con notación SPICE", () => {
+    const resistor: ComponentInstance = { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 };
+    createEditor(resistor);
+
+    const valInput = document.querySelector("#prop-val-input") as HTMLInputElement;
+    const badge = document.querySelector("#prop-val-badge") as HTMLElement;
+
+    expect(badge.textContent).toContain("1k Ω");
+
+    valInput.value = "4.7k";
+    valInput.dispatchEvent(new Event("input"));
+
+    expect(badge.textContent).toContain("4.7k Ω");
+    expect(badge.className).toContain("prop-badge");
+
+    valInput.value = "{R_LOAD / 2}";
+    valInput.dispatchEvent(new Event("input"));
+
+    expect(badge.textContent).toContain("Expresión: R_LOAD / 2");
+    expect(badge.className).toContain("expression");
+  });
+
+  test("ajusta valor nominal a la serie normalizada E96 cuando está seleccionada", () => {
+    const resistor: ComponentInstance = { id: "R1", type: "resistor", value: 4700, x: 0, y: 0, rotation: 0 };
+    createEditor(resistor);
+
+    const valInput = document.querySelector("#prop-val-input") as HTMLInputElement;
+    valInput.value = "4720";
+
+    const snapSeries = document.querySelector("#prop-snap-series") as HTMLSelectElement;
+    snapSeries.value = "E96";
+
+    const btnSnap = document.querySelector("#btn-snap-standard") as HTMLButtonElement;
+    btnSnap.click();
+
+    // 4.75k es el valor normalizado en E96
+    expect(resistor.value).toBe(4750);
+  });
+
+  test("aplica y persiste parásitos de alta frecuencia (ESL, Cp, TC1, Rleak) y condición inicial (IC)", () => {
+    const resistor: ComponentInstance = { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 };
+    createEditor(resistor);
+
+    (document.querySelector("#prop-comp-esl") as HTMLInputElement).value = "2.5n";
+    (document.querySelector("#prop-comp-cpar") as HTMLInputElement).value = "0.5p";
+    (document.querySelector("#prop-comp-tc1") as HTMLInputElement).value = "50";
+    (document.querySelector("#prop-comp-ic") as HTMLInputElement).value = "0";
+
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+
+    expect(resistor.esr).toBe(2.5e-9);
+    expect(resistor.cpar).toBe(0.5e-12);
+    expect(resistor.tc1).toBe(50);
+  });
+
+  test("calcula y muestra telemetría del punto de operación (.OP) y conexiones de pines", () => {
+    const bjt: ComponentInstance = {
+      id: "Q1",
+      type: "npn",
+      value: 100,
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+
+    const orchestrator = {
+      selectedComponent: bjt,
+      renameComponent: vi.fn(() => null),
+      getComponentPins: vi.fn(() => [
+        { name: "B", label: "B", pinIndex: 0, x: 0, y: 0 },
+        { name: "C", label: "C", pinIndex: 1, x: 0, y: 0 },
+        { name: "E", label: "E", pinIndex: 2, x: 0, y: 0 },
+      ]),
+      simulationActive: true,
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      getVoltageMap: () => ({ "1": 10.0, "2": 0.72, "0": 0.0 }),
+      getCurrentMap: () => ({ "Q1": 0.005 }),
+      getPinNode: (key: string) => {
+        if (key === "Q1:0") return "2"; // B -> node 2 (0.72V)
+        if (key === "Q1:1") return "1"; // C -> node 1 (10V)
+        if (key === "Q1:2") return "0"; // E -> node 0 (0V)
+        return "0";
+      },
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(bjt);
+
+    const regionBadge = document.querySelector("#prop-op-region-badge") as HTMLElement;
+    expect(regionBadge.textContent).toContain("Activa Directa");
+
+    const vdrop = document.querySelector("#prop-op-vdrop") as HTMLElement;
+    expect(vdrop.textContent).toContain("10 V");
+
+    const spiceText = document.querySelector("#prop-spice-card-text") as HTMLElement;
+    expect(spiceText.textContent).toContain("Q_Q1 1 2 0");
+    expect(spiceText.textContent).toContain(".MODEL");
+  });
+
+  test("edita múltiples componentes en lote simultáneamente", () => {
+    const r1: ComponentInstance = { id: "R1", type: "resistor", value: 1000, tolerance: 5, powerRating: 0.25, x: 0, y: 0, rotation: 0 };
+    const r2: ComponentInstance = { id: "R2", type: "resistor", value: 1000, tolerance: 5, powerRating: 0.25, x: 0, y: 0, rotation: 0 };
+    const r3: ComponentInstance = { id: "R3", type: "resistor", value: 1000, tolerance: 5, powerRating: 0.25, x: 0, y: 0, rotation: 0 };
+
+    const orchestrator = {
+      selectedComponent: r1,
+      selectedComponents: [r1, r2, r3],
+      renameComponent: vi.fn(() => null),
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(r1);
+
+    const batchHeader = document.querySelector("#prop-batch-header") as HTMLElement;
+    expect(batchHeader.style.display).toBe("flex");
+    expect((document.querySelector("#prop-batch-title") as HTMLElement).textContent).toContain("3 Resistores");
+
+    // Modificar valor a 4.7k y tolerancia a 1%
+    (document.querySelector("#prop-val-input") as HTMLInputElement).value = "4.7k";
+    (document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement).value = "1";
+    document.querySelector<HTMLButtonElement>("#btn-apply-properties")!.click();
+
+    expect(r1.value).toBe(4700);
+    expect(r1.tolerance).toBe(1);
+    expect(r2.value).toBe(4700);
+    expect(r2.tolerance).toBe(1);
+    expect(r3.value).toBe(4700);
+    expect(r3.tolerance).toBe(1);
+  });
+
+  test("asigna sondas CH1 y CH2 al hacer clic en los micro-botones de la tabla de pines", () => {
+    const comp: ComponentInstance = { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 };
+    const probeAssignments: { ch1?: string; ch2?: string } = {};
+
+    const orchestrator = {
+      selectedComponent: comp,
+      getComponentPins: vi.fn(() => [
+        { name: "1", label: "1", pinIndex: 0, x: 0, y: 0 },
+        { name: "2", label: "2", pinIndex: 1, x: 0, y: 0 },
+      ]),
+      simulationActive: true,
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      getVoltageMap: () => ({ "NET_IN": 5.0, "0": 0.0 }),
+      getCurrentMap: () => ({ "R1": 0.005 }),
+      getPinNode: (key: string) => (key === "R1:0" ? "NET_IN" : "0"),
+      setProbeNode: (ch, nodeId) => {
+        probeAssignments[ch] = nodeId;
+      },
+      getProbeNodes: () => probeAssignments,
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(comp);
+
+    const ch1Btn = document.querySelector<HTMLButtonElement>('.btn-pin-probe[data-channel="ch1"][data-node-id="NET_IN"]');
+    expect(ch1Btn).not.toBeNull();
+    ch1Btn!.click();
+
+    expect(probeAssignments.ch1).toBe("NET_IN");
+  });
+
+  test("notifica onComponentPropertiesApplied al hacer clic en aplicar propiedades sobre una fuente", () => {
+    const comp: ComponentInstance = { id: "V1", type: "vsource", value: 5, x: 0, y: 0, rotation: 0, waveType: "sine", amplitude: 5, frequency: 1000 };
+    const orchestrator = {
+      selectedComponent: comp,
+      selectedComponents: [comp],
+      renameComponent: vi.fn(() => null),
+    } as unknown as CanvasOrchestrator;
+
+    const onComponentPropertiesApplied = vi.fn();
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      onComponentPropertiesApplied,
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(comp);
+
+    const ampInput = document.querySelector<HTMLInputElement>("#prop-wave-amp");
+    if (ampInput) ampInput.value = "10";
+
+    const applyBtn = document.querySelector<HTMLButtonElement>("#btn-apply-properties");
+    expect(applyBtn).not.toBeNull();
+    applyBtn!.click();
+
+    expect(onComponentPropertiesApplied).toHaveBeenCalledWith(comp);
+    expect(comp.amplitude).toBe(10);
   });
 });

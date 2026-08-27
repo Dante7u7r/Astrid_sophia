@@ -83,6 +83,97 @@ impl Dual3 {
         ];
         Dual3 { val, deriv }
     }
+
+    pub fn max_val(self, other: f64) -> Self {
+        if self.val > other {
+            self
+        } else {
+            Dual3 {
+                val: other,
+                deriv: [0.0; 3],
+            }
+        }
+    }
+
+    pub fn min_val(self, other: f64) -> Self {
+        if self.val < other {
+            self
+        } else {
+            Dual3 {
+                val: other,
+                deriv: [0.0; 3],
+            }
+        }
+    }
+
+    pub fn max(self, other: Dual3) -> Self {
+        if self.val >= other.val {
+            self
+        } else {
+            other
+        }
+    }
+
+    pub fn min(self, other: Dual3) -> Self {
+        if self.val <= other.val {
+            self
+        } else {
+            other
+        }
+    }
+
+    pub fn abs(self) -> Self {
+        if self.val >= 0.0 {
+            self
+        } else {
+            -self
+        }
+    }
+
+    pub fn sin(self) -> Self {
+        let val = self.val.sin();
+        let factor = self.val.cos();
+        let deriv = [
+            self.deriv[0] * factor,
+            self.deriv[1] * factor,
+            self.deriv[2] * factor,
+        ];
+        Dual3 { val, deriv }
+    }
+
+    pub fn cos(self) -> Self {
+        let val = self.val.cos();
+        let factor = -self.val.sin();
+        let deriv = [
+            self.deriv[0] * factor,
+            self.deriv[1] * factor,
+            self.deriv[2] * factor,
+        ];
+        Dual3 { val, deriv }
+    }
+
+    pub fn atan(self) -> Self {
+        let val = self.val.atan();
+        let factor = 1.0 / (1.0 + self.val * self.val);
+        let deriv = [
+            self.deriv[0] * factor,
+            self.deriv[1] * factor,
+            self.deriv[2] * factor,
+        ];
+        Dual3 { val, deriv }
+    }
+
+    pub fn smooth_max(self, other: Dual3, delta: f64) -> Self {
+        let diff = self - other;
+        let root = (diff * diff + delta * delta).sqrt();
+        (self + other + root) * 0.5
+    }
+
+    pub fn smooth_min(self, other: Dual3, delta: f64) -> Self {
+        let diff = self - other;
+        let root = (diff * diff + delta * delta).sqrt();
+        (self + other - root) * 0.5
+    }
 }
 
 // Sobrecarga de Add para Dual3 + Dual3

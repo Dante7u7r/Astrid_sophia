@@ -93,7 +93,7 @@ function generateJsonSchema() {
   return `${JSON.stringify({
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: catalog.schemaId,
-    title: "Astryd Sophia Feedback Event V1",
+    title: "Biaani Feedback Event V1",
     description: "Contrato local-first para eventos de retroalimentacion.",
     oneOf: catalog.events.map(event => {
       const payloadProperties = Object.fromEntries(

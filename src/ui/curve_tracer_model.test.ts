@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEVICE_PRESETS, generateDeviceTrace } from "./curve_tracer_model";
+import { calculateLoadLineAndQPoint, DEVICE_PRESETS, generateDeviceTrace } from "./curve_tracer_model";
 
 describe("CurveTracerModel", () => {
   it("traza la curva I-V de un diodo 1N4148 y extrae Vf @ 1mA", () => {
@@ -100,5 +100,27 @@ describe("CurveTracerModel", () => {
     const lastPt = result.traces[0].points[result.traces[0].points.length - 1];
     expect(lastPt.v).toBeCloseTo(10.0, 4);
     expect(lastPt.i).toBeCloseTo(0.010, 4); // 10V / 1kΩ = 10mA
+  });
+
+  it("calcula la recta de carga DC y el punto de polarización Q en la curva central", () => {
+    const preset = DEVICE_PRESETS.find((d) => d.id === "2N2222A")!;
+    const result = generateDeviceTrace(preset, {
+      vMax: 10.0,
+      mode: "output",
+      numSteps: 5,
+      numPoints: 100,
+    });
+
+    const { loadLinePoints, qPoint } = calculateLoadLineAndQPoint(10.0, 1000, result.traces);
+    expect(loadLinePoints).toHaveLength(2);
+    expect(loadLinePoints[0].v).toBe(0);
+    expect(loadLinePoints[0].i).toBeCloseTo(0.010, 4); // 10V / 1kΩ = 10mA
+    expect(loadLinePoints[1].v).toBe(10);
+    expect(loadLinePoints[1].i).toBe(0);
+
+    expect(qPoint).not.toBeNull();
+    expect(qPoint!.v).toBeGreaterThan(0);
+    expect(qPoint!.v).toBeLessThan(10);
+    expect(qPoint!.i).toBeGreaterThan(0);
   });
 });

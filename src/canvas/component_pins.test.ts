@@ -21,13 +21,19 @@ describe("getComponentPins", () => {
     expect(pins[39]).toMatchObject({ componentId: "U1", pinIndex: 39, x: 160, y: 0 });
   });
 
-  it("aplica rotacion y espejo a componentes de dos pines", () => {
-    const pins = getComponentPins(component({ id: "R1", type: "resistor", rotation: 90, mirror: true }));
+  it("aplica rotacion y espejo horizontal y vertical a componentes", () => {
+    const pinsH = getComponentPins(component({ id: "R1", type: "resistor", rotation: 90, mirror: true }));
 
-    expect(pins[0].x).toBeCloseTo(100);
-    expect(pins[0].y).toBeCloseTo(240);
-    expect(pins[1].x).toBeCloseTo(100);
-    expect(pins[1].y).toBeCloseTo(160);
+    expect(pinsH[0].x).toBeCloseTo(100);
+    expect(pinsH[0].y).toBeCloseTo(240);
+    expect(pinsH[1].x).toBeCloseTo(100);
+    expect(pinsH[1].y).toBeCloseTo(160);
+
+    const pinsV = getComponentPins(component({ id: "R2", type: "resistor", rotation: 0, mirrorY: true }));
+    expect(pinsV[0].x).toBeCloseTo(60);
+    expect(pinsV[0].y).toBeCloseTo(200);
+    expect(pinsV[1].x).toBeCloseTo(140);
+    expect(pinsV[1].y).toBeCloseTo(200);
   });
 
   it("soporta numero dinamico de pines en subcircuitos X", () => {
@@ -35,7 +41,7 @@ describe("getComponentPins", () => {
 
     expect(pins).toHaveLength(6);
     expect(pins.map((pin) => pin.pinIndex)).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(pins[0].x).toBe(40);
-    expect(pins[1].x).toBe(160);
+    expect(pins[0].x).toBe(60);
+    expect(pins[3].x).toBe(140);
   });
 });

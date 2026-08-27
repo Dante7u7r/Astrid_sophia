@@ -54,6 +54,7 @@ import {
   createComponent,
   duplicateSelection,
   mirrorSelection,
+  mirrorSelectionVertical,
   removeComponentFromCircuit,
   removeSelection,
   renameComponentInCircuit,
@@ -141,6 +142,11 @@ export {
   drawSParameterMarkers,
   drawTemporaryWire,
 } from "./canvas/render_overlays";
+export {
+  SchematicSpatialIndex,
+  SpatialHashGrid,
+  getWireBounds,
+} from "./canvas/spatial_index";
 
 export interface Point2D {
   x: number;
@@ -156,10 +162,16 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'zener_diode' | 'schottky_diode' | 'fuse' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'opamp_ideal' | 'pmos' | 'npn' | 'pnp' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'x' | 'potentiometer' | 'ldr' | 'thermistor' | 'dmm' | 'and_gate' | 'or_gate' | 'not_gate' | 'nand_gate' | 'nor_gate' | 'xor_gate' | 'opto' | 'njf' | 'pjf' | 'bsim3nmos' | 'bsim3pmos' | 'bsim4nmos' | 'bsim4pmos' | 'net_label' | 'text_note' | 'power_port';
+  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'zener_diode' | 'schottky_diode' | 'fuse' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'opamp_ideal' | 'pmos' | 'npn' | 'pnp' | 'igbt' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'mcu_pic16' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'switch_spdt' | 'switch_dpdt' | 'pushbutton' | 'dc_motor' | 'servo_motor' | 'stepper_motor' | 'speaker' | 'solenoid' | 'ssr' | 'seven_segment' | 'lcd_16x2' | 'x' | 'potentiometer' | 'ldr' | 'thermistor' | 'dmm' | 'and_gate' | 'or_gate' | 'not_gate' | 'nand_gate' | 'nor_gate' | 'xor_gate' | 'opto' | 'njf' | 'pjf' | 'bsim3nmos' | 'bsim3pmos' | 'bsim4nmos' | 'bsim4pmos' | 'net_label' | 'text_note' | 'power_port' | 'vcvs' | 'vccs' | 'ccvs' | 'cccs' | 'flipflop_d' | 'flipflop_jk' | 'bcd_to_7seg' | 'shift_register_595' | 'ic_4017' | 'ic_7490' | 'ic_74193' | 'ic_74138' | 'ic_74151' | 'scr' | 'triac' | 'diac' | 'tl431' | 'wattmeter' | 'logic_probe' | 'pulse_generator' | 'frequency_counter' | 'stb_probe';
   value: number | string;
   w?: number;
   l?: number;
+  igbtKp?: number;
+  igbtAlpha?: number;
+  igbtTau?: number;
+  igbtWb?: number;
+  igbtCge?: number;
+  igbtCgc?: number;
   dmmValue?: string;
   wiperPosition?: number; // Cursor del potenciómetro (0.01 - 0.99)
   lux?: number; // Iluminación en Luxes para LDR (1 - 10000)
@@ -170,6 +182,7 @@ export interface ComponentInstance {
   rotation: number; // 0, 90, 180, 270 degrees
   selected?: boolean;
   mirror?: boolean;
+  mirrorY?: boolean;
   waveType?: string;
   amplitude?: number;
   frequency?: number;
@@ -181,15 +194,17 @@ export interface ComponentInstance {
   relayClosed?: boolean;
   buzzerLevel?: number;
   label?: string; // Etiqueta de texto o nombre de red
-  terminalType?: "signal" | "power" | "ground" | "input" | "output" | "generator" | "no_connect"; // Tipo de terminal EDA (Proteus / Altium)
+  terminalType?: "signal" | "power" | "ground" | "input" | "output" | "bidirectional" | "generator" | "bus_tap" | "test_point" | "no_connect"; // Tipo de terminal EDA (Proteus / Altium / KiCad)
+  terminalStyle?: "standard" | "arrow" | "circle" | "bar" | "triangle" | "earth" | "chassis" | "digital" | "analog"; // Estilo visual del terminal / masa / riel
   voltage?: number; // Tensión asignada al terminal de alimentación (V)
   fontSize?: number; // Tamaño de fuente para notas
   textColor?: string; // Color personalizado de texto
-  noteTheme?: "card" | "plain" | "warning" | "outline"; // Estilo visual de la nota
+  noteTheme?: "card" | "plain" | "warning" | "info" | "success" | "outline"; // Estilo visual de la nota
   
   // MCU properties
   firmwareHex?: string; // HEX content
   firmware?: Uint8Array; // compiled binary
+  esp32SourceCode?: string; // Código fuente C++/Arduino para ESP32
   mcuClockSpeed?: number;
   mcuRuntime?: McuRuntime | null;
   mcuBridge?: McuSpiceBridge | null;
@@ -225,6 +240,21 @@ export interface ComponentInstance {
   phase?: number; // Fase inicial en grados (0 - 360)
   modFrequency?: number; // Frecuencia de modulación AM (Hz)
   modIndex?: number; // Índice de modulación AM (0.0 - 1.0)
+  sequentialState?: { q?: boolean; qNot?: boolean; prevClk?: boolean; shiftReg?: number; latchReg?: number; [key: string]: unknown };
+  holdingCurrent?: number; // Corriente de mantenimiento Ih (A)
+  gateTriggerVoltage?: number; // Tensión de disparo de puerta Vgt (V)
+  gateTriggerCurrent?: number; // Corriente de disparo de puerta Igt (A)
+  breakoverVoltage?: number; // Tensión de ruptura directa Vbo (V)
+  refVoltage?: number; // Tensión de referencia interna Vref (V)
+  powerState?: { isLatched?: boolean; [key: string]: unknown };
+  activePower?: number; // Potencia activa W (Vatímetro)
+  apparentPower?: number; // Potencia aparente VA (Vatímetro)
+  powerFactor?: number; // Factor de potencia cos(phi) (Vatímetro)
+  frequencyReading?: number; // Frecuencia medida Hz (Frecuencímetro)
+  periodReading?: number; // Periodo medido s (Frecuencímetro)
+  dutyCycleReading?: number; // Ciclo de trabajo medido % (Frecuencímetro)
+  logicState?: "1" | "0" | "X"; // Estado lógico actual (Sonda Lógica)
+  pulseMode?: "single" | "continuous"; // Modo de disparo del Inyector de Pulsos
   sourceResistance?: number; // Resistencia interna de la fuente Rs (Ohms)
   acMag?: number; // Magnitud AC para barridos en frecuencia / Bode (V o A)
   acPhase?: number; // Fase AC en grados para barridos en frecuencia / Bode
@@ -234,6 +264,11 @@ export interface ComponentInstance {
   powerRating?: number; // Potencia nominal de disipación (W ej. 0.25, 0.5, 1.0)
   voltageRating?: number; // Tensión máxima admisible (V ej. 16, 25, 50, 100, 400)
   esr?: number; // Resistencia Serie Equivalente (Ohms)
+  cpar?: number; // Capacitancia parásita en paralelo Cp (F)
+  tc1?: number; // Coeficiente de temperatura de primer orden TC1 (ppm/°C)
+  rleak?: number; // Resistencia de fuga dieléctrica Rleak (Ohms)
+  initialCondition?: number; // Condición inicial transitoria .IC (V o A)
+  expression?: string; // Expresión paramétrica matemática EDA ej. {R_LOAD/2}
   dielectricType?: "ceramic" | "electrolytic" | "tantalum" | "film"; // Tipo de dieléctrico
   dcResistance?: number; // Resistencia de devanado DCR (Ohms)
   currentRating?: number; // Corriente máxima de trabajo (A)
@@ -276,8 +311,22 @@ export interface ComponentInstance {
   opampRout?: number;
   opampVos?: number;
   opampIb?: number;
+  opampIsc?: number;
+  opampIq?: number;
+  opampVdrop?: number;
+  opampIos?: number;
+  opampCmrr?: number;
+  opampPsrr?: number;
+  opampEn?: number;
+  opampIn?: number;
+  opampFc?: number;
 
   // Parámetros de compuertas lógicas digitales y de señal mixta
+  gateInputs?: number; // Número de entradas (2, 3, 4, 8)
+  logicFamily?: "ttl" | "cmos5v" | "cmos3v3" | "lvcmos1v8" | "cmos12v" | "custom";
+  propagationDelay?: number; // Tiempo de propagación tpd (s)
+  schmittTrigger?: boolean; // Entrada con histéresis Schmitt
+  openCollector?: boolean; // Salida colector abierto / open-drain
   gateTrise?: number;
   gateTfall?: number;
   gateRout?: number;
@@ -285,6 +334,31 @@ export interface ComponentInstance {
   gateVlow?: number;
   riseDelay?: number;
   fallDelay?: number;
+  symbolStandard?: "IEEE" | "IEC";
+
+  // Parámetros de actuadores, motores y displays
+  motorRpm?: number;
+  motorAngle?: number;
+  servoAngle?: number;
+  stepperSteps?: number;
+  speakerPower?: number;
+  solenoidPosition?: number;
+  solenoidEngaged?: boolean;
+  ssrActive?: boolean;
+  displayChar?: string;
+  displayLine2?: string;
+  segmentStates?: Record<string, boolean>;
+  isMomentary?: boolean;
+  switchPosition?: number;
+  buzzerActive?: boolean;
+  buzzerMode?: "active" | "passive";
+  lampVoltage?: number;
+  lampBurned?: boolean;
+  sevenSegmentType?: "common_anode" | "common_cathode";
+
+  // Layout de subcircuitos SPICE (DIP, TO-220, Op-Amp)
+  subcircuitLayout?: "to220" | "opamp_5p" | "dip" | "generic_box";
+  instanceParams?: Record<string, number | string>;
 }
 
 export interface PinInstance {
@@ -370,6 +444,7 @@ export class CanvasOrchestrator {
   public activeWireDrag: WireDragState | null = null;
   private dragStartOffset: Point2D = { x: 0, y: 0 };
   private dragStartOffsets: Record<string, Point2D> = {};
+  private dragInitialPositions: Map<string, Point2D> = new Map();
 
   // Caja de Selección CAD
   public selectionStart: Point2D | null = null;
@@ -382,6 +457,14 @@ export class CanvasOrchestrator {
   public showThermalHeatmap: boolean = true;
   public showReactiveFields: boolean = true;
   public showTelemetryHud: boolean = true;
+  public symbolStandard: "IEEE" | "IEC" = "IEEE";
+
+  public setSymbolStandard(std: "IEEE" | "IEC"): void {
+    if (this.symbolStandard !== std) {
+      this.symbolStandard = std;
+      this.render();
+    }
+  }
 
   constructor(canvas: HTMLCanvasElement, overlayCanvas?: HTMLCanvasElement | null) {
     this.canvas = canvas;
@@ -653,6 +736,7 @@ export class CanvasOrchestrator {
   }
 
   public checkHover(worldX: number, worldY: number): void {
+    this.sceneRenderer.spatialIndex.ensureUpdated(this.components, this.wires);
     const hover = resolveHoverState(
       this.components,
       this.wires,
@@ -665,6 +749,7 @@ export class CanvasOrchestrator {
         simulationActive: this.simulationActive,
         pinThreshold: this.getPinHitThreshold(),
       },
+      this.sceneRenderer.spatialIndex,
     );
     this.hoveredComponent = hover.hoveredComponent;
     this.hoveredPin = hover.hoveredPin;
@@ -717,16 +802,24 @@ export class CanvasOrchestrator {
     }
   }
 
-  public stopWireHandleDragging(): void {
+  public stopWireHandleDragging(): boolean {
+    let hasChanged = false;
     if (this.activeWireDrag && this.activeWireDrag.wire.points) {
       this.activeWireDrag.wire.points = simplifyOrthogonalWirePath(this.activeWireDrag.wire.points);
+      const init = this.activeWireDrag.initialPoints;
+      const curr = this.activeWireDrag.wire.points;
+      if (init.length !== curr.length || init.some((p, i) => p.x !== curr[i].x || p.y !== curr[i].y)) {
+        hasChanged = true;
+      }
     }
     this.isDraggingWireHandle = false;
     this.activeWireDrag = null;
     this.canvas.style.cursor = 'default';
+    return hasChanged;
   }
 
   public selectComponentAt(worldX: number, worldY: number, isShift: boolean = false): ComponentInstance | null {
+    this.sceneRenderer.spatialIndex.ensureUpdated(this.components, this.wires);
     const result = selectComponentAt(
       this.components,
       {
@@ -739,6 +832,7 @@ export class CanvasOrchestrator {
       worldX,
       worldY,
       isShift,
+      this.sceneRenderer.spatialIndex,
     );
     this.selectedComponent = result.selectedComponent;
     this.selectedComponents = result.selectedComponents;
@@ -767,6 +861,27 @@ export class CanvasOrchestrator {
     );
     this.dragStartOffsets = offsets.dragStartOffsets;
     this.dragStartOffset = offsets.dragStartOffset;
+    this.dragInitialPositions = new Map();
+    const list = this.selectedComponents.length > 0
+      ? this.selectedComponents
+      : (this.selectedComponent ? [this.selectedComponent] : []);
+    for (const c of list) {
+      this.dragInitialPositions.set(c.id, { x: c.x, y: c.y });
+    }
+  }
+
+  public hasSelectedMovedDuringDrag(): boolean {
+    if (!this.dragInitialPositions || this.dragInitialPositions.size === 0) return false;
+    const list = this.selectedComponents.length > 0
+      ? this.selectedComponents
+      : (this.selectedComponent ? [this.selectedComponent] : []);
+    for (const c of list) {
+      const init = this.dragInitialPositions.get(c.id);
+      if (init && (init.x !== c.x || init.y !== c.y)) {
+        return true;
+      }
+    }
+    return false;
   }
   public handleDragging(worldX: number, worldY: number): void {
     if (!this.isDragging) return;
@@ -811,6 +926,7 @@ export class CanvasOrchestrator {
   public stopDragging(): void {
     this.isDragging = false;
     this.activeAlignmentGuides = [];
+    this.dragInitialPositions.clear();
     this.canvas.style.cursor = 'default';
   }
 
@@ -865,6 +981,11 @@ export class CanvasOrchestrator {
 
   public mirrorSelectedComponent(): void {
     mirrorSelection(this.selectedComponents, this.selectedComponent);
+    this.syncWireConnections();
+  }
+
+  public mirrorSelectedComponentVertical(): void {
+    mirrorSelectionVertical(this.selectedComponents, this.selectedComponent);
     this.syncWireConnections();
   }
 

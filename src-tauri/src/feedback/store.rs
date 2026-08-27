@@ -196,7 +196,7 @@ impl FeedbackState {
         let (ready_tx, ready_rx) = mpsc::channel();
 
         let worker = thread::Builder::new()
-            .name("astryd-feedback-store".to_string())
+            .name("biaani-feedback-store".to_string())
             .spawn(move || {
                 let initialized = open_database(&database_path);
                 match initialized {
@@ -938,7 +938,7 @@ mod store_tests {
     fn temp_root(name: &str) -> PathBuf {
         let serial = TEST_ID.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!(
-            "astryd-feedback-{name}-{}-{serial}",
+            "biaani-feedback-{name}-{}-{serial}",
             std::process::id()
         ))
     }

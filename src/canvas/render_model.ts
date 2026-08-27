@@ -68,7 +68,11 @@ export function createComponentLookup(
 export function getVisibleComponents(
   components: readonly ComponentInstance[],
   visibleWorldBounds: BoundingBox,
+  spatialIndex?: { queryVisibleComponents(bounds: BoundingBox): ComponentInstance[] } | null,
 ): ComponentInstance[] {
+  if (spatialIndex && components.length > 30) {
+    return spatialIndex.queryVisibleComponents(visibleWorldBounds);
+  }
   return components.filter((component) => boundsIntersect(
     getComponentBounds(component),
     visibleWorldBounds,

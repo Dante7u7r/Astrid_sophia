@@ -548,3 +548,121 @@ fn test_wr_vs_monolithic_dc_and_transient_exactness() {
         v5_final_mono, v5_final_wr
     );
 }
+
+#[test]
+fn test_wr_wbg_and_multirate_cascaded_stages() {
+    // Red en cascada: Etapa 1 inversor CMOS -> Etapa 2 conmutador SiC MOSFET de potencia con carga inductiva/capacitiva
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "VDD".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 12.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "VIN".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 2.5,
+                pins: vec!["2".to_string(), "0".to_string()],
+                wave_type: Some("pulse".to_string()),
+                amplitude: Some(5.0),
+                frequency: Some(1.0e6), // 1 MHz
+                offset: Some(0.0),
+                duty_cycle: Some(0.5),
+                ..Default::default()
+            },
+            // Etapa 1: Inversor excitador (2 -> 3)
+            ComponentData {
+                id: "M1_P".to_string(),
+                comp_type: "pmos".to_string(),
+                value: 1.0,
+                pins: vec!["2".to_string(), "3".to_string(), "1".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "M1_N".to_string(),
+                comp_type: "nmos".to_string(),
+                value: 1.0,
+                pins: vec!["2".to_string(), "3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C_GATE".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 100.0e-12,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            // Etapa 2: SiC MOSFET de potencia (3 -> 4)
+            ComponentData {
+                id: "M_SIC".to_string(),
+                comp_type: "sic_mosfet".to_string(),
+                value: 3.0, // Vth
+                pins: vec!["3".to_string(), "4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_LOAD".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10.0,
+                pins: vec!["1".to_string(), "4".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C_OUT".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 50.0e-12,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let (partitions, _) = partition_circuit_for_relaxation(&netlist);
+    assert!(
+        partitions.len() >= 2,
+        "El particionador debe desacoplar automáticamente la etapa CMOS de la etapa SiC de potencia. Particiones: {}",
+        partitions.len()
+    );
+
+    let settings = TransientSettings {
+        dt: 1e-9, // 1 ns
+        t_max: 2e-6, // 2 us (2 ciclos)
+        fixed_step: Some(true),
+        integration_method: Some("trap".to_string()),
+    };
+
+    let wr_settings = WaveformRelaxationSettings {
+        mode: WaveformRelaxationMode::GaussSeidel,
+        max_iterations: 20,
+        reltol: 1e-3,
+        vntol: 1e-5,
+        initial_window_size: Some(1e-6),
+        min_window_size: Some(1e-8),
+        enable_window_chopping: true,
+    };
+
+    let mono_results = solve_transient_circuit(&netlist, &settings).unwrap();
+    let wr_results = solve_waveform_relaxation_transient(&netlist, &settings, Some(&wr_settings)).unwrap();
+
+    assert!(wr_results.converged, "La relajación de formas de onda debe converger");
+
+    // Verificar seguimiento de tensión en la salida del inversor (nodo 3) y salida del SiC (nodo 4)
+    let v4_final_mono = *mono_results.last().unwrap().node_voltages.get("4").unwrap();
+    let v4_final_wr = *wr_results.results.last().unwrap().node_voltages.get("4").unwrap();
+
+    assert!(
+        (v4_final_mono - v4_final_wr).abs() < 0.2,
+        "La tensión final en nodo 4 debe concordar: Mono={:.3}V, WR={:.3}V",
+        v4_final_mono, v4_final_wr
+    );
+}

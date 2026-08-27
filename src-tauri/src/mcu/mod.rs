@@ -3,9 +3,9 @@
 //! Provides cycle-accurate emulation of 8051 and AVR (ATmega328P) microcontrollers
 //! with peripheral support for mixed-signal co-simulation with MNA solvers.
 
-pub mod mcu8051;
 pub mod atmega328p;
 pub mod binary;
+pub mod mcu8051;
 #[cfg(test)]
 pub mod test_instructions;
 
@@ -24,8 +24,12 @@ impl std::fmt::Display for McuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             McuError::InvalidFirmwareFormat(msg) => write!(f, "Invalid firmware format: {}", msg),
-            McuError::MemoryOutOfBounds(addr) => write!(f, "Memory access out of bounds at 0x{:04X}", addr),
-            McuError::UnsupportedInstruction(op) => write!(f, "Unsupported instruction opcode: 0x{:04X}", op),
+            McuError::MemoryOutOfBounds(addr) => {
+                write!(f, "Memory access out of bounds at 0x{:04X}", addr)
+            }
+            McuError::UnsupportedInstruction(op) => {
+                write!(f, "Unsupported instruction opcode: 0x{:04X}", op)
+            }
             McuError::ExecutionError(msg) => write!(f, "MCU execution error: {}", msg),
         }
     }
@@ -50,9 +54,9 @@ pub struct McuState {
     pub acc: u8,
     pub psw: u8,
     pub dptr: u16,
-    pub registers: Vec<u8>,       // R0-R7 + SFRs for 8051, R0-R31 for AVR
-    pub data_memory: Vec<u8>,     // Internal RAM
-    pub program_memory: Vec<u8>,  // Flash/ROM
+    pub registers: Vec<u8>,      // R0-R7 + SFRs for 8051, R0-R31 for AVR
+    pub data_memory: Vec<u8>,    // Internal RAM
+    pub program_memory: Vec<u8>, // Flash/ROM
     pub cycle_count: u64,
     pub gpio_state: GpioState,
 }
@@ -102,16 +106,16 @@ pub struct GpioOutputs {
 pub trait McuCore: Send + Sync {
     /// Get the MCU architecture type
     fn mcu_type(&self) -> McuType;
-    
+
     /// Reset CPU to its initial state
     fn reset(&mut self);
-    
+
     /// Load firmware (Intel HEX format or raw binary bytes)
     fn load_firmware(&mut self, firmware: &[u8]) -> Result<(), McuError>;
-    
+
     /// Execute one instruction, return CPU machine cycles consumed
     fn step(&mut self, gpio_inputs: &GpioInputs) -> u32;
-    
+
     /// Execute multiple instruction cycles for a given delta time
     fn run_cycles(&mut self, cycles: u32, gpio_inputs: &GpioInputs) -> u32 {
         let mut total = 0;
@@ -121,19 +125,19 @@ pub trait McuCore: Send + Sync {
         }
         total
     }
-    
+
     /// Get current state snapshot for UI and telemetry
     fn get_state(&self) -> McuState;
-    
+
     /// Get GPIO output states and direction masks for the analog solver
     fn get_gpio_outputs(&self) -> GpioOutputs;
-    
+
     /// Trigger or update a hardware interrupt line
     fn set_interrupt(&mut self, int_num: u8, level: bool);
-    
+
     /// Get total elapsed machine cycles
     fn cycle_count(&self) -> u64;
-    
+
     /// Get current Program Counter
     fn pc(&self) -> u16;
 }

@@ -37,7 +37,7 @@ pub mod wasm;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 
@@ -147,6 +147,8 @@ pub struct ComponentMutation {
 
 pub struct SimulationControlState {
     pub is_running: Arc<AtomicBool>,
+    pub is_paused: Arc<AtomicBool>,
+    pub step_requested: Arc<AtomicU32>,
     pub active_run_id: Arc<AtomicU64>,
     pub hot_mutations: Arc<Mutex<Vec<ComponentMutation>>>,
     pub approved_circuit_paths: Arc<Mutex<HashSet<PathBuf>>>,
@@ -165,7 +167,6 @@ pub struct SimulationFrame {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub batch_steps: Option<Vec<solver::TimeStepResult>>,
 }
-
 
 /// Control de cadencia cuadro a cuadro (60 FPS fluidos) para simulación interactiva.
 /// En cada cuadro espera hasta cumplir los 16.66 ms de tiempo de pared (1/60 s),
@@ -187,7 +188,8 @@ fn pace_interactive_frame(
     if let Some(mut remaining) = target_frame_duration.checked_sub(elapsed) {
         let max_sleep = std::time::Duration::from_millis(2);
         while remaining > std::time::Duration::ZERO {
-            if !is_running.load(Ordering::SeqCst) || active_run_id.load(Ordering::SeqCst) != run_id {
+            if !is_running.load(Ordering::SeqCst) || active_run_id.load(Ordering::SeqCst) != run_id
+            {
                 return false;
             }
             std::thread::sleep(remaining.min(max_sleep));
@@ -394,6 +396,19 @@ async fn run_stability_analysis(
 }
 
 #[tauri::command]
+async fn run_circuit_optimization(
+    netlist: solver::CircuitNetlist,
+    params: Vec<solver::OptimizableParam>,
+    targets: Vec<solver::OptimizationTarget>,
+    settings: Option<solver::OptimizationSettings>,
+) -> Result<solver::OptimizationResult, SimulationError> {
+    let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
+    let settings = settings.unwrap_or_default();
+    solver::solve_circuit_optimization(&netlist, &params, &targets, &settings)
+        .map_err(SimulationError::from)
+}
+
+#[tauri::command]
 fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
     mut mutation: ComponentMutation,
@@ -456,19 +471,28 @@ async fn start_interactive_transient(
             "El identificador de corrida debe ser mayor que cero.".to_string(),
         ));
     }
-    settings.validate().map_err(SimulationError::from)?;
+    settings
+        .validate_interactive()
+        .map_err(SimulationError::from)?;
+    let mut effective_settings = settings.clone();
+    if effective_settings.t_max <= 0.0 || !effective_settings.t_max.is_finite() {
+        effective_settings.t_max = 1e12; // Modo continuo indefinido
+    }
     let numerical_settings = numerical_settings(tolerance, max_iterations);
     numerical_settings
         .validate()
         .map_err(SimulationError::from)?;
     let netlist = parser::expand_netlist_subcircuits(&netlist).map_err(SimulationError::from)?;
     let disable_pacing_flag = disable_pacing.unwrap_or(false)
-        || std::env::var("ASTRYD_DISABLE_PACING")
+        || std::env::var("BIAANI_DISABLE_PACING")
+            .or_else(|_| std::env::var("ASTRYD_DISABLE_PACING"))
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
     state.active_run_id.store(run_id, Ordering::SeqCst);
     state.is_running.store(true, Ordering::SeqCst);
+    state.is_paused.store(false, Ordering::SeqCst);
+    state.step_requested.store(0, Ordering::SeqCst);
     if let Ok(mut mutations) = state.hot_mutations.lock() {
         mutations.clear();
     }
@@ -478,6 +502,8 @@ async fn start_interactive_transient(
         }
     }
     let is_running = state.is_running.clone();
+    let is_paused = state.is_paused.clone();
+    let step_requested = state.step_requested.clone();
     let active_run_id = state.active_run_id.clone();
     let hot_mutations = state.hot_mutations.clone();
     let speed_multiplier_arc = state.speed_multiplier.clone();
@@ -486,6 +512,8 @@ async fn start_interactive_transient(
         let window_inner = window.clone();
         let window_panic = window.clone();
         let is_running_inner = is_running.clone();
+        let is_paused_inner = is_paused.clone();
+        let step_requested_inner = step_requested.clone();
         let active_run_id_inner = active_run_id.clone();
         let panic_run_id = active_run_id.clone();
 
@@ -500,11 +528,11 @@ async fn start_interactive_transient(
             let final_speed_arc = speed_multiplier_arc.clone();
 
             // Intervalo mínimo de sub-muestreo para no saturar el IPC en transiciones ultra rápidas (LTE adaptativo)
-            let min_batch_interval = (settings.dt * 0.25).max(1e-7);
+            let min_batch_interval = (effective_settings.dt * 0.25).max(1e-7);
 
             let result = solver::solve_transient_circuit_inner(
                 &netlist,
-                &settings,
+                &effective_settings,
                 HashMap::new(),
                 HashMap::new(),
                 numerical_settings,
@@ -517,18 +545,45 @@ async fn start_interactive_transient(
                         return false;
                     }
 
+                    // Manejo de pausa interactiva y avance paso a paso
+                    while is_running_inner.load(Ordering::SeqCst)
+                        && active_run_id_inner.load(Ordering::SeqCst) == run_id
+                        && is_paused_inner.load(Ordering::SeqCst)
+                        && step_requested_inner.load(Ordering::SeqCst) == 0
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(4));
+                        last_frame_wall_time = std::time::Instant::now();
+                    }
+
+                    if !is_running_inner.load(Ordering::SeqCst)
+                        || active_run_id_inner.load(Ordering::SeqCst) != run_id
+                    {
+                        return false;
+                    }
+
+                    let is_stepping = step_requested_inner.load(Ordering::SeqCst) > 0;
+                    if is_stepping {
+                        step_requested_inner.fetch_sub(1, Ordering::SeqCst);
+                    }
+
                     if batch.is_empty() || step.time - last_pushed_time >= min_batch_interval {
                         batch.push(step.clone());
                         last_pushed_time = step.time;
                     }
 
-                    let current_speed = speed_multiplier_arc.lock().map(|s| *s).unwrap_or(1.0).max(0.01);
+                    let current_speed = speed_multiplier_arc
+                        .lock()
+                        .map(|s| *s)
+                        .unwrap_or(1.0)
+                        .max(0.01);
                     let sim_advance = step.time - last_frame_sim_time;
                     let target_sim_advance = (1.0_f64 / 60.0_f64) * current_speed;
                     let wall_elapsed = last_frame_wall_time.elapsed();
                     let target_wall_frame = std::time::Duration::from_micros(16_666); // 60 FPS (~16.6 ms)
 
-                    let should_emit = if frame_index == 0 {
+                    let should_emit = if is_stepping {
+                        true
+                    } else if frame_index == 0 {
                         // Frame 0: emitir de inmediato (primeros 20 pasos o 2ms) para respuesta visual instantánea
                         batch.len() >= 20 || wall_elapsed >= std::time::Duration::from_millis(2)
                     } else {
@@ -539,6 +594,7 @@ async fn start_interactive_transient(
 
                     if should_emit {
                         if frame_index > 0
+                            && !is_stepping
                             && !pace_interactive_frame(
                                 last_frame_wall_time,
                                 &is_running_inner,
@@ -671,6 +727,49 @@ fn stop_interactive_transient(
     }
     state.active_run_id.store(0, Ordering::SeqCst);
     state.is_running.store(false, Ordering::SeqCst);
+    state.is_paused.store(false, Ordering::SeqCst);
+    state.step_requested.store(0, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+fn pause_interactive_transient(
+    state: tauri::State<'_, SimulationControlState>,
+    run_id: Option<u64>,
+) -> Result<(), String> {
+    let active_run_id = state.active_run_id.load(Ordering::SeqCst);
+    if run_id.is_some_and(|expected| expected != active_run_id) {
+        return Ok(());
+    }
+    state.is_paused.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+fn resume_interactive_transient(
+    state: tauri::State<'_, SimulationControlState>,
+    run_id: Option<u64>,
+) -> Result<(), String> {
+    let active_run_id = state.active_run_id.load(Ordering::SeqCst);
+    if run_id.is_some_and(|expected| expected != active_run_id) {
+        return Ok(());
+    }
+    state.is_paused.store(false, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+fn step_interactive_transient(
+    state: tauri::State<'_, SimulationControlState>,
+    run_id: Option<u64>,
+    steps: Option<u32>,
+) -> Result<(), String> {
+    let active_run_id = state.active_run_id.load(Ordering::SeqCst);
+    if run_id.is_some_and(|expected| expected != active_run_id) {
+        return Ok(());
+    }
+    let count = steps.unwrap_or(1).max(1);
+    state.step_requested.fetch_add(count, Ordering::SeqCst);
     Ok(())
 }
 
@@ -686,7 +785,7 @@ async fn save_circuit_file(
 ) -> Result<String, String> {
     validate_circuit_file_content(&content)?;
     let file_path = rfd::AsyncFileDialog::new()
-        .add_filter("Esquemático Astryd", &["astryd", "json"])
+        .add_filter("Esquemático Biaani", &["biaani", "astryd", "json"])
         .set_title("Guardar Esquemático")
         .save_file()
         .await;
@@ -735,7 +834,7 @@ async fn update_live_inspection_state(
     svg_schematic: Option<String>,
 ) -> Result<(), String> {
     validate_circuit_file_content(&state_json)?;
-    let live_dir = PathBuf::from(".astryd_live");
+    let live_dir = PathBuf::from(".biaani_live");
     if !live_dir.exists() {
         std::fs::create_dir_all(&live_dir).map_err(|error| error.to_string())?;
     }
@@ -755,7 +854,7 @@ async fn update_live_inspection_state(
 
 #[tauri::command]
 async fn get_live_inspection_state() -> Result<String, String> {
-    let state_file = PathBuf::from(".astryd_live/state.json");
+    let state_file = PathBuf::from(".biaani_live/state.json");
     if state_file.exists() {
         std::fs::read_to_string(&state_file).map_err(|error| error.to_string())
     } else {
@@ -794,8 +893,8 @@ fn validate_circuit_file_path(path: &Path) -> Result<(), String> {
         .extension()
         .and_then(|extension| extension.to_str())
         .map(str::to_ascii_lowercase);
-    if !matches!(extension.as_deref(), Some("astryd" | "json")) {
-        return Err("La ruta debe usar extension .astryd o .json.".to_string());
+    if !matches!(extension.as_deref(), Some("biaani" | "astryd" | "json")) {
+        return Err("La ruta debe usar extension .biaani, .astryd o .json.".to_string());
     }
     Ok(())
 }
@@ -878,7 +977,7 @@ mod persistence_tests {
     #[test]
     fn atomic_save_creates_and_replaces_without_residue() {
         let root = std::env::temp_dir().join(format!(
-            "astryd-persistence-{}-{}",
+            "biaani-persistence-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -886,7 +985,7 @@ mod persistence_tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&root).expect("create test directory");
-        let file_path = root.join("circuit.astryd");
+        let file_path = root.join("circuit.biaani");
 
         write_file_atomically(&file_path, "version one").expect("first save");
         write_file_atomically(&file_path, "version two").expect("replacement save");
@@ -930,7 +1029,7 @@ async fn open_circuit_file(
     use std::fs::read_to_string;
 
     let file_path = rfd::AsyncFileDialog::new()
-        .add_filter("Esquemático Astryd", &["astryd", "json"])
+        .add_filter("Esquemático Biaani", &["biaani", "astryd", "json"])
         .set_title("Abrir Esquemático")
         .pick_file()
         .await;
@@ -967,23 +1066,22 @@ fn mcu_step(
         _ => Box::new(mcu::atmega328p::Atmega328p::new()),
     };
     if let Some(hex) = firmware_hex {
-        core.load_firmware(hex.as_bytes()).map_err(|e| e.to_string())?;
+        core.load_firmware(hex.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     core.run_cycles(cycles, &inputs);
     Ok(core.get_state())
 }
 
 #[tauri::command]
-fn mcu_get_state(
-    mcu_type: String,
-    firmware_hex: Option<String>,
-) -> Result<mcu::McuState, String> {
+fn mcu_get_state(mcu_type: String, firmware_hex: Option<String>) -> Result<mcu::McuState, String> {
     let mut core: Box<dyn mcu::McuCore> = match mcu_type.to_lowercase().as_str() {
         "8051" | "mcu_8051" => Box::new(mcu::mcu8051::Mcu8051::new()),
         _ => Box::new(mcu::atmega328p::Atmega328p::new()),
     };
     if let Some(hex) = firmware_hex {
-        core.load_firmware(hex.as_bytes()).map_err(|e| e.to_string())?;
+        core.load_firmware(hex.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     Ok(core.get_state())
 }
@@ -1018,6 +1116,8 @@ pub fn run() {
         })
         .manage(SimulationControlState {
             is_running: Arc::new(AtomicBool::new(false)),
+            is_paused: Arc::new(AtomicBool::new(false)),
+            step_requested: Arc::new(AtomicU32::new(0)),
             active_run_id: Arc::new(AtomicU64::new(0)),
             hot_mutations: Arc::new(Mutex::new(Vec::new())),
             approved_circuit_paths: Arc::new(Mutex::new(HashSet::new())),
@@ -1039,6 +1139,7 @@ pub fn run() {
             expand_transmission_line,
             solve_dc_thermal,
             run_sensitivity_analysis,
+            run_circuit_optimization,
             run_pss_simulation,
             run_stability_analysis,
             get_performance_telemetry,
@@ -1049,6 +1150,9 @@ pub fn run() {
             get_live_inspection_state,
             start_interactive_transient,
             stop_interactive_transient,
+            pause_interactive_transient,
+            resume_interactive_transient,
+            step_interactive_transient,
             set_interactive_simulation_speed,
             inject_live_mutation,
             advanced_ipc::run_pvt_matrix_analysis,

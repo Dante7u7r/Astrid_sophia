@@ -9,13 +9,14 @@ import {
   hasCanvasSelection,
   isPointInsideRect,
   parsePaletteComponentData,
-  type PaletteComponentData,
   resolveTouchPanStep,
   resolveTouchPinchStep,
   resolveWheelZoomStep,
   shouldStartPaletteDrag,
 } from "./canvas_input_model";
 import { showCanvasContextMenu } from "./canvas_context_menu";
+import { ComponentSpotlightModal } from "../ui/component_spotlight_modal";
+import { getArmedStampTool, armStampTool } from "../ui/component_palette_controller";
 
 export interface CanvasInputCallbacks {
   requestRender: (immediate?: boolean) => void;
@@ -103,6 +104,7 @@ export function attachCanvasInput(
   callbacks: CanvasInputCallbacks,
 ): () => void {
   let isRightClickPanning = false;
+  let rightClickDragDistance = 0;
   let isSpacePressed = false;
   let lastMousePos = { x: 0, y: 0 };
   let draggingCanvasProbe: "CH1" | "CH2" | "CH3" | "CH4" | null = null;
@@ -114,6 +116,7 @@ export function attachCanvasInput(
 
     if (isSpacePressed || e.button === 1 || e.button === 2) {
       isRightClickPanning = true;
+      rightClickDragDistance = 0;
       lastMousePos = { x: e.clientX, y: e.clientY };
       if (isSpacePressed) canvas.style.cursor = "grabbing";
       e.preventDefault();
@@ -122,6 +125,40 @@ export function attachCanvasInput(
     }
 
     if (e.button === 0) {
+      orchestrator.checkHover(worldPt.x, worldPt.y);
+
+      const armed = getArmedStampTool();
+      if (armed) {
+        const snapped = orchestrator.snapPointToGrid(worldPt);
+        const newComp = orchestrator.addComponent(armed.type as ComponentInstance["type"], snapped.x, snapped.y, armed.value);
+        if (armed.modelName) newComp.modelName = armed.modelName;
+        if (armed.pinCount) newComp.pinCount = armed.pinCount;
+        if (armed.pinLabels) newComp.pinLabels = armed.pinLabels;
+        if (armed.spiceNetlist) newComp.spiceNetlist = armed.spiceNetlist;
+        callbacks.onNetlistSync();
+
+        const isContinuous = armed.continuous || e.shiftKey;
+        if (isContinuous) {
+          callbacks.log(
+            `Componente colocado: [${newComp.id}] (${armed.name}). Modo continuo activo (Esc o clic derecho para salir).`,
+            "system",
+          );
+        } else {
+          callbacks.log(
+            `Componente colocado: [${newComp.id}] (${armed.name}).`,
+            "system",
+          );
+          armStampTool(null);
+          canvas.style.cursor = "";
+        }
+
+        orchestrator.selectedComponent = newComp;
+        callbacks.onComponentPlaced(newComp);
+        callbacks.requestRender(true);
+        callbacks.onCanvasModified();
+        return;
+      }
+
       const probeMode = callbacks.getProbePlacementMode();
       if (probeMode) {
         const targetNode = resolveNodeAtWorldPoint(worldPt, orchestrator, callbacks);
@@ -201,7 +238,9 @@ export function attachCanvasInput(
 
     orchestrator.checkHover(worldPt.x, worldPt.y);
 
-    if (!orchestrator.isDragging && !orchestrator.activePinForWire && !orchestrator.isDraggingWireHandle && !orchestrator.selectionStart) {
+    if (getArmedStampTool()) {
+      canvas.style.cursor = "crosshair";
+    } else if (!orchestrator.isDragging && !orchestrator.activePinForWire && !orchestrator.isDraggingWireHandle && !orchestrator.selectionStart) {
       const hoveredProbe = orchestrator.hitTestProbe?.(worldPt.x, worldPt.y) ?? null;
       if (hoveredProbe) {
         canvas.style.cursor = "grab";
@@ -232,6 +271,7 @@ export function attachCanvasInput(
     if (isRightClickPanning) {
       const dx = e.clientX - lastMousePos.x;
       const dy = e.clientY - lastMousePos.y;
+      rightClickDragDistance += Math.hypot(dx, dy);
       orchestrator.pan(dx, dy);
       lastMousePos = { x: e.clientX, y: e.clientY };
     }
@@ -259,8 +299,10 @@ export function attachCanvasInput(
     }
 
     if (orchestrator.isDraggingWireHandle) {
-      orchestrator.stopWireHandleDragging();
-      callbacks.onCanvasModified();
+      const wireChanged = orchestrator.stopWireHandleDragging();
+      if (wireChanged) {
+        callbacks.onCanvasModified();
+      }
     }
 
     if (orchestrator.activePinForWire) {
@@ -302,7 +344,9 @@ export function attachCanvasInput(
     }
 
     if (orchestrator.isDragging) {
-      callbacks.onCanvasModified();
+      if (typeof orchestrator.hasSelectedMovedDuringDrag === "function" ? orchestrator.hasSelectedMovedDuringDrag() : true) {
+        callbacks.onCanvasModified();
+      }
     }
 
     orchestrator.stopDragging();
@@ -322,7 +366,12 @@ export function attachCanvasInput(
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
     const comp = orchestrator.selectComponentAt(worldPt.x, worldPt.y);
 
-    if (comp?.type === "switch") {
+    if (
+      comp?.type === "switch" ||
+      comp?.type === "switch_spdt" ||
+      comp?.type === "switch_dpdt" ||
+      comp?.type === "pushbutton"
+    ) {
       await callbacks.onSwitchDoubleClick(comp);
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
@@ -492,7 +541,46 @@ export function attachCanvasInput(
       return;
     }
 
+    if (ctrl && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      ComponentSpotlightModal.open((item) => {
+        armStampTool({
+          type: item.type,
+          value: item.defaultVal,
+          modelName: item.extraProps?.modelName,
+          pinCount: item.extraProps?.pinCount,
+          pinLabels: item.extraProps?.pinLabels,
+          spiceNetlist: item.extraProps?.spiceNetlist,
+          name: item.name,
+        });
+      });
+      return;
+    }
+
+    if (e.key === "/" && !isTypingInFormField()) {
+      e.preventDefault();
+      ComponentSpotlightModal.open((item) => {
+        armStampTool({
+          type: item.type,
+          value: item.defaultVal,
+          modelName: item.extraProps?.modelName,
+          pinCount: item.extraProps?.pinCount,
+          pinLabels: item.extraProps?.pinLabels,
+          spiceNetlist: item.extraProps?.spiceNetlist,
+          name: item.name,
+        });
+      });
+      return;
+    }
+
     if (e.key === "Escape") {
+      if (getArmedStampTool()) {
+        e.preventDefault();
+        armStampTool(null);
+        callbacks.log("Herramienta de colocación cancelada.", "system");
+        callbacks.requestRender(true);
+        return;
+      }
       callbacks.onEscape();
       callbacks.requestRender(true);
       return;
@@ -506,7 +594,11 @@ export function attachCanvasInput(
 
     if (e.key === "m" || e.key === "M") {
       e.preventDefault();
-      orchestrator.mirrorSelectedComponent();
+      if (e.shiftKey) {
+        orchestrator.mirrorSelectedComponentVertical();
+      } else {
+        orchestrator.mirrorSelectedComponent();
+      }
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
       callbacks.onNetlistSync();
@@ -621,6 +713,38 @@ export function attachCanvasInput(
   };
 
   const onContextMenu = (e: MouseEvent) => {
+    if (rightClickDragDistance > 6) {
+      e.preventDefault();
+      rightClickDragDistance = 0;
+      return;
+    }
+
+    if (getArmedStampTool()) {
+      e.preventDefault();
+      armStampTool(null);
+      canvas.style.cursor = "";
+      callbacks.log("Herramienta de colocación desactivada.", "system");
+      callbacks.requestRender(true);
+      return;
+    }
+
+    if (callbacks.getProbePlacementMode()) {
+      e.preventDefault();
+      callbacks.clearProbePlacementMode();
+      callbacks.log("Colocación de sonda cancelada.", "system");
+      callbacks.requestRender(true);
+      return;
+    }
+
+    if (orchestrator.activePinForWire) {
+      e.preventDefault();
+      orchestrator.activePinForWire = null;
+      orchestrator.tempWireEnd = null;
+      callbacks.log("Trazado de cable cancelado.", "system");
+      callbacks.requestRender(true);
+      return;
+    }
+
     showCanvasContextMenu(e, canvas, orchestrator, callbacks);
   };
   canvas.addEventListener("mousedown", onMouseDown);
@@ -817,140 +941,106 @@ export function attachCanvasDrop(
   canvasViewport.addEventListener("dragenter", onDragEnter);
 
   const paletteCleanups: Array<() => void> = [];
-  const toolboxCards = document.querySelectorAll<HTMLElement>(".component-card");
+  let pointerId: number | null = null;
+  let startX = 0;
+  let startY = 0;
+  let dragging = false;
+  let ghost: HTMLElement | null = null;
+  let activeDragCard: HTMLElement | null = null;
 
-  toolboxCards.forEach((card) => {
-    card.draggable = false;
-    card.tabIndex = 0;
-    card.setAttribute("role", "button");
-    const componentName = card.querySelector(".comp-name")?.textContent?.trim() ?? "componente";
-    card.setAttribute("aria-label", `Colocar ${componentName}`);
+  const isInsideViewport = (clientX: number, clientY: number): boolean => {
+    const rect = canvasViewport.getBoundingClientRect();
+    return isPointInsideRect(rect, { clientX, clientY });
+  };
 
-    let pointerId: number | null = null;
-    let startX = 0;
-    let startY = 0;
-    let dragging = false;
-    let ghost: HTMLElement | null = null;
+  const updateDragVisuals = (clientX: number, clientY: number): void => {
+    if (ghost) {
+      ghost.style.transform = `translate3d(${clientX + 14}px, ${clientY + 14}px, 0)`;
+    }
+    canvasViewport.classList.toggle("palette-drop-target", isInsideViewport(clientX, clientY));
+  };
 
-    const getComponentData = (): PaletteComponentData => parsePaletteComponentData(card.dataset);
+  const beginVisualDrag = (clientX: number, clientY: number): void => {
+    if (!activeDragCard) return;
+    dragging = true;
+    activeDragCard.classList.add("palette-drag-source");
+    document.body.classList.add("palette-drag-active");
+    ghost = activeDragCard.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute("id");
+    ghost.removeAttribute("role");
+    ghost.removeAttribute("tabindex");
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.className = "component-drag-ghost";
+    document.body.appendChild(ghost);
+    updateDragVisuals(clientX, clientY);
+  };
 
-    const isInsideViewport = (clientX: number, clientY: number): boolean => {
-      const rect = canvasViewport.getBoundingClientRect();
-      return isPointInsideRect(rect, { clientX, clientY });
-    };
+  const resetDrag = (): void => {
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    document.removeEventListener("pointercancel", onPointerCancel);
+    window.removeEventListener("blur", resetDrag);
+    pointerId = null;
+    dragging = false;
+    ghost?.remove();
+    ghost = null;
+    if (activeDragCard) {
+      activeDragCard.classList.remove("palette-drag-source");
+      activeDragCard = null;
+    }
+    document.body.classList.remove("palette-drag-active");
+    canvasViewport.classList.remove("palette-drop-target");
+  };
 
-    const updateDragVisuals = (clientX: number, clientY: number): void => {
-      if (ghost) {
-        ghost.style.transform = `translate3d(${clientX + 14}px, ${clientY + 14}px, 0)`;
-      }
-      canvasViewport.classList.toggle("palette-drop-target", isInsideViewport(clientX, clientY));
-    };
+  const onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerId !== pointerId) return;
+    if (!dragging && shouldStartPaletteDrag(
+      { x: startX, y: startY },
+      { x: event.clientX, y: event.clientY },
+    )) {
+      beginVisualDrag(event.clientX, event.clientY);
+    }
+    if (!dragging) return;
+    event.preventDefault();
+    updateDragVisuals(event.clientX, event.clientY);
+  };
 
-    const beginVisualDrag = (clientX: number, clientY: number): void => {
-      dragging = true;
-      card.classList.add("palette-drag-source");
-      document.body.classList.add("palette-drag-active");
-      ghost = card.cloneNode(true) as HTMLElement;
-      ghost.removeAttribute("id");
-      ghost.removeAttribute("role");
-      ghost.removeAttribute("tabindex");
-      ghost.setAttribute("aria-hidden", "true");
-      ghost.className = "component-drag-ghost";
-      document.body.appendChild(ghost);
-      updateDragVisuals(clientX, clientY);
-    };
-
-    const resetDrag = (): void => {
-      document.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.removeEventListener("pointercancel", onPointerCancel);
-      window.removeEventListener("blur", resetDrag);
-      pointerId = null;
-      dragging = false;
-      ghost?.remove();
-      ghost = null;
-      card.classList.remove("palette-drag-source");
-      document.body.classList.remove("palette-drag-active");
-      canvasViewport.classList.remove("palette-drop-target");
-    };
-
-    const onPointerDown = (event: PointerEvent): void => {
-      if (event.button !== 0 || pointerId !== null) return;
-      pointerId = event.pointerId;
-      startX = event.clientX;
-      startY = event.clientY;
-      document.addEventListener("pointermove", onPointerMove, { passive: false });
-      document.addEventListener("pointerup", onPointerUp);
-      document.addEventListener("pointercancel", onPointerCancel);
-      window.addEventListener("blur", resetDrag, { once: true });
-    };
-
-    const onPointerMove = (event: PointerEvent): void => {
-      if (event.pointerId !== pointerId) return;
-      if (!dragging && shouldStartPaletteDrag(
-        { x: startX, y: startY },
-        { x: event.clientX, y: event.clientY },
-      )) {
-        beginVisualDrag(event.clientX, event.clientY);
-      }
-      if (!dragging) return;
-      event.preventDefault();
-      updateDragVisuals(event.clientX, event.clientY);
-    };
-
-    const onPointerUp = (event: PointerEvent): void => {
-      if (event.pointerId !== pointerId) return;
-      if (dragging && isInsideViewport(event.clientX, event.clientY)) {
-        const data = getComponentData();
-        placeComponent(data.type, data.value, event.clientX, event.clientY, {
-          modelName: data.modelName,
-          pinCount: data.pinCount,
-          pinLabels: data.pinLabels,
-          spiceNetlist: data.spiceNetlist,
-        });
-      }
-      resetDrag();
-    };
-
-    const onPointerCancel = (event: PointerEvent): void => {
-      if (event.pointerId === pointerId) resetDrag();
-    };
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      const rect = canvasViewport.getBoundingClientRect();
-      const data = getComponentData();
-      placeComponent(data.type, data.value, rect.left + rect.width / 2, rect.top + rect.height / 2, {
+  const onPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== pointerId) return;
+    if (dragging && isInsideViewport(event.clientX, event.clientY) && activeDragCard) {
+      const data = parsePaletteComponentData(activeDragCard.dataset);
+      placeComponent(data.type, data.value, event.clientX, event.clientY, {
         modelName: data.modelName,
         pinCount: data.pinCount,
         pinLabels: data.pinLabels,
         spiceNetlist: data.spiceNetlist,
       });
-    };
+    }
+    resetDrag();
+  };
 
-    const onClick = (): void => {
-      if (dragging) return;
-      const rect = canvasViewport.getBoundingClientRect();
-      const data = getComponentData();
-      placeComponent(data.type, data.value, rect.left + rect.width / 2, rect.top + rect.height / 2, {
-        modelName: data.modelName,
-        pinCount: data.pinCount,
-        pinLabels: data.pinLabels,
-        spiceNetlist: data.spiceNetlist,
-      });
-    };
+  const onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId === pointerId) resetDrag();
+  };
 
-    card.addEventListener("pointerdown", onPointerDown);
-    card.addEventListener("click", onClick);
-    card.addEventListener("keydown", onKeyDown);
+  const onDocumentPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0 || pointerId !== null) return;
+    const target = (event.target as HTMLElement).closest<HTMLElement>(".component-card, .palette-favorite-chip");
+    if (!target) return;
+    activeDragCard = target;
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    startY = event.clientY;
+    document.addEventListener("pointermove", onPointerMove, { passive: false });
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("blur", resetDrag, { once: true });
+  };
 
-    paletteCleanups.push(() => {
-      card.removeEventListener("pointerdown", onPointerDown);
-      card.removeEventListener("click", onClick);
-      card.removeEventListener("keydown", onKeyDown);
-      resetDrag();
-    });
+  document.addEventListener("pointerdown", onDocumentPointerDown);
+  paletteCleanups.push(() => {
+    document.removeEventListener("pointerdown", onDocumentPointerDown);
+    resetDrag();
   });
 
   // Vinculación de arrastre mediante Pointer Events para botones y pestañas del osciloscopio

@@ -37,9 +37,57 @@ export const OSCILLOSCOPE_VOLTS_PER_DIV = [
 ] as const;
 
 export const OSCILLOSCOPE_TIME_PER_DIV = [
-  1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4,
-  1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5,
+  1e-8, 2e-8, 5e-8, 1e-7, 2e-7, 5e-7, // 10ns .. 500ns
+  1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, // 1µs .. 500µs
+  1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, // 1ms .. 500ms
+  1.0, 2.0, 5.0, 10.0, // 1s .. 10s
 ] as const;
+
+export function formatOscilloscopeTime(val: number): string {
+  if (!Number.isFinite(val) || val <= 0) return "20 ms/div";
+  if (val < 1e-6) {
+    return `${(val * 1e9).toFixed(0)} ns/div`;
+  }
+  if (val < 1e-3) {
+    return `${(val * 1e6).toFixed(0)} µs/div`;
+  }
+  if (val < 1.0) {
+    return `${(val * 1000).toFixed(0)} ms/div`;
+  }
+  return `${val >= 10 ? val.toFixed(0) : val.toFixed(1)} s/div`;
+}
+
+export function extractSampleVoltage(
+  nodeVoltages: Record<string, number> | undefined,
+  nodeId: string | null | undefined,
+): number {
+  if (!nodeVoltages || !nodeId) return 0.0;
+  const trimmed = nodeId.trim();
+  if (!trimmed) return 0.0;
+
+  // Nodo numérico directo "1", "0"
+  if (/^\d+$/.test(trimmed)) {
+    return nodeVoltages[trimmed] ?? 0.0;
+  }
+
+  // Sintaxis diferencial SPICE V(A,B) o V(A, B)
+  const matchV = trimmed.match(/^V\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (matchV) {
+    const vPos = nodeVoltages[matchV[1]] ?? 0.0;
+    const vNeg = nodeVoltages[matchV[2]] ?? 0.0;
+    return vPos - vNeg;
+  }
+
+  // Sintaxis diferencial "A-B" o "A,B"
+  const matchPair = trimmed.match(/^(\d+)\s*[-,\/]\s*(\d+)$/);
+  if (matchPair) {
+    const vPos = nodeVoltages[matchPair[1]] ?? 0.0;
+    const vNeg = nodeVoltages[matchPair[2]] ?? 0.0;
+    return vPos - vNeg;
+  }
+
+  return nodeVoltages[trimmed] ?? 0.0;
+}
 
 const metricsCache = new WeakMap<readonly TimeStepResult[], Map<string, OscilloscopeMetrics>>();
 
@@ -167,7 +215,7 @@ export function calculateOscilloscopeMetrics(
   let sumSq = 0;
 
   for (const pt of results) {
-    const v = pt.nodeVoltages[nodeId] ?? 0;
+    const v = extractSampleVoltage(pt.nodeVoltages, nodeId);
     if (v > maxV) maxV = v;
     if (v < minV) minV = v;
     sumV += v;
@@ -190,13 +238,17 @@ export function calculateOscilloscopeMetrics(
   let lastCrossingTime: number | null = null;
 
   for (let i = 0; i < count; i++) {
-    const v = results[i].nodeVoltages[nodeId] ?? 0;
+    const v = extractSampleVoltage(results[i].nodeVoltages, nodeId);
     const t = results[i].time;
     if (trigState !== "high" && v >= vHigh) {
-      if (trigState === "low") {
+      if (trigState === "low" && i > 0) {
         crossings++;
-        if (firstCrossingTime === null) firstCrossingTime = t;
-        lastCrossingTime = t;
+        const vPrev = extractSampleVoltage(results[i - 1].nodeVoltages, nodeId);
+        const tPrev = results[i - 1].time;
+        const dt = t - tPrev;
+        const exactTime = tPrev + ((vHigh - vPrev) / (v - vPrev || 1e-15)) * dt;
+        if (firstCrossingTime === null) firstCrossingTime = exactTime;
+        lastCrossingTime = exactTime;
       }
       trigState = "high";
     } else if (trigState !== "low" && v <= vLow) {
@@ -337,20 +389,15 @@ export function findTriggerStartIndex(
   // 1. Modo Roll para bases de tiempo lentas (DSO Auto-Roll): desplazamiento continuo hacia la izquierda
   if (isRollMode && Number.isFinite(windowDuration) && totalDuration >= windowDuration) {
     const targetStartTime = latestTime - windowDuration - 1e-9;
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].time >= targetStartTime) {
-        return i;
-      }
-    }
-    return 0;
+    return findTimeIndex(results, targetStartTime);
   }
 
   // 2. Si disponemos de una ventana completa de datos acumulados:
   if (Number.isFinite(windowDuration) && totalDuration >= windowDuration) {
     // 2a. Buscamos el cruce de disparo más reciente que disponga de una ventana completa hacia adelante (DSO Phase Lock)
     for (let i = results.length - 2; i >= 1; i--) {
-      const v0 = results[i - 1].nodeVoltages[nodeId] ?? 0;
-      const v1 = results[i].nodeVoltages[nodeId] ?? 0;
+      const v0 = extractSampleVoltage(results[i - 1].nodeVoltages, nodeId);
+      const v1 = extractSampleVoltage(results[i].nodeVoltages, nodeId);
       const isCrossing = edge === "rising"
         ? (v0 <= level && v1 > level)
         : (v0 >= level && v1 < level);
@@ -362,18 +409,13 @@ export function findTriggerStartIndex(
 
     // 2b. Fallback cuando hay ventana completa pero no hay cruce hacia adelante: ventana rodante más reciente para no dejar huecos negros
     const targetStartTime = latestTime - windowDuration - 1e-9;
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].time >= targetStartTime) {
-        return i;
-      }
-    }
-    return 0;
+    return findTimeIndex(results, targetStartTime);
   }
 
   // 3. Arranque progresivo: Si la simulación aún no acumula una ventana completa, anclamos al primer cruce para que la onda crezca suavemente
   for (let i = 1; i < results.length; i++) {
-    const v0 = results[i - 1].nodeVoltages[nodeId] ?? 0;
-    const v1 = results[i].nodeVoltages[nodeId] ?? 0;
+    const v0 = extractSampleVoltage(results[i - 1].nodeVoltages, nodeId);
+    const v1 = extractSampleVoltage(results[i].nodeVoltages, nodeId);
     const isCrossing = edge === "rising"
       ? (v0 <= level && v1 > level)
       : (v0 >= level && v1 < level);
@@ -408,14 +450,7 @@ export function buildTyTracePoints(
   if (latestTime - firstTime < Math.min(windowDuration * 0.5, totalAvailableDuration)) {
     if (totalAvailableDuration >= windowDuration) {
       const targetStartTime = latestTime - windowDuration;
-      let newStart = 0;
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].time >= targetStartTime) {
-          newStart = i;
-          break;
-        }
-      }
-      effectiveStartIndex = newStart;
+      effectiveStartIndex = findTimeIndex(results, targetStartTime);
       firstTime = results[effectiveStartIndex].time;
     } else {
       effectiveStartIndex = 0;
@@ -441,7 +476,7 @@ export function buildTyTracePoints(
   if (config?.coupling === "ac" && endIndex > effectiveStartIndex) {
     let sum = 0;
     for (let i = effectiveStartIndex; i < endIndex; i++) {
-      sum += results[i].nodeVoltages[nodeId] ?? 0;
+      sum += extractSampleVoltage(results[i].nodeVoltages, nodeId);
     }
     acOffset = sum / (endIndex - effectiveStartIndex);
   }
@@ -449,7 +484,7 @@ export function buildTyTracePoints(
   const toPoint = (pt: TimeStepResult): TyTracePoint => {
     const relativeTime = pt.time - firstTime;
     const x = Math.max(0, Math.min(dimensions.width, (relativeTime / windowDuration) * dimensions.width));
-    let v = pt.nodeVoltages[nodeId] ?? 0.0;
+    let v = extractSampleVoltage(pt.nodeVoltages, nodeId);
     if (config?.coupling === "gnd") {
       v = 0.0;
     } else if (config?.coupling === "ac") {
@@ -544,6 +579,77 @@ export interface AutoFitSettings {
   voltsPerDiv: number;
   timeDivValue: number;
   centerVoltage: number;
+  triggerLevel50: number;
+}
+
+export function calculateTrigger50Percent(
+  results: readonly TimeStepResult[],
+  nodeId: string | null,
+): number {
+  if (!nodeId || results.length === 0) return 0.0;
+  let minVoltage = Infinity;
+  let maxVoltage = -Infinity;
+  const startIndex = Math.max(0, results.length - 2000);
+  for (let i = startIndex; i < results.length; i++) {
+    const voltage = extractSampleVoltage(results[i].nodeVoltages, nodeId);
+    if (!Number.isFinite(voltage)) continue;
+    minVoltage = Math.min(minVoltage, voltage);
+    maxVoltage = Math.max(maxVoltage, voltage);
+  }
+  if (!Number.isFinite(minVoltage) || !Number.isFinite(maxVoltage)) return 0.0;
+  return (maxVoltage + minVoltage) / 2;
+}
+
+export function calculatePhaseDifferenceDeg(
+  results: readonly TimeStepResult[],
+  nodeA: string | null,
+  nodeB: string | null,
+): number | null {
+  if (!nodeA || !nodeB || nodeA === nodeB || results.length < 4) return null;
+  const metricsA = calculateOscilloscopeMetrics(results, nodeA);
+  if (metricsA.freq <= 0 || metricsA.vpp < 0.01) return null;
+  const period = metricsA.period;
+  if (period <= 0) return null;
+
+  const midA = (metricsA.vmax + metricsA.vmin) / 2;
+  const midB = calculateTrigger50Percent(results, nodeB);
+
+  // Encontrar primer cruce ascendente en señal A
+  let tA: number | null = null;
+  for (let i = 1; i < results.length; i++) {
+    const v0 = extractSampleVoltage(results[i - 1].nodeVoltages, nodeA);
+    const v1 = extractSampleVoltage(results[i].nodeVoltages, nodeA);
+    if (v0 <= midA && v1 > midA) {
+      const dt = results[i].time - results[i - 1].time;
+      tA = results[i - 1].time + ((midA - v0) / (v1 - v0 || 1e-15)) * dt;
+      break;
+    }
+  }
+  if (tA === null) return null;
+
+  // Encontrar cruce ascendente más cercano en señal B
+  let bestTB: number | null = null;
+  let minDiff = Infinity;
+  for (let i = 1; i < results.length; i++) {
+    const v0 = extractSampleVoltage(results[i - 1].nodeVoltages, nodeB);
+    const v1 = extractSampleVoltage(results[i].nodeVoltages, nodeB);
+    if (v0 <= midB && v1 > midB) {
+      const dt = results[i].time - results[i - 1].time;
+      const tB = results[i - 1].time + ((midB - v0) / (v1 - v0 || 1e-15)) * dt;
+      const diff = Math.abs(tB - tA);
+      if (diff < minDiff && diff < period * 1.5) {
+        minDiff = diff;
+        bestTB = tB;
+      }
+    }
+  }
+  if (bestTB === null) return null;
+
+  const dtPhase = bestTB - tA;
+  let deg = (dtPhase / period) * 360;
+  while (deg > 180) deg -= 360;
+  while (deg <= -180) deg += 360;
+  return deg;
 }
 
 function nearestTimePerDiv(target: number): number {
@@ -558,9 +664,10 @@ function nearestTimePerDiv(target: number): number {
 export function calculateAutoFitSettings(
   results: readonly TimeStepResult[],
   nodeId: string | null,
+  coupling: "dc" | "ac" | "gnd" = "dc",
 ): AutoFitSettings {
   if (!nodeId || results.length === 0) {
-    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
+    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0, triggerLevel50: 0 };
   }
 
   let minVoltage = Infinity;
@@ -574,18 +681,25 @@ export function calculateAutoFitSettings(
   }
 
   if (!Number.isFinite(minVoltage) || !Number.isFinite(maxVoltage)) {
-    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
+    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0, triggerLevel50: 0 };
   }
 
   const vSpan = maxVoltage - minVoltage;
+  const rawCenter = (maxVoltage + minVoltage) / 2;
+  const absMax = Math.max(Math.abs(maxVoltage), Math.abs(minVoltage));
+
   let requiredVoltsPerDiv = 1.0;
-  if (vSpan > 0.02) {
-    requiredVoltsPerDiv = vSpan / 5.5;
-  } else if (vSpan > 1e-4) {
-    requiredVoltsPerDiv = Math.max(vSpan / 4, 0.01);
+  if (coupling === "gnd") {
+    requiredVoltsPerDiv = 1.0;
+  } else if (coupling === "ac") {
+    requiredVoltsPerDiv = vSpan > 1e-4 ? Math.max(vSpan / 5.5, 0.001) : 1.0;
   } else {
-    const absMax = Math.max(Math.abs(maxVoltage), Math.abs(minVoltage));
-    requiredVoltsPerDiv = absMax > 0.1 ? absMax / 3.5 : 1.0;
+    // En acoplamiento DC: tanto el rango pico a pico (vSpan) como el nivel medio con desplazamiento (máx 3.5 div)
+    // deben caber dentro de los límites físicos de la pantalla del osciloscopio
+    const spanReq = vSpan > 1e-4 ? vSpan / 5.5 : 0.01;
+    const offsetReq = Math.abs(rawCenter) > 0.05 ? Math.abs(rawCenter) / 3.5 : 0;
+    const zeroGndReq = absMax > 0.1 ? absMax / 3.8 : 0.01;
+    requiredVoltsPerDiv = Math.max(spanReq, offsetReq, vSpan > 0.02 ? spanReq : zeroGndReq);
   }
 
   const voltsPerDiv = OSCILLOSCOPE_VOLTS_PER_DIV.find((value) => value >= requiredVoltsPerDiv)
@@ -599,13 +713,17 @@ export function calculateAutoFitSettings(
       ? totalDuration / 10
       : 0.02;
 
-  const rawCenter = (maxVoltage + minVoltage) / 2;
-  const centerVoltage = Math.abs(rawCenter) < 0.15 * Math.max(vSpan, 1.0) ? 0 : rawCenter;
+  const centerVoltage = coupling === "ac" || coupling === "gnd"
+    ? 0
+    : Math.abs(rawCenter) < 0.15 * Math.max(vSpan, 1.0)
+      ? 0
+      : rawCenter;
 
   return {
     voltsPerDiv,
     timeDivValue: nearestTimePerDiv(desiredTimePerDiv),
     centerVoltage,
+    triggerLevel50: coupling === "ac" ? 0 : rawCenter,
   };
 }
 
@@ -614,7 +732,7 @@ export function calculateAutoFitForValues(
   results?: readonly TimeStepResult[],
 ): AutoFitSettings {
   if (values.length === 0) {
-    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
+    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0, triggerLevel50: 0 };
   }
 
   let minVoltage = Infinity;
@@ -626,11 +744,18 @@ export function calculateAutoFitForValues(
   }
 
   if (!Number.isFinite(minVoltage) || !Number.isFinite(maxVoltage)) {
-    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0 };
+    return { voltsPerDiv: 1, timeDivValue: 0.02, centerVoltage: 0, triggerLevel50: 0 };
   }
 
   const vSpan = maxVoltage - minVoltage;
-  const requiredVoltsPerDiv = vSpan > 1e-4 ? Math.max(vSpan / 5, OSCILLOSCOPE_VOLTS_PER_DIV[0]) : 1.0;
+  const rawCenter = (maxVoltage + minVoltage) / 2;
+  const absMax = Math.max(Math.abs(maxVoltage), Math.abs(minVoltage));
+
+  const spanReq = vSpan > 1e-4 ? vSpan / 5.5 : 0.01;
+  const offsetReq = Math.abs(rawCenter) > 0.05 ? Math.abs(rawCenter) / 3.5 : 0;
+  const zeroGndReq = absMax > 0.1 ? absMax / 3.8 : 0.01;
+  const requiredVoltsPerDiv = Math.max(spanReq, offsetReq, vSpan > 0.02 ? spanReq : zeroGndReq);
+
   const voltsPerDiv = OSCILLOSCOPE_VOLTS_PER_DIV.find((value) => value >= requiredVoltsPerDiv)
     ?? OSCILLOSCOPE_VOLTS_PER_DIV[OSCILLOSCOPE_VOLTS_PER_DIV.length - 1];
 
@@ -644,6 +769,7 @@ export function calculateAutoFitForValues(
     voltsPerDiv,
     timeDivValue: nearestTimePerDiv(desiredTimePerDiv),
     centerVoltage: (maxVoltage + minVoltage) / 2,
+    triggerLevel50: (maxVoltage + minVoltage) / 2,
   };
 }
 

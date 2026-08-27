@@ -30,7 +30,7 @@ function fixtureBundle(): Record<string, unknown> {
       payload: { analysis: "DC", durationMs: 2, pointCount: 1, converged: true },
     },
   ];
-  const summaryMarkdown = "# Diagnóstico de Astryd Sophia\n";
+  const summaryMarkdown = "# Diagnóstico de Biaani\n";
   const contentSha256 = createHash("sha256")
     .update(JSON.stringify({ events, summaryMarkdown }), "utf8")
     .digest("hex");

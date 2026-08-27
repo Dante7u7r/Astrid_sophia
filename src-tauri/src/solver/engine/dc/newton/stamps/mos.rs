@@ -2,7 +2,8 @@ use crate::solver::types::ComponentData;
 
 use super::super::super::super::devices::{
     evaluate_bsim3_nmos, evaluate_bsim3_pmos, evaluate_bsim4_nmos, evaluate_bsim4_pmos,
-    evaluate_gan_hemt, evaluate_sic_mosfet, GanHemtParams, SicMosfetParams,
+    evaluate_gan_hemt, evaluate_igbt, evaluate_sic_mosfet, GanHemtParams, IgbtParams,
+    SicMosfetParams,
 };
 use super::StampContext;
 
@@ -44,16 +45,29 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vgs = v_gate - v_source;
     let raw_vds = v_drain - v_source;
     let mut vds = raw_vds;
-    if vds < 0.0 && comp.comp_type != "sic_mosfet" && comp.comp_type != "gan_hemt" {
+    if vds < 0.0 && comp.comp_type != "sic_mosfet" && comp.comp_type != "gan_hemt" && comp.comp_type != "igbt" {
         vds = 0.0;
     }
     let vbs = v_bulk - v_source;
 
     let vth = comp.value; // Tensión de umbral
-    let kn = 0.02; // transconductancia 20 mA/V^2
+    let kn: f64 = 0.02; // transconductancia 20 mA/V^2
 
     // Ecuaciones físicas y derivadas para linealización Taylor
-    let (ids, gm, gds, igs, gg) = if comp.comp_type == "sic_mosfet" {
+    let (ids, gm, gds, igs, gg) = if comp.comp_type == "igbt" {
+        let params = IgbtParams {
+            vth: if comp.value > 0.0 { comp.value } else { 5.0 },
+            kp: comp.igbt_kp.unwrap_or(12.0),
+            alpha_pnp: comp.igbt_alpha.unwrap_or(0.55),
+            tau_hl: comp.igbt_tau.unwrap_or(1.8e-6),
+            wb0: comp.igbt_wb.unwrap_or(90e-6),
+            cge: comp.igbt_cge.unwrap_or(2.2e-9),
+            cgc0: comp.igbt_cgc.unwrap_or(180e-12),
+            ..IgbtParams::default()
+        };
+        let res = evaluate_igbt(vgs, raw_vds, &params, Some(25.0), None, None);
+        (res.ic, res.gm, res.go, 0.0, 1e-12)
+    } else if comp.comp_type == "sic_mosfet" {
         let params = SicMosfetParams {
             vth: if comp.value > 0.0 { comp.value } else { 3.0 },
             rds_on: comp.ron.unwrap_or(0.065),
@@ -80,9 +94,9 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         (0.0, 0.0, 1e-9, 0.0, 1e-12)
     } else if vds < vgs - vth {
         // Lineal (Triodo)
-        let ids_val = kn * (2.0 * (vgs - vth) * vds - vds * vds);
-        let gm_val = 2.0 * kn * vds;
-        let gds_val = 2.0 * kn * (vgs - vth - vds);
+        let ids_val: f64 = kn * (2.0 * (vgs - vth) * vds - vds * vds);
+        let gm_val: f64 = 2.0 * kn * vds;
+        let gds_val: f64 = 2.0 * kn * (vgs - vth - vds);
         (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12)
     } else {
         // Saturación
@@ -199,7 +213,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
 
     let vth = if comp.value == 0.0 { -1.5 } else { comp.value };
     let vth_abs = -vth;
-    let kp = 0.02;
+    let kp: f64 = 0.02;
 
     let (isd, gm_sd, gds_cond, igs, gg) = if comp.comp_type == "bsim4pmos" {
         evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l)
@@ -210,9 +224,9 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     } else if vsg <= vth_abs {
         (0.0, 0.0, 1e-9, 0.0, 1e-12)
     } else if vsd < vsg - vth_abs {
-        let isd_val = kp * (2.0 * (vsg - vth_abs) * vsd - vsd * vsd);
-        let gm_sd_val = 2.0 * kp * vsd;
-        let gds_cond_val = 2.0 * kp * (vsg - vth_abs - vsd);
+        let isd_val: f64 = kp * (2.0 * (vsg - vth_abs) * vsd - vsd * vsd);
+        let gm_sd_val: f64 = 2.0 * kp * vsd;
+        let gds_cond_val: f64 = 2.0 * kp * (vsg - vth_abs - vsd);
         (isd_val, gm_sd_val, gds_cond_val.max(1e-9), 0.0, 1e-12)
     } else {
         let isd_val = kp * (vsg - vth_abs) * (vsg - vth_abs);

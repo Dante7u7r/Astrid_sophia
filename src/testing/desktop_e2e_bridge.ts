@@ -72,7 +72,7 @@ export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependenci
   if (!isAuditOrE2e) return;
 
   // The Tauri service compares the native title with document.title exactly.
-  document.title = "Astryd Sophia";
+  document.title = "Biaani";
 
   Object.defineProperty(window, "orchestrator", {
     get: () => dependencies.getOrchestrator(),

@@ -482,13 +482,12 @@ mod validation_tests {
     use super::*;
 
     fn step(time: f64, node: Option<f64>) -> TimeStepResult {
-        TimeStepResult {
+        TimeStepResult::new(
             time,
-            node_voltages: node
-                .map(|voltage| HashMap::from([("1".to_string(), voltage)]))
+            node.map(|voltage| HashMap::from([("1".to_string(), voltage)]))
                 .unwrap_or_default(),
-            branch_currents: HashMap::new(),
-        }
+            HashMap::new(),
+        )
     }
 
     #[test]

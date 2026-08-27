@@ -131,7 +131,7 @@ export class FftAnalyzerInstrument {
                 <span id="fft-val-thdn" style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: bold; color: #f97316;">-- %</span>
               </div>
               <div class="fft-metric-card">
-                <span class="rack-label" style="font-size: 0.55rem;">SINAD</span>
+                <span class="rack-label" style="font-size: 0.55rem;">SINAD / ENOB</span>
                 <span id="fft-val-sinad" style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: bold; color: #38bdf8;">-- dB</span>
               </div>
             </div>
@@ -143,6 +143,9 @@ export class FftAnalyzerInstrument {
           <!-- Barra Superior: Controles de Referencia, Rango, Cursores y Exportación -->
           <div class="fft-top-bar">
             <div style="display: flex; gap: 4px; align-items: center;">
+              <button id="fft-btn-auto-peak" type="button" class="fft-btn" title="Detectar y seguir automáticamente el pico fundamental y armónicos">
+                🎯 Auto-Pico
+              </button>
               <button id="fft-btn-cursors" type="button" class="fft-btn" title="Alternar cursores de frecuencia F1 y F2">
                 📏 Cursores: OFF
               </button>
@@ -152,10 +155,10 @@ export class FftAnalyzerInstrument {
             </div>
 
             <!-- Ajuste de Nivel de Referencia y Rango Dinámico -->
-            <div style="display: flex; gap: 4px; align-items: center;">
-              <div style="display: flex; align-items: center; gap: 2px;">
-                <span class="rack-label" style="font-size: 0.58rem;">Ref:</span>
-                <select id="fft-select-ref" class="osc-select-mini" style="cursor: pointer;">
+            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+              <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                <span class="rack-label" style="font-size: 0.58rem; flex-shrink: 0; white-space: nowrap;">Ref:</span>
+                <select id="fft-select-ref" class="osc-select-mini" style="width: auto; min-width: 58px; cursor: pointer;">
                   <option value="20">+20 dB</option>
                   <option value="10">+10 dB</option>
                   <option value="0" selected>0 dB</option>
@@ -164,9 +167,9 @@ export class FftAnalyzerInstrument {
                 </select>
               </div>
 
-              <div style="display: flex; align-items: center; gap: 2px;">
-                <span class="rack-label" style="font-size: 0.58rem;">Rango:</span>
-                <select id="fft-select-range" class="osc-select-mini" style="cursor: pointer;">
+              <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                <span class="rack-label" style="font-size: 0.58rem; flex-shrink: 0; white-space: nowrap;">Rango:</span>
+                <select id="fft-select-range" class="osc-select-mini" style="width: auto; min-width: 58px; cursor: pointer;">
                   <option value="40">40 dB</option>
                   <option value="60">60 dB</option>
                   <option value="80" selected>80 dB</option>
@@ -209,6 +212,12 @@ export class FftAnalyzerInstrument {
   }
 
   private bindEvents(): void {
+    if (typeof window !== "undefined") {
+      window.addEventListener("astryd-theme-changed", () => {
+        this.computeAndDraw();
+      });
+    }
+
     // 1. Selector de Canal de Entrada (CH1, CH2, DIFF)
     const btnCh1 = this.container.querySelector("#fft-btn-ch1") as HTMLElement | null;
     const btnCh2 = this.container.querySelector("#fft-btn-ch2") as HTMLElement | null;
@@ -279,6 +288,11 @@ export class FftAnalyzerInstrument {
       this.computeAndDraw();
     });
 
+    // 5.1 Auto-Peak Search
+    this.container.querySelector("#fft-btn-auto-peak")?.addEventListener("click", () => {
+      this.autoPeakSearch();
+    });
+
     // 6. Reset Hold
     this.container.querySelector("#fft-btn-reset-hold")?.addEventListener("click", () => {
       this.resetHold();
@@ -288,6 +302,24 @@ export class FftAnalyzerInstrument {
     // 7. Exportación CSV y Snapshot PNG
     this.container.querySelector("#fft-btn-export-csv")?.addEventListener("click", () => this.exportCsv());
     this.container.querySelector("#fft-btn-snapshot")?.addEventListener("click", () => this.snapshotPng());
+  }
+
+  public autoPeakSearch(): void {
+    if (!this.lastResult) return;
+    this.isCursorsEnabled = true;
+    const cursorsBtn = this.container.querySelector("#fft-btn-cursors") as HTMLButtonElement | null;
+    if (cursorsBtn) {
+      cursorsBtn.classList.add("active");
+      cursorsBtn.textContent = "📏 Cursores: ON";
+    }
+
+    this.cursorF1 = this.lastResult.fundamentalFreq;
+    if (this.lastResult.harmonics.length > 1) {
+      this.cursorF2 = this.lastResult.harmonics[1].freq;
+    } else {
+      this.cursorF2 = this.lastResult.fundamentalFreq * 2;
+    }
+    this.computeAndDraw();
   }
 
   public resetHold(): void {
@@ -320,12 +352,14 @@ export class FftAnalyzerInstrument {
   }
 
   public computeAndDraw(): void {
-    const raw = this.getActiveRawData();
-    const result = computeFftSpectrum(raw, this.windowType, 1024);
+    const data = this.getActiveRawData();
+    const result = computeFftSpectrum(data, this.windowType, 1024);
     this.lastResult = result;
 
     if (result) {
-      // Manejar Max-Hold
+      this.updateMetricsUI(result);
+
+      // Promediado y Max Hold
       if (this.avgMode === "max_hold") {
         if (!this.maxHoldMagnitudes || this.maxHoldMagnitudes.length !== result.magnitudesVrms.length) {
           this.maxHoldMagnitudes = new Float64Array(result.magnitudesVrms);
@@ -339,9 +373,6 @@ export class FftAnalyzerInstrument {
       } else {
         this.maxHoldMagnitudes = null;
       }
-
-      // Actualizar Métricas en Panel Lateral
-      this.updateMetricsUI(result);
     }
 
     if (!this.canvas || !this.ctx) return;
@@ -386,7 +417,7 @@ export class FftAnalyzerInstrument {
     if (thdnEl) thdnEl.textContent = `${result.thdPlusNoisePercent.toFixed(2)} %`;
 
     const sinadEl = this.container.querySelector("#fft-val-sinad");
-    if (sinadEl) sinadEl.textContent = `${result.sinadDb.toFixed(1)} dB`;
+    if (sinadEl) sinadEl.textContent = `${result.sinadDb.toFixed(1)} dB / ${result.enob.toFixed(1)}b`;
   }
 
   private updateStatusFooter(result: FftAnalysisResult | null): void {

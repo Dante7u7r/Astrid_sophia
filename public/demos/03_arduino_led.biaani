@@ -1,0 +1,19 @@
+{
+  "version": "3.0",
+  "components": [
+    { "id": "U1", "type": "arduino_uno", "value": 1, "x": -100, "y": 0, "rotation": 0, "mcuClockSpeed": 16000000 },
+    { "id": "R1", "type": "resistor", "value": 330, "x": 120, "y": -40, "rotation": 0 },
+    { "id": "LED1", "type": "led", "value": 0, "x": 260, "y": -40, "rotation": 0 },
+    { "id": "GND1", "type": "ground", "value": 0, "x": 340, "y": 160, "rotation": 0 }
+  ],
+  "wires": [
+    { "id": "w1", "from": { "componentId": "U1", "pinIndex": 5 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] },
+    { "id": "w2", "from": { "componentId": "U1", "pinIndex": 1 }, "to": { "componentId": "R1", "pinIndex": 0 }, "points": [], "label": "PIN_13", "color": "#22c55e" },
+    { "id": "w3", "from": { "componentId": "R1", "pinIndex": 1 }, "to": { "componentId": "LED1", "pinIndex": 0 }, "points": [], "label": "V_LED", "color": "#66fcf1" },
+    { "id": "w4", "from": { "componentId": "LED1", "pinIndex": 1 }, "to": { "componentId": "GND1", "pinIndex": 0 }, "points": [] }
+  ],
+  "viewport": { "zoom": 0.95, "offsetX": 340, "offsetY": 200 },
+  "simSettings": { "dt": 0.00001, "tolerance": 0.00001, "maxIterations": 100 },
+  "activeAnalysisMode": "TRAN",
+  "probes": { "ch1ProbeNode": "1", "ch2ProbeNode": "2" }
+}

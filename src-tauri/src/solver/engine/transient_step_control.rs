@@ -9,8 +9,18 @@ pub enum IntegrationMethodType {
     Euler,
     /// Trapezoidal (Orden 2, A-estable, disipación numérica cero).
     Trap,
+    /// TR-BDF2 (Trapezoidal + BDF2 compuesto, Orden 2, L-estable, amortigua ringing en electrónica de potencia).
+    TrBdf2,
     /// Gear 2nd Order / BDF2 (Orden 2, L-estable, amortiguamiento de ringing numérico).
     Gear2,
+    /// Gear 3rd Order / BDF3 (Orden 3, A(alpha)-estable con alpha=86°).
+    Gear3,
+    /// Gear 4th Order / BDF4 (Orden 4, A(alpha)-estable con alpha=73°).
+    Gear4,
+    /// Gear 5th Order / BDF5 (Orden 5, A(alpha)-estable con alpha=51°).
+    Gear5,
+    /// Gear 6th Order / BDF6 (Orden 6, A(alpha)-estable con alpha=18°).
+    Gear6,
 }
 
 impl IntegrationMethodType {
@@ -18,15 +28,79 @@ impl IntegrationMethodType {
         match self {
             IntegrationMethodType::Euler => "euler",
             IntegrationMethodType::Trap => "trap",
+            IntegrationMethodType::TrBdf2 => "trbdf2",
             IntegrationMethodType::Gear2 => "gear2",
+            IntegrationMethodType::Gear3 => "gear3",
+            IntegrationMethodType::Gear4 => "gear4",
+            IntegrationMethodType::Gear5 => "gear5",
+            IntegrationMethodType::Gear6 => "gear6",
         }
     }
+
+    pub fn order(&self) -> usize {
+        match self {
+            IntegrationMethodType::Euler => 1,
+            IntegrationMethodType::Trap => 2,
+            IntegrationMethodType::TrBdf2 => 2,
+            IntegrationMethodType::Gear2 => 2,
+            IntegrationMethodType::Gear3 => 3,
+            IntegrationMethodType::Gear4 => 4,
+            IntegrationMethodType::Gear5 => 5,
+            IntegrationMethodType::Gear6 => 6,
+        }
+    }
+
+    pub fn is_bdf(&self) -> bool {
+        !matches!(self, IntegrationMethodType::Trap)
+    }
+}
+
+/// Calcula los coeficientes de diferenciación hacia atrás (BDF / Gear) de orden $k \in [1, 6]$
+/// para una secuencia de pasos de tiempo no uniformes:
+/// $\dot{x}(t_n) \approx \alpha_0 x(t_n) + \sum_{j=1}^k \alpha_j x(t_{n-j})$
+/// Devuelve un vector $[\alpha_0, \alpha_1, \dots, \alpha_k]$.
+pub fn compute_bdf_coefficients(order: usize, dts: &[f64]) -> Vec<f64> {
+    let k = order.clamp(1, 6).min(dts.len());
+    if k == 0 {
+        return vec![1.0];
+    }
+    let mut t = vec![0.0; k + 1];
+    let mut acc_t = 0.0;
+    for m in 0..k {
+        acc_t += dts[m].max(1e-18);
+        t[m + 1] = -acc_t;
+    }
+
+    let mut alphas = vec![0.0; k + 1];
+
+    // alpha_0: derivada del polinomio base l_0(t) en t = 0
+    let mut sum_inv_t = 0.0;
+    for p in 1..=k {
+        sum_inv_t += 1.0 / (-t[p]);
+    }
+    alphas[0] = sum_inv_t;
+
+    // alpha_j (j >= 1): derivada del polinomio base l_j(t) en t = 0
+    for j in 1..=k {
+        let mut prod = 1.0;
+        for m in 1..=k {
+            if m != j {
+                let denom = t[j] - t[m];
+                if denom.abs() > 1e-30 {
+                    prod *= (-t[m]) / denom;
+                }
+            }
+        }
+        alphas[j] = (1.0 / t[j]) * prod;
+    }
+
+    alphas
 }
 
 /// Controlador adaptativo de paso y orden variable para el integrador transitorio.
 #[derive(Debug, Clone)]
 pub struct VariableOrderController {
-    /// Modo configurado por el usuario ("auto", "trap", "gear2", "euler").
+    /// Modo configurado por el usuario ("auto", "trap", "gear2", "gear3", "gear4", "gear5", "gear6", "euler").
     pub mode: String,
     /// Método activo para el paso actual.
     pub active_method: IntegrationMethodType,
@@ -34,6 +108,8 @@ pub struct VariableOrderController {
     pub ringing_count: usize,
     /// Pasos completados con el método actual.
     pub steps_with_current_method: usize,
+    /// Orden máximo permitido en modo auto (por defecto 6).
+    pub max_order: usize,
 }
 
 impl VariableOrderController {
@@ -41,6 +117,11 @@ impl VariableOrderController {
         let (mode, active_method) = match method_str {
             "euler" | "BE" => ("euler".to_string(), IntegrationMethodType::Euler),
             "gear2" => ("gear2".to_string(), IntegrationMethodType::Gear2),
+            "gear3" => ("gear3".to_string(), IntegrationMethodType::Gear3),
+            "gear4" => ("gear4".to_string(), IntegrationMethodType::Gear4),
+            "gear5" => ("gear5".to_string(), IntegrationMethodType::Gear5),
+            "gear6" => ("gear6".to_string(), IntegrationMethodType::Gear6),
+            "trbdf2" | "tr-bdf2" => ("trbdf2".to_string(), IntegrationMethodType::TrBdf2),
             "trap" | "trapezoidal" => ("trap".to_string(), IntegrationMethodType::Trap),
             _ => ("auto".to_string(), IntegrationMethodType::Trap),
         };
@@ -49,6 +130,7 @@ impl VariableOrderController {
             active_method,
             ringing_count: 0,
             steps_with_current_method: 0,
+            max_order: 6,
         }
     }
 
@@ -118,13 +200,23 @@ pub(crate) fn estimate_local_truncation_error(
     let reltol = reltol_opt.unwrap_or(1e-3);
     let vntol = vntol_opt.unwrap_or(1e-6);
 
-    let third_order =
-        steps_completed >= 3 && (integration_method == "trap" || integration_method == "gear2");
-    if third_order {
-        let coefficient = if integration_method == "trap" {
-            1.0 / 12.0
-        } else {
-            2.0 / 9.0
+    let is_higher_order = steps_completed >= 3
+        && (integration_method == "trap"
+            || integration_method == "gear2"
+            || integration_method == "gear3"
+            || integration_method == "gear4"
+            || integration_method == "gear5"
+            || integration_method == "gear6");
+
+    if is_higher_order {
+        let coefficient = match integration_method {
+            "trap" => 1.0 / 12.0,
+            "gear2" => 2.0 / 9.0,
+            "gear3" => 3.0 / 16.0,
+            "gear4" => 12.0 / 75.0,
+            "gear5" => 60.0 / 441.0,
+            "gear6" => 360.0 / 3025.0,
+            _ => 2.0 / 9.0,
         };
         let mut maximum: f64 = 0.0;
         let prev_h = previous_dt.max(1e-18);
@@ -152,9 +244,17 @@ pub(crate) fn estimate_local_truncation_error(
             }
         }
 
+        let order_val = match integration_method {
+            "gear3" => 3.0,
+            "gear4" => 4.0,
+            "gear5" => 5.0,
+            "gear6" => 6.0,
+            _ => 2.0,
+        };
+
         return LteEstimate {
             maximum,
-            integrator_order: 2.0,
+            integrator_order: order_val,
         };
     }
 
@@ -197,7 +297,7 @@ pub struct VariableOrderDecision {
     pub ringing_detected: bool,
 }
 
-/// Evalúa el LTE y predice el método óptimo (TRAP ↔ BE ↔ GEAR2) y el siguiente paso temporal $dt$.
+/// Evalúa el LTE y predice el método óptimo (TRAP ↔ BE ↔ GEAR2..6) y el siguiente paso temporal $dt$.
 #[allow(clippy::too_many_arguments)]
 pub fn predict_variable_order_step(
     controller: &mut VariableOrderController,
@@ -268,11 +368,13 @@ pub fn predict_variable_order_step(
         let bounded_factor = factor.clamp(0.1, 0.5);
         let reduced_dt = (dt * bounded_factor).max(dt_min);
 
-        // Si se detecta ringing trapezoidal, conmutar a GEAR2. Si el error fue severo sin ringing, reiniciar con Euler.
+        // Si se detecta ringing trapezoidal, conmutar a GEAR2. Si el error fue severo sin ringing, reiniciar con Euler/Gear2.
         let next_method = if controller.is_auto() && ringing {
             IntegrationMethodType::Gear2
         } else if controller.is_auto() && lte_max > 5.0 * lte_tol {
             IntegrationMethodType::Euler
+        } else if controller.active_method.order() > 2 {
+            IntegrationMethodType::Gear2
         } else {
             controller.active_method
         };
@@ -303,11 +405,34 @@ pub fn predict_variable_order_step(
             next_method = IntegrationMethodType::Trap;
             controller.steps_with_current_method = 0;
         } else if controller.active_method == IntegrationMethodType::Gear2
-            && controller.steps_with_current_method >= 5
+            && controller.steps_with_current_method >= 4
             && !ringing
         {
-            // Si el sistema se estabilizó en régimen suave, retornar a TRAP para preservar resonancias
-            next_method = IntegrationMethodType::Trap;
+            // Promoción adaptativa a órdenes superiores en regiones suaves
+            if controller.max_order >= 3 {
+                next_method = IntegrationMethodType::Gear3;
+                controller.steps_with_current_method = 0;
+            } else {
+                next_method = IntegrationMethodType::Trap;
+                controller.steps_with_current_method = 0;
+            }
+        } else if controller.active_method == IntegrationMethodType::Gear3
+            && controller.steps_with_current_method >= 4
+            && controller.max_order >= 4
+        {
+            next_method = IntegrationMethodType::Gear4;
+            controller.steps_with_current_method = 0;
+        } else if controller.active_method == IntegrationMethodType::Gear4
+            && controller.steps_with_current_method >= 4
+            && controller.max_order >= 5
+        {
+            next_method = IntegrationMethodType::Gear5;
+            controller.steps_with_current_method = 0;
+        } else if controller.active_method == IntegrationMethodType::Gear5
+            && controller.steps_with_current_method >= 4
+            && controller.max_order >= 6
+        {
+            next_method = IntegrationMethodType::Gear6;
             controller.steps_with_current_method = 0;
         }
     }
@@ -433,12 +558,44 @@ mod tests {
 
     #[test]
     fn test_variable_order_ringing_detection() {
-        // Simular oscilación de alta frecuencia tipo (-1)^k
         let sol_n = DVector::from_vec(vec![5.0]);
         let sol_n1 = DVector::from_vec(vec![3.0]);
         let sol_n2 = DVector::from_vec(vec![5.0]);
 
         let ringing = detect_trapezoidal_ringing(&sol_n, &sol_n1, &sol_n2, 1, 1e-6);
         assert!(ringing, "Debe detectar ringing trapezoidal");
+    }
+
+    #[test]
+    fn test_bdf_coefficients_exactness() {
+        // BDF1 uniform
+        let c1 = compute_bdf_coefficients(1, &[1.0]);
+        assert_eq!(c1.len(), 2);
+        assert!((c1[0] - 1.0).abs() < 1e-12);
+        assert!((c1[1] - (-1.0)).abs() < 1e-12);
+
+        // BDF2 uniform
+        let c2 = compute_bdf_coefficients(2, &[1.0, 1.0]);
+        assert_eq!(c2.len(), 3);
+        assert!((c2[0] - 1.5).abs() < 1e-12);
+        assert!((c2[1] - (-2.0)).abs() < 1e-12);
+        assert!((c2[2] - 0.5).abs() < 1e-12);
+
+        // BDF3 uniform: 11/6, -3, 3/2, -1/3
+        let c3 = compute_bdf_coefficients(3, &[1.0, 1.0, 1.0]);
+        assert_eq!(c3.len(), 4);
+        assert!((c3[0] - 11.0 / 6.0).abs() < 1e-12);
+        assert!((c3[1] - (-3.0)).abs() < 1e-12);
+        assert!((c3[2] - 1.5).abs() < 1e-12);
+        assert!((c3[3] - (-1.0 / 3.0)).abs() < 1e-12);
+
+        // BDF4 uniform: 25/12, -4, 3, -4/3, 1/4
+        let c4 = compute_bdf_coefficients(4, &[1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(c4.len(), 5);
+        assert!((c4[0] - 25.0 / 12.0).abs() < 1e-12);
+        assert!((c4[1] - (-4.0)).abs() < 1e-12);
+        assert!((c4[2] - 3.0).abs() < 1e-12);
+        assert!((c4[3] - (-4.0 / 3.0)).abs() < 1e-12);
+        assert!((c4[4] - 0.25).abs() < 1e-12);
     }
 }

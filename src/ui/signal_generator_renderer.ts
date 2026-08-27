@@ -12,6 +12,7 @@ import {
   type SignalGeneratorParams,
   type WaveformMetrics,
 } from "./signal_generator_model";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface RenderGeneratorOptions {
   width: number;
@@ -26,9 +27,10 @@ export function drawSignalGeneratorPreview(
   options: RenderGeneratorOptions,
 ): void {
   const { width, height, params, metrics, phaseOffsetTime = 0 } = options;
+  const theme = getInstrumentThemeColors();
 
-  // 1. Limpieza con fondo profundo de osciloscopio
-  ctx.fillStyle = "#030508";
+  // 1. Limpieza con fondo profundo o claro según tema
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   if (width <= 10 || height <= 10) return;
@@ -41,7 +43,7 @@ export function drawSignalGeneratorPreview(
   const centerY = height / 2;
 
   // 3. Dibujar retícula milimétrica
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.08)";
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
   ctx.beginPath();
 
@@ -124,7 +126,7 @@ export function drawSignalGeneratorPreview(
   const pointsCount = Math.max(80, Math.min(500, Math.round(width * 1.2)));
   const dt = timeWindow / pointsCount;
 
-  ctx.strokeStyle = "#38bdf8";
+  ctx.strokeStyle = theme.traceColors.ch2;
   ctx.lineWidth = 2.2;
   ctx.beginPath();
 
@@ -145,7 +147,7 @@ export function drawSignalGeneratorPreview(
   const yMin = centerY - (metrics.vmin / voltsPerDiv) * divHeight;
 
   if (yMax >= 8 && yMax <= height - 8) {
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
+    ctx.strokeStyle = theme.gridLine;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 4]);
     ctx.beginPath();
@@ -153,14 +155,14 @@ export function drawSignalGeneratorPreview(
     ctx.lineTo(width, yMax);
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(56, 189, 248, 0.85)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "9px monospace";
     ctx.textAlign = "right";
     ctx.fillText(`+${formatVoltage(metrics.vmax)}`, width - 6, yMax - 3);
   }
 
   if (yMin >= 8 && yMin <= height - 8) {
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
+    ctx.strokeStyle = theme.gridLine;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 4]);
     ctx.beginPath();
@@ -168,7 +170,7 @@ export function drawSignalGeneratorPreview(
     ctx.lineTo(width, yMin);
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(56, 189, 248, 0.85)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "9px monospace";
     ctx.textAlign = "right";
     ctx.fillText(`${formatVoltage(metrics.vmin)}`, width - 6, yMin + 10);
@@ -176,22 +178,24 @@ export function drawSignalGeneratorPreview(
   ctx.setLineDash([]);
 
   // 7. Mini HUD de Parámetros en la esquina superior izquierda
-  ctx.fillStyle = "rgba(3, 5, 8, 0.75)";
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+  ctx.fillStyle = theme.isClassroom ? "rgba(241, 245, 249, 0.92)" : "rgba(3, 5, 8, 0.85)";
+  ctx.strokeStyle = theme.axisLine;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(8, 8, 145, 46, 6);
+  ctx.roundRect(8, 8, 175, 54, 6);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#38bdf8";
+  ctx.fillStyle = theme.traceColors.ch2;
   ctx.font = "bold 10px monospace";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText(`f : ${formatFrequency(params.frequency)}`, 14, 14);
+  const zLabel = params.outputImpedance === "50_ohm" ? "50 Ω" : "High-Z";
+  ctx.fillText(`f: ${formatFrequency(params.frequency)} [${zLabel}]`, 14, 13);
 
-  ctx.fillStyle = "#e2e8f0";
+  ctx.fillStyle = theme.axisText;
   ctx.font = "9px monospace";
-  ctx.fillText(`Vpp: ${formatVoltage(metrics.vpp)} | Vrms: ${formatVoltage(metrics.vrms)}`, 14, 27);
-  ctx.fillText(`Offset: ${formatVoltage(params.offset)}`, 14, 39);
+  ctx.fillText(`Vpp: ${formatVoltage(metrics.vpp)} | Vrms: ${formatVoltage(metrics.vrms)}`, 14, 26);
+  const dbmStr = metrics.dbm50 !== undefined ? `${metrics.dbm50.toFixed(1)} dBm` : "--";
+  ctx.fillText(`Offset: ${formatVoltage(params.offset)} | P: ${dbmStr}`, 14, 39);
 }

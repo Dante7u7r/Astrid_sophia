@@ -6,12 +6,14 @@
  */
 
 import type { TraceResult } from "./curve_tracer_model";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface CurveTracerRenderOptions {
   width: number;
   height: number;
   result: TraceResult | null;
   qPoint?: { v: number; i: number } | null; // Punto de operación Q interactivo
+  loadLine?: [{ v: number; i: number }, { v: number; i: number }] | null; // Recta de carga DC
   showTangent?: boolean;
 }
 
@@ -19,10 +21,11 @@ export function drawCurveTracer(
   ctx: CanvasRenderingContext2D,
   options: CurveTracerRenderOptions,
 ): void {
-  const { width, height, result, qPoint = null, showTangent = true } = options;
+  const { width, height, result, qPoint = null, loadLine = null, showTangent = true } = options;
+  const theme = getInstrumentThemeColors();
 
   // 1. Limpieza de fondo
-  ctx.fillStyle = "#030508";
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   if (width <= 40 || height <= 40) return;
@@ -36,11 +39,11 @@ export function drawCurveTracer(
   const plotH = height - topMargin - bottomMargin;
 
   // 2. Fondo del Área de Gráfica
-  ctx.fillStyle = "rgba(4, 9, 20, 0.95)";
+  ctx.fillStyle = theme.plotAreaBg;
   ctx.fillRect(leftMargin, topMargin, plotW, plotH);
 
   if (!result || result.traces.length === 0) {
-    ctx.strokeStyle = "rgba(79, 156, 249, 0.12)";
+    ctx.strokeStyle = theme.gridLine;
     ctx.lineWidth = 1;
     // Cuadrícula vacía
     for (let d = 0; d <= 10; d++) {
@@ -57,10 +60,10 @@ export function drawCurveTracer(
       ctx.lineTo(leftMargin + plotW, y);
       ctx.stroke();
     }
-    ctx.strokeStyle = "rgba(79, 156, 249, 0.35)";
+    ctx.strokeStyle = theme.axisLine;
     ctx.strokeRect(leftMargin, topMargin, plotW, plotH);
 
-    ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -79,7 +82,7 @@ export function drawCurveTracer(
   const numDivsX = 10;
   const numDivsY = 8;
 
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.12)";
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
 
   for (let d = 0; d <= numDivsX; d++) {
@@ -92,7 +95,7 @@ export function drawCurveTracer(
     // Etiquetas eje X (Tensión)
     const vVal = vMin + (d * vSpan) / numDivsX;
     const vStr = Math.abs(vVal) >= 1 ? `${vVal.toFixed(1)}V` : `${(vVal * 1e3).toFixed(0)}mV`;
-    ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "9px monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -112,7 +115,7 @@ export function drawCurveTracer(
       Math.abs(iVal) >= 1.0 ? `${iVal.toFixed(2)}A` :
       Math.abs(iVal) >= 1e-3 ? `${(iVal * 1e3).toFixed(1)}mA` :
       `${(iVal * 1e6).toFixed(0)}µA`;
-    ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "9px monospace";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
@@ -120,7 +123,7 @@ export function drawCurveTracer(
   }
 
   // Ejes centrales (si cruzan por cero)
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.4)";
+  ctx.strokeStyle = theme.axisLine;
   ctx.lineWidth = 1.5;
   if (vMin < 0 && vMax > 0) {
     const zeroX = valToX(0);
@@ -178,6 +181,30 @@ export function drawCurveTracer(
       ctx.textBaseline = "middle";
       ctx.fillText(trace.stepLabel, tagX, tagY - 6);
     }
+  }
+
+  // 4.1 Recta de Carga DC (Load Line)
+  if (loadLine && loadLine.length === 2) {
+    const p1 = loadLine[0];
+    const p2 = loadLine[1];
+    const x1 = valToX(p1.v);
+    const y1 = Math.max(topMargin, Math.min(topMargin + plotH, valToY(p1.i)));
+    const x2 = valToX(p2.v);
+    const y2 = Math.max(topMargin, Math.min(topMargin + plotH, valToY(p2.i)));
+
+    ctx.strokeStyle = "#f97316";
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "#f97316";
+    ctx.font = "bold 8px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("Recta de Carga", x2 - 50, y2 - 6);
   }
 
   // 5. Cursor de Punto de Operación Q interactivo (si está presente)

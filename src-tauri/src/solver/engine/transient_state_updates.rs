@@ -6,6 +6,8 @@ pub(crate) struct IntegrationHistoryParams<'a> {
     pub integration_method: &'a str,
     pub trap_active_this_step: bool,
     pub gear2_active_this_step: bool,
+    pub bdf_order: usize,
+    pub bdf_alphas: &'a [f64],
     pub gear_a: f64,
     pub gear_b: f64,
     pub gear_c: f64,
@@ -17,32 +19,37 @@ pub(crate) fn update_passive_storage_states(
     step_solution: &DVector<f64>,
     cap_states: &mut HashMap<String, f64>,
     cap_states_prev: &mut HashMap<String, f64>,
+    cap_history: &mut Vec<HashMap<String, f64>>,
     ind_states: &mut HashMap<String, f64>,
     ind_states_prev: &mut HashMap<String, f64>,
+    ind_history: &mut Vec<HashMap<String, f64>>,
     params: &IntegrationHistoryParams<'_>,
 ) {
+    let mut new_cap_map = HashMap::new();
+    let mut new_ind_map = HashMap::new();
+
     for comp in &netlist.components {
         match comp.comp_type.as_str() {
             "capacitor" => {
-                let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                let node_neg = comp.pins[1].parse::<usize>().unwrap();
+                let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                 let new_vc =
                     node_voltage(step_solution, node_pos) - node_voltage(step_solution, node_neg);
                 let prev_vc = *cap_states.get(&comp.id).unwrap_or(&0.0);
                 cap_states_prev.insert(comp.id.clone(), prev_vc);
                 cap_states.insert(comp.id.clone(), new_vc);
+                new_cap_map.insert(comp.id.clone(), new_vc);
             }
             "inductor" => {
                 if is_coupled_inductor(netlist, &comp.id) || params.integration_method == "trap" {
                     continue;
                 }
 
-                let node_pos = comp.pins[0].parse::<usize>().unwrap();
-                let node_neg = comp.pins[1].parse::<usize>().unwrap();
+                let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                 let new_vl =
                     node_voltage(step_solution, node_pos) - node_voltage(step_solution, node_neg);
-                let prev_il = *ind_states.get(&comp.id).unwrap();
-                let prev_prev_il = *ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
+                let prev_il = *ind_states.get(&comp.id).unwrap_or(&0.0);
                 let l_nominal = comp.value.max(1e-18);
                 let ind_val_safe = if let Some(isat) = comp.isat {
                     if isat > 0.0 {
@@ -56,7 +63,26 @@ pub(crate) fn update_passive_storage_states(
                 }
                 .max(1e-18);
 
-                let new_il = if params.gear2_active_this_step {
+                let new_il = if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+                    let alpha_0 = params.bdf_alphas[0].max(1e-18);
+                    let g_eq = 1.0 / (alpha_0 * ind_val_safe);
+                    let mut sum_hist = 0.0;
+                    for j in 1..=params.bdf_order.min(params.bdf_alphas.len() - 1) {
+                        let past_il = if j == 1 {
+                            prev_il
+                        } else if j == 2 {
+                            *ind_states_prev.get(&comp.id).unwrap_or(&prev_il)
+                        } else if j - 1 < ind_history.len() {
+                            *ind_history[j - 1].get(&comp.id).unwrap_or(&prev_il)
+                        } else {
+                            prev_il
+                        };
+                        sum_hist += params.bdf_alphas[j] * past_il;
+                    }
+                    let i_eq_val = -(1.0 / alpha_0) * sum_hist;
+                    g_eq * new_vl + i_eq_val
+                } else if params.gear2_active_this_step {
+                    let prev_prev_il = *ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
                     let g_eq = 1.0 / (params.gear_a * ind_val_safe);
                     let i_eq_val = -(params.gear_b / params.gear_a) * prev_il
                         - (params.gear_c / params.gear_a) * prev_prev_il;
@@ -67,8 +93,22 @@ pub(crate) fn update_passive_storage_states(
 
                 ind_states_prev.insert(comp.id.clone(), prev_il);
                 ind_states.insert(comp.id.clone(), new_il);
+                new_ind_map.insert(comp.id.clone(), new_il);
             }
             _ => {}
+        }
+    }
+
+    if !new_cap_map.is_empty() {
+        cap_history.insert(0, new_cap_map);
+        if cap_history.len() > 6 {
+            cap_history.pop();
+        }
+    }
+    if !new_ind_map.is_empty() {
+        ind_history.insert(0, new_ind_map);
+        if ind_history.len() > 6 {
+            ind_history.pop();
         }
     }
 }
@@ -78,6 +118,7 @@ pub(crate) fn update_coupled_inductor_states(
     step_solution: &DVector<f64>,
     ind_states: &mut HashMap<String, f64>,
     ind_states_prev: &mut HashMap<String, f64>,
+    ind_history: &[HashMap<String, f64>],
     params: &IntegrationHistoryParams<'_>,
 ) {
     if let Some(ref mutuals) = netlist.mutual_inductances {
@@ -86,10 +127,10 @@ pub(crate) fn update_coupled_inductor_states(
                 netlist.components.iter().find(|c| c.id == k_comp.l1_id),
                 netlist.components.iter().find(|c| c.id == k_comp.l2_id),
             ) {
-                let node_1pos = l1.pins[0].parse::<usize>().unwrap();
-                let node_1neg = l1.pins[1].parse::<usize>().unwrap();
-                let node_2pos = l2.pins[0].parse::<usize>().unwrap();
-                let node_2neg = l2.pins[1].parse::<usize>().unwrap();
+                let node_1pos = l1.pins[0].parse::<usize>().unwrap_or(0);
+                let node_1neg = l1.pins[1].parse::<usize>().unwrap_or(0);
+                let node_2pos = l2.pins[0].parse::<usize>().unwrap_or(0);
+                let node_2neg = l2.pins[1].parse::<usize>().unwrap_or(0);
 
                 let v1 =
                     node_voltage(step_solution, node_1pos) - node_voltage(step_solution, node_1neg);
@@ -107,7 +148,9 @@ pub(crate) fn update_coupled_inductor_states(
 
                 let prev_il1 = *ind_states.get(&l1.id).unwrap_or(&0.0);
                 let prev_il2 = *ind_states.get(&l2.id).unwrap_or(&0.0);
-                let f_step = if params.gear2_active_this_step {
+                let f_step = if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+                    1.0 / params.bdf_alphas[0].max(1e-18)
+                } else if params.gear2_active_this_step {
                     1.0 / params.gear_a
                 } else {
                     params.dt
@@ -117,7 +160,34 @@ pub(crate) fn update_coupled_inductor_states(
                 let g22 = (f_step * l1_val) / delta;
                 let g12 = -(f_step * m) / delta;
 
-                let (i_eq1, i_eq2) = if params.gear2_active_this_step {
+                let (i_eq1, i_eq2) = if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+                    let alpha_0 = params.bdf_alphas[0].max(1e-18);
+                    let mut sum1 = 0.0;
+                    let mut sum2 = 0.0;
+                    for j in 1..=params.bdf_order.min(params.bdf_alphas.len() - 1) {
+                        let past_il1 = if j == 1 {
+                            prev_il1
+                        } else if j == 2 {
+                            *ind_states_prev.get(&l1.id).unwrap_or(&prev_il1)
+                        } else if j - 1 < ind_history.len() {
+                            *ind_history[j - 1].get(&l1.id).unwrap_or(&prev_il1)
+                        } else {
+                            prev_il1
+                        };
+                        let past_il2 = if j == 1 {
+                            prev_il2
+                        } else if j == 2 {
+                            *ind_states_prev.get(&l2.id).unwrap_or(&prev_il2)
+                        } else if j - 1 < ind_history.len() {
+                            *ind_history[j - 1].get(&l2.id).unwrap_or(&prev_il2)
+                        } else {
+                            prev_il2
+                        };
+                        sum1 += params.bdf_alphas[j] * past_il1;
+                        sum2 += params.bdf_alphas[j] * past_il2;
+                    }
+                    (-(1.0 / alpha_0) * sum1, -(1.0 / alpha_0) * sum2)
+                } else if params.gear2_active_this_step {
                     let prev_prev_il1 = *ind_states_prev.get(&l1.id).unwrap_or(&prev_il1);
                     let prev_prev_il2 = *ind_states_prev.get(&l2.id).unwrap_or(&prev_il2);
                     (

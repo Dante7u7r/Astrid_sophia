@@ -149,3 +149,311 @@ export function drawJfet(ctx: CanvasRenderingContext2D, _comp: ComponentInstance
   ctx.fill();
   ctx.restore();
 }
+
+/** ─── TIRISTOR SCR (2N5064 / BT151) ─── */
+export function drawScr(
+  ctx: CanvasRenderingContext2D,
+  _comp: ComponentInstance,
+  color: string,
+  isConducting?: boolean,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // 1. Leads
+  // Ánodo (0, -40) -> (0, -10)
+  // Cátodo (0, 10) -> (0, 40)
+  // Puerta (-40, 20) -> (-14, 20) -> (-6, 10)
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(0, -10);
+
+  ctx.moveTo(0, 10);
+  ctx.lineTo(0, 40);
+
+  ctx.moveTo(-40, 20);
+  ctx.lineTo(-14, 20);
+  ctx.lineTo(-6, 10);
+  ctx.stroke();
+
+  // 2. Triángulo del diodo / ánodo
+  ctx.beginPath();
+  ctx.moveTo(-12, -10);
+  ctx.lineTo(12, -10);
+  ctx.lineTo(0, 10);
+  ctx.closePath();
+
+  if (isConducting) {
+    ctx.fillStyle = "rgba(16, 185, 129, 0.85)";
+    ctx.fill();
+    ctx.strokeStyle = "#34D399";
+  } else {
+    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fill();
+  }
+  ctx.stroke();
+
+  // 3. Barra del cátodo
+  ctx.beginPath();
+  ctx.moveTo(-12, 10);
+  ctx.lineTo(12, 10);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/** ─── TRIAC (BT136 / BTA16) ─── */
+export function drawTriac(
+  ctx: CanvasRenderingContext2D,
+  _comp: ComponentInstance,
+  color: string,
+  isConducting?: boolean,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // 1. Leads
+  // MT2 (0, -40) -> (0, -10)
+  // MT1 (0, 10) -> (0, 40)
+  // Puerta G (-40, 20) -> (-14, 20) -> (-4, 10)
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(0, -10);
+
+  ctx.moveTo(0, 10);
+  ctx.lineTo(0, 40);
+
+  ctx.moveTo(-40, 20);
+  ctx.lineTo(-14, 20);
+  ctx.lineTo(-4, 10);
+  ctx.stroke();
+
+  // 2. Doble triángulo antiparalelo
+  // Triángulo 1 (hacia abajo)
+  ctx.beginPath();
+  ctx.moveTo(-12, -10);
+  ctx.lineTo(2, -10);
+  ctx.lineTo(-5, 10);
+  ctx.closePath();
+
+  // Triángulo 2 (hacia arriba)
+  ctx.moveTo(-2, 10);
+  ctx.lineTo(12, 10);
+  ctx.lineTo(5, -10);
+  ctx.closePath();
+
+  if (isConducting) {
+    ctx.fillStyle = "rgba(16, 185, 129, 0.85)";
+    ctx.fill();
+    ctx.strokeStyle = "#34D399";
+  } else {
+    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fill();
+  }
+  ctx.stroke();
+
+  // 3. Barras de ánodo / cátodo duales
+  ctx.beginPath();
+  ctx.moveTo(-12, -10);
+  ctx.lineTo(12, -10);
+  ctx.moveTo(-12, 10);
+  ctx.lineTo(12, 10);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/** ─── DIAC (DB3 / BR100) ─── */
+export function drawDiac(
+  ctx: CanvasRenderingContext2D,
+  _comp: ComponentInstance,
+  color: string,
+  isConducting?: boolean,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // 1. Leads
+  // A1 (0, -40) -> (0, -10)
+  // A2 (0, 10) -> (0, 40)
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(0, -10);
+
+  ctx.moveTo(0, 10);
+  ctx.lineTo(0, 40);
+  ctx.stroke();
+
+  // 2. Doble triángulo antiparalelo simétrico
+  ctx.beginPath();
+  ctx.moveTo(-12, -10);
+  ctx.lineTo(2, -10);
+  ctx.lineTo(-5, 10);
+  ctx.closePath();
+
+  ctx.moveTo(-2, 10);
+  ctx.lineTo(12, 10);
+  ctx.lineTo(5, -10);
+  ctx.closePath();
+
+  if (isConducting) {
+    ctx.fillStyle = "rgba(56, 189, 248, 0.85)";
+    ctx.fill();
+    ctx.strokeStyle = "#38BDF8";
+  } else {
+    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fill();
+  }
+  ctx.stroke();
+
+  // Barras
+  ctx.beginPath();
+  ctx.moveTo(-12, -10);
+  ctx.lineTo(12, -10);
+  ctx.moveTo(-12, 10);
+  ctx.lineTo(12, 10);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/** ─── REGULADOR SHUNT DE PRECISIÓN TL431 ─── */
+export function drawTl431(
+  ctx: CanvasRenderingContext2D,
+  _comp: ComponentInstance,
+  color: string,
+  isRegulating?: boolean,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // 1. Leads
+  // Cátodo K (0, -40) -> (0, -10)
+  // Ánodo A (0, 10) -> (0, 40)
+  // Referencia REF (-40, 0) -> (-10, 0)
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(0, -10);
+
+  ctx.moveTo(0, 10);
+  ctx.lineTo(0, 40);
+
+  ctx.moveTo(-40, 0);
+  ctx.lineTo(-8, 0);
+  ctx.stroke();
+
+  // 2. Triángulo Zener (Ánodo apunta hacia cátodo superior)
+  ctx.beginPath();
+  ctx.moveTo(-12, 10);
+  ctx.lineTo(12, 10);
+  ctx.lineTo(0, -10);
+  ctx.closePath();
+
+  if (isRegulating) {
+    ctx.fillStyle = "rgba(16, 185, 129, 0.85)";
+    ctx.fill();
+    ctx.strokeStyle = "#34D399";
+  } else {
+    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fill();
+  }
+  ctx.stroke();
+
+  // 3. Barra de cátodo con alas Zener en forma de Z
+  ctx.beginPath();
+  ctx.moveTo(-14, -6);
+  ctx.lineTo(-12, -10);
+  ctx.lineTo(12, -10);
+  ctx.lineTo(14, -14);
+  ctx.stroke();
+
+  // Rótulo REF
+  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.font = "bold 7px monospace";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillText("REF", -12, -6);
+
+  ctx.restore();
+}
+
+export function drawIgbt(
+  ctx: CanvasRenderingContext2D,
+  comp: ComponentInstance,
+  color: string,
+  voltageMap?: Record<string, number>,
+): void {
+  const vG = voltageMap?.[`${comp.id}:0`] ?? 0;
+  const vC = voltageMap?.[`${comp.id}:1`] ?? 0;
+  const vE = voltageMap?.[`${comp.id}:2`] ?? 0;
+  const vGE = vG - vE;
+  const vCE = vC - vE;
+  const vth = Number(comp.value) || 5.0;
+  const isConducting = vGE >= vth && vCE > 0.5;
+
+  ctx.save();
+  ctx.strokeStyle = isConducting ? "#10B981" : color;
+  ctx.lineWidth = isConducting ? 2.4 : 1.8;
+
+  // 1. Terminales externos
+  // Compuerta G: (-40, 0) -> (-14, 0)
+  ctx.beginPath();
+  ctx.moveTo(-40, 0);
+  ctx.lineTo(-14, 0);
+
+  // Placa de compuerta aislada (Gate Plate) en x = -14
+  ctx.moveTo(-14, -18);
+  ctx.lineTo(-14, 18);
+  ctx.stroke();
+
+  // 2. Placa de canal/colector en x = -8
+  ctx.beginPath();
+  ctx.moveTo(-8, -18);
+  ctx.lineTo(-8, 18);
+  ctx.stroke();
+
+  // 3. Ramas de Colector (arriba) y Emisor (abajo)
+  // Colector C: (-8, -10) -> (20, -25) -> (20, -40)
+  ctx.beginPath();
+  ctx.moveTo(-8, -10);
+  ctx.lineTo(20, -25);
+  ctx.lineTo(20, -40);
+
+  // Emisor E: (-8, 10) -> (20, 25) -> (20, 40)
+  ctx.moveTo(-8, 10);
+  ctx.lineTo(20, 25);
+  ctx.lineTo(20, 40);
+  ctx.stroke();
+
+  // 4. Flecha saliente en el terminal de Emisor (indica N-channel IGBT)
+  ctx.beginPath();
+  ctx.moveTo(10, 20);
+  ctx.lineTo(18, 24);
+  ctx.lineTo(13, 27);
+  ctx.closePath();
+  ctx.fillStyle = isConducting ? "#10B981" : color;
+  ctx.fill();
+  ctx.stroke();
+
+  // 5. Insignia "IGBT"
+  ctx.fillStyle = isConducting ? "#34D399" : "rgba(148, 163, 184, 0.85)";
+  ctx.font = "bold 8px monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("IGBT", -4, 0);
+
+  ctx.restore();
+}
+

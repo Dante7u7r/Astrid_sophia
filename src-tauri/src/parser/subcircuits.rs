@@ -243,7 +243,9 @@ pub fn flatten_subcircuit(
         }
 
         // Mapear los pines del componente hijo
-        let first_char = child_local_id.chars().next().unwrap().to_ascii_lowercase();
+        let Some(first_char) = child_local_id.chars().next().map(|c| c.to_ascii_lowercase()) else {
+            continue;
+        };
 
         let (num_pins, is_gate, is_subckt) = match first_char {
             'r' | 'c' | 'l' => (2, false, false),
@@ -343,8 +345,41 @@ pub fn flatten_subcircuit(
                     instance_id, line
                 ));
             }
-            let subckt_name = tokens.last().unwrap().clone();
-            let sub_pins_raw = &tokens[1..tokens.len() - 1];
+            let mut params_start_idx = None;
+            let mut is_params_keyword = false;
+
+            for (i, tok) in tokens.iter().enumerate().skip(1) {
+                let lower = tok.to_lowercase();
+                if lower == "params:" || lower == "params" {
+                    params_start_idx = Some(i);
+                    is_params_keyword = true;
+                    break;
+                } else if tok.contains('=') {
+                    params_start_idx = Some(i);
+                    break;
+                }
+            }
+
+            let (subckt_name, sub_pins_raw, param_tokens) = if let Some(p_idx) = params_start_idx {
+                if p_idx < 3 {
+                    return Err(format!(
+                        "Instancia de subcircuito inválida en {}: se requiere nombre antes de parámetros en '{}'.",
+                        instance_id, line
+                    ));
+                }
+                let name = tokens[p_idx - 1].clone();
+                let pins = &tokens[1..p_idx - 1];
+                let p_toks = if is_params_keyword {
+                    &tokens[p_idx + 1..]
+                } else {
+                    &tokens[p_idx..]
+                };
+                (name, pins, p_toks)
+            } else {
+                let name = tokens.last().unwrap().clone();
+                let pins = &tokens[1..tokens.len() - 1];
+                (name, pins, &tokens[tokens.len()..])
+            };
 
             // Mapear pines locales del subcircuito usando el pin_map actual
             let mut sub_pins_mapped = Vec::new();
@@ -357,18 +392,17 @@ pub fn flatten_subcircuit(
                 }
             }
 
-            // Extraer parámetros PARAMS: de la línea de instanciación interna del subcircuito
+            // Extraer parámetros de la línea de instanciación interna del subcircuito
             let mut child_override_params = HashMap::new();
-            let line_joined = tokens.join(" ");
-            if let Some(params_idx) = line_joined.to_lowercase().find("params:") {
-                let params_section = &line_joined[params_idx + 7..];
-                for pair in params_section.split_whitespace() {
-                    if let Some(eq_idx) = pair.find('=') {
-                        let key = pair[..eq_idx].trim().to_lowercase();
-                        let val_str = pair[eq_idx + 1..].trim();
-                        if let Ok(val) = parse_spice_value(val_str) {
-                            child_override_params.insert(key, val);
-                        }
+            let joined_params = param_tokens.join(" ");
+            for pair in joined_params.split_whitespace() {
+                if let Some(eq_idx) = pair.find('=') {
+                    let key = pair[..eq_idx].trim().to_lowercase();
+                    let val_str = pair[eq_idx + 1..].trim();
+                    if let Ok(val) = evaluate_expression(val_str, &param_env) {
+                        child_override_params.insert(key, val);
+                    } else if let Ok(val) = parse_spice_value(val_str) {
+                        child_override_params.insert(key, val);
                     }
                 }
             }
@@ -440,18 +474,13 @@ pub fn flatten_subcircuit(
                 } else if let Some(mapped) = pin_map.get(p) {
                     comp_pins_mapped.push(mapped.clone());
                 } else {
-                    // Nodo interno del subcircuito
-                    // Si el nombre del nodo no es un entero, le asignamos un identificador numérico único
-                    if p.parse::<usize>().is_ok() {
-                        comp_pins_mapped.push(p.clone());
-                    } else {
-                        let mapped_node = local_node_map.entry(p.clone()).or_insert_with(|| {
-                            let node = *next_internal_node;
-                            *next_internal_node += 1;
-                            node.to_string()
-                        });
-                        comp_pins_mapped.push(mapped_node.clone());
-                    }
+                    // Nodo interno del subcircuito: aislar bajo local_node_map para evitar colisiones
+                    let mapped_node = local_node_map.entry(p.clone()).or_insert_with(|| {
+                        let node = *next_internal_node;
+                        *next_internal_node += 1;
+                        node.to_string()
+                    });
+                    comp_pins_mapped.push(mapped_node.clone());
                 }
             }
 
@@ -569,11 +598,23 @@ pub fn flatten_subcircuit(
                     } else {
                         clean_rest
                     };
-                let mut expression = expr_part.to_string();
-                if expression.starts_with('{') && expression.ends_with('}') {
-                    expression = expression[1..expression.len() - 1].trim().to_string();
+                let mut raw_expression = expr_part.to_string();
+                if raw_expression.starts_with('{') && raw_expression.ends_with('}') {
+                    raw_expression = raw_expression[1..raw_expression.len() - 1]
+                        .trim()
+                        .to_string();
                 }
-                comp.expression = Some(expression);
+
+                // Remapear referencias de nodos V(pin) e I(src) y resolver {params}
+                let mapped_expression = remap_expression_nodes_and_sources(
+                    &raw_expression,
+                    instance_id,
+                    &pin_map,
+                    &mut local_node_map,
+                    next_internal_node,
+                    &param_env,
+                );
+                comp.expression = Some(mapped_expression);
             }
 
             if (comp_type == "cccs" || comp_type == "ccvs") && tokens.len() >= 5 {
@@ -865,4 +906,149 @@ pub fn expand_netlist_subcircuits(netlist: &CircuitNetlist) -> Result<CircuitNet
         subcircuit_definitions: None,
         triggers: None,
     })
+}
+
+/// Remapea las referencias de nodos V(pin) e I(src) dentro de expresiones de fuentes
+/// comportamentales (B-Sources) y resuelve parámetros entre llaves {param} durante la expansión de subcircuitos.
+pub fn remap_expression_nodes_and_sources(
+    expr: &str,
+    instance_id: &str,
+    pin_map: &HashMap<String, String>,
+    local_node_map: &mut HashMap<String, String>,
+    next_internal_node: &mut usize,
+    param_env: &HashMap<String, f64>,
+) -> String {
+    let map_node =
+        |n: &str, local_map: &mut HashMap<String, String>, next_node: &mut usize| -> String {
+            let clean = n.trim();
+            if clean == "0" || clean.eq_ignore_ascii_case("gnd") {
+                "0".to_string()
+            } else if let Some(m) = pin_map.get(clean) {
+                m.clone()
+            } else {
+                let entry = local_map.entry(clean.to_string()).or_insert_with(|| {
+                    let node = *next_node;
+                    *next_node += 1;
+                    node.to_string()
+                });
+                entry.clone()
+            }
+        };
+
+    // 1. Reemplazar cualquier {param_expr} de forma insensible a mayúsculas con soporte de evaluación aritmética
+    let mut resolved_expr = String::new();
+    let mut idx = 0;
+    let chars: Vec<char> = expr.chars().collect();
+    while idx < chars.len() {
+        if chars[idx] == '{' {
+            if let Some(close_rel) = chars[idx + 1..].iter().position(|&c| c == '}') {
+                let close_idx = idx + 1 + close_rel;
+                let param_name: String = chars[idx + 1..close_idx].iter().collect();
+                let param_clean = param_name.trim().to_lowercase();
+                if let Some(&val) = param_env.get(&param_clean) {
+                    resolved_expr.push_str(&format!("{}", val));
+                } else if let Ok(val) = evaluate_expression(&param_name, param_env) {
+                    resolved_expr.push_str(&format!("{}", val));
+                } else {
+                    resolved_expr.push_str(&param_name);
+                }
+                idx = close_idx + 1;
+                continue;
+            }
+        }
+        resolved_expr.push(chars[idx]);
+        idx += 1;
+    }
+
+    // 2. Tokenizar y remapear V(node) o V(n1, n2) e I(src)
+    if let Ok(tokens) = crate::solver::tokenize_expression(&resolved_expr) {
+        let mut output = String::new();
+        let mut i = 0;
+        while i < tokens.len() {
+            match &tokens[i] {
+                crate::solver::Token::Ident(name) => {
+                    let name_lower = name.to_lowercase();
+                    if name_lower == "v"
+                        && i + 1 < tokens.len()
+                        && tokens[i + 1] == crate::solver::Token::LParen
+                    {
+                        i += 2; // consume V and (
+                        let mut n1 = String::new();
+                        while i < tokens.len()
+                            && tokens[i] != crate::solver::Token::RParen
+                            && tokens[i] != crate::solver::Token::Comma
+                        {
+                            match &tokens[i] {
+                                crate::solver::Token::Ident(s) => n1.push_str(s),
+                                crate::solver::Token::Number(num) => {
+                                    n1.push_str(&format!("{}", *num as i64))
+                                }
+                                _ => {}
+                            }
+                            i += 1;
+                        }
+                        let mapped_n1 = map_node(&n1, local_node_map, next_internal_node);
+                        if i < tokens.len() && tokens[i] == crate::solver::Token::Comma {
+                            i += 1; // consume ,
+                            let mut n2 = String::new();
+                            while i < tokens.len() && tokens[i] != crate::solver::Token::RParen {
+                                match &tokens[i] {
+                                    crate::solver::Token::Ident(s) => n2.push_str(s),
+                                    crate::solver::Token::Number(num) => {
+                                        n2.push_str(&format!("{}", *num as i64))
+                                    }
+                                    _ => {}
+                                }
+                                i += 1;
+                            }
+                            let mapped_n2 = map_node(&n2, local_node_map, next_internal_node);
+                            output.push_str(&format!("V({}, {})", mapped_n1, mapped_n2));
+                        } else {
+                            output.push_str(&format!("V({})", mapped_n1));
+                        }
+                        if i < tokens.len() && tokens[i] == crate::solver::Token::RParen {
+                            i += 1; // consume )
+                        }
+                        continue;
+                    } else if name_lower == "i"
+                        && i + 1 < tokens.len()
+                        && tokens[i + 1] == crate::solver::Token::LParen
+                    {
+                        i += 2;
+                        let mut src = String::new();
+                        while i < tokens.len() && tokens[i] != crate::solver::Token::RParen {
+                            match &tokens[i] {
+                                crate::solver::Token::Ident(s) => src.push_str(s),
+                                crate::solver::Token::Number(num) => {
+                                    src.push_str(&format!("{}", *num as i64))
+                                }
+                                _ => {}
+                            }
+                            i += 1;
+                        }
+                        output.push_str(&format!("I({}.{})", instance_id, src));
+                        if i < tokens.len() && tokens[i] == crate::solver::Token::RParen {
+                            i += 1;
+                        }
+                        continue;
+                    } else {
+                        output.push_str(name);
+                    }
+                }
+                crate::solver::Token::Number(n) => output.push_str(&format!("{}", n)),
+                crate::solver::Token::Plus => output.push('+'),
+                crate::solver::Token::Minus => output.push('-'),
+                crate::solver::Token::Star => output.push('*'),
+                crate::solver::Token::Slash => output.push('/'),
+                crate::solver::Token::Caret => output.push('^'),
+                crate::solver::Token::LParen => output.push('('),
+                crate::solver::Token::RParen => output.push(')'),
+                crate::solver::Token::Comma => output.push_str(", "),
+            }
+            i += 1;
+        }
+        output
+    } else {
+        resolved_expr
+    }
 }

@@ -2,6 +2,7 @@ import type { ERCResult } from "../simulation/simulation_dispatcher";
 import type { CircuitNetlist } from "../simulation/netlist_extractor";
 import type { AnalysisMode } from "../ui/simulation_controls";
 import type { SimulationSettings } from "../ui/settings_modal";
+import type { TopologicalFixAction } from "./topological_fixes";
 
 export type RecommendationSafety = "informational" | "reversible" | "scientific-review-required";
 
@@ -23,6 +24,7 @@ export interface AdvisorRecommendation {
   readonly safetyClass: RecommendationSafety;
   readonly confidence: number;
   readonly settingsPatch?: Partial<SimulationSettings>;
+  readonly topologicalPatch?: TopologicalFixAction;
 }
 
 interface AdvisorRule {
@@ -92,6 +94,7 @@ function ercRule(
   pattern: RegExp,
   title: string,
   explanation: string,
+  topologicalPatch?: TopologicalFixAction,
 ): AdvisorRule {
   return {
     id,
@@ -100,14 +103,15 @@ function ercRule(
       title,
       explanation,
       evidence: "El ERC produjo el código topológico asociado.",
-      safetyClass: "informational",
+      safetyClass: topologicalPatch ? "reversible" : "informational",
       confidence: 1,
+      topologicalPatch,
     } : null,
   };
 }
 
 export const ADVISOR_RULES: readonly AdvisorRule[] = [
-  ercRule("erc.missing-ground", /tierra|gnd/i, "Añade una referencia GND", "El sistema MNA necesita una referencia de potencial única."),
+  ercRule("erc.missing-ground", /tierra|gnd/i, "Añade una referencia GND", "El sistema MNA necesita una referencia de potencial única.", { type: "add_ground" }),
   ercRule("erc.shorted-vsource", /cortocircuito franco/i, "Corrige la fuente cortocircuitada", "Una fuente ideal no puede imponer tensión entre el mismo nodo."),
   ercRule("erc.parallel-vsource", /fuentes en paralelo/i, "Elimina la restricción de fuentes redundante", "Dos fuentes ideales sobre los mismos nodos hacen singular la formulación."),
   ercRule("erc.floating-pin", /pin flotante/i, "Revisa el pin flotante", "El pin sin conexión puede ser intencional, pero debe confirmarse antes de interpretar resultados."),
@@ -338,4 +342,65 @@ export function evaluateAdvisor(
     });
   }
   return recommendations;
+}
+
+export interface CircuitHealthAssessment {
+  readonly score: number; // 0 a 100
+  readonly grade: "A+" | "A" | "B" | "C" | "D" | "F";
+  readonly summary: string;
+  readonly recommendations: readonly AdvisorRecommendation[];
+}
+
+export function evaluateCircuitHealth(
+  context: AdvisorContext,
+  disabledRuleIds: ReadonlySet<string> = new Set(),
+): CircuitHealthAssessment {
+  const recs = evaluateAdvisor(context, disabledRuleIds);
+  let deductions = 0;
+
+  // Penalizaciones por ERC
+  deductions += (context.erc.errors?.length || 0) * 25;
+  deductions += (context.erc.warnings?.length || 0) * 10;
+
+  // Penalizaciones por recomendaciones
+  for (const r of recs) {
+    if (r.safetyClass === "scientific-review-required") {
+      deductions += 15;
+    } else if (r.safetyClass === "reversible") {
+      deductions += 8;
+    } else {
+      deductions += 3;
+    }
+  }
+
+  const score = Math.max(0, Math.min(100, Math.round(100 - deductions)));
+  let grade: "A+" | "A" | "B" | "C" | "D" | "F" = "F";
+  let summary = "";
+
+  if (score >= 95) {
+    grade = "A+";
+    summary = "Excelente: El circuito cumple todas las reglas topológicas y numéricas óptimas.";
+  } else if (score >= 85) {
+    grade = "A";
+    summary = "Muy bueno: Topología sólida con ajustes menores recomendados.";
+  } else if (score >= 70) {
+    grade = "B";
+    summary = "Aceptable: Existen advertencias o desajustes numéricos que conviene revisar.";
+  } else if (score >= 55) {
+    grade = "C";
+    summary = "Regular: Múltiples inconsistencias topológicas o condiciones numéricas rígidas.";
+  } else if (score >= 40) {
+    grade = "D";
+    summary = "Deficiente: Advertencias críticas de simulación detectadas.";
+  } else {
+    grade = "F";
+    summary = "Crítico: Errores de ERC o singularidades que impiden la simulación precisa.";
+  }
+
+  return {
+    score,
+    grade,
+    summary,
+    recommendations: recs,
+  };
 }

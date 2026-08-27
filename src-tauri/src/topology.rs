@@ -10,15 +10,21 @@ fn expected_pin_range(comp_type: &str) -> Option<(usize, usize)> {
     match comp_type {
         "ground" => Some((1, 1)),
         "resistor" | "capacitor" | "inductor" | "diode" | "led" | "vsource" | "isource"
-        | "bvoltage" | "bcurrent" | "switch" | "cccs" | "ccvs" => Some((2, 2)),
-        "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => Some((3, 4)),
+        | "bvoltage" | "bcurrent" | "switch" | "cccs" | "ccvs" | "stb_probe" | "probe_stb" => {
+            Some((2, 2))
+        }
+        "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "sic_mosfet"
+        | "gan_hemt" | "igbt" => Some((3, 4)),
         "npn" | "pnp" | "njf" | "pjf" => Some((3, 3)),
         "vcvs" | "vccs" | "opto" => Some((4, 4)),
         "opamp" => Some((5, 5)),
         "opamp_ideal" => Some((3, 5)),
-        "not_gate" => Some((2, 2)),
-        "and_gate" | "or_gate" | "nand_gate" | "nor_gate" | "xor_gate" => Some((3, 3)),
-        "arduino_uno" | "esp32" | "raspberry_pi_pico" => Some((6, 6)),
+        "not_gate" | "buffer" => Some((2, 2)),
+        "and_gate" | "or_gate" | "nand_gate" | "nor_gate" | "xor_gate" | "xnor_gate" => {
+            Some((3, 3))
+        }
+        "arduino_uno" | "esp32" | "raspberry_pi_pico" | "atmega328p" | "mcu_avr" | "mcu_8051"
+        | "8051" => Some((6, 6)),
         "verilog_a" => Some((3, MAX_COMPONENT_PINS)),
         "ic_directive" | "nodeset_directive" => Some((1, MAX_COMPONENT_PINS)),
         _ => None,
@@ -232,8 +238,9 @@ pub fn find_floating_nodes(netlist: &CircuitNetlist, n: usize) -> HashSet<usize>
 fn dc_conduction_pin_pairs(comp_type: &str, pin_count: usize) -> Vec<(usize, usize)> {
     match comp_type {
         "resistor" | "inductor" | "diode" | "led" | "vsource" | "bvoltage" | "switch" | "ccvs"
-        | "vcvs" => vec![(0, 1)],
-        "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "verilog_a" => {
+        | "vcvs" | "stb_probe" | "probe_stb" => vec![(0, 1)],
+        "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "sic_mosfet"
+        | "gan_hemt" | "igbt" | "verilog_a" => {
             vec![(1, 2)]
         }
         "npn" | "pnp" | "njf" | "pjf" => vec![(0, 1), (0, 2), (1, 2)],
@@ -249,7 +256,8 @@ fn dc_conduction_pin_pairs(comp_type: &str, pin_count: usize) -> Vec<(usize, usi
         "and_gate" | "or_gate" | "nand_gate" | "nor_gate" | "xor_gate" => {
             vec![(2, usize::MAX)]
         }
-        "arduino_uno" | "esp32" | "raspberry_pi_pico" => (0..pin_count.saturating_sub(1))
+        "arduino_uno" | "esp32" | "raspberry_pi_pico" | "atmega328p" | "mcu_avr" | "mcu_8051"
+        | "8051" => (0..pin_count.saturating_sub(1))
             .map(|pin| (pin, pin_count - 1))
             .collect(),
         _ => Vec::new(),

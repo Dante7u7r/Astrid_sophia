@@ -4,7 +4,7 @@
 
 import { drawCompactComponent } from "../../canvas/component_compact_renderer";
 import { drawLed } from "../../canvas/component_discrete_renderer";
-import { drawJfet, drawOptocoupler } from "../../canvas/component_discrete_extended_renderer";
+import { drawIgbt, drawJfet, drawOptocoupler } from "../../canvas/component_discrete_extended_renderer";
 import type { ComponentDefinition, LocalPinDefinition } from "../types";
 
 const STANDARD_TWO_PINS: readonly LocalPinDefinition[] = [
@@ -185,6 +185,21 @@ export const NmosDefinition: ComponentDefinition = {
     ctx.stroke();
     ctx.restore();
   },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const vG = pinVoltages[0] ?? 0;
+    const vD = pinVoltages[1] ?? 0;
+    const vS = pinVoltages[2] ?? 0;
+    const vGS = vG - vS;
+    const vDS = vD - vS;
+    const vth = comp.mosVth ?? (Number(comp.value) || 1.5);
+    const ron = comp.mosRon ?? 0.05;
+    if (vGS > vth && vDS > 0) {
+      const vov = vGS - vth;
+      const iD = vDS < vov ? vDS / ron : (vov * vov) / (2 * ron);
+      return { branchCurrents: { 0: 0, 1: iD, 2: -iD } };
+    }
+    return { branchCurrents: { 0: 0, 1: 0, 2: 0 } };
+  },
 };
 
 export const PmosDefinition: ComponentDefinition = {
@@ -255,6 +270,21 @@ export const PmosDefinition: ComponentDefinition = {
     ctx.stroke();
     ctx.restore();
   },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const vG = pinVoltages[0] ?? 0;
+    const vD = pinVoltages[1] ?? 0;
+    const vS = pinVoltages[2] ?? 0;
+    const vSG = vS - vG;
+    const vSD = vS - vD;
+    const vth = Math.abs(comp.mosVth ?? (Number(comp.value) || -1.5));
+    const ron = comp.mosRon ?? 0.05;
+    if (vSG > vth && vSD > 0) {
+      const vov = vSG - vth;
+      const iD = vSD < vov ? vSD / ron : (vov * vov) / (2 * ron);
+      return { branchCurrents: { 0: 0, 1: -iD, 2: iD } };
+    }
+    return { branchCurrents: { 0: 0, 1: 0, 2: 0 } };
+  },
 };
 
 export const NpnDefinition: ComponentDefinition = {
@@ -323,6 +353,21 @@ export const NpnDefinition: ComponentDefinition = {
     ctx.stroke();
     ctx.restore();
   },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const vB = pinVoltages[0] ?? 0;
+    const vC = pinVoltages[1] ?? 0;
+    const vE = pinVoltages[2] ?? 0;
+    const vBE = vB - vE;
+    const vCE = vC - vE;
+    if (vBE > 0.55 && vCE > 0) {
+      const bf = comp.bjtBf ?? (Number(comp.value) || 100);
+      const iB = Math.max(0, (vBE - 0.65) / 500);
+      const iC = Math.min(iB * bf, Math.max(0, vCE / 2.0));
+      const iE = iB + iC;
+      return { branchCurrents: { 0: iB, 1: iC, 2: -iE } };
+    }
+    return { branchCurrents: { 0: 0, 1: 0, 2: 0 } };
+  },
 };
 
 export const PnpDefinition: ComponentDefinition = {
@@ -388,6 +433,21 @@ export const PnpDefinition: ComponentDefinition = {
     ctx.lineWidth = state.lineWidth;
     ctx.stroke();
     ctx.restore();
+  },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const vB = pinVoltages[0] ?? 0;
+    const vC = pinVoltages[1] ?? 0;
+    const vE = pinVoltages[2] ?? 0;
+    const vEB = vE - vB;
+    const vEC = vE - vC;
+    if (vEB > 0.55 && vEC > 0) {
+      const bf = comp.bjtBf ?? (Number(comp.value) || 100);
+      const iB = Math.max(0, (vEB - 0.65) / 500);
+      const iC = Math.min(iB * bf, Math.max(0, vEC / 2.0));
+      const iE = iB + iC;
+      return { branchCurrents: { 0: -iB, 1: -iC, 2: iE } };
+    }
+    return { branchCurrents: { 0: 0, 1: 0, 2: 0 } };
   },
 };
 
@@ -638,4 +698,38 @@ export const SchottkyDiodeDefinition: ComponentDefinition = {
     return { branchCurrents: { 0: i, 1: -i } };
   },
 };
+
+export const IgbtDefinition: ComponentDefinition = {
+  type: "igbt",
+  name: "Transistor IGBT (Hefner)",
+  description: "Transistor bipolar de puerta aislada con modelo físico de Hefner (conducción MOS + PNP con cola de corriente).",
+  category: "semiconductores",
+  prefix: "Q",
+  defaultProperties: { value: 5.0, igbtKp: 15.0, igbtAlpha: 0.55, igbtTau: 1.8e-6, igbtWb: 90e-6 },
+  halfExtents: { halfW: 45, halfH: 45 },
+  hasStandardLeads: false,
+  getPins: () => THREE_TERMINAL_PINS("G", "C", "E", "Puerta (G / Gate)", "Colector (C / Collector)", "Emisor (E / Emitter)"),
+  render: (ctx, comp, state, options) => {
+    if (options.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+    drawIgbt(ctx, comp, state.color, options.voltageMap);
+  },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const vG = pinVoltages[0] ?? 0;
+    const vC = pinVoltages[1] ?? 0;
+    const vE = pinVoltages[2] ?? 0;
+    const vGE = vG - vE;
+    const vCE = vC - vE;
+    const vth = Number(comp.value) || 5.0;
+    if (vGE > vth && vCE > 0.6) {
+      const vov = vGE - vth;
+      const iC = Math.max(0, (vov * vov * 2.0) * (1.0 + 0.002 * vCE));
+      return { branchCurrents: { 0: 0, 1: iC, 2: -iC } };
+    }
+    return { branchCurrents: { 0: 0, 1: 0, 2: 0 } };
+  },
+};
+
 

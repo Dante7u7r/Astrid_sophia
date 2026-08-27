@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Astryd Sophia — CLI Headless Batch Simulation Runner
+ * Biaani — CLI Headless Batch Simulation Runner
  *
  * Uso:
- *   astryd-sophia --run <circuito.astryd> [--mode TRAN|DC|AC] [--output <resultados.csv>] [--dt <paso>] [--tmax <tiempo_final>]
- *   node scripts/headless_cli.mjs --run examples/rc_filter.astryd --mode TRAN --output results.csv
+ *   biaani --run <circuito.biaani> [--mode TRAN|DC|AC] [--output <resultados.csv>] [--dt <paso>] [--tmax <tiempo_final>]
+ *   node scripts/headless_cli.mjs --run examples/rc_circuit.biaani --mode TRAN --output results.csv
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -15,15 +15,15 @@ import { performance } from "node:perf_hooks";
 export function printHelp() {
   console.log(`
 ═══════════════════════════════════════════════════════════════════════════
-  ASTRYD SOPHIA — SIMULADOR DE CIRCUITOS EN MODO HEADLESS BATCH (CLI)
+  BIAANI — SIMULADOR DE CIRCUITOS EN MODO HEADLESS BATCH (CLI)
 ═══════════════════════════════════════════════════════════════════════════
 
 Uso:
-  astryd-sophia --run <archivo.astryd> [opciones]
-  node scripts/headless_cli.mjs --run <archivo.astryd> [opciones]
+  biaani --run <archivo.biaani> [opciones]
+  node scripts/headless_cli.mjs --run <archivo.biaani> [opciones]
 
 Opciones:
-  --run, -r <archivo>       Ruta al archivo de circuito (.astryd o .json) [Obligatorio]
+  --run, -r <archivo>       Ruta al archivo de circuito (.biaani, .astryd o .json) [Obligatorio]
   --mode, -m <modo>         Modo de análisis: TRAN | DC | AC (por defecto: TRAN)
   --output, -o <archivo>    Ruta del archivo de salida (.csv o .json)
   --format, -f <formato>    Formato de salida explícito: csv | json (por defecto: según extensión)
@@ -35,9 +35,9 @@ Opciones:
   --help, -h                Muestra esta ayuda de comandos
 
 Ejemplos:
-  astryd-sophia --run circuit.astryd --mode TRAN --output results.csv
-  astryd-sophia --run circuit.astryd --mode DC --output dc_op.json
-  astryd-sophia --run filter.astryd --mode AC --output bode.csv --verbose
+  biaani --run circuit.biaani --mode TRAN --output results.csv
+  biaani --run circuit.biaani --mode DC --output dc_op.json
+  biaani --run filter.biaani --mode AC --output bode.csv --verbose
 `);
 }
 
@@ -338,7 +338,7 @@ export function formatSummary(mode, points, elapsedMs, nodeCount) {
   const pointsPerSec = Math.round(points / (elapsedMs / 1000));
   return [
     `═══════════════════════════════════════════════════════════════════════════`,
-    `  ASTRYD SOPHIA — HEADLESS BATCH SIMULATION REPORT`,
+    `  BIAANI — HEADLESS BATCH SIMULATION REPORT`,
     `═══════════════════════════════════════════════════════════════════════════`,
     `  Modo de Análisis:       ${mode}`,
     `  Estado de Convergencia: CONVERGIDO (Éxito)`,
@@ -362,7 +362,7 @@ async function main() {
   const options = parseCliArgs(args);
 
   if (!options.circuitPath) {
-    console.error("❌ Error: Debe especificar la ruta del archivo de circuito con --run <archivo.astryd>");
+    console.error("❌ Error: Debe especificar la ruta del archivo de circuito con --run <archivo.biaani>");
     process.exit(1);
   }
 

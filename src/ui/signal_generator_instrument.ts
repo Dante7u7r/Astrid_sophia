@@ -137,16 +137,21 @@ export class SignalGeneratorInstrument {
               <button type="button" class="gen-wave-btn" data-wave="triangle" title="Onda Triangular">⋀ Triángulo</button>
               <button type="button" class="gen-wave-btn" data-wave="sawtooth" title="Diente de Sierra">⊿ Rampa</button>
               <button type="button" class="gen-wave-btn" data-wave="pulse" title="Tren de Pulsos">⎍ Pulso</button>
+              <button type="button" class="gen-wave-btn" data-wave="sweep" title="Barrido de Frecuencia">〰 Sweep</button>
               <button type="button" class="gen-wave-btn" data-wave="am" title="Modulación en Amplitud">📻 AM</button>
               <button type="button" class="gen-wave-btn" data-wave="fm" title="Modulación en Frecuencia">📻 FM</button>
-              <button type="button" class="gen-wave-btn" data-wave="sweep" title="Barrido de Frecuencia">〰 Sweep</button>
-              <button type="button" class="gen-wave-btn" data-wave="noise" title="Ruido Blanco Gaussiano">⚅ Ruido</button>
+              <button type="button" class="gen-wave-btn" data-wave="noise" title="Ruido Blanco">⚅ Ruido</button>
               <button type="button" class="gen-wave-btn" data-wave="dc" title="Corriente Continua (DC)">⎓ DC</button>
             </div>
 
-            <button id="gen-output-toggle" type="button" class="gen-output-btn active" title="Alternar encendido de la señal de salida">
-              ⚡ SALIDA: ACTIVA
-            </button>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button id="gen-z-toggle" type="button" class="gen-wave-btn" style="font-family: var(--font-mono); font-size: 0.68rem; font-weight: bold; border-color: rgba(56,189,248,0.4);" title="Alternar impedancia de salida de referencia">
+                ⚡ 50 Ω
+              </button>
+              <button id="gen-output-toggle" type="button" class="gen-output-btn active" title="Alternar encendido de la señal de salida">
+                ⚡ SALIDA: ACTIVA
+              </button>
+            </div>
           </div>
 
           <!-- Visor Gráfico Central del Sintetizador -->
@@ -180,7 +185,7 @@ export class SignalGeneratorInstrument {
                 <span id="gen-val-amp" class="gen-control-val">5.00 V</span>
               </div>
               <div class="gen-input-row">
-                <input id="gen-num-amp" type="number" min="0.01" max="100" step="0.1" value="5.0" class="gen-num-input" />
+                <input id="gen-num-amp" type="number" min="0.01" max="1000" step="0.1" value="5.0" class="gen-num-input" />
                 <span style="font-size: 0.65rem; color: var(--text-muted); font-family: var(--font-mono);">V</span>
               </div>
               <input id="gen-slider-amp" type="range" min="0.1" max="30" step="0.1" value="5" class="gen-slider" />
@@ -237,6 +242,18 @@ export class SignalGeneratorInstrument {
               </div>
               <input id="gen-slider-mod-idx" type="range" min="0" max="100" step="1" value="50" class="gen-slider" />
             </div>
+
+            <!-- 7. Sweep Controles (Opcional) -->
+            <div id="gen-card-sweep" class="gen-control-card" style="display: none;">
+              <div class="gen-control-header">
+                <span class="gen-control-label">Barrido (F1 - F2)</span>
+                <span id="gen-val-sweep" class="gen-control-val">100Hz - 10kHz</span>
+              </div>
+              <div class="gen-input-row">
+                <input id="gen-num-sweep-start" type="number" min="1" max="1000000" step="10" value="100" class="gen-num-input" placeholder="F. Start (Hz)" />
+                <input id="gen-num-sweep-end" type="number" min="1" max="10000000" step="100" value="10000" class="gen-num-input" placeholder="F. End (Hz)" />
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -278,6 +295,12 @@ export class SignalGeneratorInstrument {
   }
 
   private bindEvents(): void {
+    if (typeof window !== "undefined") {
+      window.addEventListener("astryd-theme-changed", () => {
+        this.renderFrame();
+      });
+    }
+
     // 1. Selector de Fuente en Lienzo
     this.sourceSelectEl?.addEventListener("change", () => {
       const selectedId = this.sourceSelectEl?.value;
@@ -311,6 +334,18 @@ export class SignalGeneratorInstrument {
       this.syncToSource();
     });
 
+    // 3.1 Botón de Impedancia de Salida (50 Ω vs High-Z)
+    const zToggleBtn = this.container.querySelector<HTMLButtonElement>("#gen-z-toggle");
+    zToggleBtn?.addEventListener("click", () => {
+      const current = this.params.outputImpedance ?? "50_ohm";
+      this.params.outputImpedance = current === "50_ohm" ? "high_z" : "50_ohm";
+      if (zToggleBtn) {
+        zToggleBtn.textContent = this.params.outputImpedance === "50_ohm" ? "⚡ 50 Ω" : "⚡ High-Z";
+      }
+      this.syncToSource();
+      this.renderFrame();
+    });
+
     // 4. Botones de Tipo de Onda
     for (const btn of this.waveButtons) {
       btn.addEventListener("click", () => {
@@ -320,6 +355,20 @@ export class SignalGeneratorInstrument {
         }
       });
     }
+
+    // 4.1 Sweep start/end inputs
+    const sweepStartInput = this.container.querySelector<HTMLInputElement>("#gen-num-sweep-start");
+    const sweepEndInput = this.container.querySelector<HTMLInputElement>("#gen-num-sweep-end");
+    sweepStartInput?.addEventListener("change", () => {
+      this.params.sweepStartFreq = parseFloat(sweepStartInput.value) || 100;
+      this.updateValueBadge("gen-val-sweep", `${this.params.sweepStartFreq}Hz - ${this.params.sweepEndFreq ?? 10000}Hz`);
+      this.syncToSource();
+    });
+    sweepEndInput?.addEventListener("change", () => {
+      this.params.sweepEndFreq = parseFloat(sweepEndInput.value) || 10000;
+      this.updateValueBadge("gen-val-sweep", `${this.params.sweepStartFreq ?? 100}Hz - ${this.params.sweepEndFreq}Hz`);
+      this.syncToSource();
+    });
 
     // 5. Presets de Laboratorio
     const presetButtons = this.container.querySelectorAll(".gen-preset-chip");
@@ -517,6 +566,11 @@ export class SignalGeneratorInstrument {
       this.amContainer.style.display = waveType === "am" ? "flex" : "none";
     }
 
+    const sweepCard = this.container.querySelector<HTMLElement>("#gen-card-sweep");
+    if (sweepCard) {
+      sweepCard.style.display = waveType === "sweep" ? "flex" : "none";
+    }
+
     this.syncToSource();
   }
 
@@ -609,6 +663,15 @@ export class SignalGeneratorInstrument {
     this.callbacks.onCanvasModified();
     this.callbacks.onNetlistSync();
     this.callbacks.requestRender(true);
+    this.callbacks.onSourceMutated?.(source);
+  }
+
+  public syncFromExternalSource(source: ComponentInstance): void {
+    const current = this.findLinkedSource();
+    if (current && current.id === source.id) {
+      this.loadFromSource(source);
+      this.updateLinkedSourceInfo();
+    }
   }
 
   private loadFromSource(source: ComponentInstance): void {

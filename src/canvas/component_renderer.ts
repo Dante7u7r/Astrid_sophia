@@ -18,6 +18,7 @@ export interface ComponentRenderOptions {
   readonly voltageMap?: Record<string, number>;
   readonly branchCurrents?: Record<string, number>;
   readonly showReactiveFields?: boolean;
+  readonly symbolStandard?: "IEEE" | "IEC";
 }
 
 export function drawComponentSymbol(
@@ -30,8 +31,10 @@ export function drawComponentSymbol(
   ctx.save();
   ctx.translate(comp.x, comp.y);
   ctx.rotate((comp.rotation * Math.PI) / 180);
-  if (comp.mirror) {
-    ctx.scale(-1, 1);
+  const scaleX = comp.mirror ? -1 : 1;
+  const scaleY = comp.mirrorY ? -1 : 1;
+  if (scaleX !== 1 || scaleY !== 1) {
+    ctx.scale(scaleX, scaleY);
   }
 
   const visualState = getComponentVisualState(isSelected, isHovered);
@@ -39,7 +42,9 @@ export function drawComponentSymbol(
 
   ctx.strokeStyle = color;
   ctx.lineWidth = visualState.lineWidth;
-  ctx.fillStyle = "rgba(8, 12, 22, 0.75)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
   if (options.detail === "compact" && !isSelected && !isHovered) {
     drawCompactComponent(ctx, comp, color);
@@ -73,20 +78,21 @@ export function drawComponentSymbol(
   }
 
   // 3. Dibujar ID y valor numérico formateado
-  if (comp.mirror) {
-    ctx.scale(-1, 1);
+  if (scaleX !== 1 || scaleY !== 1) {
+    ctx.scale(scaleX, scaleY);
   }
   ctx.rotate(-(comp.rotation * Math.PI) / 180); // Des-rotar el texto para mantenerlo horizontal
 
   const { idY, valueY } = getComponentLabelLayout(comp);
 
-  ctx.fillStyle = isSelected ? "hsl(270, 89%, 80%)" : "hsl(210, 17%, 85%)";
+  ctx.fillStyle = isSelected ? "#38BDF8" : "#F1F5F9";
   ctx.font = "bold 11px 'Inter', sans-serif";
   ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.fillText(comp.id, 0, idY);
 
   if (shouldDrawValueLabel(comp.type)) {
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isSelected ? "#7DD3FC" : "#94A3B8";
     ctx.font = "9px 'JetBrains Mono', monospace";
     ctx.fillText(formatComponentValue(comp), 0, valueY);
   }

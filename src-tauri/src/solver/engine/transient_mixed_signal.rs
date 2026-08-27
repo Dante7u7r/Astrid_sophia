@@ -2,20 +2,92 @@ use crate::solver::matrix::{MixedSignalEvent, MixedSignalEventType, MixedSignalS
 use crate::solver::types::{CircuitNetlist, ComponentData};
 use nalgebra::DVector;
 
+fn initial_source_voltages(netlist: &CircuitNetlist) -> std::collections::HashMap<usize, f64> {
+    let mut node_v = std::collections::HashMap::new();
+    for comp in &netlist.components {
+        if comp.comp_type == "vsource" && comp.pins.len() >= 2 {
+            if let (Ok(p_pos), Ok(p_neg)) =
+                (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>())
+            {
+                let v = if let Some(ref wave) = comp.wave_type {
+                    let amp = comp.amplitude.unwrap_or(0.0);
+                    let offset = comp.offset.unwrap_or(0.0);
+                    let phase = comp.phase.unwrap_or(0.0).to_radians();
+                    let duty = comp.duty_cycle.unwrap_or(0.5);
+                    match wave.as_str() {
+                        "sine" => offset + amp * phase.sin(),
+                        "pulse" | "square" => {
+                            if 0.0 < duty {
+                                offset + amp
+                            } else {
+                                offset
+                            }
+                        }
+                        _ => comp.value,
+                    }
+                } else {
+                    comp.value
+                };
+                if p_neg == 0 {
+                    node_v.insert(p_pos, v);
+                }
+            }
+        }
+    }
+    node_v
+}
+
 pub(crate) fn initialize_mixed_signal_scheduler(netlist: &CircuitNetlist) -> MixedSignalScheduler {
     let mut scheduler = MixedSignalScheduler::new();
+    let init_v = initial_source_voltages(netlist);
+
     for comp in &netlist.components {
-        if comp.comp_type.ends_with("_gate") {
+        if comp.comp_type.ends_with("_gate") || comp.comp_type == "buffer" {
             let is_not = comp.comp_type == "not_gate";
-            let output_pin = if is_not { 1 } else { 2 };
-            scheduler.set_state(&comp.id, output_pin, false);
+            let is_buf = comp.comp_type == "buffer";
+            let output_pin = if is_not || is_buf { 1 } else { 2 };
+            let v_th_h = comp.gate_vhigh.unwrap_or(1.5);
+
+            let p0 = comp
+                .pins
+                .first()
+                .and_then(|p| p.parse::<usize>().ok())
+                .unwrap_or(0);
+            let p1 = comp
+                .pins
+                .get(1)
+                .and_then(|p| p.parse::<usize>().ok())
+                .unwrap_or(0);
+            let v_in_a = *init_v.get(&p0).unwrap_or(&0.0);
+            let v_in_b = *init_v.get(&p1).unwrap_or(&0.0);
+
+            let state_a = v_in_a >= v_th_h;
+            let state_b = v_in_b >= v_th_h;
+
+            scheduler.set_state(&comp.id, 0, state_a);
+            if !is_not && !is_buf {
+                scheduler.set_state(&comp.id, 1, state_b);
+            }
+
+            let init_out = match comp.comp_type.as_str() {
+                "not_gate" => !state_a,
+                "buffer" => state_a,
+                "and_gate" => state_a && state_b,
+                "or_gate" => state_a || state_b,
+                "nand_gate" => !(state_a && state_b),
+                "nor_gate" => !(state_a || state_b),
+                "xor_gate" => state_a ^ state_b,
+                "xnor_gate" => !(state_a ^ state_b),
+                _ => false,
+            };
+            scheduler.set_state(&comp.id, output_pin, init_out);
 
             let entry = scheduler.last_analog_v.entry(comp.id.clone()).or_default();
-            entry.insert(0, 0.0);
-            if !is_not {
-                entry.insert(1, 0.0);
+            entry.insert(0, v_in_a);
+            if !is_not && !is_buf {
+                entry.insert(1, v_in_b);
             }
-            entry.insert(output_pin, 0.0);
+            entry.insert(output_pin, if init_out { 5.0 } else { 0.0 });
         } else if is_mcu_component_type(&comp.comp_type) {
             scheduler.set_state(&comp.id, 1, comp.value as i32 == 1);
             scheduler.schedule_event(MixedSignalEvent {
@@ -29,7 +101,13 @@ pub(crate) fn initialize_mixed_signal_scheduler(netlist: &CircuitNetlist) -> Mix
 }
 
 fn is_mcu_component_type(comp_type: &str) -> bool {
-    comp_type == "arduino_uno" || comp_type == "esp32" || comp_type == "raspberry_pi_pico"
+    comp_type == "arduino_uno"
+        || comp_type == "esp32"
+        || comp_type == "raspberry_pi_pico"
+        || comp_type == "mcu_8051"
+        || comp_type == "8051"
+        || comp_type == "mcu_avr"
+        || comp_type == "atmega328p"
 }
 
 pub(crate) fn detect_mixed_signal_crossings(
@@ -43,7 +121,7 @@ pub(crate) fn detect_mixed_signal_crossings(
         if comp.comp_type.ends_with("_gate") {
             detect_gate_crossings(comp, scheduler, step_solution, t, dt);
         } else if is_mcu_component_type(&comp.comp_type) && comp.pins.len() >= 6 {
-            detect_mcu_adc_crossing(comp, scheduler, step_solution, t, dt);
+            detect_mcu_crossings(comp, scheduler, step_solution, t, dt);
         }
     }
 }
@@ -61,27 +139,31 @@ pub(crate) fn process_mixed_signal_events(
         let event = scheduler.events.remove(0);
         match event.event_type {
             MixedSignalEventType::LogicInputCrossing { pin_idx, direction } => {
-                let comp = netlist
+                if let Some(comp) = netlist
                     .components
                     .iter()
                     .find(|c| c.id == event.component_id)
-                    .unwrap();
-                if comp.comp_type.ends_with("_gate") {
-                    process_gate_input_crossing(comp, scheduler, event.time, pin_idx, direction);
-                } else if is_mcu_component_type(&comp.comp_type) {
-                    process_mcu_input_crossing(comp, scheduler, event.time, pin_idx, direction);
+                {
+                    if comp.comp_type.ends_with("_gate") {
+                        process_gate_input_crossing(
+                            comp, scheduler, event.time, pin_idx, direction,
+                        );
+                    } else if is_mcu_component_type(&comp.comp_type) {
+                        process_mcu_input_crossing(comp, scheduler, event.time, pin_idx, direction);
+                    }
                 }
             }
             MixedSignalEventType::LogicOutputTransition { pin_idx, new_state } => {
                 scheduler.set_state(&event.component_id, pin_idx, new_state);
             }
             MixedSignalEventType::McuPeriodicTick => {
-                let comp = netlist
+                if let Some(comp) = netlist
                     .components
                     .iter()
                     .find(|c| c.id == event.component_id)
-                    .unwrap();
-                process_mcu_periodic_tick(comp, scheduler, event.time);
+                {
+                    process_mcu_periodic_tick(comp, scheduler, event.time);
+                }
             }
         }
     }
@@ -134,28 +216,52 @@ fn detect_gate_crossings(
     }
 }
 
-fn detect_mcu_adc_crossing(
+fn detect_mcu_crossings(
     comp: &ComponentData,
     scheduler: &mut MixedSignalScheduler,
     step_solution: &DVector<f64>,
     t: f64,
     dt: f64,
 ) {
+    let pin_in = comp.pins[0].parse::<usize>().unwrap_or(0);
     let pin_adc = comp.pins[2].parse::<usize>().unwrap_or(0);
     let pin_gnd = comp.pins[5].parse::<usize>().unwrap_or(0);
-    let v_adc_diff = node_voltage(step_solution, pin_adc) - node_voltage(step_solution, pin_gnd);
+    let v_gnd = node_voltage(step_solution, pin_gnd);
+
+    let v_cc = match comp.comp_type.as_str() {
+        "arduino_uno" | "mcu_8051" | "8051" | "mcu_avr" | "atmega328p" => 5.0,
+        _ => 3.3,
+    };
+    let threshold = 0.5 * v_cc;
+
+    // 1. Cruce en pin digital de entrada (Pin 0 / INT0)
+    let v_in_diff = node_voltage(step_solution, pin_in) - v_gnd;
+    let v_in_prev = scheduler
+        .last_analog_v
+        .get(&comp.id)
+        .map(|last_v| *last_v.get(&0).unwrap_or(&0.0))
+        .unwrap_or(0.0);
+    let crossed_in = (v_in_prev < threshold && v_in_diff >= threshold)
+        || (v_in_prev >= threshold && v_in_diff < threshold);
+    if crossed_in {
+        let t_cross = crossing_time(t, dt, threshold, v_in_prev, v_in_diff);
+        scheduler.schedule_event(MixedSignalEvent {
+            time: t_cross,
+            component_id: comp.id.clone(),
+            event_type: MixedSignalEventType::LogicInputCrossing {
+                pin_idx: 0,
+                direction: v_in_diff >= threshold,
+            },
+        });
+    }
+
+    // 2. Cruce en pin analógico ADC (Pin 2)
+    let v_adc_diff = node_voltage(step_solution, pin_adc) - v_gnd;
     let v_adc_prev = scheduler
         .last_analog_v
         .get(&comp.id)
         .map(|last_v| *last_v.get(&2).unwrap_or(&0.0))
         .unwrap_or(0.0);
-
-    let v_cc = match comp.comp_type.as_str() {
-        "arduino_uno" => 5.0,
-        _ => 3.3,
-    };
-    let threshold = 0.5 * v_cc;
-
     let crossed_adc = (v_adc_prev < threshold && v_adc_diff >= threshold)
         || (v_adc_prev >= threshold && v_adc_diff < threshold);
     if crossed_adc {
@@ -169,11 +275,10 @@ fn detect_mcu_adc_crossing(
             },
         });
     }
-    scheduler
-        .last_analog_v
-        .entry(comp.id.clone())
-        .or_default()
-        .insert(2, v_adc_diff);
+
+    let entry = scheduler.last_analog_v.entry(comp.id.clone()).or_default();
+    entry.insert(0, v_in_diff);
+    entry.insert(2, v_adc_diff);
 }
 
 fn schedule_logic_crossing_if_needed(

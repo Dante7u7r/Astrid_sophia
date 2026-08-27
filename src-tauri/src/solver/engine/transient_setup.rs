@@ -159,6 +159,9 @@ pub(crate) fn has_transient_nonlinearity(netlist: &CircuitNetlist) -> bool {
             || c.comp_type == "opto"
             || c.comp_type == "nmos"
             || c.comp_type == "pmos"
+            || c.comp_type == "sic_mosfet"
+            || c.comp_type == "gan_hemt"
+            || c.comp_type == "igbt"
             || c.comp_type == "npn"
             || c.comp_type == "pnp"
             || c.comp_type == "opamp"
@@ -278,6 +281,10 @@ fn is_mcu_component(comp: &ComponentData) -> bool {
     comp.comp_type == "arduino_uno"
         || comp.comp_type == "esp32"
         || comp.comp_type == "raspberry_pi_pico"
+        || comp.comp_type == "atmega328p"
+        || comp.comp_type == "mcu_avr"
+        || comp.comp_type == "mcu_8051"
+        || comp.comp_type == "8051"
 }
 
 fn uses_self_heating(comp: &ComponentData) -> bool {
@@ -285,6 +292,9 @@ fn uses_self_heating(comp: &ComponentData) -> bool {
         || comp.comp_type == "led"
         || comp.comp_type == "nmos"
         || comp.comp_type == "pmos"
+        || comp.comp_type == "sic_mosfet"
+        || comp.comp_type == "gan_hemt"
+        || comp.comp_type == "igbt"
         || comp.comp_type == "npn"
         || comp.comp_type == "pnp"
         || comp.comp_type == "bsim3nmos"
@@ -294,4 +304,5 @@ fn uses_self_heating(comp: &ComponentData) -> bool {
         || comp.comp_type == "njf"
         || comp.comp_type == "pjf"
         || comp.comp_type == "opto"
+        || (comp.comp_type == "resistor" && comp.rth.is_some())
 }

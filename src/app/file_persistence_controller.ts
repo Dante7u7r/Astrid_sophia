@@ -42,15 +42,16 @@ export function initFilePersistenceController(
         const candidate = dependencies.documentController.validateCircuitFileForLoad(content);
         if (!candidate) return;
 
+        const cleanName = file.replace(/\.(biaani|astryd|json)$/i, "");
         const demoTab = tabManager.createNewTab(
-          file.replace(".astryd", ""),
+          cleanName,
           { components: [], wires: [], filePath: null },
         );
         if (!demoTab) return;
 
         if (dependencies.documentController.deserializeCircuit(content, candidate)) {
           tabManager.applyLoadedFileToTab(demoTab.id, {
-            name: file.replace(".astryd", ""),
+            name: cleanName,
             filePath: null,
             unsaved: false,
           });
@@ -84,7 +85,7 @@ export function initFilePersistenceController(
 
         let tabToLoad: Tab;
         let createdTab: Tab | null = null;
-        const filename = filePath.split(/[/\\]/).pop() || "esquematico.astryd";
+        const filename = filePath.split(/[/\\]/).pop() || "esquematico.biaani";
 
         if (isEmpty && currentTab) {
           tabToLoad = currentTab;
@@ -108,11 +109,16 @@ export function initFilePersistenceController(
         } else if (createdTab) {
           await tabManager.closeTab(createdTab.id);
         }
-      } catch (err) {
-        if (err !== "Operacion cancelada por el usuario") {
-          dependencies.addLog(`Error al abrir esquematico: ${err}`, "error");
-        } else {
+      } catch (err: unknown) {
+        const errStr = String(err);
+        if (
+          errStr.includes("cancelada por el usuario") ||
+          errStr.includes("canceled") ||
+          errStr.includes("cancelled")
+        ) {
           dependencies.addLog("Operacion de apertura cancelada.", "system");
+        } else {
+          dependencies.addLog(`Error al abrir esquematico: ${err}`, "error");
         }
       }
     });

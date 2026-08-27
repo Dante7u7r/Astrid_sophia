@@ -15,11 +15,7 @@ fn test_fft_sine_thd() {
         let v_val = 5.0 * (2.0 * std::f64::consts::PI * f_fund * t).sin();
         node_voltages.insert("1".to_string(), v_val);
 
-        time_steps.push(TimeStepResult {
-            time: t,
-            node_voltages,
-            branch_currents: HashMap::new(),
-        });
+        time_steps.push(TimeStepResult::new(t, node_voltages, HashMap::new()));
     }
 
     let fft_res = calculate_fft_and_thd(&time_steps, "1", f_fund).unwrap();
@@ -76,11 +72,7 @@ fn test_imd_two_tone_clipper() {
 
         node_voltages.insert("out".to_string(), v_distorted);
 
-        time_steps.push(TimeStepResult {
-            time: t,
-            node_voltages,
-            branch_currents: HashMap::new(),
-        });
+        time_steps.push(TimeStepResult::new(t, node_voltages, HashMap::new()));
     }
 
     let imd_res = calculate_imd_analysis(&time_steps, "out", f1, f2).unwrap();

@@ -4,8 +4,8 @@
 //! hardware timers (T0/T1), UART buffers, and vector interrupt controller.
 
 use super::{
-    binary::parse_firmware_image,
-    GpioInputs, GpioOutputs, GpioState, McuCore, McuError, McuState, McuType,
+    binary::parse_firmware_image, GpioInputs, GpioOutputs, GpioState, McuCore, McuError, McuState,
+    McuType,
 };
 
 pub const SFR_ACC: u8 = 0xE0;
@@ -292,7 +292,8 @@ impl Mcu8051 {
             let mut count = (th0 << 8) | tl0;
 
             match mode0 {
-                0 => { // 13-bit
+                0 => {
+                    // 13-bit
                     count += cycles as u16;
                     if count >= 8192 {
                         count %= 8192;
@@ -301,7 +302,8 @@ impl Mcu8051 {
                     self.write_direct(SFR_TL0, (count & 0x1F) as u8);
                     self.write_direct(SFR_TH0, ((count >> 5) & 0xFF) as u8);
                 }
-                1 => { // 16-bit
+                1 => {
+                    // 16-bit
                     let (new_count, overflow) = count.overflowing_add(cycles as u16);
                     if overflow {
                         self.set_timer0_overflow(true);
@@ -309,7 +311,8 @@ impl Mcu8051 {
                     self.write_direct(SFR_TL0, (new_count & 0xFF) as u8);
                     self.write_direct(SFR_TH0, ((new_count >> 8) & 0xFF) as u8);
                 }
-                2 => { // 8-bit auto-reload
+                2 => {
+                    // 8-bit auto-reload
                     let reload = th0 as u8;
                     let (new_tl0, overflow) = (tl0 as u8).overflowing_add(cycles as u8);
                     if overflow {
@@ -330,14 +333,16 @@ impl Mcu8051 {
             let th1 = self.read_direct(SFR_TH1) as u16;
             let count = (th1 << 8) | tl1;
 
-            if mode1 == 1 { // 16-bit
+            if mode1 == 1 {
+                // 16-bit
                 let (new_count, overflow) = count.overflowing_add(cycles as u16);
                 if overflow {
                     self.set_timer1_overflow(true);
                 }
                 self.write_direct(SFR_TL1, (new_count & 0xFF) as u8);
                 self.write_direct(SFR_TH1, ((new_count >> 8) & 0xFF) as u8);
-            } else if mode1 == 2 { // 8-bit auto-reload
+            } else if mode1 == 2 {
+                // 8-bit auto-reload
                 let reload = th1 as u8;
                 let (new_tl1, overflow) = (tl1 as u8).overflowing_add(cycles as u8);
                 if overflow {
@@ -589,17 +594,20 @@ impl Mcu8051 {
                 self.pc = (self.pc & 0xF800) | (high << 8) | low;
                 2
             }
-            0x02 => { // LJMP addr16
+            0x02 => {
+                // LJMP addr16
                 let addr = self.fetch_code_word();
                 self.pc = addr;
                 2
             }
-            0x80 => { // SJMP rel
+            0x80 => {
+                // SJMP rel
                 let rel = self.fetch_code_byte() as i8;
                 self.pc = (self.pc as i32 + rel as i32) as u16;
                 2
             }
-            0x73 => { // JMP @A+DPTR
+            0x73 => {
+                // JMP @A+DPTR
                 let acc = self.read_acc() as u16;
                 let dptr = self.read_dptr();
                 self.pc = dptr.wrapping_add(acc);
@@ -616,7 +624,8 @@ impl Mcu8051 {
                 self.pc = (self.pc & 0xF800) | (high << 8) | low;
                 2
             }
-            0x12 => { // LCALL addr16
+            0x12 => {
+                // LCALL addr16
                 let target = self.fetch_code_word();
                 let ret_pc = self.pc;
                 self.push((ret_pc & 0xFF) as u8);
@@ -624,13 +633,15 @@ impl Mcu8051 {
                 self.pc = target;
                 2
             }
-            0x22 => { // RET
+            0x22 => {
+                // RET
                 let high = self.pop() as u16;
                 let low = self.pop() as u16;
                 self.pc = (high << 8) | low;
                 2
             }
-            0x32 => { // RETI
+            0x32 => {
+                // RETI
                 let high = self.pop() as u16;
                 let low = self.pop() as u16;
                 self.pc = (high << 8) | low;
@@ -639,35 +650,40 @@ impl Mcu8051 {
             }
 
             // Conditional jumps: JZ, JNZ, JC, JNC, JB, JNB, JBC
-            0x60 => { // JZ rel
+            0x60 => {
+                // JZ rel
                 let rel = self.fetch_code_byte() as i8;
                 if self.read_acc() == 0 {
                     self.pc = (self.pc as i32 + rel as i32) as u16;
                 }
                 2
             }
-            0x70 => { // JNZ rel
+            0x70 => {
+                // JNZ rel
                 let rel = self.fetch_code_byte() as i8;
                 if self.read_acc() != 0 {
                     self.pc = (self.pc as i32 + rel as i32) as u16;
                 }
                 2
             }
-            0x40 => { // JC rel
+            0x40 => {
+                // JC rel
                 let rel = self.fetch_code_byte() as i8;
                 if self.get_cy() {
                     self.pc = (self.pc as i32 + rel as i32) as u16;
                 }
                 2
             }
-            0x50 => { // JNC rel
+            0x50 => {
+                // JNC rel
                 let rel = self.fetch_code_byte() as i8;
                 if !self.get_cy() {
                     self.pc = (self.pc as i32 + rel as i32) as u16;
                 }
                 2
             }
-            0x20 => { // JB bit, rel
+            0x20 => {
+                // JB bit, rel
                 let bit_addr = self.fetch_code_byte();
                 let rel = self.fetch_code_byte() as i8;
                 if self.read_bit(bit_addr) {
@@ -675,7 +691,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0x30 => { // JNB bit, rel
+            0x30 => {
+                // JNB bit, rel
                 let bit_addr = self.fetch_code_byte();
                 let rel = self.fetch_code_byte() as i8;
                 if !self.read_bit(bit_addr) {
@@ -683,7 +700,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0x10 => { // JBC bit, rel
+            0x10 => {
+                // JBC bit, rel
                 let bit_addr = self.fetch_code_byte();
                 let rel = self.fetch_code_byte() as i8;
                 if self.read_bit(bit_addr) {
@@ -692,7 +710,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0xB4 => { // CJNE A, #data, rel
+            0xB4 => {
+                // CJNE A, #data, rel
                 let data = self.fetch_code_byte();
                 let rel = self.fetch_code_byte() as i8;
                 let acc = self.read_acc();
@@ -702,7 +721,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0xB5 => { // CJNE A, direct, rel
+            0xB5 => {
+                // CJNE A, direct, rel
                 let direct = self.fetch_code_byte();
                 let data = self.read_direct(direct);
                 let rel = self.fetch_code_byte() as i8;
@@ -713,7 +733,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0xB6..=0xB7 => { // CJNE @Ri, #data, rel
+            0xB6..=0xB7 => {
+                // CJNE @Ri, #data, rel
                 let ri = (op & 1) as usize;
                 let val = self.read_indirect_ri(ri);
                 let data = self.fetch_code_byte();
@@ -724,7 +745,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0xB8..=0xBF => { // CJNE Rn, #data, rel
+            0xB8..=0xBF => {
+                // CJNE Rn, #data, rel
                 let rn = (op & 7) as usize;
                 let val = self.read_rn(rn);
                 let data = self.fetch_code_byte();
@@ -735,7 +757,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0xD5 => { // DJNZ direct, rel
+            0xD5 => {
+                // DJNZ direct, rel
                 let direct = self.fetch_code_byte();
                 let rel = self.fetch_code_byte() as i8;
                 let val = self.read_direct(direct).wrapping_sub(1);
@@ -745,7 +768,8 @@ impl Mcu8051 {
                 }
                 2
             }
-            0xD8..=0xDF => { // DJNZ Rn, rel
+            0xD8..=0xDF => {
+                // DJNZ Rn, rel
                 let rn = (op & 7) as usize;
                 let rel = self.fetch_code_byte() as i8;
                 let val = self.read_rn(rn).wrapping_sub(1);
@@ -757,208 +781,245 @@ impl Mcu8051 {
             }
 
             // MOV instructions
-            0x74 => { // MOV A, #data
+            0x74 => {
+                // MOV A, #data
                 let data = self.fetch_code_byte();
                 self.write_acc(data);
                 1
             }
-            0xE5 => { // MOV A, direct
+            0xE5 => {
+                // MOV A, direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_direct(direct);
                 self.write_acc(val);
                 1
             }
-            0xE6..=0xE7 => { // MOV A, @Ri
+            0xE6..=0xE7 => {
+                // MOV A, @Ri
                 let val = self.read_indirect_ri((op & 1) as usize);
                 self.write_acc(val);
                 1
             }
-            0xE8..=0xEF => { // MOV A, Rn
+            0xE8..=0xEF => {
+                // MOV A, Rn
                 let val = self.read_rn((op & 7) as usize);
                 self.write_acc(val);
                 1
             }
-            0xF5 => { // MOV direct, A
+            0xF5 => {
+                // MOV direct, A
                 let direct = self.fetch_code_byte();
                 let val = self.read_acc();
                 self.write_direct(direct, val);
                 1
             }
-            0x75 => { // MOV direct, #data
+            0x75 => {
+                // MOV direct, #data
                 let direct = self.fetch_code_byte();
                 let data = self.fetch_code_byte();
                 self.write_direct(direct, data);
                 2
             }
-            0x85 => { // MOV direct_dst, direct_src
+            0x85 => {
+                // MOV direct_dst, direct_src
                 let src = self.fetch_code_byte();
                 let dst = self.fetch_code_byte();
                 let val = self.read_direct(src);
                 self.write_direct(dst, val);
                 2
             }
-            0x86..=0x87 => { // MOV direct, @Ri
+            0x86..=0x87 => {
+                // MOV direct, @Ri
                 let direct = self.fetch_code_byte();
                 let val = self.read_indirect_ri((op & 1) as usize);
                 self.write_direct(direct, val);
                 2
             }
-            0x88..=0x8F => { // MOV direct, Rn
+            0x88..=0x8F => {
+                // MOV direct, Rn
                 let direct = self.fetch_code_byte();
                 let val = self.read_rn((op & 7) as usize);
                 self.write_direct(direct, val);
                 2
             }
-            0xF6..=0xF7 => { // MOV @Ri, A
+            0xF6..=0xF7 => {
+                // MOV @Ri, A
                 let val = self.read_acc();
                 self.write_indirect_ri((op & 1) as usize, val);
                 1
             }
-            0x76..=0x77 => { // MOV @Ri, #data
+            0x76..=0x77 => {
+                // MOV @Ri, #data
                 let data = self.fetch_code_byte();
                 self.write_indirect_ri((op & 1) as usize, data);
                 1
             }
-            0xA6..=0xA7 => { // MOV @Ri, direct
+            0xA6..=0xA7 => {
+                // MOV @Ri, direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_direct(direct);
                 self.write_indirect_ri((op & 1) as usize, val);
                 2
             }
-            0xF8..=0xFF => { // MOV Rn, A
+            0xF8..=0xFF => {
+                // MOV Rn, A
                 let val = self.read_acc();
                 self.write_rn((op & 7) as usize, val);
                 1
             }
-            0x78..=0x7F => { // MOV Rn, #data
+            0x78..=0x7F => {
+                // MOV Rn, #data
                 let data = self.fetch_code_byte();
                 self.write_rn((op & 7) as usize, data);
                 1
             }
-            0xA8..=0xAF => { // MOV Rn, direct
+            0xA8..=0xAF => {
+                // MOV Rn, direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_direct(direct);
                 self.write_rn((op & 7) as usize, val);
                 2
             }
-            0x90 => { // MOV DPTR, #data16
+            0x90 => {
+                // MOV DPTR, #data16
                 let dptr = self.fetch_code_word();
                 self.write_dptr(dptr);
                 2
             }
 
             // ADD / ADDC / SUBB
-            0x24 => { // ADD A, #data
+            0x24 => {
+                // ADD A, #data
                 let data = self.fetch_code_byte();
                 self.alu_add(data, false);
                 1
             }
-            0x25 => { // ADD A, direct
+            0x25 => {
+                // ADD A, direct
                 let direct = self.fetch_code_byte();
                 let data = self.read_direct(direct);
                 self.alu_add(data, false);
                 1
             }
-            0x26..=0x27 => { // ADD A, @Ri
+            0x26..=0x27 => {
+                // ADD A, @Ri
                 let data = self.read_indirect_ri((op & 1) as usize);
                 self.alu_add(data, false);
                 1
             }
-            0x28..=0x2F => { // ADD A, Rn
+            0x28..=0x2F => {
+                // ADD A, Rn
                 let data = self.read_rn((op & 7) as usize);
                 self.alu_add(data, false);
                 1
             }
-            0x34 => { // ADDC A, #data
+            0x34 => {
+                // ADDC A, #data
                 let data = self.fetch_code_byte();
                 self.alu_add(data, true);
                 1
             }
-            0x35 => { // ADDC A, direct
+            0x35 => {
+                // ADDC A, direct
                 let direct = self.fetch_code_byte();
                 let data = self.read_direct(direct);
                 self.alu_add(data, true);
                 1
             }
-            0x36..=0x37 => { // ADDC A, @Ri
+            0x36..=0x37 => {
+                // ADDC A, @Ri
                 let data = self.read_indirect_ri((op & 1) as usize);
                 self.alu_add(data, true);
                 1
             }
-            0x38..=0x3F => { // ADDC A, Rn
+            0x38..=0x3F => {
+                // ADDC A, Rn
                 let data = self.read_rn((op & 7) as usize);
                 self.alu_add(data, true);
                 1
             }
-            0x94 => { // SUBB A, #data
+            0x94 => {
+                // SUBB A, #data
                 let data = self.fetch_code_byte();
                 self.alu_subb(data);
                 1
             }
-            0x95 => { // SUBB A, direct
+            0x95 => {
+                // SUBB A, direct
                 let direct = self.fetch_code_byte();
                 let data = self.read_direct(direct);
                 self.alu_subb(data);
                 1
             }
-            0x96..=0x97 => { // SUBB A, @Ri
+            0x96..=0x97 => {
+                // SUBB A, @Ri
                 let data = self.read_indirect_ri((op & 1) as usize);
                 self.alu_subb(data);
                 1
             }
-            0x98..=0x9F => { // SUBB A, Rn
+            0x98..=0x9F => {
+                // SUBB A, Rn
                 let data = self.read_rn((op & 7) as usize);
                 self.alu_subb(data);
                 1
             }
 
             // INC / DEC
-            0x04 => { // INC A
+            0x04 => {
+                // INC A
                 let val = self.read_acc().wrapping_add(1);
                 self.write_acc(val);
                 1
             }
-            0x05 => { // INC direct
+            0x05 => {
+                // INC direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_direct(direct).wrapping_add(1);
                 self.write_direct(direct, val);
                 1
             }
-            0x06..=0x07 => { // INC @Ri
+            0x06..=0x07 => {
+                // INC @Ri
                 let ri = (op & 1) as usize;
                 let val = self.read_indirect_ri(ri).wrapping_add(1);
                 self.write_indirect_ri(ri, val);
                 1
             }
-            0x08..=0x0F => { // INC Rn
+            0x08..=0x0F => {
+                // INC Rn
                 let rn = (op & 7) as usize;
                 let val = self.read_rn(rn).wrapping_add(1);
                 self.write_rn(rn, val);
                 1
             }
-            0xA3 => { // INC DPTR
+            0xA3 => {
+                // INC DPTR
                 let dptr = self.read_dptr().wrapping_add(1);
                 self.write_dptr(dptr);
                 2
             }
-            0x14 => { // DEC A
+            0x14 => {
+                // DEC A
                 let val = self.read_acc().wrapping_sub(1);
                 self.write_acc(val);
                 1
             }
-            0x15 => { // DEC direct
+            0x15 => {
+                // DEC direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_direct(direct).wrapping_sub(1);
                 self.write_direct(direct, val);
                 1
             }
-            0x16..=0x17 => { // DEC @Ri
+            0x16..=0x17 => {
+                // DEC @Ri
                 let ri = (op & 1) as usize;
                 let val = self.read_indirect_ri(ri).wrapping_sub(1);
                 self.write_indirect_ri(ri, val);
                 1
             }
-            0x18..=0x1F => { // DEC Rn
+            0x18..=0x1F => {
+                // DEC Rn
                 let rn = (op & 7) as usize;
                 let val = self.read_rn(rn).wrapping_sub(1);
                 self.write_rn(rn, val);
@@ -966,7 +1027,8 @@ impl Mcu8051 {
             }
 
             // MUL AB / DIV AB / DA A
-            0xA4 => { // MUL AB
+            0xA4 => {
+                // MUL AB
                 let a = self.read_acc() as u16;
                 let b = self.read_b() as u16;
                 let prod = a * b;
@@ -976,7 +1038,8 @@ impl Mcu8051 {
                 self.set_ov(prod > 255);
                 4
             }
-            0x84 => { // DIV AB
+            0x84 => {
+                // DIV AB
                 let a = self.read_acc();
                 let b = self.read_b();
                 self.set_cy(false);
@@ -989,7 +1052,8 @@ impl Mcu8051 {
                 }
                 4
             }
-            0xD4 => { // DA A (Decimal Adjust)
+            0xD4 => {
+                // DA A (Decimal Adjust)
                 let mut a = self.read_acc() as u16;
                 let mut cy = self.get_cy();
                 let ac = self.get_ac();
@@ -1007,72 +1071,85 @@ impl Mcu8051 {
             }
 
             // Logic operations: ANL, ORL, XRL, CLR, CPL, RL, RLC, RR, RRC, SWAP
-            0x54 => { // ANL A, #data
+            0x54 => {
+                // ANL A, #data
                 let data = self.fetch_code_byte();
                 let val = self.read_acc() & data;
                 self.write_acc(val);
                 1
             }
-            0x55 => { // ANL A, direct
+            0x55 => {
+                // ANL A, direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_acc() & self.read_direct(direct);
                 self.write_acc(val);
                 1
             }
-            0x58..=0x5F => { // ANL A, Rn
+            0x58..=0x5F => {
+                // ANL A, Rn
                 let val = self.read_acc() & self.read_rn((op & 7) as usize);
                 self.write_acc(val);
                 1
             }
-            0x44 => { // ORL A, #data
+            0x44 => {
+                // ORL A, #data
                 let data = self.fetch_code_byte();
                 let val = self.read_acc() | data;
                 self.write_acc(val);
                 1
             }
-            0x45 => { // ORL A, direct
+            0x45 => {
+                // ORL A, direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_acc() | self.read_direct(direct);
                 self.write_acc(val);
                 1
             }
-            0x48..=0x4F => { // ORL A, Rn
+            0x48..=0x4F => {
+                // ORL A, Rn
                 let val = self.read_acc() | self.read_rn((op & 7) as usize);
                 self.write_acc(val);
                 1
             }
-            0x64 => { // XRL A, #data
+            0x64 => {
+                // XRL A, #data
                 let data = self.fetch_code_byte();
                 let val = self.read_acc() ^ data;
                 self.write_acc(val);
                 1
             }
-            0x65 => { // XRL A, direct
+            0x65 => {
+                // XRL A, direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_acc() ^ self.read_direct(direct);
                 self.write_acc(val);
                 1
             }
-            0x68..=0x6F => { // XRL A, Rn
+            0x68..=0x6F => {
+                // XRL A, Rn
                 let val = self.read_acc() ^ self.read_rn((op & 7) as usize);
                 self.write_acc(val);
                 1
             }
-            0xE4 => { // CLR A
+            0xE4 => {
+                // CLR A
                 self.write_acc(0);
                 1
             }
-            0xF4 => { // CPL A
+            0xF4 => {
+                // CPL A
                 let val = !self.read_acc();
                 self.write_acc(val);
                 1
             }
-            0x23 => { // RL A
+            0x23 => {
+                // RL A
                 let a = self.read_acc();
                 self.write_acc(a.rotate_left(1));
                 1
             }
-            0x33 => { // RLC A
+            0x33 => {
+                // RLC A
                 let a = self.read_acc();
                 let cy = self.get_cy() as u8;
                 let new_cy = (a & 0x80) != 0;
@@ -1081,12 +1158,14 @@ impl Mcu8051 {
                 self.set_cy(new_cy);
                 1
             }
-            0x03 => { // RR A
+            0x03 => {
+                // RR A
                 let a = self.read_acc();
                 self.write_acc(a.rotate_right(1));
                 1
             }
-            0x13 => { // RRC A
+            0x13 => {
+                // RRC A
                 let a = self.read_acc();
                 let cy = (self.get_cy() as u8) << 7;
                 let new_cy = (a & 1) != 0;
@@ -1095,7 +1174,8 @@ impl Mcu8051 {
                 self.set_cy(new_cy);
                 1
             }
-            0xC4 => { // SWAP A
+            0xC4 => {
+                // SWAP A
                 let a = self.read_acc();
                 let val = a.rotate_left(4);
                 self.write_acc(val);
@@ -1103,40 +1183,48 @@ impl Mcu8051 {
             }
 
             // Bit operations: CLR C, SETB C, CPL C, ANL C, ORL C, MOV C
-            0xC3 => { // CLR C
+            0xC3 => {
+                // CLR C
                 self.set_cy(false);
                 1
             }
-            0xD3 => { // SETB C
+            0xD3 => {
+                // SETB C
                 self.set_cy(true);
                 1
             }
-            0xB3 => { // CPL C
+            0xB3 => {
+                // CPL C
                 self.set_cy(!self.get_cy());
                 1
             }
-            0xC2 => { // CLR bit
+            0xC2 => {
+                // CLR bit
                 let bit_addr = self.fetch_code_byte();
                 self.write_bit(bit_addr, false);
                 1
             }
-            0xD2 => { // SETB bit
+            0xD2 => {
+                // SETB bit
                 let bit_addr = self.fetch_code_byte();
                 self.write_bit(bit_addr, true);
                 1
             }
-            0xB2 => { // CPL bit
+            0xB2 => {
+                // CPL bit
                 let bit_addr = self.fetch_code_byte();
                 let val = !self.read_bit(bit_addr);
                 self.write_bit(bit_addr, val);
                 1
             }
-            0xA2 => { // MOV C, bit
+            0xA2 => {
+                // MOV C, bit
                 let bit_addr = self.fetch_code_byte();
                 self.set_cy(self.read_bit(bit_addr));
                 1
             }
-            0x92 => { // MOV bit, C
+            0x92 => {
+                // MOV bit, C
                 let bit_addr = self.fetch_code_byte();
                 let cy = self.get_cy();
                 self.write_bit(bit_addr, cy);
@@ -1144,13 +1232,15 @@ impl Mcu8051 {
             }
 
             // Stack: PUSH / POP
-            0xC0 => { // PUSH direct
+            0xC0 => {
+                // PUSH direct
                 let direct = self.fetch_code_byte();
                 let val = self.read_direct(direct);
                 self.push(val);
                 2
             }
-            0xD0 => { // POP direct
+            0xD0 => {
+                // POP direct
                 let direct = self.fetch_code_byte();
                 let val = self.pop();
                 self.write_direct(direct, val);
@@ -1158,7 +1248,8 @@ impl Mcu8051 {
             }
 
             // Exchange: XCH, XCHD
-            0xC5 => { // XCH A, direct
+            0xC5 => {
+                // XCH A, direct
                 let direct = self.fetch_code_byte();
                 let a = self.read_acc();
                 let d = self.read_direct(direct);
@@ -1166,7 +1257,8 @@ impl Mcu8051 {
                 self.write_direct(direct, a);
                 1
             }
-            0xC8..=0xCF => { // XCH A, Rn
+            0xC8..=0xCF => {
+                // XCH A, Rn
                 let rn = (op & 7) as usize;
                 let a = self.read_acc();
                 let r = self.read_rn(rn);
@@ -1174,7 +1266,8 @@ impl Mcu8051 {
                 self.write_rn(rn, a);
                 1
             }
-            0xD6..=0xD7 => { // XCHD A, @Ri
+            0xD6..=0xD7 => {
+                // XCHD A, @Ri
                 let ri = (op & 1) as usize;
                 let mut a = self.read_acc();
                 let mut d = self.read_indirect_ri(ri);
@@ -1188,24 +1281,28 @@ impl Mcu8051 {
             }
 
             // MOVC / MOVX
-            0x83 => { // MOVC A, @A+PC
+            0x83 => {
+                // MOVC A, @A+PC
                 let a = self.read_acc() as u16;
                 let val = self.code_memory[self.pc.wrapping_add(a) as usize];
                 self.write_acc(val);
                 2
             }
-            0x93 => { // MOVC A, @A+DPTR
+            0x93 => {
+                // MOVC A, @A+DPTR
                 let a = self.read_acc() as u16;
                 let dptr = self.read_dptr();
                 let val = self.code_memory[dptr.wrapping_add(a) as usize];
                 self.write_acc(val);
                 2
             }
-            0xE0 | 0xE2..=0xE3 => { // MOVX A, @DPTR / @Ri
+            0xE0 | 0xE2..=0xE3 => {
+                // MOVX A, @DPTR / @Ri
                 self.write_acc(0);
                 2
             }
-            0xF0 | 0xF2..=0xF3 => { // MOVX @DPTR / @Ri, A
+            0xF0 | 0xF2..=0xF3 => {
+                // MOVX @DPTR / @Ri, A
                 2
             }
 
@@ -1215,7 +1312,11 @@ impl Mcu8051 {
 
     fn alu_add(&mut self, data: u8, use_carry: bool) {
         let a = self.read_acc();
-        let cin = if use_carry && self.get_cy() { 1u16 } else { 0u16 };
+        let cin = if use_carry && self.get_cy() {
+            1u16
+        } else {
+            0u16
+        };
         let sum = (a as u16) + (data as u16) + cin;
 
         // AC (Auxiliary carry)

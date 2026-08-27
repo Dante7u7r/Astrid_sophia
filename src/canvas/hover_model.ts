@@ -1,4 +1,9 @@
-import type { ComponentInstance, PinInstance, WireInstance } from "../canvas_orchestrator";
+import type {
+  ComponentInstance,
+  PinInstance,
+  Point2D,
+  WireInstance,
+} from "../canvas_orchestrator";
 import { hitTestComponentAt } from "./component_geometry";
 import {
   findHoveredWire,
@@ -32,8 +37,13 @@ export function hitTestPin(
   worldY: number,
   threshold: number,
   wires?: readonly WireInstance[],
+  spatialIndex?: { queryComponentCandidates(point: Point2D, radius?: number): ComponentInstance[]; queryWireCandidates(point: Point2D, radius?: number): WireInstance[] } | null,
 ): { pin: PinInstance; comp: ComponentInstance } | null {
-  for (const comp of components) {
+  const compsToTest = (spatialIndex && components.length > 30)
+    ? spatialIndex.queryComponentCandidates({ x: worldX, y: worldY }, threshold + 30)
+    : components;
+
+  for (const comp of compsToTest) {
     const pins = getPins(comp);
     for (const pin of pins) {
       const dx = worldX - pin.x;
@@ -44,8 +54,12 @@ export function hitTestPin(
     }
   }
 
-  if (wires && wires.length > 0) {
-    const junctions = findWireJunctionPoints(wires);
+  const wiresToTest = (spatialIndex && wires && wires.length > 30)
+    ? spatialIndex.queryWireCandidates({ x: worldX, y: worldY }, threshold + 30)
+    : wires;
+
+  if (wiresToTest && wiresToTest.length > 0) {
+    const junctions = findWireJunctionPoints(wiresToTest);
     for (const jPt of junctions) {
       const dx = worldX - jPt.x;
       const dy = worldY - jPt.y;
@@ -83,6 +97,7 @@ export function resolveHoverState(
   worldX: number,
   worldY: number,
   options: HoverOptions,
+  spatialIndex?: { queryComponentCandidates(point: Point2D, radius?: number): ComponentInstance[]; queryWireCandidates(point: Point2D, radius?: number): WireInstance[] } | null,
 ): HoverState {
   const pinHit = hitTestPin(
     components,
@@ -91,6 +106,7 @@ export function resolveHoverState(
     worldY,
     options.pinThreshold,
     wires,
+    spatialIndex,
   );
   if (pinHit) {
     return {
@@ -103,9 +119,17 @@ export function resolveHoverState(
     };
   }
 
+  const compsToTest = (spatialIndex && components.length > 30)
+    ? spatialIndex.queryComponentCandidates({ x: worldX, y: worldY }, 30)
+    : components;
+
+  const wiresToTest = (spatialIndex && wires.length > 30)
+    ? spatialIndex.queryWireCandidates({ x: worldX, y: worldY }, 30)
+    : wires;
+
   // Si se está tirando un cable, permitir empalme directo sobre cables existentes (T-Junction tap)
   if (options.activePinForWire) {
-    const wireSegmentHit = findWireSegmentIntersection(wires, { x: worldX, y: worldY }, 12);
+    const wireSegmentHit = findWireSegmentIntersection(wiresToTest, { x: worldX, y: worldY }, 12);
     if (wireSegmentHit) {
       return {
         hoveredComponent: null,
@@ -118,7 +142,7 @@ export function resolveHoverState(
     }
   }
 
-  for (const comp of components) {
+  for (const comp of compsToTest) {
     if (!hitTestComponentAt(comp, worldX, worldY)) continue;
 
     let cursor = "grab";
@@ -140,7 +164,7 @@ export function resolveHoverState(
     };
   }
 
-  const wireHandleHit = hitTestWireHandles(wires, worldX, worldY);
+  const wireHandleHit = hitTestWireHandles(wiresToTest, worldX, worldY);
   if (wireHandleHit) {
     let cursor = "move";
     if (wireHandleHit.type === "segment") {

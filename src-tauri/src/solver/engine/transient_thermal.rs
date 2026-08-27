@@ -1,16 +1,16 @@
+use crate::solver::engine::advanced::thermal_network::{MultiNodeThermalModel, ThermalStage};
+use crate::solver::engine::devices::igbt::{evaluate_igbt, IgbtParams};
 use crate::solver::types::CircuitNetlist;
 use nalgebra::DVector;
 use std::collections::HashMap;
 
 use super::devices::*;
 
-pub(crate) fn update_device_junction_temperatures(
+pub(crate) fn initialize_transient_thermal_models(
     netlist: &CircuitNetlist,
-    step_solution: &DVector<f64>,
-    device_tjunc: &mut HashMap<String, f64>,
     t_amb: f64,
-    dt: f64,
-) {
+) -> HashMap<String, MultiNodeThermalModel> {
+    let mut models = HashMap::new();
     for comp in &netlist.components {
         let (rth, cth) = match comp.comp_type.as_str() {
             "diode" | "led" => (
@@ -25,10 +25,34 @@ pub(crate) fn update_device_junction_temperatures(
             | "sic_mosfet" | "gan_hemt" => {
                 (comp.rth.unwrap_or(MOS_RTH_JA), comp.cth.unwrap_or(MOS_CTH))
             }
+            "igbt" => (comp.rth.unwrap_or(45.0), comp.cth.unwrap_or(0.02)),
             "npn" | "pnp" => (comp.rth.unwrap_or(BJT_RTH_JA), comp.cth.unwrap_or(BJT_CTH)),
+            "resistor" if comp.rth.is_some() => {
+                (comp.rth.unwrap(), comp.cth.unwrap_or(0.01))
+            }
             _ => continue,
         };
 
+        let model = MultiNodeThermalModel::new_foster(
+            vec![ThermalStage::new(rth, cth)],
+            t_amb,
+        );
+        models.insert(comp.id.clone(), model);
+    }
+    models
+}
+
+pub(crate) fn update_device_junction_temperatures(
+    netlist: &CircuitNetlist,
+    step_solution: &DVector<f64>,
+    device_tjunc: &mut HashMap<String, f64>,
+    thermal_models: &mut HashMap<String, MultiNodeThermalModel>,
+    t_amb: f64,
+    dt: f64,
+) {
+    let mut p_diss_map: HashMap<String, f64> = HashMap::new();
+
+    for comp in &netlist.components {
         let p_diss = match comp.comp_type.as_str() {
             "diode" | "led" => {
                 let na = comp.pins[0].parse::<usize>().unwrap_or(0);
@@ -172,7 +196,8 @@ pub(crate) fn update_device_junction_temperatures(
                 let tj = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
                 let (vt_b, is_b) = get_thermal_parameters_junction(tj, None);
                 let ic = is_b * ((vbe / vt_b).exp() - 1.0) * comp.value.max(100.0);
-                (vce * ic.abs()).min(50.0)
+                let ib = (ic / comp.value.max(1.0)).abs();
+                (vce * ic.abs()) + (vbe * ib).abs()
             }
             "sic_mosfet" => {
                 let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
@@ -210,12 +235,76 @@ pub(crate) fn update_device_junction_temperatures(
                 let res = evaluate_gan_hemt(vgs, vds, tj, &params);
                 (vds * res.ids).abs()
             }
-            _ => 0.0,
+            "igbt" => {
+                let ng = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let nc = comp.pins[1].parse::<usize>().unwrap_or(0);
+                let ne = comp.pins[2].parse::<usize>().unwrap_or(0);
+                let vg = if ng > 0 { step_solution[ng - 1] } else { 0.0 };
+                let vc_pin = if nc > 0 { step_solution[nc - 1] } else { 0.0 };
+                let ve = if ne > 0 { step_solution[ne - 1] } else { 0.0 };
+                let vge = vg - ve;
+                let vce = vc_pin - ve;
+                let tj = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
+                let params = IgbtParams {
+                    vth: if comp.value > 0.0 { comp.value } else { 5.0 },
+                    kp: comp.igbt_kp.unwrap_or(12.0),
+                    alpha_pnp: comp.igbt_alpha.unwrap_or(0.55),
+                    tau_hl: comp.igbt_tau.unwrap_or(1.8e-6),
+                    wb0: comp.igbt_wb.unwrap_or(90e-6),
+                    cge: comp.igbt_cge.unwrap_or(2.2e-9),
+                    cgc0: comp.igbt_cgc.unwrap_or(180e-12),
+                    ..IgbtParams::default()
+                };
+                let res = evaluate_igbt(vge, vce, &params, Some(tj - 273.15), None, Some(dt));
+                (vce * res.ic).abs()
+            }
+            "resistor" if comp.rth.is_some() && comp.pins.len() >= 2 => {
+                let n1 = comp.pins[0].parse::<usize>().unwrap_or(0);
+                let n2 = comp.pins[1].parse::<usize>().unwrap_or(0);
+                let v1 = if n1 > 0 { step_solution[n1 - 1] } else { 0.0 };
+                let v2 = if n2 > 0 { step_solution[n2 - 1] } else { 0.0 };
+                let vr = v1 - v2;
+                let r = comp.value.abs().max(1e-12);
+                (vr * vr) / r
+            }
+            _ => continue,
         };
 
-        let tj_prev = *device_tjunc.get(&comp.id).unwrap_or(&t_amb);
-        let tj_new = (tj_prev + (dt / cth) * (p_diss + t_amb / rth)) / (1.0 + dt / (cth * rth));
-        device_tjunc.insert(comp.id.clone(), tj_new.clamp(t_amb, 500.0));
+        p_diss_map.insert(comp.id.clone(), p_diss);
+    }
+
+    // 1. Auto-calentamiento mediante MultiNodeThermalModel (Foster / Cauer)
+    let mut self_tjunc: HashMap<String, f64> = HashMap::new();
+    for (id, p_diss) in &p_diss_map {
+        let tj_val = if let Some(model) = thermal_models.get_mut(id) {
+            model.step(*p_diss, dt, t_amb)
+        } else {
+            let tj_prev = *device_tjunc.get(id).unwrap_or(&t_amb);
+            let rth = 80.0;
+            let cth = 0.01;
+            (tj_prev + (dt / cth) * (*p_diss + t_amb / rth)) / (1.0 + dt / (cth * rth))
+        };
+        self_tjunc.insert(id.clone(), tj_val);
+    }
+
+    // 2. Acoplamiento térmico mutuo entre dispositivos en el mismo disipador (Heatsink Cross-Heating)
+    let mut delta_cross: HashMap<String, f64> = HashMap::new();
+    if let Some(ref tc) = netlist.thermal_config {
+        for (id1, id2, r_mutual) in &tc.thermal_coupling {
+            if let Some(&p1) = p_diss_map.get(id1) {
+                *delta_cross.entry(id2.clone()).or_insert(0.0) += p1 * r_mutual;
+            }
+            if let Some(&p2) = p_diss_map.get(id2) {
+                *delta_cross.entry(id1.clone()).or_insert(0.0) += p2 * r_mutual;
+            }
+        }
+    }
+
+    // 3. Consolidar temperaturas finales de unión
+    for (id, t_self) in self_tjunc {
+        let t_cross = delta_cross.get(&id).copied().unwrap_or(0.0);
+        let t_total = (t_self + t_cross).clamp(t_amb, 600.0);
+        device_tjunc.insert(id, t_total);
     }
 }
 
@@ -245,11 +334,13 @@ mod tests {
             ..Default::default()
         };
         let mut temperatures = HashMap::from([(id.clone(), T_AMB)]);
+        let mut thermal_models = initialize_transient_thermal_models(&netlist, T_AMB);
 
         update_device_junction_temperatures(
             &netlist,
             &DVector::from_column_slice(voltages),
             &mut temperatures,
+            &mut thermal_models,
             T_AMB,
             0.01,
         );
@@ -286,5 +377,12 @@ mod tests {
     fn updates_bjt_temperatures() {
         assert_heats("npn", 100.0, &["1", "2", "0"], &[0.65, 5.0]);
         assert_heats("pnp", 100.0, &["1", "0", "2"], &[4.35, 5.0]);
+    }
+
+    #[test]
+    fn updates_igbt_and_wbg_temperatures() {
+        assert_heats("igbt", 5.0, &["1", "2", "0"], &[5.5, 2.0]);
+        assert_heats("sic_mosfet", 3.0, &["1", "2", "0"], &[3.5, 1.0]);
+        assert_heats("gan_hemt", 1.5, &["1", "2", "0"], &[1.8, 1.0]);
     }
 }

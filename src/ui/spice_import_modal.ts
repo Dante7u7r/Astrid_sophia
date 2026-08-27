@@ -1,8 +1,9 @@
-import { parseSpiceLibrary, type ParsedSubcircuit } from "../simulation/spice_library_parser";
-import { addSubcircuitCardToPalette } from "./component_palette_controller";
+import { parseSpiceLibrary, type ParsedSpiceModel, type ParsedSubcircuit } from "../simulation/spice_library_parser";
+import { addModelCardToPalette, addSubcircuitCardToPalette } from "./component_palette_controller";
 
 let modalElement: HTMLElement | null = null;
 let parsedSubcircuitsCache: ParsedSubcircuit[] = [];
+let parsedModelsCache: ParsedSpiceModel[] = [];
 
 /**
  * Abre el Modal de Importación de Bibliotecas SPICE.
@@ -243,11 +244,20 @@ function createSpiceImportModalDOM(): void {
 
     let registeredCount = 0;
     checkboxes.forEach((cb) => {
+      const itemType = cb.dataset.itemType;
       const index = parseInt(cb.dataset.index ?? "-1", 10);
-      const subckt = parsedSubcircuitsCache[index];
-      if (subckt) {
-        addSubcircuitCardToPalette(subckt);
-        registeredCount++;
+      if (itemType === "subckt") {
+        const subckt = parsedSubcircuitsCache[index];
+        if (subckt) {
+          addSubcircuitCardToPalette(subckt);
+          registeredCount++;
+        }
+      } else if (itemType === "model") {
+        const model = parsedModelsCache[index];
+        if (model) {
+          addModelCardToPalette(model);
+          registeredCount++;
+        }
       }
     });
 
@@ -259,14 +269,17 @@ function createSpiceImportModalDOM(): void {
 
     const parsed = parseSpiceLibrary(text);
     parsedSubcircuitsCache = [...parsed.subcircuits];
+    parsedModelsCache = [...parsed.models];
 
     if (!detectedContainer || !detectedList || !registerBtn) return;
 
     detectedList.innerHTML = "";
 
-    if (parsed.subcircuits.length === 0) {
+    const totalFound = parsed.subcircuits.length + parsed.models.length;
+
+    if (totalFound === 0) {
       detectedContainer.style.display = "flex";
-      detectedList.innerHTML = `<span style="font-size: 12px; color: #F85149; padding: 6px;">No se encontraron directivas .SUBCKT válidas en el texto proporcionado.</span>`;
+      detectedList.innerHTML = `<span style="font-size: 12px; color: #F85149; padding: 6px;">No se encontraron directivas .SUBCKT ni .MODEL válidas en el texto proporcionado.</span>`;
       registerBtn.disabled = true;
       registerBtn.style.opacity = "0.6";
       registerBtn.style.cursor = "not-allowed";
@@ -275,6 +288,7 @@ function createSpiceImportModalDOM(): void {
 
     detectedContainer.style.display = "flex";
 
+    // 1. Renderizar Macromodelos (.SUBCKT)
     parsed.subcircuits.forEach((sub, idx) => {
       const item = document.createElement("div");
       item.style.cssText = `
@@ -296,11 +310,53 @@ function createSpiceImportModalDOM(): void {
 
       item.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px;">
-          <input type="checkbox" checked data-index="${idx}" id="sub-check-${idx}" style="cursor: pointer;" />
+          <input type="checkbox" checked data-item-type="subckt" data-index="${idx}" id="sub-check-${idx}" style="cursor: pointer;" />
           <div>
-            <div style="font-size: 13px; font-weight: 600; color: #E6EDF3;">${sub.name} <span style="font-size: 11px; font-weight: normal; color: #8B949E;">(${sub.category})</span></div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="background: rgba(56, 189, 248, 0.15); color: #38BDF8; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; border: 1px solid rgba(56, 189, 248, 0.3);">.SUBCKT</span>
+              <span style="font-size: 13px; font-weight: 600; color: #E6EDF3;">${sub.name}</span>
+              <span style="font-size: 11px; font-weight: normal; color: #8B949E;">(${sub.category})</span>
+            </div>
             <div style="font-size: 11px; color: #8B949E; margin-top: 2px;">${sub.description}</div>
             <div style="margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap;">${pinBadges}</div>
+          </div>
+        </div>
+      `;
+      detectedList.appendChild(item);
+    });
+
+    // 2. Renderizar Modelos de Semiconductores (.MODEL)
+    parsed.models.forEach((mod, idx) => {
+      const item = document.createElement("div");
+      item.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        background: #161B22;
+        border: 1px solid #30363D;
+        border-radius: 6px;
+      `;
+
+      const paramEntries = Object.entries(mod.parameters || {});
+      const paramBadges = paramEntries.slice(0, 5)
+        .map(
+          ([k, v]) =>
+            `<span style="background: #21262D; color: #A78BFA; font-size: 10px; font-family: monospace; padding: 2px 6px; border-radius: 3px; border: 1px solid #30363D;">${k}=${v}</span>`,
+        )
+        .join(" ");
+
+      item.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="checkbox" checked data-item-type="model" data-index="${idx}" id="model-check-${idx}" style="cursor: pointer;" />
+          <div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="background: rgba(167, 139, 250, 0.15); color: #A78BFA; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; border: 1px solid rgba(167, 139, 250, 0.3);">.MODEL ${mod.type.toUpperCase()}</span>
+              <span style="font-size: 13px; font-weight: 600; color: #E6EDF3;">${mod.name}</span>
+              <span style="font-size: 11px; font-weight: normal; color: #8B949E;">(${mod.category || "Semiconductores"})</span>
+            </div>
+            <div style="font-size: 11px; color: #8B949E; margin-top: 2px;">${mod.description || `Modelo SPICE ${mod.name}`}</div>
+            ${paramBadges ? `<div style="margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap;">${paramBadges}</div>` : ""}
           </div>
         </div>
       `;

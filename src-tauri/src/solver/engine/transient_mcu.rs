@@ -1,3 +1,4 @@
+use crate::solver::matrix::MixedSignalScheduler;
 use crate::solver::types::{CircuitNetlist, ComponentData};
 use nalgebra::DVector;
 use std::collections::HashMap;
@@ -6,6 +7,99 @@ pub(crate) struct McuAcceptedStateMaps<'a> {
     pub tchip: &'a mut HashMap<String, f64>,
     pub vsample: &'a mut HashMap<String, f64>,
     pub vdaceff: &'a mut HashMap<String, f64>,
+}
+
+/// Gestor de ejecución de microcontroladores nativos cycle-accurate en Rust.
+pub struct McuRuntimeManager {
+    pub cores: HashMap<String, Box<dyn crate::mcu::McuCore>>,
+    pub last_clock_time: HashMap<String, f64>,
+}
+
+impl McuRuntimeManager {
+    pub fn new(netlist: &CircuitNetlist) -> Result<Self, String> {
+        let mut cores: HashMap<String, Box<dyn crate::mcu::McuCore>> = HashMap::new();
+        let mut last_clock_time = HashMap::new();
+
+        for comp in &netlist.components {
+            if is_mcu_component(comp) {
+                if let Some(ref fw_str) = comp.firmware {
+                    if !fw_str.trim().is_empty() {
+                        let mut core: Box<dyn crate::mcu::McuCore> = match comp.comp_type.as_str() {
+                            "mcu_8051" | "8051" => {
+                                Box::new(crate::mcu::mcu8051::Mcu8051::default())
+                            }
+                            _ => Box::new(crate::mcu::atmega328p::Atmega328p::default()),
+                        };
+                        core.load_firmware(fw_str.as_bytes()).map_err(|e| {
+                            format!("Error al cargar firmware en '{}': {}", comp.id, e)
+                        })?;
+                        cores.insert(comp.id.clone(), core);
+                        last_clock_time.insert(comp.id.clone(), 0.0);
+                    }
+                }
+            }
+        }
+
+        Ok(Self {
+            cores,
+            last_clock_time,
+        })
+    }
+
+    pub fn step_native_mcus(
+        &mut self,
+        netlist: &CircuitNetlist,
+        step_solution: &DVector<f64>,
+        t: f64,
+        dt: f64,
+        scheduler: &mut MixedSignalScheduler,
+    ) {
+        for comp in &netlist.components {
+            if is_mcu_component(comp) && comp.pins.len() >= 6 {
+                if let Some(core) = self.cores.get_mut(&comp.id) {
+                    let clock_freq = comp
+                        .mcu_clock_freq
+                        .unwrap_or_else(|| mcu_clock_frequency(&comp.comp_type));
+                    let _last_t = *self.last_clock_time.get(&comp.id).unwrap_or(&0.0);
+                    let next_t = t + dt;
+                    let total_cycles_target = (next_t * clock_freq).floor() as u64;
+                    let current_cycles = core.cycle_count();
+
+                    let cycles_to_run = if total_cycles_target > current_cycles {
+                        (total_cycles_target - current_cycles) as u32
+                    } else {
+                        1
+                    };
+
+                    let pin_in = comp.pins[0].parse::<usize>().unwrap_or(0);
+                    let pin_adc = comp.pins[2].parse::<usize>().unwrap_or(0);
+                    let pin_gnd = comp.pins[5].parse::<usize>().unwrap_or(0);
+                    let v_gnd_val = node_voltage(step_solution, pin_gnd);
+                    let v_adc_diff = (node_voltage(step_solution, pin_adc) - v_gnd_val).max(0.0);
+                    let v_in_diff = (node_voltage(step_solution, pin_in) - v_gnd_val).max(0.0);
+                    let v_cc = mcu_supply_voltage(&comp.comp_type);
+
+                    let mut gpio_inputs = crate::mcu::GpioInputs::default();
+                    gpio_inputs.adc_channels[0] = v_adc_diff;
+                    if v_in_diff >= 0.5 * v_cc {
+                        gpio_inputs.pin_d |= 0x04; // PD2 (INT0)
+                        gpio_inputs.pin_b |= 0x01; // PB0
+                        gpio_inputs.pin_c |= 0x01; // PC0
+                    }
+
+                    core.run_cycles(cycles_to_run, &gpio_inputs);
+                    self.last_clock_time.insert(comp.id.clone(), next_t);
+
+                    let outputs = core.get_gpio_outputs();
+                    let out_state = match comp.comp_type.as_str() {
+                        "mcu_8051" | "8051" => (outputs.port_b & 0x01) != 0, // P1.0
+                        _ => (outputs.port_b & (1 << 5)) != 0 || (outputs.port_d & (1 << 1)) != 0, // PB5 (D13) o PD1
+                    };
+                    scheduler.set_state(&comp.id, 1, out_state);
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn update_mcu_accepted_states(
@@ -88,7 +182,7 @@ fn update_mcu_accepted_state(
     states.vdaceff.insert(comp.id.clone(), v_dac_eff_new);
 }
 
-fn is_mcu_component(comp: &ComponentData) -> bool {
+pub(crate) fn is_mcu_component(comp: &ComponentData) -> bool {
     comp.comp_type == "arduino_uno"
         || comp.comp_type == "esp32"
         || comp.comp_type == "raspberry_pi_pico"
@@ -98,7 +192,7 @@ fn is_mcu_component(comp: &ComponentData) -> bool {
         || comp.comp_type == "atmega328p"
 }
 
-fn mcu_supply_voltage(comp_type: &str) -> f64 {
+pub(crate) fn mcu_supply_voltage(comp_type: &str) -> f64 {
     match comp_type {
         "arduino_uno" | "mcu_8051" | "8051" | "mcu_avr" | "atmega328p" => 5.0,
         "esp32" | "raspberry_pi_pico" => 3.3,
@@ -106,7 +200,7 @@ fn mcu_supply_voltage(comp_type: &str) -> f64 {
     }
 }
 
-fn mcu_baseline_current(comp_type: &str) -> f64 {
+pub(crate) fn mcu_baseline_current(comp_type: &str) -> f64 {
     match comp_type {
         "arduino_uno" | "mcu_avr" | "atmega328p" => 0.015,
         "mcu_8051" | "8051" => 0.020,
@@ -116,7 +210,7 @@ fn mcu_baseline_current(comp_type: &str) -> f64 {
     }
 }
 
-fn mcu_effective_capacitance(comp_type: &str) -> f64 {
+pub(crate) fn mcu_effective_capacitance(comp_type: &str) -> f64 {
     match comp_type {
         "arduino_uno" => 150e-12,
         "esp32" => 450e-12,
@@ -125,16 +219,17 @@ fn mcu_effective_capacitance(comp_type: &str) -> f64 {
     }
 }
 
-fn mcu_clock_frequency(comp_type: &str) -> f64 {
+pub(crate) fn mcu_clock_frequency(comp_type: &str) -> f64 {
     match comp_type {
-        "arduino_uno" => 16e6,
+        "arduino_uno" | "mcu_avr" | "atmega328p" => 16e6,
+        "mcu_8051" | "8051" => 12e6,
         "esp32" => 240e6,
         "raspberry_pi_pico" => 133e6,
         _ => 16e6,
     }
 }
 
-fn mcu_io_current_limit(comp_type: &str) -> f64 {
+pub(crate) fn mcu_io_current_limit(comp_type: &str) -> f64 {
     match comp_type {
         "arduino_uno" => 0.040,
         "esp32" | "raspberry_pi_pico" => 0.012,

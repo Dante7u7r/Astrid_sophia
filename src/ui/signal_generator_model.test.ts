@@ -4,6 +4,8 @@ import {
   evaluateSignalPoint,
   formatFrequency,
   formatVoltage,
+  voltsRmsToDbm50,
+  dbm50ToVoltsRms,
   GENERATOR_PRESETS,
   type SignalGeneratorParams,
 } from "./signal_generator_model";
@@ -95,10 +97,33 @@ describe("SignalGeneratorModel — Síntesis y Métricas", () => {
 
   it("contiene los presets requeridos con parámetros válidos", () => {
     expect(GENERATOR_PRESETS.length).toBeGreaterThanOrEqual(5);
-    const sine1k = GENERATOR_PRESETS.find((p) => p.id === "sine_1khz");
-    expect(sine1k).toBeDefined();
-    expect(sine1k?.params.frequency).toBe(1000);
-    expect(sine1k?.params.amplitude).toBe(5);
+    const audio1k = GENERATOR_PRESETS.find((p) => p.id === "audio_1khz_1vpp");
+    expect(audio1k).toBeDefined();
+    expect(audio1k?.params.frequency).toBe(1000);
+    expect(audio1k?.params.amplitude).toBe(0.5);
+  });
+
+  it("convierte con precisión entre Vrms y dBm a 50 ohmios", () => {
+    // 1 Vrms en 50 ohms -> P = 1/50 = 20 mW = 13.01 dBm
+    const dbm = voltsRmsToDbm50(1.0);
+    expect(dbm).toBeCloseTo(13.01, 2);
+
+    const vrms = dbm50ToVoltsRms(13.0103);
+    expect(vrms).toBeCloseTo(1.0, 3);
+
+    // 0 dBm -> 1 mW en 50 ohms = 0.2236 Vrms
+    expect(dbm50ToVoltsRms(0)).toBeCloseTo(0.2236, 3);
+  });
+
+  it("calcula métricas teniendo en cuenta la impedancia de 50 ohms", () => {
+    const params50Ohm: SignalGeneratorParams = {
+      ...baseSineParams,
+      outputImpedance: "50_ohm",
+    };
+    const metrics = calculateSignalMetrics(params50Ohm);
+    // Vpp cae a la mitad (5V en vez de 10V)
+    expect(metrics.vpp).toBeCloseTo(5, 4);
+    expect(metrics.dbm50).toBeDefined();
   });
 
   it("evalúa modulación en frecuencia FM y barrido Sweep", () => {

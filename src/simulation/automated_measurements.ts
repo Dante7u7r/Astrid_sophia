@@ -358,7 +358,7 @@ export function exportMeasurementsToCsv(
   metadata: { circuitName?: string; timestamp?: string } = {},
 ): string {
   const rows: string[] = [
-    `# Mediciones Automáticas .MEAS - Astryd Sophia`,
+    `# Mediciones Automáticas .MEAS - Biaani`,
     `# Circuito: ${metadata.circuitName || "Esquemático Principal"}`,
     `# Fecha: ${metadata.timestamp || new Date().toISOString()}`,
     `ID,Nombre,Categoría,Nodo,Valor,Unidad,ValorFormateado,Descripción`,

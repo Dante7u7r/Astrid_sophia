@@ -15,6 +15,7 @@ import {
   type LogicThresholdConfig,
   type UartPacket,
 } from "./logic_analyzer_model";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface LogicRendererChannel {
   index: number;         // 0..7
@@ -60,8 +61,10 @@ export function drawLogicAnalyzer(
     cursors,
   } = options;
 
+  const theme = getInstrumentThemeColors();
+
   // 1. Limpieza de fondo
-  ctx.fillStyle = "#030508";
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   if (width <= 20 || height <= 20) return;
@@ -74,10 +77,10 @@ export function drawLogicAnalyzer(
   const totalDuration = Math.max(1e-9, tEnd - tStart);
 
   // 2. Dibujar Regla de Tiempo Superior (Time Ruler)
-  ctx.fillStyle = "rgba(10, 16, 30, 0.9)";
+  ctx.fillStyle = theme.subRulerBg;
   ctx.fillRect(0, 0, width, rulerHeight);
 
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.25)";
+  ctx.strokeStyle = theme.subRulerBorder;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, rulerHeight);
@@ -91,7 +94,7 @@ export function drawLogicAnalyzer(
   const divWidth = plotWidth / numDivs;
   const timePerDiv = totalDuration / numDivs;
 
-  ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+  ctx.fillStyle = theme.axisText;
   ctx.font = "9px monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -101,14 +104,14 @@ export function drawLogicAnalyzer(
     const t = tStart + d * timePerDiv;
 
     // Tick en la regla
-    ctx.strokeStyle = "rgba(79, 156, 249, 0.4)";
+    ctx.strokeStyle = theme.axisLine;
     ctx.beginPath();
     ctx.moveTo(x, rulerHeight - 5);
     ctx.lineTo(x, rulerHeight);
     ctx.stroke();
 
     // Línea de cuadrícula vertical sutil
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.strokeStyle = theme.gridLine;
     ctx.beginPath();
     ctx.moveTo(x, rulerHeight);
     ctx.lineTo(x, height);
@@ -120,7 +123,7 @@ export function drawLogicAnalyzer(
   }
 
   // Indicador de escala (ns/div, µs/div, etc.) en la esquina superior izquierda
-  ctx.fillStyle = "#38bdf8";
+  ctx.fillStyle = theme.traceColors.ch2;
   ctx.font = "bold 9px monospace";
   ctx.textAlign = "left";
   ctx.fillText(formatTimeDiv(timePerDiv), 8, rulerHeight / 2);
@@ -141,7 +144,7 @@ export function drawLogicAnalyzer(
     const waveMidY = topY + rowHeight / 2;
 
     // Separador de canal
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+    ctx.strokeStyle = theme.gridLine;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, bottomY);
@@ -151,7 +154,7 @@ export function drawLogicAnalyzer(
     // Etiqueta de Canal y Estado actual en el margen izquierdo
     const lastSample = ch.samples[ch.samples.length - 1];
     const currentLvl = lastSample ? evaluateLogicLevel(lastSample.val, threshold) : "X";
-    const lvlColor = currentLvl === 1 ? "#4ade80" : currentLvl === 0 ? "#94a3b8" : "#f59e0b";
+    const lvlColor = currentLvl === 1 ? (theme.isClassroom ? "#16a34a" : "#4ade80") : currentLvl === 0 ? theme.axisText : "#f59e0b";
 
     ctx.fillStyle = ch.color;
     ctx.font = "bold 10px monospace";
@@ -159,7 +162,7 @@ export function drawLogicAnalyzer(
     ctx.textBaseline = "middle";
     ctx.fillText(`D${i}`, 8, topY + rowHeight / 2);
 
-    ctx.fillStyle = ch.enabled && ch.nodeName ? "rgba(255,255,255,0.7)" : "rgba(148,163,184,0.3)";
+    ctx.fillStyle = ch.enabled && ch.nodeName ? (theme.isClassroom ? "#0f172a" : "rgba(255,255,255,0.7)") : (theme.isClassroom ? "#94a3b8" : "rgba(148,163,184,0.3)");
     ctx.font = "9px monospace";
     const nodeLabel = ch.nodeName ? `N:${ch.nodeName}` : "OFF";
     ctx.fillText(nodeLabel, 28, topY + rowHeight / 2);
@@ -173,7 +176,7 @@ export function drawLogicAnalyzer(
 
     if (!ch.enabled || !ch.nodeName || ch.samples.length === 0) {
       // Línea atenuada en bajo para canales apagados
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+      ctx.strokeStyle = theme.gridLine;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(leftMargin, waveLowY);

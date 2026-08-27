@@ -41,8 +41,8 @@ pub fn parse_spice_value(s: &str) -> Result<f64, String> {
             val *= 1e6;
         } else if suffix_str.starts_with("mil") {
             val *= 25.4e-6; // 1 mil en metros (típico en PCB, pero en SPICE a veces es 1e-3, usemos 25.4e-6 o 1e-3. ngspice mapea mil a 25.4e-6)
-        } else {
-            match suffix_str.chars().next().unwrap() {
+        } else if let Some(c) = suffix_str.chars().next() {
+            match c {
                 't' => val *= 1e12,
                 'g' => val *= 1e9,
                 'k' => val *= 1e3,

@@ -85,7 +85,7 @@ const COMPONENT_TYPES = new Set<ComponentInstance["type"]>([
   "mcu_8051", "mcu_avr", "arduino_uno", "esp32", "raspberry_pi_pico",
   "isource", "led", "transformer", "switch", "x", "potentiometer",
   "ldr", "thermistor", "dmm", "fuse",
-  "zener_diode", "schottky_diode", "njf", "pjf", "opto",
+  "zener_diode", "schottky_diode", "njf", "pjf", "opto", "igbt",
   "bsim3nmos", "bsim3pmos", "bsim4nmos", "bsim4pmos",
   "and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate",
   "net_label", "power_port", "text_note",
@@ -148,6 +148,12 @@ const NUMERIC_COMPONENT_FIELDS = [
   "mosRon",
   "mosCgs",
   "mosCgd",
+  "igbtKp",
+  "igbtAlpha",
+  "igbtTau",
+  "igbtWb",
+  "igbtCge",
+  "igbtCgc",
   "jfetVto",
   "jfetBeta",
   "jfetLambda",
@@ -160,6 +166,15 @@ const NUMERIC_COMPONENT_FIELDS = [
   "opampRout",
   "opampVos",
   "opampIb",
+  "opampIsc",
+  "opampIq",
+  "opampVdrop",
+  "opampIos",
+  "opampCmrr",
+  "opampPsrr",
+  "opampEn",
+  "opampIn",
+  "opampFc",
   "gateTrise",
   "gateTfall",
   "gateRout",
@@ -171,6 +186,7 @@ const NUMERIC_COMPONENT_FIELDS = [
 
 const BOOLEAN_COMPONENT_FIELDS = [
   "mirror",
+  "mirrorY",
   "relayClosed",
   "switchState",
   "isSubcircuitBlock",
@@ -187,6 +203,7 @@ const STRING_COMPONENT_FIELDS = [
   "dielectricType",
   "potTaper",
   "ledColor",
+  "terminalStyle",
 ] as const;
 
 const VALID_TERMINAL_TYPES = new Set<string>([
@@ -195,7 +212,10 @@ const VALID_TERMINAL_TYPES = new Set<string>([
   "ground",
   "input",
   "output",
+  "bidirectional",
   "generator",
+  "bus_tap",
+  "test_point",
   "no_connect",
 ]);
 
@@ -520,8 +540,20 @@ export function cloneCircuitWires(wires: readonly WireInstance[]): WireInstance[
 
 export function parseCircuitFile(json: string): CircuitFileParseResult {
   try {
-    const root: unknown = JSON.parse(json);
-    if (!isRecord(root)) throw new CircuitFileValidationError("El archivo no contiene un objeto JSON.");
+    const cleanJson = typeof json === "string" ? json.replace(/^\uFEFF/, "") : json;
+    const parsedRaw: unknown = JSON.parse(cleanJson);
+    if (!isRecord(parsedRaw)) throw new CircuitFileValidationError("El archivo no contiene un objeto JSON.");
+    let root: Record<string, unknown> = parsedRaw;
+
+    let migratedFrom: string | null = null;
+
+    // Desempaquetado automático de paquetes de diagnóstico (Biaani Diagnostic Bundle)
+    if (root.format === "biaani-diagnostic-bundle" && isRecord(root.circuit) && typeof root.circuit.rawFileJson === "string") {
+      migratedFrom = `paquete de diagnóstico (${String(root.category || "reporte")})`;
+      const innerRoot: unknown = JSON.parse(root.circuit.rawFileJson);
+      if (!isRecord(innerRoot)) throw new CircuitFileValidationError("El paquete de diagnóstico no contiene un circuito válido.");
+      root = innerRoot;
+    }
 
     if (root.version !== undefined && typeof root.version !== "string") {
       throw new CircuitFileValidationError("version debe ser texto.");
@@ -529,6 +561,9 @@ export function parseCircuitFile(json: string): CircuitFileParseResult {
     const sourceVersion = root.version ?? "2.0";
     if (sourceVersion !== "2.0" && sourceVersion !== CURRENT_CIRCUIT_FILE_VERSION) {
       throw new CircuitFileValidationError(`Version de archivo no soportada: [${sourceVersion}].`);
+    }
+    if (migratedFrom === null && sourceVersion !== CURRENT_CIRCUIT_FILE_VERSION) {
+      migratedFrom = sourceVersion;
     }
     if (!Array.isArray(root.components) || !Array.isArray(root.wires)) {
       throw new CircuitFileValidationError("El archivo no contiene listas de componentes y cables.");
@@ -615,7 +650,7 @@ export function parseCircuitFile(json: string): CircuitFileParseResult {
     return {
       ok: true,
       data,
-      migratedFrom: sourceVersion === CURRENT_CIRCUIT_FILE_VERSION ? null : sourceVersion,
+      migratedFrom: migratedFrom ?? (sourceVersion === CURRENT_CIRCUIT_FILE_VERSION ? null : sourceVersion),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

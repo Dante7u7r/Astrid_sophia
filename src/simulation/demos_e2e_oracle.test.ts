@@ -16,6 +16,7 @@ describe("Demo Circuits E2E Oracle & Integrity Suite", () => {
     "06_inversor_cmos.astryd",
     "07_rlc_resonante.astryd",
     "08_control_rele_interactivo.astryd",
+    "09_integrador_opamp.astryd",
   ];
 
   it.each(demoFiles)("Demo '%s' must be valid, well-formed and parse cleanly", (fileName) => {

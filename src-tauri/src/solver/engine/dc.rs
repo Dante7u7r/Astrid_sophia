@@ -4,15 +4,22 @@ use crate::solver::SolverNumericalSettings;
 use nalgebra::DVector;
 use std::collections::HashMap;
 
+mod arclength;
 mod diagnostics;
 mod homotopy;
 mod linear;
 mod newton;
 mod result;
 
+use arclength::solve_arclength_continuation_core;
 use diagnostics::{diagnose_convergence_failure, multiply_sparse_matrix_vector};
 use homotopy::solve_homotopy_core;
 use result::build_simulation_result;
+
+pub use arclength::{
+    find_multiple_dc_operating_points_arclength,
+    solve_arclength_continuation_core as solve_arclength_core,
+};
 
 pub use linear::{
     stamp_linear_components, stamp_linear_components_sparse, stamp_transient_linear_components,
@@ -75,13 +82,16 @@ pub fn solve_dc_circuit_with_guess_and_numerical_settings(
         vsource_map.insert(vs.id.clone(), idx);
     }
 
-    // Comprobar si el circuito tiene componentes no lineales (Diodos, MOSFETs, BJTs, Op-Amps, B-Sources)
+    // Comprobar si el circuito tiene componentes no lineales (Diodos, MOSFETs, BJTs, Op-Amps, B-Sources, WBG, IGBT)
     let has_nonlinear = netlist.components.iter().any(|c| {
         c.comp_type == "diode"
             || c.comp_type == "led"
             || c.comp_type == "opto"
             || c.comp_type == "nmos"
             || c.comp_type == "pmos"
+            || c.comp_type == "sic_mosfet"
+            || c.comp_type == "gan_hemt"
+            || c.comp_type == "igbt"
             || c.comp_type == "npn"
             || c.comp_type == "pnp"
             || c.comp_type == "opamp"
@@ -525,7 +535,60 @@ pub fn solve_newton_raphson(
             }
         }
 
-        // Intento 5: Pseudo-Transient Analysis (PTA)
+        // Intento 5: Continuación por Pseudo-longitud de Arco (Método de Keller)
+        let x_init_arc = initial_guess.clone();
+        if let Ok(arc_sol) = solve_arclength_continuation_core(
+            netlist,
+            n,
+            m,
+            vsource_map,
+            base_gmin,
+            &x_init_arc,
+            numerical_settings,
+        ) {
+            let mut current_guess_arc = vec![0.0; n + 1];
+            for i in 1..=n {
+                current_guess_arc[i] = arc_sol[i - 1];
+            }
+
+            if let Ok(solution) = solve_newton_raphson_core(
+                netlist,
+                n,
+                m,
+                vsource_map,
+                base_gmin,
+                1.0,
+                &current_guess_arc,
+                None,
+                &switch_frozen_states,
+                numerical_settings,
+            ) {
+                let (sw_changed, new_sw) =
+                    check_switch_convergence(&solution, &switch_frozen_states);
+                if !sw_changed {
+                    let res = build_simulation_result(
+                        netlist,
+                        n,
+                        m,
+                        vsource_map,
+                        &solution,
+                        iters_homotopy * 20 + 35,
+                    )?;
+                    let mut final_voltages = vec![0.0; n + 1];
+                    for i in 1..=n {
+                        final_voltages[i] = solution[i - 1];
+                    }
+                    return Ok((res, final_voltages));
+                }
+                switch_frozen_states = new_sw;
+                for i in 1..=n {
+                    initial_guess[i] = solution[i - 1];
+                }
+                continue;
+            }
+        }
+
+        // Intento 6: Pseudo-Transient Analysis (PTA)
         let size = n + m;
         let mut pta_sol = DVector::<f64>::zeros(size);
         for i in 1..=n {

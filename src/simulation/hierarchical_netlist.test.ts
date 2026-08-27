@@ -157,4 +157,36 @@ describe("hierarchical_netlist", () => {
     expect(defs).toContain(".ends Etapa_Amp");
     expect(defs).toContain(".ends Filtro_RC");
   });
+
+  it("genera cláusulas PARAMS: en instancias de subcircuito con parámetros específicos", () => {
+    const childComponents: ComponentInstance[] = [
+      { id: "P_IN", type: "net_label", label: "IN", terminalType: "signal", x: 0, y: 0, rotation: 0 },
+      {
+        id: "X_FILTRO_PARAM",
+        type: "x",
+        subcircuitName: "Filtro_Parametrico",
+        instanceParams: { GAIN: 50, FC: "10k" },
+        x: 50,
+        y: 0,
+        rotation: 0,
+      },
+      { id: "P_OUT", type: "net_label", label: "OUT", terminalType: "signal", x: 150, y: 0, rotation: 0 },
+    ];
+
+    const childWires: WireInstance[] = [
+      { id: "w1", from: { componentId: "P_IN", pinIndex: 0 }, to: { componentId: "X_FILTRO_PARAM", pinIndex: 0 }, points: [] },
+      { id: "w2", from: { componentId: "X_FILTRO_PARAM", pinIndex: 1 }, to: { componentId: "P_OUT", pinIndex: 0 }, points: [] },
+    ];
+
+    const tab = {
+      name: "Top_Level",
+      subcircuitName: "Top_Level",
+      components: childComponents,
+      wires: childWires,
+    };
+
+    const sub = generateSubcircuitFromTab(tab);
+    expect(sub.spiceText).toContain("X_X_FILTRO_PARAM");
+    expect(sub.spiceText).toContain("Filtro_Parametrico PARAMS: GAIN=50 FC=10k");
+  });
 });

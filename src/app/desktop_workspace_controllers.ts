@@ -6,6 +6,7 @@ import type { McuDebugPanel } from "../ui/mcu_debug_panel";
 import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
 import type { AnalysisMode, SimulationControls } from "../ui/simulation_controls";
 import { SettingsModal, type SimulationSettings } from "../ui/settings_modal";
+import { MnaInspectorModal } from "../ui/mna_inspector_modal";
 import { TabManager } from "../ui/tab_manager";
 import { PropertyEditor } from "../ui/property_editor";
 import { ExporterPanel } from "../ui/exporter_panel";
@@ -48,6 +49,7 @@ export interface DesktopWorkspaceControllerDeps {
   onCircuitLoaded(): void;
   addLog(text: string, type?: LogType): void;
   logError(message: string): void;
+  getInstrumentsDock?(): import("../ui/instruments_dock").InstrumentsDock | null;
   invokeTauri: InvokeTauri;
 }
 
@@ -109,10 +111,59 @@ export function createDesktopWorkspaceControllers(
     getOrchestrator: deps.getOrchestrator,
     getMcuDebugPanel: deps.getMcuDebugPanel,
     getSimulationRunner: deps.getSimulationRunner,
+    getVoltageMap: () => deps.circuitState.getVoltageMap(),
+    getCurrentMap: () => deps.circuitState.getCurrentMap(),
+    getPinNode: (pinKey: string) => deps.circuitState.getPinNode(pinKey),
+    setProbeNode: (channel, nodeId) => {
+      const current = deps.probePlacementController.getNodes();
+      deps.probePlacementController.setNodes({
+        ...current,
+        [channel]: nodeId,
+      });
+      deps.updateCanvasRendering();
+      deps.updateOscilloscopeRendering();
+    },
+    getProbeNodes: () => {
+      const probes = deps.probePlacementController.getNodes();
+      return { ch1: probes.ch1, ch2: probes.ch2 };
+    },
+    highlightNet: (nodeId) => {
+      const orch = deps.getOrchestrator();
+      if (!orch) return;
+      if (!nodeId) {
+        orch.hoveredPin = null;
+        deps.updateCanvasRendering();
+        return;
+      }
+      for (const comp of orch.components) {
+        const pins = typeof orch.getComponentPins === "function" ? orch.getComponentPins(comp) : [];
+        for (let idx = 0; idx < pins.length; idx++) {
+          const pinKey = `${comp.id}:${idx}`;
+          if (deps.circuitState.getPinNode(pinKey) === nodeId) {
+            orch.hoveredPin = {
+              componentId: comp.id,
+              pinIndex: idx,
+              x: 0,
+              y: 0,
+            };
+            deps.updateCanvasRendering();
+            return;
+          }
+        }
+      }
+      orch.hoveredPin = null;
+      deps.updateCanvasRendering();
+    },
     addLog: deps.addLog,
     updateCanvasRendering: deps.updateCanvasRendering,
     markCurrentTabAsModified: deps.markCurrentTabAsModified,
     extractNetlist: deps.extractNetlist,
+    onComponentPropertiesApplied: (comp) => {
+      if (comp.type === "vsource" || comp.type === "isource") {
+        const dock = deps.getInstrumentsDock?.();
+        dock?.generator?.syncFromExternalSource(comp);
+      }
+    },
     invokeTauri: deps.invokeTauri,
   });
 
@@ -127,7 +178,7 @@ export function createDesktopWorkspaceControllers(
     addLog: deps.addLog,
     getComponents: () => deps.getOrchestrator()?.components ?? [],
     getWires: () => deps.getOrchestrator()?.wires ?? [],
-    getCircuitTitle: () => tabManager.getActiveTab()?.name ?? "Circuito Astryd Sophia",
+    getCircuitTitle: () => tabManager.getActiveTab()?.name ?? "Circuito Biaani",
   });
 
   new SettingsModal(deps.getSimulationSettings(), (newSettings) => {
@@ -165,6 +216,10 @@ export function createDesktopWorkspaceControllers(
       `Ajustes guardados: dt=${settings.dt}, tTRAN=${settings.transientDuration ?? 10} s, tol=${settings.tolerance}, iterMax=${settings.maxIterations}${extra}`,
       "system",
     );
+  });
+
+  new MnaInspectorModal({
+    getNetlist: () => deps.extractNetlist(false) ?? { components: [], wires: [] },
   });
 
   return {

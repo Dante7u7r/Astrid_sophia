@@ -1,4 +1,4 @@
-use astryd_sophia_lib::solver::{
+use biaani_lib::solver::{
     solve_ac_sweep, solve_dc_circuit, solve_transient_circuit, AcSweepSettings, CircuitNetlist,
     ComponentData, TransientSettings,
 };

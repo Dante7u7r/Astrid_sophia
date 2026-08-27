@@ -32,10 +32,49 @@ impl TransientSettings {
         if let Some(method) = self.integration_method.as_deref() {
             if !matches!(
                 method,
-                "auto" | "euler" | "BE" | "gear2" | "trap" | "trapezoidal"
+                "auto"
+                    | "euler"
+                    | "BE"
+                    | "gear2"
+                    | "gear3"
+                    | "gear4"
+                    | "gear5"
+                    | "gear6"
+                    | "trap"
+                    | "trapezoidal"
             ) {
                 return Err(format!(
-                    "Método de integración no compatible: {method}. Use auto, euler, BE, gear2, trap o trapezoidal."
+                    "Método de integración no compatible: {method}. Use auto, euler, BE, gear2, gear3, gear4, gear5, gear6, trap o trapezoidal."
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_interactive(&self) -> Result<(), String> {
+        if !self.dt.is_finite() || self.dt <= 0.0 {
+            return Err("El paso temporal dt debe ser finito y mayor que cero.".to_string());
+        }
+        if self.t_max.is_nan() || self.t_max < 0.0 {
+            return Err("La duración transitoria tMax no puede ser negativa.".to_string());
+        }
+
+        if let Some(method) = self.integration_method.as_deref() {
+            if !matches!(
+                method,
+                "auto"
+                    | "euler"
+                    | "BE"
+                    | "gear2"
+                    | "gear3"
+                    | "gear4"
+                    | "gear5"
+                    | "gear6"
+                    | "trap"
+                    | "trapezoidal"
+            ) {
+                return Err(format!(
+                    "Método de integración no compatible: {method}. Use auto, euler, BE, gear2, gear3, gear4, gear5, gear6, trap o trapezoidal."
                 ));
             }
         }
@@ -79,6 +118,23 @@ pub struct TimeStepResult {
     pub time: f64,
     pub node_voltages: HashMap<String, f64>,
     pub branch_currents: HashMap<String, f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_temperatures: Option<HashMap<String, f64>>,
+}
+
+impl TimeStepResult {
+    pub fn new(
+        time: f64,
+        node_voltages: HashMap<String, f64>,
+        branch_currents: HashMap<String, f64>,
+    ) -> Self {
+        Self {
+            time,
+            node_voltages,
+            branch_currents,
+            device_temperatures: None,
+        }
+    }
 }
 
 /// Representación plana de memoria contigua para transferencia IPC de ultra-alto rendimiento.
@@ -170,11 +226,7 @@ pub fn unpack_transient_results(packed: &PackedTransientResult) -> Vec<TimeStepR
             }
         }
 
-        results.push(TimeStepResult {
-            time,
-            node_voltages,
-            branch_currents,
-        });
+        results.push(TimeStepResult::new(time, node_voltages, branch_currents));
     }
     results
 }
@@ -233,16 +285,8 @@ mod validation_tests {
         step2_branches.insert("R1".to_string(), 0.0048);
 
         let original = vec![
-            TimeStepResult {
-                time: 0.0,
-                node_voltages: step1_nodes,
-                branch_currents: step1_branches,
-            },
-            TimeStepResult {
-                time: 0.001,
-                node_voltages: step2_nodes,
-                branch_currents: step2_branches,
-            },
+            TimeStepResult::new(0.0, step1_nodes, step1_branches),
+            TimeStepResult::new(0.001, step2_nodes, step2_branches),
         ];
 
         let packed = pack_transient_results(&original);

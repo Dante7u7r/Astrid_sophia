@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Astryd Sophia — SPICE Language Server (JSON-RPC stdio)
+ * Biaani — SPICE Language Server (JSON-RPC stdio)
  *
  * Servidor LSP ejecutable compatible con clientes de Language Server Protocol (VS Code, Neovim, Emacs, Helix).
- * Provee diagnóstico en vivo, autocompletado y hover para archivos .spice, .cir, .net, .mod, .lib y .astryd.
+ * Provee diagnóstico en vivo, autocompletado y hover para archivos .spice, .cir, .net, .mod, .lib, .biaani y .astryd.
  */
 
 // ============================================================================
@@ -139,7 +139,7 @@ function validateSpiceDocument(text) {
           diagnostics.push({
             range: { start: { line: lineIdx, character: 0 }, end: { line: lineIdx, character: rawLine.length } },
             severity: 1,
-            source: "astryd-spice-lsp",
+            source: "biaani-spice-lsp",
             message: "Sintaxis .SUBCKT incompleta.",
             code: "ERC_SUBCKT_SYNTAX",
           });
@@ -151,7 +151,7 @@ function validateSpiceDocument(text) {
           diagnostics.push({
             range: { start: { line: lineIdx, character: 0 }, end: { line: lineIdx, character: rawLine.length } },
             severity: 1,
-            source: "astryd-spice-lsp",
+            source: "biaani-spice-lsp",
             message: "Directiva .ENDS huérfana.",
             code: "ERC_DANGLING_ENDS",
           });
@@ -167,7 +167,7 @@ function validateSpiceDocument(text) {
         diagnostics.push({
           range: { start: { line: lineIdx, character: 0 }, end: { line: lineIdx, character: rawLine.length } },
           severity: 1,
-          source: "astryd-spice-lsp",
+          source: "biaani-spice-lsp",
           message: `Definición incompleta para componente ${firstToken}.`,
           code: "SPICE_COMP_SYNTAX",
         });
@@ -178,7 +178,7 @@ function validateSpiceDocument(text) {
           diagnostics.push({
             range: { start: { line: lineIdx, character: rawLine.indexOf(valStr) }, end: { line: lineIdx, character: rawLine.indexOf(valStr) + valStr.length } },
             severity: 1,
-            source: "astryd-spice-lsp",
+            source: "biaani-spice-lsp",
             message: `Valor numérico SPICE no reconocido: '${valStr}'.`,
             code: "SPICE_INVALID_VALUE",
           });
@@ -191,7 +191,7 @@ function validateSpiceDocument(text) {
         diagnostics.push({
           range: { start: { line: lineIdx, character: 0 }, end: { line: lineIdx, character: rawLine.length } },
           severity: 1,
-          source: "astryd-spice-lsp",
+          source: "biaani-spice-lsp",
           message: `Definición incompleta para ${firstToken}.`,
           code: firstChar === "D" ? "SPICE_DIODE_SYNTAX" : "SPICE_SOURCE_SYNTAX",
         });
@@ -206,7 +206,7 @@ function validateSpiceDocument(text) {
     diagnostics.push({
       range: { start: { line: lines.length - 1, character: 0 }, end: { line: lines.length - 1, character: 1 } },
       severity: 1,
-      source: "astryd-spice-lsp",
+      source: "biaani-spice-lsp",
       message: `Bloque .SUBCKT [${subcktStack.join(", ")}] sin cerrar.`,
       code: "ERC_UNCLOSED_SUBCKT",
     });
@@ -216,7 +216,7 @@ function validateSpiceDocument(text) {
     diagnostics.push({
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: Math.max(1, lines[0].length) } },
       severity: 2,
-      source: "astryd-spice-lsp",
+      source: "biaani-spice-lsp",
       message: "Referencia a Tierra (Nodo '0' o 'GND') no encontrada.",
       code: "ERC_NO_GND",
     });
@@ -417,7 +417,7 @@ function processMessage(msg) {
           hoverProvider: true,
         },
         serverInfo: {
-          name: "astryd-spice-lsp",
+          name: "biaani-spice-lsp",
           version: "1.0.0",
         },
       },

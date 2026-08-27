@@ -111,7 +111,7 @@ function createDiagnosticSummary(events: readonly FeedbackEventV1[], exportedAtU
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .map(([code, count]) => `- \`${code}\`: ${count}`);
   return [
-    "# Diagnóstico de Astryd Sophia",
+    "# Diagnóstico de Biaani",
     "",
     `Exportado: ${new Date(exportedAtUnixMs).toISOString()}`,
     "",
@@ -404,7 +404,7 @@ export class IntelligenceCenter {
     if (recommendations.length === 0) {
       const emptyDiv = this.documentRef.createElement("div");
       emptyDiv.id = "intelligence-empty-state";
-      emptyDiv.style.cssText = "font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px dashed rgba(255,255,255,0.08);";
+      emptyDiv.style.cssText = "font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; border-radius: 6px;";
       emptyDiv.textContent = "✓ Sin advertencias ni conflictos detectados en el circuito actual.";
       container.appendChild(emptyDiv);
       return;
@@ -425,7 +425,7 @@ export class IntelligenceCenter {
       const badge = this.documentRef.createElement("span");
       badge.style.cssText = `font-size: 0.58rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-family: var(--font-mono); ${
         safety === "scientific-review-required" ? "background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);" :
-        safety === "reversible" ? "background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);" :
+        safety === "reversible" ? "background: rgba(56, 189, 248, 0.2); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.4);" :
         "background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);"
       }`;
       badge.textContent =
@@ -440,18 +440,18 @@ export class IntelligenceCenter {
 
       // Título
       const title = this.documentRef.createElement("h5");
-      title.style.cssText = "margin: 0; font-size: 0.78rem; font-weight: 700; color: #fff;";
+      title.style.cssText = "margin: 0; font-size: 0.78rem; font-weight: 700; color: var(--text-bright);";
       title.textContent = recommendation.title;
 
       // Explicación teórica
       const explanation = this.documentRef.createElement("p");
-      explanation.style.cssText = "margin: 0; font-size: 0.7rem; color: rgba(226, 232, 240, 0.85); line-height: 1.4;";
+      explanation.style.cssText = "margin: 0; font-size: 0.7rem; color: var(--text-main); line-height: 1.4;";
       explanation.textContent = recommendation.explanation;
 
       // Evidencia física / topológica
       const evidence = this.documentRef.createElement("div");
       evidence.className = "intelligence-evidence";
-      evidence.style.cssText = "background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 4px; font-size: 0.62rem; color: #38bdf8; font-family: var(--font-mono);";
+      evidence.style.cssText = "background: var(--bg-deep); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 0.62rem; color: var(--cyan); font-family: var(--font-mono);";
       evidence.textContent = `🔍 Evidencia: ${recommendation.evidence}`;
 
       // Barra de acciones
@@ -480,6 +480,23 @@ export class IntelligenceCenter {
           this.announce(isApplied ? "Ajuste aplicado; puedes deshacerlo." : "Ajuste revertido.");
         });
         actions.appendChild(apply);
+      }
+
+      if (recommendation.topologicalPatch) {
+        const fixTopological = this.documentRef.createElement("button");
+        fixTopological.type = "button";
+        fixTopological.className = "intel-btn active";
+        fixTopological.style.cssText = "font-size: 0.65rem; padding: 3px 8px; background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4);";
+        fixTopological.textContent = "🛠 Auto-Corregir en Lienzo";
+        fixTopological.addEventListener("click", () => {
+          window.dispatchEvent(new CustomEvent("astryd-apply-topological-fix", {
+            detail: { recommendationId: recommendation.recommendationId, patch: recommendation.topologicalPatch },
+          }));
+          fixTopological.disabled = true;
+          fixTopological.textContent = "✓ Corregido en Lienzo";
+          this.announce("Corrección topológica aplicada al esquemático.");
+        });
+        actions.appendChild(fixTopological);
       }
 
       const reject = this.documentRef.createElement("button");
@@ -666,7 +683,7 @@ export class IntelligenceCenter {
 
           <!-- Lista de Tarjetas del Asesor -->
           <div id="intelligence-recommendations-list" class="intel-recommendations-scroll">
-            <div id="intelligence-empty-state" style="font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px dashed rgba(255,255,255,0.08);">
+            <div id="intelligence-empty-state" style="font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; border-radius: 6px;">
               ✓ Sin advertencias ni conflictos detectados en el circuito actual.
             </div>
           </div>

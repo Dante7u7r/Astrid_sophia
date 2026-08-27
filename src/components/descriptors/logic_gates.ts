@@ -9,36 +9,109 @@ import {
   drawNotGate,
   drawOrGate,
   drawXorGate,
+  getGateInputYOffsets,
   type LogicGateRenderOptions,
 } from "../../canvas/component_logic_renderer";
 import type { ComponentDefinition, LocalPinDefinition } from "../types";
+import type { ComponentInstance } from "../../canvas_orchestrator";
 
-const TWO_INPUT_GATE_PINS: readonly LocalPinDefinition[] = [
-  { index: 0, x: -40, y: -10, label: "A", name: "Entrada A" },
-  { index: 1, x: -40, y: 10, label: "B", name: "Entrada B" },
-  { index: 2, x: 40, y: 0, label: "Y", name: "Salida Y" },
-];
+function getLogicGatePins(comp?: { gateInputs?: number }): readonly LocalPinDefinition[] {
+  const inputs = comp?.gateInputs ?? 2;
+  const yOffsets = getGateInputYOffsets(inputs);
+  const pins: LocalPinDefinition[] = yOffsets.map((y, idx) => {
+    const label = String.fromCharCode(65 + idx);
+    return {
+      index: idx,
+      x: -40,
+      y,
+      label,
+      name: `Entrada ${label}`,
+    };
+  });
+  pins.push({
+    index: inputs,
+    x: 40,
+    y: 0,
+    label: "Y",
+    name: "Salida Y",
+  });
+  return pins;
+}
 
-function getLogicLevel(voltage?: number): "1" | "0" | "X" | undefined {
+function getLogicLevel(voltage?: number, vth: number = 2.5): "1" | "0" | "X" | undefined {
   if (voltage === undefined) return undefined;
-  if (voltage >= 2.0) return "1";
-  if (voltage <= 0.8) return "0";
+  if (voltage >= vth * 0.8) return "1";
+  if (voltage <= vth * 0.35) return "0";
   return "X";
 }
 
-function extractTwoInputGateLevels(
-  comp: { id: string },
+function extractGateLevels(
+  comp: ComponentInstance,
   voltageMap?: Record<string, number>,
+  symbolStandard?: "IEEE" | "IEC",
 ): LogicGateRenderOptions {
-  if (!voltageMap) return {};
-  const vA = voltageMap[`${comp.id}:0`];
-  const vB = voltageMap[`${comp.id}:1`];
-  const vY = voltageMap[`${comp.id}:2`];
+  const inputs = comp.gateInputs ?? 2;
+  const numVal = Number(comp.value) || 5.0;
+  const vth = comp.offset !== undefined ? comp.offset : (comp.logicFamily === "ttl" ? 1.4 : numVal * 0.5);
+  const std = comp.symbolStandard ?? symbolStandard ?? "IEEE";
+  if (!voltageMap) {
+    return {
+      inputCount: inputs,
+      schmittTrigger: comp.schmittTrigger,
+      openCollector: comp.openCollector,
+      symbolStandard: std,
+    };
+  }
+
+  const inputLevels: ("1" | "0" | "X" | undefined)[] = [];
+  for (let i = 0; i < inputs; i++) {
+    const v = voltageMap[`${comp.id}:${i}`];
+    inputLevels.push(getLogicLevel(v, vth));
+  }
+  const vY = voltageMap[`${comp.id}:${inputs}`];
+  const levelY = getLogicLevel(vY, vth);
+
   return {
-    levelA: getLogicLevel(vA),
-    levelB: getLogicLevel(vB),
-    levelY: getLogicLevel(vY),
+    levelA: inputLevels[0],
+    levelB: inputLevels[1],
+    levelY,
+    inputLevels,
+    inputCount: inputs,
+    schmittTrigger: comp.schmittTrigger,
+    openCollector: comp.openCollector,
+    symbolStandard: std,
   };
+}
+
+function evaluateGateLiveBehavior(
+  pinVoltages: Record<number, number | undefined>,
+  comp: ComponentInstance,
+  op: (inputs: boolean[]) => boolean,
+) {
+  const inputCount = comp.gateInputs ?? 2;
+  const numVal = Number(comp.value) || 5.0;
+  const vth = comp.offset !== undefined ? comp.offset : (comp.logicFamily === "ttl" ? 1.4 : numVal * 0.5);
+  const voh = numVal;
+
+  const booleanInputs: boolean[] = [];
+  for (let i = 0; i < inputCount; i++) {
+    const v = pinVoltages[i] ?? 0;
+    booleanInputs.push(v >= vth);
+  }
+
+  const outBool = op(booleanInputs);
+  const targetVout = outBool ? voh : 0.0;
+  const actualVout = pinVoltages[inputCount] ?? targetVout;
+  const rout = comp.gateRout ?? 50.0;
+  const iOut = (targetVout - actualVout) / Math.max(1.0, rout);
+
+  const branchCurrents: Record<number, number> = {};
+  for (let i = 0; i < inputCount; i++) {
+    branchCurrents[i] = 1e-9;
+  }
+  branchCurrents[inputCount] = iOut;
+
+  return { branchCurrents };
 }
 
 export const AndGateDefinition: ComponentDefinition = {
@@ -46,14 +119,19 @@ export const AndGateDefinition: ComponentDefinition = {
   name: "Compuerta AND",
   category: "logica-digital",
   prefix: "U",
-  defaultProperties: { value: 1 },
-  halfExtents: { halfW: 45, halfH: 30 },
+  defaultProperties: { value: 5.0, offset: 2.5, gateInputs: 2 },
+  halfExtents: (comp) => {
+    const inputs = comp?.gateInputs ?? 2;
+    return { halfW: 45, halfH: inputs >= 8 ? 85 : (inputs >= 4 ? 45 : (inputs >= 3 ? 35 : 30)) };
+  },
   hasStandardLeads: false,
-  getPins: () => TWO_INPUT_GATE_PINS,
+  getPins: (comp) => getLogicGatePins(comp),
   render: (ctx, comp, _state, options) => {
-    const opts = extractTwoInputGateLevels(comp, options.voltageMap);
+    const opts = extractGateLevels(comp, options.voltageMap, options.symbolStandard);
     drawAndGate(ctx, opts);
   },
+  evaluateLiveBehavior: (pinVoltages, comp) =>
+    evaluateGateLiveBehavior(pinVoltages, comp, (ins) => ins.every((v) => v)),
 };
 
 export const OrGateDefinition: ComponentDefinition = {
@@ -61,14 +139,19 @@ export const OrGateDefinition: ComponentDefinition = {
   name: "Compuerta OR",
   category: "logica-digital",
   prefix: "U",
-  defaultProperties: { value: 1 },
-  halfExtents: { halfW: 45, halfH: 30 },
+  defaultProperties: { value: 5.0, offset: 2.5, gateInputs: 2 },
+  halfExtents: (comp) => {
+    const inputs = comp?.gateInputs ?? 2;
+    return { halfW: 45, halfH: inputs >= 8 ? 85 : (inputs >= 4 ? 45 : (inputs >= 3 ? 35 : 30)) };
+  },
   hasStandardLeads: false,
-  getPins: () => TWO_INPUT_GATE_PINS,
+  getPins: (comp) => getLogicGatePins(comp),
   render: (ctx, comp, _state, options) => {
-    const opts = extractTwoInputGateLevels(comp, options.voltageMap);
+    const opts = extractGateLevels(comp, options.voltageMap, options.symbolStandard);
     drawOrGate(ctx, opts);
   },
+  evaluateLiveBehavior: (pinVoltages, comp) =>
+    evaluateGateLiveBehavior(pinVoltages, comp, (ins) => ins.some((v) => v)),
 };
 
 export const NotGateDefinition: ComponentDefinition = {
@@ -76,7 +159,7 @@ export const NotGateDefinition: ComponentDefinition = {
   name: "Compuerta NOT (Inversor)",
   category: "logica-digital",
   prefix: "U",
-  defaultProperties: { value: 1 },
+  defaultProperties: { value: 5.0, offset: 2.5, gateInputs: 1 },
   halfExtents: { halfW: 45, halfH: 30 },
   hasStandardLeads: false,
   getPins: () => [
@@ -84,12 +167,27 @@ export const NotGateDefinition: ComponentDefinition = {
     { index: 1, x: 40, y: 0, label: "Y", name: "Salida Y" },
   ],
   render: (ctx, comp, _state, options) => {
+    const vth = comp.offset !== undefined ? comp.offset : (comp.logicFamily === "ttl" ? 1.4 : 2.5);
     const vA = options.voltageMap?.[`${comp.id}:0`];
     const vY = options.voltageMap?.[`${comp.id}:1`];
     drawNotGate(ctx, {
-      levelA: getLogicLevel(vA),
-      levelY: getLogicLevel(vY),
+      levelA: getLogicLevel(vA, vth),
+      levelY: getLogicLevel(vY, vth),
+      schmittTrigger: comp.schmittTrigger,
+      openCollector: comp.openCollector,
+      symbolStandard: comp.symbolStandard ?? options.symbolStandard ?? "IEEE",
     });
+  },
+  evaluateLiveBehavior: (pinVoltages, comp) => {
+    const vth = comp.offset !== undefined ? comp.offset : (comp.logicFamily === "ttl" ? 1.4 : 2.5);
+    const voh = Number(comp.value) || 5.0;
+    const vA = pinVoltages[0] ?? 0;
+    const outBool = vA < vth;
+    const targetVout = outBool ? voh : 0.0;
+    const actualVout = pinVoltages[1] ?? targetVout;
+    const rout = comp.gateRout ?? 50.0;
+    const iOut = (targetVout - actualVout) / Math.max(1.0, rout);
+    return { branchCurrents: { 0: 1e-9, 1: iOut } };
   },
 };
 
@@ -98,14 +196,19 @@ export const NandGateDefinition: ComponentDefinition = {
   name: "Compuerta NAND",
   category: "logica-digital",
   prefix: "U",
-  defaultProperties: { value: 1 },
-  halfExtents: { halfW: 45, halfH: 30 },
+  defaultProperties: { value: 5.0, offset: 2.5, gateInputs: 2 },
+  halfExtents: (comp) => {
+    const inputs = comp?.gateInputs ?? 2;
+    return { halfW: 45, halfH: inputs >= 8 ? 85 : (inputs >= 4 ? 45 : (inputs >= 3 ? 35 : 30)) };
+  },
   hasStandardLeads: false,
-  getPins: () => TWO_INPUT_GATE_PINS,
+  getPins: (comp) => getLogicGatePins(comp),
   render: (ctx, comp, _state, options) => {
-    const opts = extractTwoInputGateLevels(comp, options.voltageMap);
+    const opts = extractGateLevels(comp, options.voltageMap, options.symbolStandard);
     drawNandGate(ctx, opts);
   },
+  evaluateLiveBehavior: (pinVoltages, comp) =>
+    evaluateGateLiveBehavior(pinVoltages, comp, (ins) => !ins.every((v) => v)),
 };
 
 export const NorGateDefinition: ComponentDefinition = {
@@ -113,14 +216,19 @@ export const NorGateDefinition: ComponentDefinition = {
   name: "Compuerta NOR",
   category: "logica-digital",
   prefix: "U",
-  defaultProperties: { value: 1 },
-  halfExtents: { halfW: 45, halfH: 30 },
+  defaultProperties: { value: 5.0, offset: 2.5, gateInputs: 2 },
+  halfExtents: (comp) => {
+    const inputs = comp?.gateInputs ?? 2;
+    return { halfW: 45, halfH: inputs >= 8 ? 85 : (inputs >= 4 ? 45 : (inputs >= 3 ? 35 : 30)) };
+  },
   hasStandardLeads: false,
-  getPins: () => TWO_INPUT_GATE_PINS,
+  getPins: (comp) => getLogicGatePins(comp),
   render: (ctx, comp, _state, options) => {
-    const opts = extractTwoInputGateLevels(comp, options.voltageMap);
+    const opts = extractGateLevels(comp, options.voltageMap, options.symbolStandard);
     drawNorGate(ctx, opts);
   },
+  evaluateLiveBehavior: (pinVoltages, comp) =>
+    evaluateGateLiveBehavior(pinVoltages, comp, (ins) => !ins.some((v) => v)),
 };
 
 export const XorGateDefinition: ComponentDefinition = {
@@ -128,12 +236,18 @@ export const XorGateDefinition: ComponentDefinition = {
   name: "Compuerta XOR",
   category: "logica-digital",
   prefix: "U",
-  defaultProperties: { value: 1 },
-  halfExtents: { halfW: 45, halfH: 30 },
+  defaultProperties: { value: 5.0, offset: 2.5, gateInputs: 2 },
+  halfExtents: (comp) => {
+    const inputs = comp?.gateInputs ?? 2;
+    return { halfW: 45, halfH: inputs >= 8 ? 85 : (inputs >= 4 ? 45 : (inputs >= 3 ? 35 : 30)) };
+  },
   hasStandardLeads: false,
-  getPins: () => TWO_INPUT_GATE_PINS,
+  getPins: (comp) => getLogicGatePins(comp),
   render: (ctx, comp, _state, options) => {
-    const opts = extractTwoInputGateLevels(comp, options.voltageMap);
+    const opts = extractGateLevels(comp, options.voltageMap, options.symbolStandard);
     drawXorGate(ctx, opts);
   },
+  evaluateLiveBehavior: (pinVoltages, comp) =>
+    evaluateGateLiveBehavior(pinVoltages, comp, (ins) => ins.filter((v) => v).length % 2 !== 0),
 };
+

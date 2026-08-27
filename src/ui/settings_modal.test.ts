@@ -8,6 +8,10 @@ function installSettingsDom(): void {
     <div id="app-viewport"><button id="settings-trigger-btn">Ajustes</button></div>
     <div id="settings-modal" role="dialog" aria-hidden="true">
       <div id="settings-box">
+        <select id="settings-theme-mode-input">
+          <option value="dark">Modo Laboratorio</option>
+          <option value="classroom">Modo Proyector / Aula</option>
+        </select>
         <select id="settings-default-mode-input">
           <option value="DC">DC</option>
           <option value="TRAN">TRAN</option>
@@ -74,6 +78,7 @@ describe("SettingsModal", () => {
     new SettingsModal({ dt: 0.001, tolerance: 0.00001, maxIterations: 80, defaultAnalysisMode: "DC" }, onSave);
     trigger.click();
 
+    (document.querySelector("#settings-theme-mode-input") as HTMLSelectElement).value = "classroom";
     (document.querySelector("#settings-default-mode-input") as HTMLSelectElement).value = "TRAN";
     (document.querySelector("#settings-dt-input") as HTMLInputElement).value = "0.002";
     (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "8";
@@ -91,6 +96,7 @@ describe("SettingsModal", () => {
       dt: 0.002,
       transientDuration: 8,
       defaultAnalysisMode: "TRAN",
+      themeMode: "classroom",
       tolerance: 0.0001,
       maxIterations: 120,
       currentFlowMode: "electron",
@@ -102,6 +108,7 @@ describe("SettingsModal", () => {
       enableExperimentalPhysics: false,
       disablePacing: false,
     });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("classroom");
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });
 

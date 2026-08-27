@@ -295,3 +295,76 @@ fn test_logic_gate_analog_rise_fall_ramp() {
         v_completed_rise
     );
 }
+
+#[test]
+fn test_sub_microsecond_zero_crossing_event_localization() {
+    // Señal senoidal analógica V(t) = 5 * sin(2*pi*1000*t) conectada a inversor NOT.
+    // Umbral Vth = 2.5V -> 5*sin(2*pi*1000*t) = 2.5 -> sin = 0.5 -> 2*pi*1000*t = pi/6 -> t_teorico = 83.3333 µs.
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V_sine".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                wave_type: Some("sine".to_string()),
+                amplitude: Some(5.0),
+                frequency: Some(1000.0),
+                offset: Some(0.0),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "U_not".to_string(),
+                comp_type: "not_gate".to_string(),
+                value: 0.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                gate_vhigh: Some(2.5),
+                gate_vlow: Some(2.5),
+                delay: Some(20e-9), // 20 ns
+                gate_rout: Some(30.0),
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: Some(false),
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 25e-6, // 25 µs (paso grande para probar la localización de cruce por cero)
+        t_max: 200e-6, // 200 µs
+        integration_method: Some("trap".to_string()),
+        fixed_step: Some(false),
+    };
+
+    let (results, _, _) = solve_transient_circuit_with_initial_states(
+        &netlist,
+        &settings,
+        HashMap::new(),
+        HashMap::new(),
+    )
+    .unwrap();
+
+    // Buscar el instante exacto de conmutación de la salida (donde V(2) cae por debajo de 2.5V)
+    let transition_step = results.windows(2).find(|w| {
+        let v_prev = *w[0].node_voltages.get("2").unwrap_or(&5.0);
+        let v_curr = *w[1].node_voltages.get("2").unwrap_or(&0.0);
+        v_prev >= 2.5 && v_curr < 2.5
+    });
+
+    assert!(transition_step.is_some(), "Debe haber ocurrido una transición de la compuerta");
+    let (s_prev, s_curr) = (transition_step.unwrap()[0].time, transition_step.unwrap()[1].time);
+    let t_expected = (1.0 / 12.0) * 1e-3 + 20e-9; // 83.3333 µs + 20 ns = 83.3533 µs
+
+    // El cruce debe haber sido detectado en el intervalo esperado con exactitud sub-microsegundo
+    assert!(
+        s_prev <= t_expected + 1e-9 && s_curr >= t_expected - 1e-9,
+        "La transición ocurrió en [{:.3}µs, {:.3}µs], esperado: {:.3}µs",
+        s_prev * 1e6, s_curr * 1e6, t_expected * 1e6
+    );
+}
+

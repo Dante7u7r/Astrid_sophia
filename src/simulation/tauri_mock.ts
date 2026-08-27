@@ -194,7 +194,7 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
   if (!shouldEnableWebMocks(import.meta.env.MODE, import.meta.env.DEV)) {
     throw new Error(
-      `window.__TAURI__ no esta disponible: el comando '${cmd}' requiere el escritorio Astryd Sophia.`,
+      `window.__TAURI__ no esta disponible: el comando '${cmd}' requiere el escritorio Biaani.`,
     );
   }
 
@@ -284,8 +284,40 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case "open_circuit_file":
       return ["demo_circuit.astryd", JSON.stringify({ components: [], wires: [] })] as T;
 
-    case "save_circuit_file":
-    case "save_circuit_to_path":
+    case "save_circuit_file": {
+      const content = (args?.content as string) || "";
+      if (typeof window !== "undefined" && typeof document !== "undefined" && content && import.meta.env.MODE !== "test") {
+        const blob = new Blob([content], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "circuito.astryd";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      return "circuito.astryd" as T;
+    }
+
+    case "save_circuit_to_path": {
+      const content = (args?.content as string) || "";
+      if (typeof window !== "undefined" && typeof document !== "undefined" && content && import.meta.env.MODE !== "test") {
+        const path = (args?.path as string) || "circuito.astryd";
+        const filename = path.split(/[/\\]/).pop() || "circuito.astryd";
+        const blob = new Blob([content], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      return undefined as T;
+    }
+
     case "export_touchstone_file":
       return "mock_exported_file.txt" as T;
 
@@ -295,6 +327,12 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     case "stop_interactive_transient":
       stopWebTransient(typeof args?.runId === "number" ? args.runId : undefined);
+      return undefined as T;
+
+    case "pause_interactive_transient":
+    case "resume_interactive_transient":
+    case "step_interactive_transient":
+    case "set_interactive_simulation_speed":
       return undefined as T;
 
     case "mutate_interactive_component":

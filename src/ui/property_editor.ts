@@ -9,7 +9,11 @@ import {
 import {
   ACTUATOR_MODEL_EDITORS,
   DEDICATED_VALUE_EDITORS,
+  analyzeBatchSelection,
   buildLiveMutations,
+  calculateComponentOperatingPoint,
+  formatComponentSpiceCard,
+  formatEngineeringBadge,
   getUnitDisplayConfig,
   getValueEditorPresentation,
   supportsLiveMutation,
@@ -39,6 +43,24 @@ import {
   applySemiconductorsSubform,
 } from "./property_subforms_semiconductors";
 
+export interface PropertyEditorCallbacks {
+  getOrchestrator: () => CanvasOrchestrator | null;
+  getMcuDebugPanel: () => McuDebugPanel | null;
+  getSimulationRunner: () => SimulationRunner | null;
+  getVoltageMap?: () => Readonly<Record<string, number>>;
+  getCurrentMap?: () => Readonly<Record<string, number>>;
+  getPinNode?: (pinKey: string) => string | undefined;
+  setProbeNode?: (channel: "ch1" | "ch2", nodeId: string) => void;
+  getProbeNodes?: () => { ch1?: string | null; ch2?: string | null };
+  highlightNet?: (nodeId: string | null) => void;
+  addLog: (text: string, type?: 'system' | 'send' | 'receive' | 'error') => void;
+  updateCanvasRendering: () => void;
+  markCurrentTabAsModified: () => void;
+  extractNetlist?: () => void;
+  onComponentPropertiesApplied?: (comp: ComponentInstance) => void;
+  invokeTauri: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
+
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
   private propValInput: HTMLInputElement | null = null;
@@ -49,16 +71,7 @@ export class PropertyEditor {
   private btnApplyProperties: HTMLButtonElement | null = null;
 
   constructor(
-    private callbacks: {
-      getOrchestrator: () => CanvasOrchestrator | null;
-      getMcuDebugPanel: () => McuDebugPanel | null;
-      getSimulationRunner: () => SimulationRunner | null;
-      addLog: (text: string, type?: 'system' | 'send' | 'receive' | 'error') => void;
-      updateCanvasRendering: () => void;
-      markCurrentTabAsModified: () => void;
-      extractNetlist?: () => void;
-      invokeTauri: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-    }
+    private callbacks: PropertyEditorCallbacks
   ) {}
 
   private setFormControlsDisabled(disabled: boolean): void {
@@ -72,14 +85,180 @@ export class PropertyEditor {
     }
   }
 
+  public updateValueBadge(compType: ComponentInstance["type"]): void {
+    const valBadge = document.querySelector("#prop-val-badge") as HTMLElement | null;
+    if (!valBadge || !this.propValInput) return;
+    const res = formatEngineeringBadge(this.propValInput.value, compType);
+    valBadge.style.display = "inline-flex";
+    valBadge.textContent = res.badgeText;
+    valBadge.className = `prop-badge ${res.valid ? (res.isExpression ? "expression" : "") : "invalid"}`;
+  }
+
+  public updateSpiceDirective(comp: ComponentInstance, pinNodes: { pinName: string; nodeId: string }[]): void {
+    const detailsSpice = document.querySelector("#details-spice-card") as HTMLElement | null;
+    const spiceText = document.querySelector("#prop-spice-card-text") as HTMLElement | null;
+    if (!detailsSpice || !spiceText) return;
+
+    const card = formatComponentSpiceCard(comp, pinNodes);
+    if (card) {
+      detailsSpice.style.display = "block";
+      spiceText.textContent = card;
+    } else {
+      detailsSpice.style.display = "none";
+    }
+  }
+
+  public updateOperatingPointTelemetry(comp: ComponentInstance): void {
+    const opContainer = document.querySelector("#prop-op-telemetry-container") as HTMLElement | null;
+    const opRegionBadge = document.querySelector("#prop-op-region-badge") as HTMLElement | null;
+    const opVdrop = document.querySelector("#prop-op-vdrop") as HTMLElement | null;
+    const opIbranch = document.querySelector("#prop-op-ibranch") as HTMLElement | null;
+    const opPower = document.querySelector("#prop-op-power") as HTMLElement | null;
+    const opSmallSignalItem = document.querySelector("#prop-op-small-signal-item") as HTMLElement | null;
+    const opGm = document.querySelector("#prop-op-gm") as HTMLElement | null;
+
+    const detailsPins = document.querySelector("#details-pins") as HTMLElement | null;
+    const pinsTbody = document.querySelector("#prop-pins-tbody") as HTMLElement | null;
+
+    const orchestrator = this.callbacks.getOrchestrator();
+    if (!orchestrator) {
+      if (opContainer) opContainer.style.display = "none";
+      if (detailsPins) detailsPins.style.display = "none";
+      return;
+    }
+
+    const pins = typeof orchestrator.getComponentPins === "function" ? orchestrator.getComponentPins(comp) : [];
+    const pinNodes = pins.map((p, idx) => {
+      const pinKey = `${comp.id}:${idx}`;
+      const nodeId = this.callbacks.getPinNode?.(pinKey) ?? "0";
+      const pinName = p.name || p.label || `Pin ${idx + 1}`;
+      return { pinIndex: idx, pinName, nodeId };
+    });
+
+    const nodeVoltages = this.callbacks.getVoltageMap?.() ?? {};
+    const branchCurrents = this.callbacks.getCurrentMap?.() ?? {};
+
+    const op = calculateComponentOperatingPoint(comp, pinNodes, nodeVoltages, branchCurrents);
+
+    if (op && (orchestrator.simulationActive || Object.keys(nodeVoltages).length > 0)) {
+      if (opContainer) {
+        opContainer.style.display = "flex";
+        if (opVdrop) opVdrop.textContent = `${formatSpiceValue(op.vDrop)} V`;
+        if (opIbranch) opIbranch.textContent = `${formatSpiceValue(op.iBranch)} A`;
+        if (opPower) {
+          const pStr = `${formatSpiceValue(op.power)} W`;
+          const ratioStr = op.powerRatio !== undefined ? ` (${Math.round(op.powerRatio * 100)}% P_max)` : "";
+          opPower.textContent = `${pStr}${ratioStr}`;
+          opPower.className = `prop-op-val ${op.isOverloaded ? "danger" : (op.powerRatio && op.powerRatio > 0.8 ? "warning" : "")}`;
+        }
+        if (opRegionBadge) {
+          if (op.region) {
+            opRegionBadge.style.display = "inline-block";
+            opRegionBadge.textContent = op.region;
+          } else {
+            opRegionBadge.style.display = "none";
+          }
+        }
+        if (opSmallSignalItem && opGm) {
+          if (op.smallSignal?.gm !== undefined) {
+            opSmallSignalItem.style.display = "flex";
+            const extra = op.smallSignal.rpi !== undefined ? ` | rπ: ${formatSpiceValue(op.smallSignal.rpi)} Ω` : (op.smallSignal.ro !== undefined ? ` | ro: ${formatSpiceValue(op.smallSignal.ro)} Ω` : "");
+            opGm.textContent = `gm: ${formatSpiceValue(op.smallSignal.gm)} S${extra}`;
+          } else if (op.smallSignal?.rd !== undefined) {
+            opSmallSignalItem.style.display = "flex";
+            opGm.textContent = `rd: ${formatSpiceValue(op.smallSignal.rd)} Ω`;
+          } else {
+            opSmallSignalItem.style.display = "none";
+          }
+        }
+      }
+    } else {
+      if (opContainer) opContainer.style.display = "none";
+    }
+
+    // Renderizar tabla de pines con Cross-Probing y Asignación de Sondas
+    if (detailsPins && pinsTbody) {
+      if (pinNodes.length > 0) {
+        detailsPins.style.display = "block";
+        const currentProbes = this.callbacks.getProbeNodes?.() ?? {};
+        pinsTbody.innerHTML = pinNodes.map(p => {
+          const v = nodeVoltages[p.nodeId];
+          const vStr = v !== undefined ? `${v.toFixed(2)} V` : "-- V";
+          const isCh1 = currentProbes.ch1 === p.nodeId;
+          const isCh2 = currentProbes.ch2 === p.nodeId;
+          const displayName = p.pinName.replace(/^Terminal\s+/i, "T");
+          return `<tr class="interactive-row" data-node-id="${p.nodeId}">
+            <td style="font-weight: 600; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${p.pinName}">${displayName}</td>
+            <td><code style="color: var(--cyan);">${p.nodeId}</code></td>
+            <td>${vStr}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button type="button" class="btn-pin-probe ${isCh1 ? "active-ch1" : ""}" data-channel="ch1" data-node-id="${p.nodeId}" title="Fijar Canal 1 (CH1) a este nodo">CH1</button>
+              <button type="button" class="btn-pin-probe ${isCh2 ? "active-ch2" : ""}" data-channel="ch2" data-node-id="${p.nodeId}" title="Fijar Canal 2 (CH2) a este nodo">CH2</button>
+            </td>
+          </tr>`;
+        }).join("");
+
+        for (const row of pinsTbody.querySelectorAll<HTMLTableRowElement>("tr.interactive-row")) {
+          const nId = row.getAttribute("data-node-id");
+          row.addEventListener("mouseenter", () => {
+            if (nId) this.callbacks.highlightNet?.(nId);
+          });
+          row.addEventListener("mouseleave", () => {
+            this.callbacks.highlightNet?.(null);
+          });
+        }
+
+        for (const btn of pinsTbody.querySelectorAll<HTMLButtonElement>(".btn-pin-probe")) {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const ch = btn.getAttribute("data-channel") as "ch1" | "ch2";
+            const nId = btn.getAttribute("data-node-id");
+            if (ch && nId && this.callbacks.setProbeNode) {
+              this.callbacks.setProbeNode(ch, nId);
+              this.callbacks.addLog(`Sonda ${ch.toUpperCase()} conectada al nodo [${nId}]`, "system");
+              this.updateOperatingPointTelemetry(comp);
+            }
+          });
+        }
+      } else {
+        detailsPins.style.display = "none";
+      }
+    }
+
+    // Actualizar visor de directiva SPICE
+    this.updateSpiceDirective(comp, pinNodes);
+  }
+
   public clearPropertiesPanel(): void {
     this.setFormControlsDisabled(true);
     if (this.propIdInput) {
       this.propIdInput.value = "";
       this.propIdInput.placeholder = "Selecciona un componente";
+      this.propIdInput.disabled = true;
     }
     if (this.propValInput) this.propValInput.value = "";
     if (this.propUnitInput) this.propUnitInput.value = "";
+
+    const batchHeader = document.querySelector("#prop-batch-header") as HTMLElement | null;
+    if (batchHeader) batchHeader.style.display = "none";
+
+    const valBadge = document.querySelector("#prop-val-badge") as HTMLElement | null;
+    if (valBadge) valBadge.style.display = "none";
+
+    const opContainer = document.querySelector("#prop-op-telemetry-container") as HTMLElement | null;
+    if (opContainer) opContainer.style.display = "none";
+
+    const detailsPins = document.querySelector("#details-pins") as HTMLElement | null;
+    if (detailsPins) detailsPins.style.display = "none";
+
+    const detailsParasitics = document.querySelector("#details-parasitics") as HTMLElement | null;
+    if (detailsParasitics) detailsParasitics.style.display = "none";
+
+    const detailsIc = document.querySelector("#details-initial-conditions") as HTMLElement | null;
+    if (detailsIc) detailsIc.style.display = "none";
+
+    const detailsSpice = document.querySelector("#details-spice-card") as HTMLElement | null;
+    if (detailsSpice) detailsSpice.style.display = "none";
 
     for (const id of [
       "wire-properties-container",
@@ -190,18 +369,53 @@ export class PropertyEditor {
     this.setFormControlsDisabled(false);
     this.propIdInput.placeholder = "Ej. R1";
 
-    this.propIdInput.value = comp.id;
-    const usesActuatorModel = ACTUATOR_MODEL_EDITORS.has(comp.type);
-    if (comp.type === "net_label") {
-      this.propValInput.value = String(comp.label || comp.value || "NET_A");
-    } else if (comp.type === "text_note") {
-      this.propValInput.value = String(comp.label || comp.value || "");
-    } else if (usesActuatorModel) {
-      this.propValInput.value = comp.value.toString();
+    const orchestrator = this.callbacks.getOrchestrator();
+    const selectedList = (orchestrator?.selectedComponents && orchestrator.selectedComponents.length > 0)
+      ? orchestrator.selectedComponents
+      : [comp];
+    const batchSummary = analyzeBatchSelection(selectedList);
+
+    const batchHeader = document.querySelector("#prop-batch-header") as HTMLElement | null;
+    const batchTitle = document.querySelector("#prop-batch-title") as HTMLElement | null;
+    const batchSubtitle = document.querySelector("#prop-batch-subtitle") as HTMLElement | null;
+
+    if (batchSummary.isMultiple && batchHeader && batchTitle && batchSubtitle) {
+      batchHeader.style.display = "flex";
+      batchTitle.textContent = `${batchSummary.count} ${batchSummary.typeLabel}`;
+      batchSubtitle.textContent = batchSummary.ids.join(", ");
+      this.propIdInput.value = batchSummary.ids.join(", ");
+      this.propIdInput.disabled = true;
+
+      if (batchSummary.hasMixedValues) {
+        this.propValInput.value = "";
+        this.propValInput.placeholder = "<Valores Mixtos>";
+      } else {
+        this.propValInput.value = formatSpiceValue(Number(batchSummary.sharedValue) || 0);
+      }
     } else {
-      this.propValInput.value = formatSpiceValue(Number(comp.value) || 0);
+      if (batchHeader) batchHeader.style.display = "none";
+      this.propIdInput.disabled = false;
+      this.propIdInput.value = comp.id;
+
+      const usesActuatorModel = ACTUATOR_MODEL_EDITORS.has(comp.type);
+      if (comp.expression) {
+        this.propValInput.value = comp.expression;
+      } else if (comp.type === "net_label") {
+        this.propValInput.value = String(comp.label || comp.value || "NET_A");
+      } else if (comp.type === "text_note") {
+        this.propValInput.value = String(comp.label || comp.value || "");
+      } else if (usesActuatorModel) {
+        this.propValInput.value = comp.value.toString();
+      } else {
+        this.propValInput.value = formatSpiceValue(Number(comp.value) || 0);
+      }
     }
-    this.propValSlider.value = usesActuatorModel || comp.type === "net_label" || comp.type === "text_note" ? "0" : comp.value.toString();
+
+    const usesActuator = ACTUATOR_MODEL_EDITORS.has(comp.type);
+    this.propValSlider.value = usesActuator || comp.type === "net_label" || comp.type === "text_note" ? "0" : comp.value.toString();
+
+    this.updateValueBadge(comp.type);
+    this.updateOperatingPointTelemetry(comp);
 
     const mcuDebugPanel = this.callbacks.getMcuDebugPanel();
     if (comp.type === 'mcu_8051' || comp.type === 'mcu_avr') {
@@ -316,6 +530,60 @@ export class PropertyEditor {
     updateActuatorsSubform(comp);
     updateSemiconductorsSubform(comp);
 
+    // 7. Parásitos y Modelado HF (Divulgación Progresiva)
+    const detailsParasitics = document.querySelector("#details-parasitics") as HTMLElement | null;
+    const groupEsl = document.querySelector("#group-comp-esl") as HTMLElement | null;
+    const groupCpar = document.querySelector("#group-comp-cpar") as HTMLElement | null;
+    const groupTc1 = document.querySelector("#group-comp-tc1") as HTMLElement | null;
+    const groupRleak = document.querySelector("#group-comp-rleak") as HTMLElement | null;
+
+    const inputEsl = document.querySelector("#prop-comp-esl") as HTMLInputElement | null;
+    const inputCpar = document.querySelector("#prop-comp-cpar") as HTMLInputElement | null;
+    const inputTc1 = document.querySelector("#prop-comp-tc1") as HTMLInputElement | null;
+    const inputRleak = document.querySelector("#prop-comp-rleak") as HTMLInputElement | null;
+
+    if (detailsParasitics) {
+      if (comp.type === "resistor") {
+        detailsParasitics.style.display = "block";
+        if (groupEsl) groupEsl.style.display = "flex";
+        if (groupCpar) groupCpar.style.display = "flex";
+        if (groupTc1) groupTc1.style.display = "flex";
+        if (groupRleak) groupRleak.style.display = "none";
+        if (inputEsl) inputEsl.value = comp.esr ? formatSpiceValue(comp.esr) : "";
+        if (inputCpar) inputCpar.value = comp.cpar ? formatSpiceValue(comp.cpar) : "";
+        if (inputTc1) inputTc1.value = comp.tc1 !== undefined ? comp.tc1.toString() : "";
+      } else if (comp.type === "capacitor") {
+        detailsParasitics.style.display = "block";
+        if (groupEsl) groupEsl.style.display = "flex";
+        if (groupCpar) groupCpar.style.display = "none";
+        if (groupTc1) groupTc1.style.display = "none";
+        if (groupRleak) groupRleak.style.display = "flex";
+        if (inputEsl) inputEsl.value = comp.esr ? formatSpiceValue(comp.esr) : "";
+        if (inputRleak) inputRleak.value = comp.rleak ? formatSpiceValue(comp.rleak) : "";
+      } else if (comp.type === "inductor") {
+        detailsParasitics.style.display = "block";
+        if (groupEsl) groupEsl.style.display = "none";
+        if (groupCpar) groupCpar.style.display = "flex";
+        if (groupTc1) groupTc1.style.display = "none";
+        if (groupRleak) groupRleak.style.display = "none";
+        if (inputCpar) inputCpar.value = comp.cpar ? formatSpiceValue(comp.cpar) : "";
+      } else {
+        detailsParasitics.style.display = "none";
+      }
+    }
+
+    // 8. Condiciones Iniciales (.IC)
+    const detailsIc = document.querySelector("#details-initial-conditions") as HTMLElement | null;
+    const inputIc = document.querySelector("#prop-comp-ic") as HTMLInputElement | null;
+    if (detailsIc) {
+      if (["capacitor", "inductor", "switch"].includes(comp.type)) {
+        detailsIc.style.display = "block";
+        if (inputIc) inputIc.value = comp.initialCondition !== undefined ? comp.initialCondition.toString() : "";
+      } else {
+        detailsIc.style.display = "none";
+      }
+    }
+
     const textNoteContainer = document.querySelector("#text-note-properties-container") as HTMLElement;
     const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement;
     const noteFontInput = document.querySelector("#prop-note-fontsize") as HTMLInputElement;
@@ -333,6 +601,10 @@ export class PropertyEditor {
 
     const terminalContainer = document.querySelector("#terminal-properties-container") as HTMLElement;
     const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+    const terminalGroundGroup = document.querySelector("#terminal-ground-group") as HTMLElement;
+    const terminalGroundStyleSelect = document.querySelector("#prop-terminal-ground-style") as HTMLSelectElement;
+    const terminalPowerStyleGroup = document.querySelector("#terminal-power-style-group") as HTMLElement;
+    const terminalPowerStyleSelect = document.querySelector("#prop-terminal-power-style") as HTMLSelectElement;
     const terminalPowerGroup = document.querySelector("#terminal-power-group") as HTMLElement;
     const terminalPresetSelect = document.querySelector("#prop-terminal-preset") as HTMLSelectElement;
     const terminalVoltageGroup = document.querySelector("#terminal-voltage-group") as HTMLElement;
@@ -355,18 +627,32 @@ export class PropertyEditor {
         const generatorNotice = document.querySelector("#terminal-generator-notice") as HTMLElement | null;
 
         if (tType === "power") {
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "flex";
           if (terminalPowerGroup) terminalPowerGroup.style.display = "flex";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "flex";
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "none";
           if (powerNotice) powerNotice.style.display = "block";
           if (generatorNotice) generatorNotice.style.display = "none";
           if (waveContainer) waveContainer.style.display = "none";
           const v = parsePowerRailVoltage(comp);
           if (terminalVoltageInput) terminalVoltageInput.value = v.toString();
+          if (terminalPowerStyleSelect) terminalPowerStyleSelect.value = comp.terminalStyle || "arrow";
           if (terminalPresetSelect) {
             const label = String(comp.label || comp.value || "");
             terminalPresetSelect.value = ["+5V", "+3.3V", "+12V", "-12V", "+15V", "-15V", "+24V", "+1.8V", "+9V", "+3.7V"].includes(label) ? label : "custom";
           }
+        } else if (tType === "ground") {
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "flex";
+          if (terminalGroundStyleSelect) terminalGroundStyleSelect.value = comp.terminalStyle || "standard";
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "none";
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
+          if (powerNotice) powerNotice.style.display = "none";
+          if (generatorNotice) generatorNotice.style.display = "none";
+          if (waveContainer) waveContainer.style.display = "none";
         } else if (tType === "generator") {
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "none";
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "none";
           if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
           if (powerNotice) powerNotice.style.display = "none";
@@ -381,6 +667,8 @@ export class PropertyEditor {
             this.toggleWaveFieldsVisibility(waveTypeSelect ? waveTypeSelect.value : (comp.waveType || "square"));
           }
         } else {
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "none";
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "none";
           if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
           if (powerNotice) powerNotice.style.display = "none";
@@ -415,6 +703,10 @@ export class PropertyEditor {
     this.propUnitInput = document.querySelector("#prop-unit-input");
 
     const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+    const terminalGroundGroup = document.querySelector("#terminal-ground-group") as HTMLElement;
+    const terminalGroundStyleSelect = document.querySelector("#prop-terminal-ground-style") as HTMLSelectElement;
+    const terminalPowerStyleGroup = document.querySelector("#terminal-power-style-group") as HTMLElement;
+    const terminalPowerStyleSelect = document.querySelector("#prop-terminal-power-style") as HTMLSelectElement;
     const terminalPresetSelect = document.querySelector("#prop-terminal-preset") as HTMLSelectElement;
     const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
     const terminalPowerGroup = document.querySelector("#terminal-power-group") as HTMLElement;
@@ -425,10 +717,20 @@ export class PropertyEditor {
       terminalTypeSelect.addEventListener("change", () => {
         const val = terminalTypeSelect.value;
         if (val === "power") {
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "flex";
           if (terminalPowerGroup) terminalPowerGroup.style.display = "flex";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "flex";
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "none";
+          if (waveContainer) waveContainer.style.display = "none";
+        } else if (val === "ground") {
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "flex";
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "none";
+          if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
+          if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
           if (waveContainer) waveContainer.style.display = "none";
         } else if (val === "generator") {
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "none";
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "none";
           if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
           if (waveContainer) {
@@ -437,9 +739,33 @@ export class PropertyEditor {
             this.toggleWaveFieldsVisibility(waveTypeSelect ? waveTypeSelect.value : "square");
           }
         } else {
+          if (terminalGroundGroup) terminalGroundGroup.style.display = "none";
+          if (terminalPowerStyleGroup) terminalPowerStyleGroup.style.display = "none";
           if (terminalPowerGroup) terminalPowerGroup.style.display = "none";
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
           if (waveContainer) waveContainer.style.display = "none";
+        }
+      });
+    }
+
+    if (terminalGroundStyleSelect) {
+      terminalGroundStyleSelect.addEventListener("change", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedComponent && orchestrator.selectedComponent.type === "net_label") {
+          orchestrator.selectedComponent.terminalStyle = terminalGroundStyleSelect.value as any;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
+        }
+      });
+    }
+
+    if (terminalPowerStyleSelect) {
+      terminalPowerStyleSelect.addEventListener("change", () => {
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedComponent && orchestrator.selectedComponent.type === "net_label") {
+          orchestrator.selectedComponent.terminalStyle = terminalPowerStyleSelect.value as any;
+          this.callbacks.updateCanvasRendering();
+          this.callbacks.markCurrentTabAsModified();
         }
       });
     }
@@ -515,17 +841,24 @@ export class PropertyEditor {
       this.propValSlider.addEventListener("input", (e) => {
         const val = (e.target as HTMLInputElement).value;
         if (this.propValInput) this.propValInput.value = val;
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedComponent) {
+          this.updateValueBadge(orchestrator.selectedComponent.type);
+        }
       });
 
       this.propValInput.addEventListener("input", (e) => {
         const val = (e.target as HTMLInputElement).value;
         if (this.propValSlider) this.propValSlider.value = val;
+        const orchestrator = this.callbacks.getOrchestrator();
+        if (orchestrator?.selectedComponent) {
+          this.updateValueBadge(orchestrator.selectedComponent.type);
+        }
       });
     }
 
-
-
     const btnSnapStandard = document.querySelector("#btn-snap-standard") as HTMLButtonElement;
+    const snapSeriesSelect = document.querySelector("#prop-snap-series") as HTMLSelectElement | null;
     if (btnSnapStandard && this.propValInput) {
       btnSnapStandard.addEventListener("click", () => {
         const orchestrator = this.callbacks.getOrchestrator();
@@ -533,9 +866,11 @@ export class PropertyEditor {
         const parsed = parseSpiceValue(this.propValInput!.value);
         const currentVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
         if (currentVal > 0) {
-          const snapped = snapToStandardValue(currentVal, "E24");
+          const series = (snapSeriesSelect?.value as "E12" | "E24" | "E96") || "E24";
+          const snapped = snapToStandardValue(currentVal, series);
           this.propValInput!.value = formatSpiceValue(snapped);
           if (this.propValSlider) this.propValSlider.value = snapped.toString();
+          this.updateValueBadge(orchestrator.selectedComponent.type);
           this.btnApplyProperties?.click();
         }
       });
@@ -555,6 +890,7 @@ export class PropertyEditor {
           this.callbacks.updateCanvasRendering();
           this.callbacks.markCurrentTabAsModified();
           this.callbacks.extractNetlist?.();
+          this.callbacks.onComponentPropertiesApplied?.(selected);
         }
       });
     }
@@ -581,6 +917,7 @@ export class PropertyEditor {
         val += step;
         this.propValInput!.value = formatSpiceValue(val);
         this.propValSlider!.value = val.toString();
+        this.updateValueBadge(comp.type);
         this.btnApplyProperties?.click();
       });
     }
@@ -607,6 +944,7 @@ export class PropertyEditor {
         val = Math.max(0, val - step);
         this.propValInput!.value = formatSpiceValue(val);
         this.propValSlider!.value = val.toString();
+        this.updateValueBadge(comp.type);
         this.btnApplyProperties?.click();
       });
     }
@@ -617,166 +955,242 @@ export class PropertyEditor {
       this.btnApplyProperties?.click();
     };
     this.propIdInput?.addEventListener("keydown", applyFromKeyboard);
-    this.propValInput?.addEventListener("keydown", applyFromKeyboard);
+    this.propValInput?.addEventListener("keydown", applyFromKeyboard);    const btnCopySpice = document.querySelector("#btn-copy-spice-card") as HTMLButtonElement | null;
+    if (btnCopySpice) {
+      btnCopySpice.addEventListener("click", async () => {
+        const text = document.querySelector("#prop-spice-card-text")?.textContent;
+        if (text) {
+          try {
+            await navigator.clipboard.writeText(text);
+            this.callbacks.addLog("Directiva SPICE copiada al portapapeles.", "system");
+          } catch {
+            this.callbacks.addLog(text, "system");
+          }
+        }
+      });
+    }
 
     if (this.btnApplyProperties && this.propIdInput && this.propValInput) {
       this.btnApplyProperties.addEventListener("click", () => {
         const activeOrchestrator = this.callbacks.getOrchestrator();
         if (!activeOrchestrator) return;
-        const selected = activeOrchestrator.selectedComponent;
-        if (selected) {
-          const oldId = selected.id;
-          const newId = this.propIdInput!.value.trim();
-          const parsed = parseSpiceValue(this.propValInput!.value);
+        const selectedList = (activeOrchestrator.selectedComponents && activeOrchestrator.selectedComponents.length > 0)
+          ? activeOrchestrator.selectedComponents
+          : (activeOrchestrator.selectedComponent ? [activeOrchestrator.selectedComponent] : []);
+        if (selectedList.length === 0) return;
 
-          if (!parsed.valid || parsed.value === undefined || !Number.isFinite(parsed.value)) {
-            if (!ACTUATOR_MODEL_EDITORS.has(selected.type) && selected.type !== "net_label" && selected.type !== "text_note" && selected.type !== "dmm") {
-              this.callbacks.addLog(`Valor inválido para [${selected.id}]: ${parsed.error || this.propValInput!.value}`, "error");
-              return;
-            }
+        const isBatch = selectedList.length > 1;
+        const selected = selectedList[0];
+        const oldId = selected.id;
+        const newId = this.propIdInput!.value.trim();
+        const rawInput = this.propValInput!.value.trim();
+        const parsed = parseSpiceValue(rawInput);
+
+        const isParametricExpr = rawInput.startsWith("{") && rawInput.endsWith("}");
+        const hasNewVal = rawInput !== "" && rawInput !== "<Valores Mixtos>";
+
+        if (hasNewVal && !isParametricExpr && (!parsed.valid || parsed.value === undefined || !Number.isFinite(parsed.value))) {
+          if (!ACTUATOR_MODEL_EDITORS.has(selected.type) && selected.type !== "net_label" && selected.type !== "text_note" && selected.type !== "dmm") {
+            this.callbacks.addLog(`Valor inválido: ${parsed.error || this.propValInput!.value}`, "error");
+            return;
           }
+        }
 
-          const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
+        const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
 
-          if (newId.length > 0 && newId !== oldId) {
-            const renameError = activeOrchestrator.renameComponent(selected, newId);
+        for (const targetComp of selectedList) {
+          if (!isBatch && newId.length > 0 && newId !== oldId) {
+            const renameError = activeOrchestrator.renameComponent(targetComp, newId);
             if (renameError) {
               this.propIdInput!.value = oldId;
               this.callbacks.addLog(`Error: ${renameError}`, "error");
             }
           }
 
-          if (selected.type === "dmm") {
-            const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
-            selected.value = normalizeDmmMode(dmmModeSelect?.value);
-            selected.dmmValue = DMM_INITIAL_DISPLAY;
-          } else if (ACTUATOR_MODEL_EDITORS.has(selected.type)) {
-            selected.value = this.propValInput!.value.trim() || selected.value;
-          } else if (!DEDICATED_VALUE_EDITORS.has(selected.type)) {
-            selected.value = newVal;
-            this.propValInput!.value = formatSpiceValue(newVal);
-          }
-
-          applyWaveSubform(selected, newVal, this.propValInput, this.propValSlider);
-
-          if (selected.type === "resistor") {
-            const resistorTolSelect = document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement;
-            const resistorPowerSelect = document.querySelector("#prop-resistor-power") as HTMLSelectElement;
-            if (resistorTolSelect) selected.tolerance = parseFloat(resistorTolSelect.value) || 1;
-            if (resistorPowerSelect) selected.powerRating = parseFloat(resistorPowerSelect.value) || 0.25;
-          }
-
-          if (selected.type === "capacitor") {
-            const capVoltSelect = document.querySelector("#prop-capacitor-voltage") as HTMLSelectElement;
-            const capEsrInput = document.querySelector("#prop-capacitor-esr") as HTMLInputElement;
-            const capDielectricSelect = document.querySelector("#prop-capacitor-dielectric") as HTMLSelectElement;
-            if (capVoltSelect) selected.voltageRating = parseFloat(capVoltSelect.value) || 25;
-            if (capEsrInput) selected.esr = Math.max(0, parseFloat(capEsrInput.value) || 0);
-            if (capDielectricSelect) selected.dielectricType = capDielectricSelect.value as any;
-          }
-
-          if (selected.type === "inductor") {
-            const indDcrInput = document.querySelector("#prop-inductor-dcr") as HTMLInputElement;
-            const indIsatInput = document.querySelector("#prop-inductor-isat") as HTMLInputElement;
-            if (indDcrInput) selected.dcResistance = Math.max(0, parseFloat(indDcrInput.value) || 0);
-            if (indIsatInput) {
-              const val = parseFloat(indIsatInput.value);
-              selected.isat = val > 0 ? val : undefined;
-              selected.currentRating = selected.isat ?? 1.0;
+          if (hasNewVal) {
+            if (isParametricExpr) {
+              targetComp.expression = rawInput;
+            } else {
+              targetComp.expression = undefined;
+              if (!DEDICATED_VALUE_EDITORS.has(targetComp.type)) {
+                targetComp.value = newVal;
+              }
             }
           }
 
-          if (selected.type === "led") {
-            const ledColorSelect = document.querySelector("#prop-led-color") as HTMLSelectElement;
-            const ledImaxInput = document.querySelector("#prop-led-imax") as HTMLInputElement;
-            if (ledColorSelect) selected.ledColor = ledColorSelect.value as any;
-            if (ledImaxInput) selected.maxCurrent = Math.max(1, parseFloat(ledImaxInput.value) || 20);
+          if (targetComp.type === "dmm") {
+            const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
+            targetComp.value = normalizeDmmMode(dmmModeSelect?.value);
+            targetComp.dmmValue = DMM_INITIAL_DISPLAY;
+          } else if (ACTUATOR_MODEL_EDITORS.has(targetComp.type) && hasNewVal) {
+            targetComp.value = this.propValInput!.value.trim() || targetComp.value;
           }
 
-          applyActuatorsSubform(selected);
-          applySemiconductorsSubform(selected);
+          applyWaveSubform(targetComp, newVal, this.propValInput, this.propValSlider);
 
-          if (selected.type === 'x') {
+          if (targetComp.type === "resistor") {
+            const resistorTolSelect = document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement;
+            const resistorPowerSelect = document.querySelector("#prop-resistor-power") as HTMLSelectElement;
+            if (resistorTolSelect) targetComp.tolerance = parseFloat(resistorTolSelect.value) || 1;
+            if (resistorPowerSelect) targetComp.powerRating = parseFloat(resistorPowerSelect.value) || 0.25;
+          }
+
+          if (targetComp.type === "capacitor") {
+            const capVoltSelect = document.querySelector("#prop-capacitor-voltage") as HTMLSelectElement;
+            const capEsrInput = document.querySelector("#prop-capacitor-esr") as HTMLInputElement;
+            const capDielectricSelect = document.querySelector("#prop-capacitor-dielectric") as HTMLSelectElement;
+            if (capVoltSelect) targetComp.voltageRating = parseFloat(capVoltSelect.value) || 25;
+            if (capEsrInput) targetComp.esr = Math.max(0, parseFloat(capEsrInput.value) || 0);
+            if (capDielectricSelect) targetComp.dielectricType = capDielectricSelect.value as any;
+          }
+
+          if (targetComp.type === "inductor") {
+            const indDcrInput = document.querySelector("#prop-inductor-dcr") as HTMLInputElement;
+            const indIsatInput = document.querySelector("#prop-inductor-isat") as HTMLInputElement;
+            if (indDcrInput) targetComp.dcResistance = Math.max(0, parseFloat(indDcrInput.value) || 0);
+            if (indIsatInput) {
+              const val = parseFloat(indIsatInput.value);
+              targetComp.isat = val > 0 ? val : undefined;
+              targetComp.currentRating = targetComp.isat ?? 1.0;
+            }
+          }
+
+          if (targetComp.type === "led") {
+            const ledColorSelect = document.querySelector("#prop-led-color") as HTMLSelectElement;
+            const ledImaxInput = document.querySelector("#prop-led-imax") as HTMLInputElement;
+            if (ledColorSelect) targetComp.ledColor = ledColorSelect.value as any;
+            if (ledImaxInput) targetComp.maxCurrent = Math.max(1, parseFloat(ledImaxInput.value) || 20);
+          }
+
+          // Parásitos físicos y condiciones iniciales
+          const inputEsl = document.querySelector("#prop-comp-esl") as HTMLInputElement | null;
+          const inputCpar = document.querySelector("#prop-comp-cpar") as HTMLInputElement | null;
+          const inputTc1 = document.querySelector("#prop-comp-tc1") as HTMLInputElement | null;
+          const inputRleak = document.querySelector("#prop-comp-rleak") as HTMLInputElement | null;
+          const inputIc = document.querySelector("#prop-comp-ic") as HTMLInputElement | null;
+
+          if (inputEsl && inputEsl.value.trim()) {
+            const p = parseSpiceValue(inputEsl.value);
+            targetComp.esr = p.valid && p.value !== undefined ? p.value : (parseFloat(inputEsl.value) || undefined);
+          }
+          if (inputCpar && inputCpar.value.trim()) {
+            const p = parseSpiceValue(inputCpar.value);
+            targetComp.cpar = p.valid && p.value !== undefined ? p.value : (parseFloat(inputCpar.value) || undefined);
+          }
+          if (inputTc1 && inputTc1.value.trim()) {
+            targetComp.tc1 = parseFloat(inputTc1.value) || undefined;
+          }
+          if (inputRleak && inputRleak.value.trim()) {
+            const p = parseSpiceValue(inputRleak.value);
+            targetComp.rleak = p.valid && p.value !== undefined ? p.value : (parseFloat(inputRleak.value) || undefined);
+          }
+          if (inputIc && inputIc.value.trim()) {
+            const p = parseSpiceValue(inputIc.value);
+            targetComp.initialCondition = p.valid && p.value !== undefined ? p.value : (parseFloat(inputIc.value) || undefined);
+          }
+
+          applyActuatorsSubform(targetComp);
+          applySemiconductorsSubform(targetComp);
+
+          if (targetComp.type === 'x') {
             const macroTextarea = document.querySelector("#prop-spice-macro") as HTMLTextAreaElement;
             if (macroTextarea) {
-              selected.spiceMacro = macroTextarea.value.trim() || undefined;
+              targetComp.spiceMacro = macroTextarea.value.trim() || undefined;
             }
             const pinCountInput = document.querySelector("#prop-pin-count") as HTMLInputElement;
             if (pinCountInput) {
               const newPinCount = parseInt(pinCountInput.value) || 4;
-              selected.pinCount = Math.max(2, Math.min(64, newPinCount));
+              targetComp.pinCount = Math.max(2, Math.min(64, newPinCount));
             }
           }
 
-          if (selected.type === "text_note") {
+          if (targetComp.type === "text_note") {
             const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement;
             const noteFontInput = document.querySelector("#prop-note-fontsize") as HTMLInputElement;
             const noteThemeSelect = document.querySelector("#prop-note-theme") as HTMLSelectElement;
             if (noteTextInput) {
-              selected.label = noteTextInput.value;
-              selected.value = noteTextInput.value;
+              targetComp.label = noteTextInput.value;
+              targetComp.value = noteTextInput.value;
             }
             if (noteFontInput) {
-              selected.fontSize = Number(noteFontInput.value) || 12;
+              targetComp.fontSize = Number(noteFontInput.value) || 12;
             }
             if (noteThemeSelect) {
-              selected.noteTheme = (noteThemeSelect.value as any) || "card";
+              targetComp.noteTheme = (noteThemeSelect.value as any) || "card";
             }
           }
 
-          if (selected.type === "net_label") {
+          if (targetComp.type === "net_label") {
             const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+            const terminalGroundStyleSelect = document.querySelector("#prop-terminal-ground-style") as HTMLSelectElement;
+            const terminalPowerStyleSelect = document.querySelector("#prop-terminal-power-style") as HTMLSelectElement;
             const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
             const tType = (terminalTypeSelect?.value as TerminalType) || "signal";
-            selected.terminalType = tType;
+            targetComp.terminalType = tType;
 
             if (tType === "power") {
+              if (terminalPowerStyleSelect) targetComp.terminalStyle = terminalPowerStyleSelect.value as any || "arrow";
               const volt = parseFloat(terminalVoltageInput?.value || "5") || 5;
-              selected.voltage = volt;
-              const rawVal = String(newVal || selected.label || (volt >= 0 ? `+${volt}V` : `${volt}V`)).trim().toUpperCase();
-              selected.value = rawVal;
-              selected.label = rawVal;
+              targetComp.voltage = volt;
+              const rawVal = String(newVal || targetComp.label || (volt >= 0 ? `+${volt}V` : `${volt}V`)).trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
             } else if (tType === "ground") {
-              const rawVal = String(newVal || selected.label || "GND").trim().toUpperCase();
-              selected.value = rawVal;
-              selected.label = rawVal;
+              if (terminalGroundStyleSelect) targetComp.terminalStyle = terminalGroundStyleSelect.value as any || "standard";
+              const rawVal = String(newVal || targetComp.label || "GND").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
             } else if (tType === "generator") {
               const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
               const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
               const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
               const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement;
               const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
-              selected.waveType = waveTypeSelect ? waveTypeSelect.value : "square";
-              selected.amplitude = waveAmpInput ? (parseFloat(waveAmpInput.value) || 5) : 5;
-              selected.frequency = waveFreqInput ? (parseFloat(waveFreqInput.value) || 1000) : 1000;
-              selected.offset = waveOffsetInput ? (parseFloat(waveOffsetInput.value) || 0) : 0;
-              selected.dutyCycle = waveDutyInput ? (parseFloat(waveDutyInput.value) || 0.5) : 0.5;
-              const rawVal = String(newVal || selected.label || "CLK").trim().toUpperCase();
-              selected.value = rawVal;
-              selected.label = rawVal;
+              targetComp.waveType = waveTypeSelect ? waveTypeSelect.value : "square";
+              targetComp.amplitude = waveAmpInput ? (parseFloat(waveAmpInput.value) || 5) : 5;
+              targetComp.frequency = waveFreqInput ? (parseFloat(waveFreqInput.value) || 1000) : 1000;
+              targetComp.offset = waveOffsetInput ? (parseFloat(waveOffsetInput.value) || 0) : 0;
+              targetComp.dutyCycle = waveDutyInput ? (parseFloat(waveDutyInput.value) || 0.5) : 0.5;
+              const rawVal = String(newVal || targetComp.label || "CLK").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
             } else if (tType === "no_connect") {
-              const rawVal = String(newVal || selected.label || "NC").trim().toUpperCase();
-              selected.value = rawVal;
-              selected.label = rawVal;
+              const rawVal = String(newVal || targetComp.label || "NC").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
             } else if (tType === "output") {
-              const rawVal = String(newVal || selected.label || "OUT").trim().toUpperCase();
-              selected.value = rawVal;
-              selected.label = rawVal;
+              const rawVal = String(newVal || targetComp.label || "OUT").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
             } else if (tType === "input") {
-              const rawVal = String(newVal || selected.label || "IN").trim().toUpperCase();
-              selected.value = rawVal;
-              selected.label = rawVal;
+              const rawVal = String(newVal || targetComp.label || "IN").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
+            } else if (tType === "bidirectional") {
+              const rawVal = String(newVal || targetComp.label || "DATA").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
+            } else if (tType === "bus_tap") {
+              const rawVal = String(newVal || targetComp.label || "BUS[7:0]").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
+            } else if (tType === "test_point") {
+              const rawVal = String(newVal || targetComp.label || "TP1").trim().toUpperCase();
+              targetComp.value = rawVal;
+              targetComp.label = rawVal;
             } else {
-              const rawVal = String(newVal || selected.label || selected.id).trim().toUpperCase();
-              selected.value = rawVal || "NET";
-              selected.label = selected.value as string;
+              const rawVal = String(newVal || targetComp.label || targetComp.id).trim().toUpperCase();
+              targetComp.value = rawVal || "NET";
+              targetComp.label = targetComp.value as string;
             }
           }
+        }
 
-          const simulationRunner = this.callbacks.getSimulationRunner();
-          if (simulationRunner && simulationRunner.isSimulationActive() && supportsLiveMutation(selected.type)) {
-            const runner = simulationRunner;
-            const mutations = buildLiveMutations(selected, newVal);
+        const simulationRunner = this.callbacks.getSimulationRunner();
+        if (simulationRunner && simulationRunner.isSimulationActive() && supportsLiveMutation(selected.type)) {
+          const runner = simulationRunner;
+          for (const targetComp of selectedList) {
+            const mutations = buildLiveMutations(targetComp, newVal);
             for (const m of mutations) {
               void runner.mutateComponent(
                 m.componentId,
@@ -784,25 +1198,30 @@ export class PropertyEditor {
                 m.value,
               );
             }
-            this.callbacks.addLog(
-              `Mutación en caliente emitida para [${selected.id}]: ${mutations.length} campo(s)`,
-              "send",
-            );
-          } else if (simulationRunner?.isSimulationActive() ?? false) {
-            this.callbacks.addLog(
-              `Los cambios de [${selected.id}] se aplicarán en la próxima simulación.`,
-              "system",
-            );
           }
-
-          this.callbacks.updateCanvasRendering();
-          this.callbacks.markCurrentTabAsModified();
-          this.callbacks.extractNetlist?.();
           this.callbacks.addLog(
-            `Propiedades aplicadas a [${selected.id}]: Valor = [${selected.value}]`,
+            `Mutación en caliente emitida para [${selectedList.map(c => c.id).join(", ")}]`,
+            "send",
+          );
+        } else if (simulationRunner?.isSimulationActive() ?? false) {
+          this.callbacks.addLog(
+            `Los cambios de [${selectedList.map(c => c.id).join(", ")}] se aplicarán en la próxima simulación.`,
             "system",
           );
         }
+
+        this.callbacks.updateCanvasRendering();
+        this.callbacks.markCurrentTabAsModified();
+        this.callbacks.extractNetlist?.();
+        for (const targetComp of selectedList) {
+          this.callbacks.onComponentPropertiesApplied?.(targetComp);
+        }
+        this.callbacks.addLog(
+          isBatch
+            ? `Propiedades aplicadas por lote a ${selectedList.length} componente(s)`
+            : `Propiedades aplicadas a [${selected.id}]: Valor = [${selected.value}]`,
+          "system",
+        );
       });
     }
 

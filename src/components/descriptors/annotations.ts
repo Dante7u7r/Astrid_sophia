@@ -5,17 +5,19 @@
 import {
   drawNetLabel,
   drawTextNote,
+  getNetLabelDynamicExtents,
+  getTextNoteDynamicExtents,
 } from "../../canvas/component_annotation_renderer";
 import type { ComponentDefinition } from "../types";
 
 export const NetLabelDefinition: ComponentDefinition = {
   type: "net_label",
   name: "Puerto / Etiqueta de Red (Terminal)",
-  description: "Conexión de red virtual. Los terminales de Alimentación (VCC/VDD/+5V) inyectan automáticamente una fuente de tensión virtual referenciada a GND (0V) en el motor SPICE.",
+  description: "Conexión de red virtual y terminales EDA (Señal, Entrada, Salida, Bidireccional, Bus, TP, NC, Alimentación VCC/VDD y Tierra GND).",
   category: "anotaciones",
   prefix: "NET",
   defaultProperties: { value: "NET", label: "NET", terminalType: "signal" },
-  halfExtents: { halfW: 35, halfH: 20 },
+  halfExtents: (comp) => getNetLabelDynamicExtents(comp),
   hasStandardLeads: false,
   hasValueLabel: false,
   getPins: () => [{ index: 0, x: 0, y: 0, label: "NET" }],
@@ -29,10 +31,11 @@ export const NetLabelDefinition: ComponentDefinition = {
 export const TextNoteDefinition: ComponentDefinition = {
   type: "text_note",
   name: "Nota de Texto EDA",
+  description: "Bloque de anotación y documentación técnica esquemática con soporte de temas y tipografía adaptable.",
   category: "anotaciones",
   prefix: "NOTE",
   defaultProperties: { value: "Nota de ingeniería...", noteTheme: "card" },
-  halfExtents: { halfW: 80, halfH: 35 },
+  halfExtents: (comp) => getTextNoteDynamicExtents(comp),
   hasStandardLeads: false,
   hasValueLabel: false,
   isDocumentOnly: true,

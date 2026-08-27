@@ -165,6 +165,51 @@ export function digitalStateToVoltage(state: DigitalState): number {
   }
 }
 
+export interface GpioEquivalentCircuit {
+  readonly vTh: number;
+  readonly rTh: number;
+  readonly mode: "output_high" | "output_low" | "input_pullup" | "input_high_z";
+}
+
+/**
+ * Obtiene el modelo Thévenin dinámico (tensión e impedancia interna) del pin GPIO según su estado.
+ */
+export function getGpioTheveninEquivalent(
+  pin: GpioPin,
+  vcc: number = 5.0,
+  pullUpEnabled: boolean = false,
+): GpioEquivalentCircuit {
+  if (pin.direction === "output") {
+    if (pin.state === 1) {
+      return { vTh: vcc, rTh: 25.0, mode: "output_high" };
+    }
+    return { vTh: 0.0, rTh: 25.0, mode: "output_low" };
+  }
+
+  // Entrada
+  if (pullUpEnabled) {
+    return { vTh: vcc, rTh: 35000.0, mode: "input_pullup" };
+  }
+  return { vTh: 0.0, rTh: 10000000.0, mode: "input_high_z" };
+}
+
+/**
+ * Calcula la corriente y caída de tensión en el pin GPIO bajo carga externa.
+ */
+export function calculateGpioLoadedVoltage(
+  pin: GpioPin,
+  externalVoltage: number,
+  vcc: number = 5.0,
+  pullUpEnabled: boolean = false,
+): { pinVoltage: number; pinCurrent: number } {
+  const eq = getGpioTheveninEquivalent(pin, vcc, pullUpEnabled);
+  const pinCurrent = (eq.vTh - externalVoltage) / eq.rTh;
+  return {
+    pinVoltage: externalVoltage,
+    pinCurrent,
+  };
+}
+
 export function writeGpioOutputs(
   bridge: McuSpiceBridge,
   voltageMap: Map<string, number>

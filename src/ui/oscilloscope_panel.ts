@@ -4,6 +4,8 @@ import {
   calculateOscilloscopeMetrics,
   calculateAutoFitSettings,
   calculateAutoFitForValues,
+  calculateTrigger50Percent,
+  calculatePhaseDifferenceDeg,
   calculateWaveformHistogram,
   evaluateMaskTest,
   findTimeIndex,
@@ -13,6 +15,7 @@ import {
   type MaskToleranceDefinition,
   buildTyTracePoints,
   findTriggerStartIndex,
+  formatOscilloscopeTime,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
   type OscilloscopeChannel,
@@ -38,6 +41,7 @@ import {
 } from "./oscilloscope_cursor_model";
 import { ensureCanvasDpr } from "./canvas_dpr";
 import { evaluateWaveformMath } from "./waveform_math_parser";
+import { getInstrumentThemeColors } from "./instrument_theme";
 import {
   calculateAutomatedMeasurements,
   exportMeasurementsToCsv,
@@ -65,6 +69,7 @@ export interface TimeStepResult {
   time: number;
   nodeVoltages: Record<string, number>;
   branchCurrents: Record<string, number>;
+  deviceTemperatures?: Record<string, number>;
 }
 
 export interface AcSweepResult {
@@ -86,6 +91,8 @@ export class OscilloscopePanel {
 
   // Timebase & Trigger DOM elements
   private timeDivSelect: HTMLSelectElement | null = null;
+  private simSpeedSelect: HTMLSelectElement | null = null;
+  public simulationSpeedMultiplier = 1.0;
   private cursorsBtn: HTMLButtonElement | null = null;
   private mathBtn: HTMLButtonElement | null = null;
   private snapshotBtn: HTMLButtonElement | null = null;
@@ -95,12 +102,11 @@ export class OscilloscopePanel {
   private triggerEdgeSelect: HTMLSelectElement | null = null;
   private triggerLevelSlider: HTMLInputElement | null = null;
   private triggerSweepModeSelect: HTMLSelectElement | null = null;
+  private trigger50Btn: HTMLButtonElement | null = null;
 
   private modeTyBtn: HTMLButtonElement | null = null;
   private modeXyBtn: HTMLButtonElement | null = null;
   private modeSplitBtn: HTMLButtonElement | null = null;
-  private interpolationSelect: HTMLSelectElement | null = null;
-  private phosphorSelect: HTMLSelectElement | null = null;
   private isSplitMode = false;
 
   // Tabbed Focused Channel UI elements
@@ -117,6 +123,14 @@ export class OscilloscopePanel {
   private focusedVoltsBadge: HTMLElement | null = null;
   private focusedOffsetSlider: HTMLInputElement | null = null;
   private focusedOffsetVal: HTMLElement | null = null;
+
+  // Math Presets and Coupling container
+  private mathPresetsRow: HTMLElement | null = null;
+  private couplingRow: HTMLElement | null = null;
+  private mathPresetDiffBtn: HTMLButtonElement | null = null;
+  private mathPresetMultBtn: HTMLButtonElement | null = null;
+  private mathPresetDerivBtn: HTMLButtonElement | null = null;
+  private mathPresetIntegBtn: HTMLButtonElement | null = null;
 
   private tabCh1: HTMLButtonElement | null = null;
   private tabCh2: HTMLButtonElement | null = null;
@@ -141,7 +155,7 @@ export class OscilloscopePanel {
   public ch3ProbeNode: string | null = null;
   public ch4ProbeNode: string | null = null;
 
-  // Advanced Digital Storage Features (Tektronix / Keysight DSO)
+  // Advanced Digital Storage Features
   public interpolationMode: "linear" | "sinc" = "linear";
   public phosphorDecay: "off" | "short" | "medium" | "infinite" = "off";
 
@@ -229,7 +243,21 @@ export class OscilloscopePanel {
   }
 
   public formatTime(val: number): string {
-    return val >= 0.001 ? `${(val * 1000).toFixed(0)} ms/div` : `${(val * 1000000).toFixed(0)} µs/div`;
+    return formatOscilloscopeTime(val);
+  }
+
+  public syncTimeDivSelect(val: number): void {
+    if (!this.timeDivSelect) return;
+    this.timeDivSelect.value = val.toString();
+    if (this.timeDivSelect.selectedIndex === -1) {
+      for (let i = 0; i < this.timeDivSelect.options.length; i++) {
+        const optVal = parseFloat(this.timeDivSelect.options[i].value);
+        if (Math.abs(optVal - val) <= Math.max(1e-12, val * 0.05)) {
+          this.timeDivSelect.selectedIndex = i;
+          break;
+        }
+      }
+    }
   }
 
   public getVoltsPerDiv(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): number {
@@ -321,10 +349,13 @@ export class OscilloscopePanel {
       button?.classList.toggle("active", state.channelsEnabled[index]);
     });
 
-    if (this.timeDivSelect) this.timeDivSelect.value = state.timeDivValue.toString();
+    this.syncTimeDivSelect(state.timeDivValue);
     if (this.triggerModeSelect) this.triggerModeSelect.value = state.triggerChannel;
     if (this.triggerEdgeSelect) this.triggerEdgeSelect.value = state.triggerEdge;
-    if (this.triggerLevelSlider) this.triggerLevelSlider.value = (state.triggerLevel * 30).toString();
+    if (this.triggerLevelSlider) {
+      const vPerDiv = this.getVoltsPerDiv(state.triggerChannel) || 1;
+      this.triggerLevelSlider.value = (state.triggerLevel / vPerDiv).toFixed(2);
+    }
 
     this.modeTyBtn?.classList.toggle("active", !state.isXyMode);
     this.modeXyBtn?.classList.toggle("active", state.isXyMode);
@@ -345,6 +376,7 @@ export class OscilloscopePanel {
     this.oscCh4Btn = document.querySelector("#osc-ch4-btn");
 
     this.timeDivSelect = document.querySelector("#osc-time-div");
+    this.simSpeedSelect = document.querySelector("#osc-sim-speed");
     this.cursorsBtn = document.querySelector("#osc-cursors-btn");
     this.mathBtn = document.querySelector("#osc-math-btn");
     this.snapshotBtn = document.querySelector("#osc-snapshot-btn");
@@ -354,12 +386,11 @@ export class OscilloscopePanel {
     this.triggerEdgeSelect = document.querySelector("#osc-trigger-edge");
     this.triggerLevelSlider = document.querySelector("#osc-trigger-level");
     this.triggerSweepModeSelect = document.querySelector("#osc-trigger-sweep-mode");
+    this.trigger50Btn = document.querySelector("#osc-trigger-50-btn");
 
     this.modeTyBtn = document.querySelector("#osc-mode-ty");
     this.modeXyBtn = document.querySelector("#osc-mode-xy");
     this.modeSplitBtn = document.querySelector("#osc-mode-split");
-    this.interpolationSelect = document.querySelector("#osc-interpolation-select");
-    this.phosphorSelect = document.querySelector("#osc-phosphor-select");
 
     // Focused Channel UI
     this.focusedCard = document.querySelector("#osc-focused-card");
@@ -374,6 +405,14 @@ export class OscilloscopePanel {
     this.focusedVoltsBadge = document.querySelector("#osc-focused-volts-badge");
     this.focusedOffsetSlider = document.querySelector("#osc-focused-offset");
     this.focusedOffsetVal = document.querySelector("#osc-focused-offset-val");
+
+    // Math Presets & Rows
+    this.mathPresetsRow = document.querySelector("#osc-math-presets-row");
+    this.couplingRow = document.querySelector("#osc-coupling-row");
+    this.mathPresetDiffBtn = document.querySelector("#osc-math-preset-diff");
+    this.mathPresetMultBtn = document.querySelector("#osc-math-preset-mult");
+    this.mathPresetDerivBtn = document.querySelector("#osc-math-preset-deriv");
+    this.mathPresetIntegBtn = document.querySelector("#osc-math-preset-integ");
 
     this.tabCh1 = document.querySelector("#osc-tab-ch1");
     this.tabCh2 = document.querySelector("#osc-tab-ch2");
@@ -392,6 +431,12 @@ export class OscilloscopePanel {
           this.draw();
         });
         resizeObs.observe(this.oscCanvas);
+      }
+
+      if (typeof window !== "undefined") {
+        window.addEventListener("astryd-theme-changed", () => {
+          this.draw();
+        });
       }
     }
   }
@@ -455,12 +500,20 @@ export class OscilloscopePanel {
       this.focusedToggleBtn.classList.toggle("active", active);
     }
 
+    // Math Presets row vs Coupling row visibility
+    if (this.mathPresetsRow) {
+      this.mathPresetsRow.style.display = ch === "math" ? "block" : "none";
+    }
+    if (this.couplingRow) {
+      this.couplingRow.style.display = ch === "math" ? "none" : "block";
+    }
+
     // Node Input / Math Expression Input
     if (this.focusedNodeInput) {
       if (ch === "math") {
         this.focusedNodeInput.disabled = false;
         this.focusedNodeInput.value = this.mathExpression || "CH1 - CH2";
-        this.focusedNodeInput.placeholder = "Ej. CH1 - CH2, CH1 * CH2, DERIV(CH1), INTEG(CH1), FFT(CH1)";
+        this.focusedNodeInput.placeholder = "Ej. CH1 - CH2, CH1 * CH2, DERIV(CH1), INTEG(CH1)";
       } else {
         this.focusedNodeInput.disabled = false;
         this.focusedNodeInput.placeholder = "Ej. 1, out...";
@@ -487,6 +540,12 @@ export class OscilloscopePanel {
     const off = this.getOffsetDivs(ch);
     if (this.focusedOffsetSlider) this.focusedOffsetSlider.value = off.toString();
     if (this.focusedOffsetVal) this.focusedOffsetVal.textContent = this.formatOffset(off, v);
+
+    // Trigger level slider sync
+    if (this.triggerLevelSlider) {
+      const trigVPerDiv = this.getVoltsPerDiv(this.triggerChannel) || 1;
+      this.triggerLevelSlider.value = (this.triggerLevel / trigVPerDiv).toFixed(2);
+    }
   }
 
   public updateHud(): void {
@@ -502,7 +561,21 @@ export class OscilloscopePanel {
     if (hudTime) hudTime.textContent = this.formatTime(this.timeDivValue);
 
     const trigVal = document.querySelector("#osc-trigger-level-val");
-    if (trigVal) trigVal.textContent = `${this.triggerLevel.toFixed(1)} V`;
+    if (trigVal) trigVal.textContent = `${this.triggerLevel >= 0 ? '+' : ''}${this.triggerLevel.toFixed(2)} V`;
+
+    const hudSpeed = document.querySelector("#osc-hud-speed-val");
+    if (hudSpeed) {
+      const spd = this.simulationSpeedMultiplier;
+      hudSpeed.textContent = spd >= 100 ? "Turbo" : `${spd.toFixed(spd < 1 ? 2 : 1)}x`;
+    }
+  }
+
+  public setSimulationSpeed(speed: number): void {
+    this.simulationSpeedMultiplier = Math.max(0.01, speed);
+    if (this.simSpeedSelect) {
+      this.simSpeedSelect.value = speed.toString();
+    }
+    this.updateHud();
   }
 
   private initEvents() {
@@ -602,6 +675,7 @@ export class OscilloscopePanel {
           const levelVolts = (offsetPixels / divHeight) * vPerDiv;
           this.triggerLevel = Math.max(-4 * vPerDiv, Math.min(4 * vPerDiv, levelVolts));
           this.updateHud();
+          this.syncFocusedChannelUI();
           this.draw();
         } else if (this.draggingMarker.type === "cursor" && this.isCursorsEnabled) {
           const targetVPerDiv = this.getVoltsPerDiv(this.cursorTargetChannel);
@@ -714,7 +788,7 @@ export class OscilloscopePanel {
           } else if (delta < 0 && curIdx > 0) {
             this.timeDivValue = timeOptions[curIdx - 1];
           }
-          if (this.timeDivSelect) this.timeDivSelect.value = this.timeDivValue.toString();
+          this.syncTimeDivSelect(this.timeDivValue);
           this.updateHud();
           this.draw();
         } else {
@@ -727,10 +801,8 @@ export class OscilloscopePanel {
 
           let nextV = curV;
           if (e.deltaY > 0 && curIdx < voltOptions.length - 1) {
-            // Rueda hacia abajo: alejar / aumentar V/div -> la onda se hace más compacta
             nextV = voltOptions[curIdx + 1];
           } else if (e.deltaY < 0 && curIdx > 0) {
-            // Rueda hacia arriba: acercar / reducir V/div -> la onda se hace más grande
             nextV = voltOptions[curIdx - 1];
           }
 
@@ -825,6 +897,32 @@ export class OscilloscopePanel {
       }
     });
 
+    // Math Quick Presets listeners
+    this.mathPresetDiffBtn?.addEventListener("click", () => {
+      this.mathExpression = "CH1 - CH2";
+      if (this.focusedNodeInput) this.focusedNodeInput.value = this.mathExpression;
+      this.syncFocusedChannelUI();
+      this.draw();
+    });
+    this.mathPresetMultBtn?.addEventListener("click", () => {
+      this.mathExpression = "CH1 * CH2";
+      if (this.focusedNodeInput) this.focusedNodeInput.value = this.mathExpression;
+      this.syncFocusedChannelUI();
+      this.draw();
+    });
+    this.mathPresetDerivBtn?.addEventListener("click", () => {
+      this.mathExpression = "DERIV(CH1)";
+      if (this.focusedNodeInput) this.focusedNodeInput.value = this.mathExpression;
+      this.syncFocusedChannelUI();
+      this.draw();
+    });
+    this.mathPresetIntegBtn?.addEventListener("click", () => {
+      this.mathExpression = "INTEG(CH1)";
+      if (this.focusedNodeInput) this.focusedNodeInput.value = this.mathExpression;
+      this.syncFocusedChannelUI();
+      this.draw();
+    });
+
     const setCoupling = (mode: "dc" | "ac" | "gnd") => {
       const ch = this.focusedChannel;
       if (ch === "ch1") this.couplingCh1 = mode;
@@ -881,8 +979,18 @@ export class OscilloscopePanel {
       this.draw();
     });
 
+    this.simSpeedSelect?.addEventListener("change", () => {
+      const speed = parseFloat(this.simSpeedSelect?.value ?? "1.0");
+      if (Number.isFinite(speed) && speed > 0) {
+        this.simulationSpeedMultiplier = speed;
+        this.onSpeedChanged?.(speed);
+        this.updateHud();
+      }
+    });
+
     this.triggerModeSelect?.addEventListener("input", () => {
       if (this.triggerModeSelect) this.triggerChannel = normalizeTriggerChannel(this.triggerModeSelect.value);
+      this.syncFocusedChannelUI();
       this.draw();
     });
 
@@ -892,9 +1000,17 @@ export class OscilloscopePanel {
     });
 
     this.triggerLevelSlider?.addEventListener("input", () => {
-      if (this.triggerLevelSlider) this.triggerLevel = parseFloat(this.triggerLevelSlider.value) / 30;
+      if (this.triggerLevelSlider) {
+        const vPerDiv = this.getVoltsPerDiv(this.triggerChannel) || 1;
+        const divs = parseFloat(this.triggerLevelSlider.value || "0");
+        this.triggerLevel = divs * vPerDiv;
+      }
       this.updateHud();
       this.draw();
+    });
+
+    this.trigger50Btn?.addEventListener("click", () => {
+      this.setTriggerTo50Percent();
     });
 
     this.triggerSweepModeSelect?.addEventListener("input", () => {
@@ -945,33 +1061,6 @@ export class OscilloscopePanel {
       this.draw();
     });
 
-    // Interpolation Mode (Linear / Sinc Lanczos)
-    this.interpolationSelect?.addEventListener("change", () => {
-      const val = this.interpolationSelect?.value;
-      if (val === "linear" || val === "sinc") {
-        this.interpolationMode = val;
-        this.draw();
-      }
-    });
-
-    // Digital Phosphor Decay (Off / Short / Medium / Infinite)
-    this.phosphorSelect?.addEventListener("change", () => {
-      const val = this.phosphorSelect?.value;
-      if (val === "off" || val === "short" || val === "medium" || val === "infinite") {
-        this.phosphorDecay = val;
-        this.draw();
-      }
-    });
-
-    // Simulation Speed Control (0.5x, 1x, 2x, 5x, 10x, Turbo)
-    const speedSelect = document.querySelector<HTMLSelectElement>("#osc-speed-select");
-    speedSelect?.addEventListener("change", () => {
-      const speed = parseFloat(speedSelect.value || "1.0");
-      if (Number.isFinite(speed) && speed > 0) {
-        this.onSpeedChanged?.(speed);
-      }
-    });
-
     // Snapshot PNG & CSV Export
     this.snapshotBtn?.addEventListener("click", () => this.snapshotPng());
     this.csvBtn?.addEventListener("click", () => this.exportCsv());
@@ -1011,13 +1100,14 @@ export class OscilloscopePanel {
     if (!this.oscCanvas?.isConnected) return false;
     const floatingWindow = this.oscCanvas.closest(".floating-instrument-window");
     if (floatingWindow) {
-      return floatingWindow.clientWidth > 0 && floatingWindow.clientHeight > 0;
+      return (floatingWindow.clientWidth > 0 || (floatingWindow as HTMLElement).offsetWidth > 0)
+        && (floatingWindow.clientHeight > 0 || (floatingWindow as HTMLElement).offsetHeight > 0);
     }
     const dock = this.oscCanvas.closest("#bottom-dock");
     if (dock?.classList.contains("collapsed")) return false;
-    return this.oscCanvas.getClientRects().length > 0
-      && this.oscCanvas.clientWidth > 0
-      && this.oscCanvas.clientHeight > 0;
+    if (this.oscCanvas.clientWidth > 0 && this.oscCanvas.clientHeight > 0) return true;
+    if (this.oscCanvas.width > 0 && this.oscCanvas.height > 0) return true;
+    return this.oscCanvas.getClientRects().length > 0;
   }
 
   private shouldAnimate(): boolean {
@@ -1059,16 +1149,10 @@ export class OscilloscopePanel {
     const { width, height } = ensureCanvasDpr(this.oscCanvas, this.oscCtx);
     if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return;
 
-    // Digital Phosphor Persistence / Clean background clear
-    if (this.phosphorDecay === "short") {
-      this.oscCtx.fillStyle = "rgba(3, 5, 8, 0.25)";
-    } else if (this.phosphorDecay === "medium") {
-      this.oscCtx.fillStyle = "rgba(3, 5, 8, 0.10)";
-    } else if (this.phosphorDecay === "infinite") {
-      this.oscCtx.fillStyle = "rgba(3, 5, 8, 0.01)";
-    } else {
-      this.oscCtx.fillStyle = "#030508";
-    }
+    const themeColors = getInstrumentThemeColors();
+
+    // Clean, crisp solid background
+    this.oscCtx.fillStyle = themeColors.screenBg;
     this.oscCtx.fillRect(0, 0, width, height);
 
     const isCh1Active = this.oscCh1Btn?.classList.contains("active") ?? false;
@@ -1076,13 +1160,18 @@ export class OscilloscopePanel {
     const isCh3Active = this.oscCh3Btn?.classList.contains("active") ?? false;
     const isCh4Active = this.oscCh4Btn?.classList.contains("active") ?? false;
 
+    const ch1Color = themeColors.traceColors.ch1;
+    const ch2Color = themeColors.traceColors.ch2;
+    const ch3Color = themeColors.traceColors.ch3;
+    const ch4Color = themeColors.traceColors.ch4;
+
     // --- MODO AC SWEEP: DIAGRAMA DE BODE LOGARÍTMICO ---
     if (this.activeAnalysisMode === "AC" && this.acSweepResults !== null && this.acSweepResults.frequencies.length > 0) {
       drawAcSweep(this.oscCtx, width, height, this.acSweepResults, [
-        { node: this.ch1ProbeNode, color: "#FACC15", active: isCh1Active },
-        { node: this.ch2ProbeNode, color: "#38BDF8", active: isCh2Active },
-        { node: this.ch3ProbeNode, color: "#F43F5E", active: isCh3Active },
-        { node: this.ch4ProbeNode, color: "#4ADE80", active: isCh4Active },
+        { node: this.ch1ProbeNode, color: ch1Color, active: isCh1Active },
+        { node: this.ch2ProbeNode, color: ch2Color, active: isCh2Active },
+        { node: this.ch3ProbeNode, color: ch3Color, active: isCh3Active },
+        { node: this.ch4ProbeNode, color: ch4Color, active: isCh4Active },
       ]);
     } else if (this.activeAnalysisMode === "PVT" && this.pvtTraces.length > 0) {
       drawPvtTraces(
@@ -1122,10 +1211,10 @@ export class OscilloscopePanel {
       );
 
       const activeChannelsList = [
-        { num: 1, node: this.ch1ProbeNode || "1", color: "#FACC15", voltsPerDiv: this.voltsPerDivCh1, offsetDivs: this.offsetCh1, active: isCh1Active, coupling: this.couplingCh1, invert: this.invertCh1 },
-        { num: 2, node: this.ch2ProbeNode || "2", color: "#38BDF8", voltsPerDiv: this.voltsPerDivCh2, offsetDivs: this.offsetCh2, active: isCh2Active, coupling: this.couplingCh2, invert: this.invertCh2 },
-        { num: 3, node: this.ch3ProbeNode || "3", color: "#F43F5E", voltsPerDiv: this.voltsPerDivCh3, offsetDivs: this.offsetCh3, active: isCh3Active, coupling: this.couplingCh3, invert: this.invertCh3 },
-        { num: 4, node: this.ch4ProbeNode || "4", color: "#4ADE80", voltsPerDiv: this.voltsPerDivCh4, offsetDivs: this.offsetCh4, active: isCh4Active, coupling: this.couplingCh4, invert: this.invertCh4 },
+        { num: 1, node: this.ch1ProbeNode || "1", color: ch1Color, voltsPerDiv: this.voltsPerDivCh1, offsetDivs: this.offsetCh1, active: isCh1Active, coupling: this.couplingCh1, invert: this.invertCh1 },
+        { num: 2, node: this.ch2ProbeNode || "2", color: ch2Color, voltsPerDiv: this.voltsPerDivCh2, offsetDivs: this.offsetCh2, active: isCh2Active, coupling: this.couplingCh2, invert: this.invertCh2 },
+        { num: 3, node: this.ch3ProbeNode || "3", color: ch3Color, voltsPerDiv: this.voltsPerDivCh3, offsetDivs: this.offsetCh3, active: isCh3Active, coupling: this.couplingCh3, invert: this.invertCh3 },
+        { num: 4, node: this.ch4ProbeNode || "4", color: ch4Color, voltsPerDiv: this.voltsPerDivCh4, offsetDivs: this.offsetCh4, active: isCh4Active, coupling: this.couplingCh4, invert: this.invertCh4 },
       ].filter(c => c.active && c.node);
 
       if (this.isSplitMode && activeChannelsList.length > 1) {
@@ -1191,10 +1280,10 @@ export class OscilloscopePanel {
         // Overlay standard single grid
         drawTyReticle(this.oscCtx, width, height, {
           channels: [
-            { num: 1, color: "#FACC15", offsetPixels: this.offsetCh1 * divHeight, active: isCh1Active },
-            { num: 2, color: "#38BDF8", offsetPixels: this.offsetCh2 * divHeight, active: isCh2Active },
-            { num: 3, color: "#F43F5E", offsetPixels: this.offsetCh3 * divHeight, active: isCh3Active },
-            { num: 4, color: "#4ADE80", offsetPixels: this.offsetCh4 * divHeight, active: isCh4Active },
+            { num: 1, color: ch1Color, offsetPixels: this.offsetCh1 * divHeight, active: isCh1Active },
+            { num: 2, color: ch2Color, offsetPixels: this.offsetCh2 * divHeight, active: isCh2Active },
+            { num: 3, color: ch3Color, offsetPixels: this.offsetCh3 * divHeight, active: isCh3Active },
+            { num: 4, color: ch4Color, offsetPixels: this.offsetCh4 * divHeight, active: isCh4Active },
           ],
           trigger: {
             levelVolts: this.triggerLevel,
@@ -1257,22 +1346,22 @@ export class OscilloscopePanel {
           ctx.restore();
         };
 
-        drawChannelTY(this.ch1ProbeNode || "1", "#FACC15", this.voltsPerDivCh1, this.offsetCh1, isCh1Active, {
+        drawChannelTY(this.ch1ProbeNode || "1", ch1Color, this.voltsPerDivCh1, this.offsetCh1, isCh1Active, {
           coupling: this.couplingCh1,
           invert: this.invertCh1,
           interpolation: this.interpolationMode,
         });
-        drawChannelTY(this.ch2ProbeNode || "2", "#38BDF8", this.voltsPerDivCh2, this.offsetCh2, isCh2Active, {
+        drawChannelTY(this.ch2ProbeNode || "2", ch2Color, this.voltsPerDivCh2, this.offsetCh2, isCh2Active, {
           coupling: this.couplingCh2,
           invert: this.invertCh2,
           interpolation: this.interpolationMode,
         });
-        drawChannelTY(this.ch3ProbeNode || "3", "#F43F5E", this.voltsPerDivCh3, this.offsetCh3, isCh3Active, {
+        drawChannelTY(this.ch3ProbeNode || "3", ch3Color, this.voltsPerDivCh3, this.offsetCh3, isCh3Active, {
           coupling: this.couplingCh3,
           invert: this.invertCh3,
           interpolation: this.interpolationMode,
         });
-        drawChannelTY(this.ch4ProbeNode || "4", "#4ADE80", this.voltsPerDivCh4, this.offsetCh4, isCh4Active, {
+        drawChannelTY(this.ch4ProbeNode || "4", ch4Color, this.voltsPerDivCh4, this.offsetCh4, isCh4Active, {
           coupling: this.couplingCh4,
           invert: this.invertCh4,
           interpolation: this.interpolationMode,
@@ -1422,23 +1511,52 @@ export class OscilloscopePanel {
       const vavgEl = card.querySelector<HTMLElement>("[id^='meas-vavg']") || card.querySelector<HTMLElement>(".val-vavg");
       const freqEl = card.querySelector<HTMLElement>("[id^='meas-freq']") || card.querySelector<HTMLElement>(".val-freq");
       const dutyEl = card.querySelector<HTMLElement>("[id^='meas-duty']") || card.querySelector<HTMLElement>(".val-duty");
+      const trEl = card.querySelector<HTMLElement>("[id^='meas-tr']");
+      const tfEl = card.querySelector<HTMLElement>("[id^='meas-tf']");
+      const phaseEl = card.querySelector<HTMLElement>("[id^='meas-phase']");
 
       if (channel.active && channel.node) {
         const metrics = calculateOscilloscopeMetrics(this.transientResults, channel.node);
-        const freqStr = metrics.freq >= 1000 ? `${(metrics.freq / 1000).toFixed(2)}k` : `${metrics.freq.toFixed(0)}`;
-        const freqUnit = metrics.freq >= 1000 ? "kHz" : "Hz";
+        let freqText = "--";
+        if (metrics.freq > 0) {
+          if (metrics.freq >= 1e6) {
+            freqText = `${(metrics.freq / 1e6).toFixed(2)} MHz`;
+          } else if (metrics.freq >= 1e3) {
+            freqText = `${(metrics.freq / 1e3).toFixed(2)} kHz`;
+          } else {
+            freqText = `${metrics.freq.toFixed(1)} Hz`;
+          }
+        }
 
         if (vppEl) vppEl.textContent = metrics.vpp >= 1 ? `${metrics.vpp.toFixed(2)}V` : `${(metrics.vpp * 1000).toFixed(0)}mV`;
         if (vrmsEl) vrmsEl.textContent = metrics.vrms >= 1 ? `${metrics.vrms.toFixed(2)}V` : `${(metrics.vrms * 1000).toFixed(0)}mV`;
         if (vavgEl) vavgEl.textContent = `${metrics.vavg >= 0 ? '+' : ''}${metrics.vavg.toFixed(2)}V`;
-        if (freqEl) freqEl.textContent = metrics.freq > 0 ? `${freqStr}${freqUnit}` : "--";
+        if (freqEl) freqEl.textContent = freqText;
         if (dutyEl) dutyEl.textContent = metrics.freq > 0 ? `${metrics.duty.toFixed(0)}%` : "--";
+
+        const formatTimeMetric = (val?: number) => {
+          if (val === undefined || !Number.isFinite(val) || val <= 0) return "--";
+          if (val >= 1e-3) return `${(val * 1e3).toFixed(1)}ms`;
+          if (val >= 1e-6) return `${(val * 1e6).toFixed(1)}µs`;
+          return `${(val * 1e9).toFixed(1)}ns`;
+        };
+
+        if (trEl) trEl.textContent = formatTimeMetric(metrics.riseTime);
+        if (tfEl) tfEl.textContent = formatTimeMetric(metrics.fallTime);
+
+        if (phaseEl && this.ch1ProbeNode && this.ch2ProbeNode) {
+          const deg = calculatePhaseDifferenceDeg(this.transientResults, this.ch1ProbeNode, this.ch2ProbeNode);
+          phaseEl.textContent = deg !== null ? `${deg >= 0 ? '+' : ''}${deg.toFixed(1)}°` : "--";
+        }
       } else {
         if (vppEl) vppEl.textContent = "--";
         if (vrmsEl) vrmsEl.textContent = "--";
         if (vavgEl) vavgEl.textContent = "--";
         if (freqEl) freqEl.textContent = "--";
         if (dutyEl) dutyEl.textContent = "--";
+        if (trEl) trEl.textContent = "--";
+        if (tfEl) tfEl.textContent = "--";
+        if (phaseEl) phaseEl.textContent = "--";
       }
     }
   }
@@ -1553,6 +1671,16 @@ export class OscilloscopePanel {
     this.refreshVisibility();
   }
 
+  public setTriggerTo50Percent(): void {
+    if (this.transientResults.length === 0) return;
+    const trigNode = this.getProbeNodeByChannel(this.triggerChannel);
+    if (!trigNode) return;
+    this.triggerLevel = calculateTrigger50Percent(this.transientResults, trigNode);
+    this.syncFocusedChannelUI();
+    this.updateHud();
+    this.draw();
+  }
+
   public autoFit(channel: OscilloscopeChannel | "math" | null = null): boolean {
     if (this.transientResults.length === 0) return false;
 
@@ -1562,6 +1690,7 @@ export class OscilloscopePanel {
       const node = this.getProbeNodeByChannel(channel);
       if (node) channelsToFit.push({ ch: channel, node });
     } else if (!channel) {
+      const allChannels: readonly OscilloscopeChannel[] = ["ch1", "ch2", "ch3", "ch4"];
       const activeList: readonly [OscilloscopeChannel, boolean][] = [
         ["ch1", this.oscCh1Btn?.classList.contains("active") ?? false],
         ["ch2", this.oscCh2Btn?.classList.contains("active") ?? false],
@@ -1573,19 +1702,38 @@ export class OscilloscopePanel {
         const node = this.getProbeNodeByChannel(ch);
         if (node) channelsToFit.push({ ch, node });
       }
+
+      // Auto-detección: Si ningún canal está marcado activo, activar los que tengan señal real (> 5mV)
       if (channelsToFit.length === 0 && !this.isMathEnabled) {
-        const fallbackCh = this.getAutoFitChannel() || "ch1";
-        const node = this.getProbeNodeByChannel(fallbackCh);
-        if (node) channelsToFit.push({ ch: fallbackCh, node });
+        for (const ch of allChannels) {
+          const node = this.getProbeNodeByChannel(ch);
+          if (!node) continue;
+          const m = calculateOscilloscopeMetrics(this.transientResults, node);
+          if (m.vpp > 0.005) {
+            this.setChannelActive(ch, true);
+            channelsToFit.push({ ch, node });
+          }
+        }
+        if (channelsToFit.length === 0) {
+          const fallbackCh = this.getAutoFitChannel() || "ch1";
+          const node = this.getProbeNodeByChannel(fallbackCh);
+          if (node) {
+            this.setChannelActive(fallbackCh, true);
+            channelsToFit.push({ ch: fallbackCh, node });
+          }
+        }
       }
     }
 
     let primaryFit: AutoFitSettings | null = null;
+    let primaryChannel: OscilloscopeChannel = this.triggerChannel || "ch1";
 
     for (const { ch, node } of channelsToFit) {
-      const fit = calculateAutoFitSettings(this.transientResults, node);
-      if (!primaryFit || ch === (this.triggerChannel || "ch1")) {
+      const coupling = ch === "ch1" ? this.couplingCh1 : ch === "ch2" ? this.couplingCh2 : ch === "ch3" ? this.couplingCh3 : this.couplingCh4;
+      const fit = calculateAutoFitSettings(this.transientResults, node, coupling);
+      if (!primaryFit || ch === primaryChannel) {
         primaryFit = fit;
+        primaryChannel = ch;
       }
 
       const minOffset = -4;
@@ -1631,7 +1779,10 @@ export class OscilloscopePanel {
 
     if (primaryFit) {
       this.timeDivValue = primaryFit.timeDivValue;
-      if (this.timeDivSelect) this.timeDivSelect.value = primaryFit.timeDivValue.toString();
+      this.syncTimeDivSelect(primaryFit.timeDivValue);
+      if (typeof primaryFit.triggerLevel50 === "number") {
+        this.triggerLevel = primaryFit.triggerLevel50;
+      }
     }
 
     this.syncFocusedChannelUI();

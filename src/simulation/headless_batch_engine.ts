@@ -331,7 +331,7 @@ export function formatHeadlessSummary(results: HeadlessSimulationResults): strin
 
   const lines = [
     `═══════════════════════════════════════════════════════════════════════════`,
-    `  ASTRYD SOPHIA — HEADLESS BATCH SIMULATION REPORT`,
+    `  BIAANI — HEADLESS BATCH SIMULATION REPORT`,
     `═══════════════════════════════════════════════════════════════════════════`,
     `  Modo de Análisis:       ${results.mode}`,
     `  Estado de Convergencia: CONVERGIDO (Éxito)`,

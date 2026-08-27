@@ -1,4 +1,4 @@
-# Astryd Sophia — Agent Instructions
+# Biaani — Agent Instructions
 
 Never tell me what I want to hear. If the answer conflicts with my assumptions, say so directly. Do not soften, omit, or reframe uncomfortable truths to avoid friction.
 
@@ -68,9 +68,29 @@ cargo test           # Unit/integration tests
 - `solve_dc_thermal`, `parse_spice_netlist`, `evaluate_measures`, `expand_transmission_line`
 
 ## Testing
-- Frontend tests: `tests/test_ui.ts` (run via browser or Node — no test runner configured)
-- Rust tests: `cargo test` in `src-tauri/`
-- No Vitest/Jest configured; tests are manual `console.log` suites
+- Frontend tests: `npm test` (ejecuta Vitest con Happy-DOM en 177+ archivos de prueba)
+- Rust tests: `cargo test` en `src-tauri/`
+
+## Registro de Anti-patrones y Errores Recurrentes (Lecciones Aprendidas)
+1. **Serialización Numérica JS vs DOM HTML (`<select>` y atributos):**
+   - En JavaScript, números $< 10^{-6}$ (e.g. `1e-8`) se convierten en notación exponencial `"1e-8"` al llamar `.toString()`.
+   - Si el HTML tiene `<option value="0.00000001">`, la asignación `select.value = val.toString()` falla silenciosamente.
+   - *Regla:* Sincronizar siempre los atributos `value` con la salida exacta de `.toString()` y usar funciones de coincidencia numérica tolerante (`syncTimeDivSelect`).
+
+2. **Formateo de Unidades de Ingeniería y Evitar Doble Sufijo:**
+   - Prohibido concatenar variables intermedias que ya contengan prefijos de magnitud (e.g., `freqStr` con `"k"` + `freqUnit` `"kHz"` $\rightarrow$ `"1.00kkHz"`).
+   - Usar siempre funciones puras y unificadas de formateo (`formatOscilloscopeTime`, `formatSpiceValue`) con rangos limpios (`Hz`, `kHz`, `MHz`, `GHz` / `ns`, `µs`, `ms`, `s`).
+
+3. **Compatibilidad con Entornos Headless y Tests (`Happy-DOM`):**
+   - En entornos de prueba headless, `getClientRects()` devuelve listas vacías y los contextos 2D de canvas son nulos por defecto.
+   - *Regla:* No depender exclusivamente de `getClientRects().length > 0` en comprobaciones de visibilidad (`isCanvasVisible`) y mantener siempre mocks de `getContext("2d")` en `beforeEach`.
+
+4. **Propagación Completa al Extender Rangos Físicos:**
+   - Al ampliar un rango en un instrumento (e.g. base de tiempo horizontal a nanosegundos o segundos), auditar y adaptar inmediatamente:
+     - Métricas DSP y detección de cruces por disparo.
+     - Etiquetas de cursores en pantalla ($\Delta t$, $1/\Delta t$).
+     - Tarjetas de lectura digital / telemetría.
+     - Tests unitarios que cubran los extremos del nuevo rango.
 
 ## Gotchas
 - **Vite port fixed at 1420** (see `vite.config.ts`); Tauri expects this

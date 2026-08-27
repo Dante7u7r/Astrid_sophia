@@ -145,9 +145,9 @@ export function createLiveStateExporter(deps: LiveStateExporterDeps): LiveStateE
         includeGrid: true,
         includeTitleBlock: true,
         titleBlockInfo: {
-          title: deps.getTabManager()?.getActiveTab()?.name ?? "Astryd Sophia Live",
+          title: deps.getTabManager()?.getActiveTab()?.name ?? "Biaani Live",
           author: "Usuario",
-          organization: "Astryd Sophia CAD",
+          organization: "Biaani",
           revision: "1.0-LIVE",
           date: new Date().toLocaleDateString(),
           sheet: "1/1",
@@ -169,8 +169,10 @@ export function createLiveStateExporter(deps: LiveStateExporterDeps): LiveStateE
       const svg = buildSvgSchematic();
 
       if (typeof window !== "undefined") {
+        (window as any).__BIAANI_LIVE_STATE__ = snapshot;
         (window as any).__ASTRYD_LIVE_STATE__ = snapshot;
         try {
+          localStorage.setItem("biaani_live_state", stateJson);
           localStorage.setItem("astryd_live_state", stateJson);
         } catch {
           // Ignorar cuota de localStorage

@@ -30,6 +30,7 @@ import { drawBusSlash, getBusWidth, isBusLabel } from "./bus_wiring";
 import { CurrentAnimationRenderer } from "./current_animation_renderer";
 import { ThermalHeatmapRenderer } from "./thermal_heatmap_renderer";
 import { renderPinTelemetryHud, renderWireTelemetryHud } from "./hud_inspector";
+import { SchematicSpatialIndex } from "./spatial_index";
 import type {
   BoundingBox,
   ComponentInstance,
@@ -72,15 +73,26 @@ export interface CanvasRenderHost {
   showThermalHeatmap?: boolean;
   showReactiveFields?: boolean;
   showTelemetryHud?: boolean;
+  symbolStandard?: "IEEE" | "IEC";
   transientResults?: readonly { time?: number; nodeVoltages?: Record<string, number>; branchCurrents?: Record<string, number> }[];
   clampCameraOffsets(): void;
   generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[];
   getComponentPins(component: ComponentInstance): PinInstance[];
 }
 
+interface WireTopologyCache {
+  wireCount: number;
+  wireHash: string;
+  nodeMapSize: number;
+  junctions: Point2D[];
+  crossings: Map<string, Point2D[]>;
+}
+
 export class CanvasSceneRenderer {
   public hasOverlayRenderer = false;
+  public readonly spatialIndex = new SchematicSpatialIndex(160);
   private gridPathCache: GridPathCache | null = null;
+  private wireTopologyCache: WireTopologyCache | null = null;
   private currentAnimationRenderer = new CurrentAnimationRenderer();
   private thermalHeatmapRenderer = new ThermalHeatmapRenderer();
 
@@ -118,10 +130,11 @@ export class CanvasSceneRenderer {
     // 1. Draw World Grid
     this.drawWorldGrid(dpr);
 
+    this.spatialIndex.ensureUpdated(this.host.components, this.host.wires);
     const componentById = createComponentLookup(this.host.components);
     const pinCache: RenderPinCache = new Map();
     const visibleWorldBounds = this.getVisibleWorldBounds();
-    const visibleComponents = getVisibleComponents(this.host.components, visibleWorldBounds);
+    const visibleComponents = getVisibleComponents(this.host.components, visibleWorldBounds, this.spatialIndex);
     const selectedIds = createSelectedComponentIds(this.host.selectedComponents);
     const netHighlight = getActiveNetHighlight({
       wires: this.host.wires,
@@ -177,6 +190,7 @@ export class CanvasSceneRenderer {
         voltageMap: _voltageMap,
         branchCurrents,
         showReactiveFields: this.host.showReactiveFields !== false,
+        symbolStandard: comp.symbolStandard ?? this.host.symbolStandard ?? "IEEE",
       });
     }
 
@@ -267,6 +281,42 @@ export class CanvasSceneRenderer {
     return pins;
   }
 
+  private getWireTopology(nodeMap?: Record<string, string>): {
+    junctions: Point2D[];
+    crossings: Map<string, Point2D[]>;
+  } {
+    const wires = this.host.wires;
+    let wireHash = `${wires.length}`;
+    for (let i = 0; i < wires.length; i++) {
+      const w = wires[i];
+      const pts = w.points;
+      wireHash += `|${w.id}:${pts ? pts.length : 0}:${pts && pts.length > 0 ? pts[0].x : 0}`;
+    }
+    const nodeMapSize = nodeMap ? Object.keys(nodeMap).length : 0;
+
+    if (
+      this.wireTopologyCache &&
+      this.wireTopologyCache.wireCount === wires.length &&
+      this.wireTopologyCache.wireHash === wireHash &&
+      this.wireTopologyCache.nodeMapSize === nodeMapSize
+    ) {
+      return this.wireTopologyCache;
+    }
+
+    const junctions = findWireJunctionPoints(wires);
+    const crossings = findWireCrossings(wires, nodeMap);
+
+    this.wireTopologyCache = {
+      wireCount: wires.length,
+      wireHash,
+      nodeMapSize,
+      junctions,
+      crossings,
+    };
+
+    return this.wireTopologyCache;
+  }
+
   private drawWires(
     componentById: ReadonlyMap<string, ComponentInstance>,
     pinCache: RenderPinCache,
@@ -283,9 +333,14 @@ export class CanvasSceneRenderer {
     const selectedWireIds = new Set(this.host.selectedWires.map((w) => w.id));
     if (this.host.selectedWire) selectedWireIds.add(this.host.selectedWire.id);
 
-    const crossingsByWire = findWireCrossings(this.host.wires, nodeMap);
+    const topology = this.getWireTopology(nodeMap);
+    const crossingsByWire = topology.crossings;
 
-    for (const wire of this.host.wires) {
+    const wiresToProcess = this.host.wires.length > 30
+      ? this.spatialIndex.queryVisibleWires(visibleWorldBounds)
+      : this.host.wires;
+
+    for (const wire of wiresToProcess) {
       let startPt: Point2D | undefined;
       if (wire.from.isJunction && wire.from.junctionPos) {
         startPt = wire.from.junctionPos;
@@ -314,11 +369,11 @@ export class CanvasSceneRenderer {
       if (!pts || pts.length < 2) continue;
       if (!this.wirePathIntersects(pts, visibleWorldBounds)) continue;
 
-      // Dibujar camino ortogonal con esquinas redondeadas
+      // Dibujar camino ortogonal con esquinas redondeadas limpias
       this.ctx.beginPath();
       this.ctx.moveTo(pts[0].x, pts[0].y);
 
-      const cornerRadius = 8;
+      const cornerRadius = 6;
       if (pts.length > 2) {
         for (let i = 1; i < pts.length - 1; i++) {
           const p1 = pts[i];
@@ -353,6 +408,21 @@ export class CanvasSceneRenderer {
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 3.8 : 2;
       } else {
+        // Sombreado de potencial si hay tensión disponible durante simulación
+        const fromKey = `${wire.from.componentId}:${wire.from.pinIndex}`;
+        const toKey = `${wire.to.componentId}:${wire.to.pinIndex}`;
+        const v = voltageMap[fromKey] ?? voltageMap[toKey];
+        if (v !== undefined && !isNaN(v) && (this.host.showCurrentAnimation !== false || Object.keys(voltageMap).length > 0)) {
+          if (Math.abs(v) < 0.05) {
+            strokeColor = "#475569"; // Tierra / 0V (Slate profundo)
+          } else if (v >= 4.5) {
+            strokeColor = "#F43F5E"; // Nivel ALTO / VCC (Rojo / Carmesí)
+          } else if (v < -0.5) {
+            strokeColor = "#A855F7"; // Tensión Negativa (Violeta)
+          } else {
+            strokeColor = "#0284C7"; // Señal activa (Cian / Azul cielo)
+          }
+        }
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 3.8 : 2;
       }
@@ -384,15 +454,15 @@ export class CanvasSceneRenderer {
       const jumperPoints = crossingsByWire.get(wire.id);
       if (jumperPoints && jumperPoints.length > 0) {
         for (const jPt of jumperPoints) {
-          this.ctx.fillStyle = "rgba(29, 36, 44, 0.95)";
+          this.ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
           this.ctx.beginPath();
-          this.ctx.arc(jPt.x, jPt.y, 6, 0, Math.PI * 2);
+          this.ctx.arc(jPt.x, jPt.y, 5, 0, Math.PI * 2);
           this.ctx.fill();
 
           this.ctx.strokeStyle = strokeColor;
-          this.ctx.lineWidth = 2;
+          this.ctx.lineWidth = 1.8;
           this.ctx.beginPath();
-          this.ctx.arc(jPt.x, jPt.y, 6, Math.PI, 0, false);
+          this.ctx.arc(jPt.x, jPt.y, 5, Math.PI, 0, false);
           this.ctx.stroke();
         }
       }
@@ -421,10 +491,10 @@ export class CanvasSceneRenderer {
         for (let i = 1; i < pts.length - 1; i++) {
           const pt = pts[i];
           this.ctx.fillStyle = isSelected ? "#38BDF8" : "#5B9FD6";
-          this.ctx.strokeStyle = "#151A20";
+          this.ctx.strokeStyle = "#0F172A";
           this.ctx.lineWidth = 1.5;
           this.ctx.beginPath();
-          this.ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+          this.ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
           this.ctx.fill();
           this.ctx.stroke();
         }
@@ -434,7 +504,7 @@ export class CanvasSceneRenderer {
           const p2 = pts[i + 1];
           const midX = (p1.x + p2.x) / 2;
           const midY = (p1.y + p2.y) / 2;
-          this.ctx.fillStyle = "rgba(91, 159, 214, 0.4)";
+          this.ctx.fillStyle = "rgba(56, 189, 248, 0.3)";
           this.ctx.strokeStyle = isSelected ? "#38BDF8" : "#5B9FD6";
           this.ctx.lineWidth = 1;
           this.ctx.fillRect(midX - 3, midY - 3, 6, 6);
@@ -453,14 +523,13 @@ export class CanvasSceneRenderer {
       }
     }
 
-    // Dibujar Nodos de Unión en T (T-Junction Dots)
-    const junctions = findWireJunctionPoints(this.host.wires);
-    for (const jPt of junctions) {
-      this.ctx.fillStyle = "#F2C94C";
-      this.ctx.strokeStyle = "#151A20";
-      this.ctx.lineWidth = 1;
+    // Dibujar Nodos de Unión en T (T-Junction Dots) con diseño profesional EDA
+    for (const jPt of topology.junctions) {
+      this.ctx.fillStyle = "#64748B";
+      this.ctx.strokeStyle = "#0F172A";
+      this.ctx.lineWidth = 1.5;
       this.ctx.beginPath();
-      this.ctx.arc(jPt.x, jPt.y, 4, 0, Math.PI * 2);
+      this.ctx.arc(jPt.x, jPt.y, 3.5, 0, Math.PI * 2);
       this.ctx.fill();
       this.ctx.stroke();
     }

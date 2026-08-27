@@ -6,11 +6,12 @@
  */
 
 export type GeneratorWaveType = "sine" | "square" | "triangle" | "sawtooth" | "pulse" | "am" | "fm" | "sweep" | "noise" | "dc";
+export type OutputImpedance = "high_z" | "50_ohm";
 
 export interface SignalGeneratorParams {
   waveType: GeneratorWaveType;
   frequency: number;       // Hz (frecuencia central / portadora)
-  amplitude: number;       // V (amplitud pico)
+  amplitude: number;       // V (amplitud pico en bornes abiertos)
   offset: number;          // V (tensión continua offset)
   dutyCycle: number;       // 0.01 .. 0.99 (50% por defecto)
   phase: number;           // Grados (0 .. 360)
@@ -20,6 +21,7 @@ export interface SignalGeneratorParams {
   sweepStartFreq?: number; // Hz (frecuencia inicial para Sweep)
   sweepEndFreq?: number;   // Hz (frecuencia final para Sweep)
   sweepTime?: number;      // s (duración del ciclo de barrido, ej: 0.1 s)
+  outputImpedance?: OutputImpedance; // 50 ohm vs High-Z
   enabled: boolean;        // Salida activa o en espera
 }
 
@@ -30,6 +32,7 @@ export interface WaveformMetrics {
   vmax: number;            // Voltaje Máximo (V)
   vmin: number;            // Voltaje Mínimo (V)
   period: number;          // Período T (s)
+  dbm50?: number;          // Potencia en dBm sobre carga de 50 ohms
 }
 
 export interface SignalPreset {
@@ -42,46 +45,53 @@ export interface SignalPreset {
 
 export const GENERATOR_PRESETS: readonly SignalPreset[] = [
   {
-    id: "sine_1khz",
-    name: "1 kHz Senoidal (5 Vpk)",
-    description: "Tono de referencia estándar para pruebas de audio y filtros",
+    id: "audio_1khz_1vpp",
+    name: "Audio 1 kHz (1.0 Vpp)",
+    description: "Tono estándar de calibración de audio profesional y bancos de prueba",
     category: "audio",
-    params: { waveType: "sine", frequency: 1000, amplitude: 5, offset: 0, phase: 0 },
+    params: { waveType: "sine", frequency: 1000, amplitude: 0.5, offset: 0, phase: 0 },
   },
   {
-    id: "clock_10mhz",
-    name: "10 MHz Clock (TTL 3.3V)",
-    description: "Señal de reloj digital CMOS/TTL con offset de 1.65V",
+    id: "ttl_clock_1mhz",
+    name: "Clock TTL 1 MHz (0-5V)",
+    description: "Señal de reloj para lógica TTL de 5V estándar (Duty 50%)",
+    category: "clock",
+    params: { waveType: "square", frequency: 1_000_000, amplitude: 2.5, offset: 2.5, dutyCycle: 0.5 },
+  },
+  {
+    id: "cmos_clock_10mhz",
+    name: "Clock CMOS 10 MHz (0-3.3V)",
+    description: "Reloj para microcontroladores y lógica LVCMOS 3.3V",
     category: "clock",
     params: { waveType: "square", frequency: 10_000_000, amplitude: 1.65, offset: 1.65, dutyCycle: 0.5 },
   },
   {
-    id: "mains_60hz",
-    name: "60 Hz AC (120 Vrms)",
-    description: "Red eléctrica de corriente alterna (170 Vpk)",
+    id: "mains_50hz_230v",
+    name: "Red Eléctrica 50 Hz (230 Vrms)",
+    description: "Línea de red europea/internacional (325.3 Vpk)",
+    category: "power",
+    params: { waveType: "sine", frequency: 50, amplitude: 325.27, offset: 0, phase: 0 },
+  },
+  {
+    id: "mains_60hz_120v",
+    name: "Red Eléctrica 60 Hz (120 Vrms)",
+    description: "Línea de red americana/nacional (169.7 Vpk)",
     category: "power",
     params: { waveType: "sine", frequency: 60, amplitude: 169.7, offset: 0, phase: 0 },
   },
   {
-    id: "audio_440hz",
-    name: "440 Hz (Nota La4)",
-    description: "Frecuencia patrón de afinación musical",
+    id: "smps_ripple_100khz",
+    name: "Rizado SMPS 100 kHz (50 mVpp)",
+    description: "Simulación de rizado de conmutación en fuentes DC de 5V",
+    category: "power",
+    params: { waveType: "sawtooth", frequency: 100_000, amplitude: 0.025, offset: 5.0 },
+  },
+  {
+    id: "audio_sweep_20_20k",
+    name: "Barrido Audio 20 Hz - 20 kHz",
+    description: "Chirp logarítmico para caracterización de respuesta acústica y filtros",
     category: "audio",
-    params: { waveType: "sine", frequency: 440, amplitude: 2.5, offset: 0, phase: 0 },
-  },
-  {
-    id: "pwm_10khz_75",
-    name: "PWM 10 kHz (Duty 75%)",
-    description: "Control de modulación por ancho de pulsos para drivers y potencia",
-    category: "test",
-    params: { waveType: "square", frequency: 10_000, amplitude: 2.5, offset: 2.5, dutyCycle: 0.75 },
-  },
-  {
-    id: "ramp_100hz",
-    name: "Rampa 100 Hz (Lineal)",
-    description: "Diente de sierra lineal para barridos de osciloscopio y moduladores",
-    category: "test",
-    params: { waveType: "sawtooth", frequency: 100, amplitude: 5, offset: 0 },
+    params: { waveType: "sweep", frequency: 1000, amplitude: 1.0, offset: 0, sweepStartFreq: 20, sweepEndFreq: 20_000, sweepTime: 0.5 },
   },
   {
     id: "am_carrier_100khz",
@@ -91,6 +101,23 @@ export const GENERATOR_PRESETS: readonly SignalPreset[] = [
     params: { waveType: "am", frequency: 100_000, amplitude: 4, offset: 0, modFrequency: 1000, modIndex: 0.8 },
   },
 ] as const;
+
+/**
+ * Convierte tensión eficaz (Vrms) a potencia en dBm sobre carga normalizada de 50 ohmios.
+ */
+export function voltsRmsToDbm50(vrms: number): number {
+  if (vrms <= 0 || !Number.isFinite(vrms)) return -100;
+  const pWatts = (vrms * vrms) / 50.0;
+  return 10.0 * Math.log10(pWatts / 0.001);
+}
+
+/**
+ * Convierte potencia en dBm (50 ohmios) a tensión eficaz (Vrms).
+ */
+export function dbm50ToVoltsRms(dbm: number): number {
+  const pWatts = Math.pow(10, (dbm - 30.0) / 10.0);
+  return Math.sqrt(pWatts * 50.0);
+}
 
 /**
  * Evalúa el valor instantáneo de la señal en el instante de tiempo t (en segundos).
@@ -238,13 +265,17 @@ export function calculateSignalMetrics(params: SignalGeneratorParams): WaveformM
       break;
   }
 
+  const effectiveVrms = params.outputImpedance === "50_ohm" ? vrms / 2.0 : vrms;
+  const dbm50 = voltsRmsToDbm50(effectiveVrms);
+
   return {
-    vpp: Number.isFinite(vpp) ? vpp : 0,
-    vrms: Number.isFinite(vrms) ? vrms : 0,
-    vavg: Number.isFinite(vavg) ? vavg : 0,
-    vmax: Number.isFinite(vmax) ? vmax : 0,
-    vmin: Number.isFinite(vmin) ? vmin : 0,
+    vpp: Number.isFinite(vpp) ? (params.outputImpedance === "50_ohm" ? vpp / 2 : vpp) : 0,
+    vrms: Number.isFinite(effectiveVrms) ? effectiveVrms : 0,
+    vavg: Number.isFinite(vavg) ? (params.outputImpedance === "50_ohm" ? vavg / 2 : vavg) : 0,
+    vmax: Number.isFinite(vmax) ? (params.outputImpedance === "50_ohm" ? vmax / 2 : vmax) : 0,
+    vmin: Number.isFinite(vmin) ? (params.outputImpedance === "50_ohm" ? vmin / 2 : vmin) : 0,
     period: Number.isFinite(period) ? period : 0,
+    dbm50: Number.isFinite(dbm50) ? dbm50 : -100,
   };
 }
 

@@ -238,7 +238,7 @@
         {
           "name": "exportKind",
           "type": "enum",
-          "values": ["support-bundle", "touchstone", "csv", "svg", "hdf5", "pdf"]
+          "values": ["support-bundle", "touchstone", "csv", "svg", "hdf5", "pdf", "json"]
         },
         { "name": "itemCount", "type": "integer", "min": 0, "max": 2000000 },
         { "name": "redactionCount", "type": "integer", "min": 0, "max": 2000000 }

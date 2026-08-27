@@ -1,3 +1,4 @@
+import type { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { ERCResult } from "../simulation/simulation_dispatcher";
 import type { CircuitNetlist } from "../simulation/netlist_extractor";
 import type { AnalysisMode } from "../ui/simulation_controls";
@@ -6,6 +7,7 @@ import {
   evaluateAdvisor,
   type AdvisorRecommendation,
 } from "./advisor";
+import { applyTopologicalFix } from "./topological_fixes";
 import {
   recordRecommendationOutcome,
   recordRecommendationShown,
@@ -87,6 +89,19 @@ export function applyRecommendation(recommendationId: string): boolean {
   applied.set(recommendationId, { recommendation, previous });
   recordRecommendationOutcome(recommendationId, "accepted", true);
   return true;
+}
+
+export function applyTopologicalRecommendation(
+  orchestrator: CanvasOrchestrator,
+  recommendationId: string,
+): boolean {
+  const recommendation = currentRecommendations.find((item) => item.recommendationId === recommendationId);
+  if (!recommendation || !recommendation.topologicalPatch) return false;
+  const success = applyTopologicalFix(orchestrator, recommendation.topologicalPatch);
+  if (success) {
+    recordRecommendationOutcome(recommendationId, "accepted", true);
+  }
+  return success;
 }
 
 export function undoRecommendation(recommendationId: string): boolean {

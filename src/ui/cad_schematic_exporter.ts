@@ -198,28 +198,89 @@ export function buildCadSchematicSvg(
     svg += `  <g id="layer-annotations">\n`;
     for (const comp of components) {
       if (comp.type === "net_label") {
-        const tType = comp.terminalType || (["GND", "0", "0V", "TIERRA", "GROUND"].includes(String(comp.label || comp.value || "").toUpperCase()) ? "ground" : (comp.voltage !== undefined || /^[+-]?\d+(\.\d+)?V?$/i.test(String(comp.label || comp.value || "")) ? "power" : "signal"));
+        const tType = comp.terminalType || (["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "EARTH", "CHASSIS"].includes(String(comp.label || comp.value || "").toUpperCase()) ? "ground" : (comp.voltage !== undefined || /^[+-]?\d+(\.\d+)?V?$/i.test(String(comp.label || comp.value || "")) ? "power" : "signal"));
         const netName = String(comp.label || comp.value || "NET");
-        svg += `    <g transform="translate(${comp.x}, ${comp.y})">\n`;
+        const rot = comp.rotation || 0;
+        const textLen = Math.max(26, netName.length * 7.5);
+        const totalW = textLen + 18;
+
+        svg += `    <g transform="translate(${comp.x}, ${comp.y}) rotate(${rot})">\n`;
         if (tType === "power") {
-          svg += `      <line x1="0" y1="0" x2="0" y2="-14" stroke="#F59E0B" stroke-width="1.8" />\n`;
-          svg += `      <polygon points="-6,-14 0,-22 6,-14" fill="#F59E0B" stroke="#F59E0B" stroke-width="1.2" />\n`;
-          svg += `      <text x="0" y="-25" text-anchor="middle" font-weight="bold" font-size="10" fill="#F59E0B">${netName}</text>\n`;
+          svg += `      <line x1="0" y1="0" x2="0" y2="-12" stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round" />\n`;
+          svg += `      <polygon points="-6,-12 0,-21 6,-12" fill="#F59E0B" stroke="#F59E0B" stroke-width="1.2" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2.5" fill="#F59E0B" />\n`;
+          svg += `      <text x="0" y="-26" text-anchor="middle" font-weight="bold" font-size="10" font-family="monospace" fill="#F59E0B">${netName}</text>\n`;
         } else if (tType === "ground") {
-          svg += `      <line x1="0" y1="0" x2="0" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
-          svg += `      <line x1="-11" y1="10" x2="11" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
-          svg += `      <line x1="-7" y1="14" x2="7" y2="14" stroke="#10B981" stroke-width="1.8" />\n`;
-          svg += `      <line x1="-3" y1="18" x2="3" y2="18" stroke="#10B981" stroke-width="1.8" />\n`;
-          svg += `      <text x="0" y="28" text-anchor="middle" font-weight="bold" font-size="9" fill="#10B981">${netName}</text>\n`;
+          const gStyle = comp.terminalStyle || (["EARTH", "PE"].includes(netName.toUpperCase()) ? "earth" : ["CHASSIS", "CHASIS"].includes(netName.toUpperCase()) ? "chassis" : "standard");
+          svg += `      <line x1="0" y1="0" x2="0" y2="10" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" />\n`;
+          if (gStyle === "earth") {
+            svg += `      <line x1="-11" y1="10" x2="11" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="-7" y1="14" x2="7" y2="14" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="-3" y1="18" x2="3" y2="18" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <circle cx="0" cy="13" r="13" fill="none" stroke="#10B981" stroke-width="1.5" />\n`;
+            svg += `      <text x="0" y="32" text-anchor="middle" font-weight="bold" font-size="9" font-family="monospace" fill="#10B981">${netName}</text>\n`;
+          } else if (gStyle === "chassis") {
+            svg += `      <line x1="-10" y1="10" x2="10" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="-7" y1="10" x2="-12" y2="17" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="0" y1="10" x2="-5" y2="17" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="7" y1="10" x2="2" y2="17" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <text x="0" y="26" text-anchor="middle" font-weight="bold" font-size="9" font-family="monospace" fill="#10B981">${netName}</text>\n`;
+          } else {
+            svg += `      <line x1="-11" y1="10" x2="11" y2="10" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="-7" y1="14" x2="7" y2="14" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <line x1="-3" y1="18" x2="3" y2="18" stroke="#10B981" stroke-width="1.8" />\n`;
+            svg += `      <text x="0" y="27" text-anchor="middle" font-weight="bold" font-size="9" font-family="monospace" fill="#10B981">${netName}</text>\n`;
+          }
+          svg += `      <circle cx="0" cy="0" r="2.5" fill="#10B981" />\n`;
+        } else if (tType === "input") {
+          svg += `      <polygon points="0,0 8,-10 ${totalW},-10 ${totalW},10 8,10" fill="rgba(49, 46, 129, 0.9)" stroke="#818CF8" stroke-width="1.5" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2.5" fill="#818CF8" />\n`;
+          svg += `      <text x="${8 + (totalW - 8) / 2}" y="3.5" text-anchor="middle" font-weight="bold" font-size="10" font-family="monospace" fill="#E0E7FF">${netName}</text>\n`;
+        } else if (tType === "output") {
+          svg += `      <polygon points="0,-10 ${totalW - 8},-10 ${totalW},0 ${totalW - 8},10 0,10" fill="rgba(6, 78, 59, 0.85)" stroke="#34D399" stroke-width="1.5" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2.5" fill="#34D399" />\n`;
+          svg += `      <text x="${(totalW - 8) / 2}" y="3.5" text-anchor="middle" font-weight="bold" font-size="10" font-family="monospace" fill="#E2E8F0">${netName}</text>\n`;
+        } else if (tType === "bidirectional") {
+          const bW = totalW + 8;
+          svg += `      <polygon points="0,0 8,-11 ${bW - 8},-11 ${bW},0 ${bW - 8},11 8,11" fill="rgba(88, 28, 135, 0.9)" stroke="#A855F7" stroke-width="1.5" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2.5" fill="#A855F7" />\n`;
+          svg += `      <text x="${bW / 2}" y="3.5" text-anchor="middle" font-weight="bold" font-size="9" font-family="monospace" fill="#F3E8FF">&lt; ${netName} &gt;</text>\n`;
+        } else if (tType === "bus_tap") {
+          svg += `      <polygon points="0,0 9,-12 ${totalW + 4},-12 ${totalW + 4},12 9,12" fill="rgba(120, 53, 15, 0.9)" stroke="#F59E0B" stroke-width="2.0" />\n`;
+          svg += `      <circle cx="0" cy="0" r="3" fill="#F59E0B" />\n`;
+          svg += `      <text x="${9 + (totalW - 5) / 2}" y="3.5" text-anchor="middle" font-weight="bold" font-size="9" font-family="monospace" fill="#FEF3C7">${netName}</text>\n`;
+        } else if (tType === "test_point") {
+          svg += `      <circle cx="0" cy="0" r="7" fill="rgba(251, 191, 36, 0.3)" stroke="#FBBF24" stroke-width="1.6" />\n`;
+          svg += `      <line x1="-9" y1="0" x2="9" y2="0" stroke="#FBBF24" stroke-width="1.2" />\n`;
+          svg += `      <line x1="0" y1="-9" x2="0" y2="9" stroke="#FBBF24" stroke-width="1.2" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2" fill="#FBBF24" />\n`;
+          svg += `      <text x="0" y="-14" text-anchor="middle" font-weight="bold" font-size="9" font-family="monospace" fill="#FDE68A">${netName}</text>\n`;
+        } else if (tType === "no_connect") {
+          svg += `      <line x1="-6" y1="-6" x2="6" y2="6" stroke="#EF4444" stroke-width="2.0" stroke-linecap="round" />\n`;
+          svg += `      <line x1="-6" y1="6" x2="6" y2="-6" stroke="#EF4444" stroke-width="2.0" stroke-linecap="round" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2" fill="#EF4444" />\n`;
+          svg += `      <text x="12" y="3" font-weight="bold" font-size="8" font-family="monospace" fill="#FCA5A5">NC</text>\n`;
         } else {
-          svg += `      <polygon points="0,0 8,-10 40,-10 40,10 8,10" fill="${palette.netLabelBg}" stroke="${palette.netLabelBorder}" stroke-width="1.2" />\n`;
-          svg += `      <text x="24" y="3.5" text-anchor="middle" font-weight="bold" font-size="10" fill="${palette.netLabelText}">${netName}</text>\n`;
+          svg += `      <polygon points="0,0 8,-10 ${totalW},-10 ${totalW},10 8,10" fill="${palette.netLabelBg}" stroke="${palette.netLabelBorder}" stroke-width="1.4" />\n`;
+          svg += `      <circle cx="0" cy="0" r="2.5" fill="${palette.netLabelBorder}" />\n`;
+          svg += `      <text x="${8 + (totalW - 8) / 2}" y="3.5" text-anchor="middle" font-weight="bold" font-size="10" font-family="monospace" fill="${palette.netLabelText}">${netName}</text>\n`;
         }
         svg += `    </g>\n`;
       } else if (comp.type === "text_note") {
         const noteText = String(comp.value || comp.label || "Nota");
+        const lines = noteText.split("\n");
+        const fontSize = comp.fontSize || 12;
+        const lineHeight = fontSize * 1.38;
+        const maxLen = Math.max(...lines.map(l => l.length));
+        const boxW = Math.max(80, maxLen * fontSize * 0.6 + 28);
+        const boxH = Math.max(36, lines.length * lineHeight + 24);
+
         svg += `    <g transform="translate(${comp.x}, ${comp.y})">\n`;
-        svg += `      <text x="0" y="0" font-size="${comp.fontSize || 12}" fill="${palette.componentText}" font-family="sans-serif">${noteText}</text>\n`;
+        svg += `      <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="6" fill="${palette.componentBody}" stroke="${palette.componentStroke}" stroke-width="1.2" />\n`;
+        svg += `      <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="3.5" rx="2" fill="${palette.titleBlockAccent}" />\n`;
+        lines.forEach((line, idx) => {
+          svg += `      <text x="${-boxW / 2 + 14}" y="${-boxH / 2 + 16 + idx * lineHeight}" font-size="${fontSize}" fill="${palette.componentText}" font-family="sans-serif">${line}</text>\n`;
+        });
         svg += `    </g>\n`;
       }
     }
@@ -246,8 +307,8 @@ export function buildCadSchematicSvg(
 
     // Fila 1: Título y Organización
     svg += `    <text x="10" y="14" class="cad-title-header">PROYECTO / ESQUEMA:</text>\n`;
-    svg += `    <text x="10" y="25" class="cad-title-val" font-size="12">${info.title || "Circuito Astryd Sophia"}</text>\n`;
-    svg += `    <text x="${tbW - 10}" y="20" text-anchor="end" class="cad-title-header">${info.organization || "ASTRYD SOPHIA CAD"}</text>\n`;
+    svg += `    <text x="10" y="25" class="cad-title-val" font-size="12">${info.title || "Circuito Biaani"}</text>\n`;
+    svg += `    <text x="${tbW - 10}" y="20" text-anchor="end" class="cad-title-header">${info.organization || "BIAANI"}</text>\n`;
 
     // Fila 2: Diseñador y Aprobación
     svg += `    <text x="10" y="42" class="cad-title-header">DISEÑADOR / AUTOR:</text>\n`;

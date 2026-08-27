@@ -8,6 +8,7 @@
 
 import type { EyeDiagramResult, EyeMaskDefinition } from "../simulation/eye_diagram_model";
 import { formatSpiceValue } from "../simulation/spice_value_parser";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface EyeRenderOptions {
   width: number;
@@ -51,8 +52,10 @@ export function drawEyeDiagram(
     colorScheme = "cyan_phosphor",
   } = options;
 
+  const theme = getInstrumentThemeColors();
+
   // 1. Limpieza de pantalla
-  ctx.fillStyle = "#030508";
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   if (width <= 60 || height <= 60) return;
@@ -66,7 +69,7 @@ export function drawEyeDiagram(
   const plotH = height - topMargin - bottomMargin;
 
   // 2. Fondo del Área de Trazado
-  ctx.fillStyle = "rgba(4, 9, 20, 0.95)";
+  ctx.fillStyle = theme.plotAreaBg;
   ctx.fillRect(leftMargin, topMargin, plotW, plotH);
 
   // 3. Cuadrícula Reticular de Intervalos Unitarios (UI)
@@ -74,7 +77,7 @@ export function drawEyeDiagram(
   const numDivsX = 8;
   const numDivsY = 6;
 
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.12)";
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
 
   for (let d = 0; d <= numDivsX; d++) {

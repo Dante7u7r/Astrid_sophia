@@ -72,4 +72,58 @@ describe("initAppKeyboardShortcuts", () => {
 
     expect(tabManager.createNewTab).not.toHaveBeenCalled();
   });
+
+  it("abre la guía interactiva con F1", () => {
+    const onOpenGuide = vi.fn();
+
+    initAppKeyboardShortcuts({
+      getTabManager: () => null,
+      getPanelLayoutManager: () => null,
+      getSidePanelController: () => null,
+      isTypingInFormField: () => false,
+      getOpenCircuitButton: () => null,
+      onOpenGuide,
+    });
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F1" }));
+    expect(onOpenGuide).toHaveBeenCalledOnce();
+  });
+
+  it("abre el modal de feedback con F7 o Ctrl+Shift+B", () => {
+    const onOpenFeedback = vi.fn();
+
+    initAppKeyboardShortcuts({
+      getTabManager: () => null,
+      getPanelLayoutManager: () => null,
+      getSidePanelController: () => null,
+      isTypingInFormField: () => false,
+      getOpenCircuitButton: () => null,
+      onOpenFeedback,
+    });
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F7" }));
+    expect(onOpenFeedback).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, shiftKey: true }));
+    expect(onOpenFeedback).toHaveBeenCalledTimes(2);
+  });
+
+  it("activa el modo Zen / Pantalla Completa con F11 o Ctrl+Shift+F", () => {
+    const onToggleZenMode = vi.fn();
+
+    initAppKeyboardShortcuts({
+      getTabManager: () => null,
+      getPanelLayoutManager: () => null,
+      getSidePanelController: () => null,
+      isTypingInFormField: () => false,
+      getOpenCircuitButton: () => null,
+      onToggleZenMode,
+    });
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F11" }));
+    expect(onToggleZenMode).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, shiftKey: true }));
+    expect(onToggleZenMode).toHaveBeenCalledTimes(2);
+  });
 });

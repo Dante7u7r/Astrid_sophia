@@ -82,7 +82,7 @@ describe("corner_analysis_model", () => {
     expect(report.yieldPercent).toBe(50.0);
 
     const csv = exportCornerAnalysisToCsv(report);
-    expect(csv).toContain("# Dashboard de Análisis de Esquinas PVT - Astryd Sophia");
+    expect(csv).toContain("# Dashboard de Análisis de Esquinas PVT - Biaani");
     expect(csv).toContain("Rendimiento (Yield): 50.0%");
     expect(csv).toContain("TT,27,1.00,SI,PASS");
     expect(csv).toContain("SS,-40,0.90,SI,FAIL");

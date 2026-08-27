@@ -1,4 +1,4 @@
-//! WebAssembly Solver Bridge for Astryd Sophia
+//! WebAssembly Solver Bridge for Biaani
 //! Loads and runs high-performance Rust MNA solver compiled to WASM in browser environments
 
 import type { CircuitNetlist } from "./netlist_extractor";
@@ -28,7 +28,10 @@ export async function initWasmSolver(): Promise<boolean> {
   try {
     // Attempt dynamic import if wasm package is available
     // @ts-expect-error - wasm module is dynamically loaded or bundled
-    const wasm = await import("./wasm_pkg/astryd_sophia_wasm.js").catch(() => null);
+    const wasm = await import("./wasm_pkg/biaani_wasm.js").catch(async () => {
+      // @ts-expect-error - fallback legacy path
+      return await import("./wasm_pkg/astryd_sophia_wasm.js").catch(() => null);
+    });
     if (wasm && typeof wasm.solve_dc_wasm_core === "function") {
       wasmModule = wasm;
       return true;

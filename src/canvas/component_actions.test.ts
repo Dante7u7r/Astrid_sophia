@@ -4,6 +4,7 @@ import {
   createComponent,
   duplicateSelection,
   mirrorSelection,
+  mirrorSelectionVertical,
   removeSelection,
   renameComponentInCircuit,
   rotateSelection,
@@ -57,17 +58,20 @@ describe("component_actions", () => {
     expect(r1.id).toBe("R1");
   });
 
-  it("rota y espeja la seleccion activa", () => {
+  it("rota y espeja la seleccion activa horizontal y verticalmente", () => {
     const r1 = component("R1");
     const r2 = component("R2");
 
     rotateSelection([r1, r2], null, -90);
     mirrorSelection([r1, r2], null);
+    mirrorSelectionVertical([r1, r2], null);
 
     expect(r1.rotation).toBe(270);
     expect(r2.rotation).toBe(270);
     expect(r1.mirror).toBe(true);
     expect(r2.mirror).toBe(true);
+    expect(r1.mirrorY).toBe(true);
+    expect(r2.mirrorY).toBe(true);
   });
 
   it("duplica una seleccion multiple y mueve el foco a los clones", () => {

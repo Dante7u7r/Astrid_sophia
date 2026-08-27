@@ -61,6 +61,15 @@ export interface OpampCommercialModel {
   readonly rout: number;     // Resistencia de salida (Ohm)
   readonly vos: number;      // Tensión de offset típica (V)
   readonly ib?: number;      // Corriente de polarización de entrada típica (A)
+  readonly ios?: number;     // Corriente de offset de entrada (A)
+  readonly iq?: number;      // Corriente de alimentación en reposo (A)
+  readonly isc?: number;     // Límite de corriente de cortocircuito (A)
+  readonly vdrop?: number;   // Caída de tensión a riel de alimentación (V)
+  readonly cmrr?: number;    // Rechazo de modo común CMRR (dB)
+  readonly psrr?: number;    // Rechazo de rizado de fuente PSRR (dB)
+  readonly en?: number;      // Densidad espectral de ruido de tensión (V/sqrt(Hz))
+  readonly in?: number;      // Densidad espectral de ruido de corriente (A/sqrt(Hz))
+  readonly fc?: number;      // Frecuencia de esquina de ruido 1/f (Hz)
 }
 
 export const COMMERCIAL_DIODES: Record<string, DiodeCommercialModel> = {
@@ -112,6 +121,40 @@ export const COMMERCIAL_DIODES: Record<string, DiodeCommercialModel> = {
     ibv: 1e-3,
     forwardVoltage: 0.36,
   },
+  "1N5817": {
+    name: "1N5817",
+    description: "Diodo Schottky de ultra-baja caída directa (20V, 1A, VF~0.32V)",
+    is: 4.5e-5,
+    rs: 0.045,
+    n: 1.040,
+    cjo: 125.0e-12,
+    tt: 1.0e-9,
+    bv: 20.0,
+    ibv: 1e-3,
+    forwardVoltage: 0.32,
+  },
+  "BAT54": {
+    name: "BAT54",
+    description: "Diodo Schottky SMD de conmutación ultra-rápida (30V, 200mA, trr<5ns)",
+    is: 2.1e-7,
+    rs: 1.2,
+    n: 1.08,
+    cjo: 10.0e-12,
+    tt: 5.0e-9,
+    bv: 30.0,
+    ibv: 1e-4,
+    forwardVoltage: 0.32,
+  },
+  "BZX55C3V3": {
+    name: "BZX55C3V3",
+    description: "Diodo Zener regulador de tensión (3.3V, 500mW)",
+    is: 1.0e-12,
+    rs: 2.0,
+    n: 1.15,
+    bv: 3.3,
+    ibv: 5e-3,
+    forwardVoltage: 0.70,
+  },
   "BZX55C5V1": {
     name: "BZX55C5V1",
     description: "Diodo Zener regulador de tensión (5.1V, 500mW)",
@@ -131,6 +174,36 @@ export const COMMERCIAL_DIODES: Record<string, DiodeCommercialModel> = {
     bv: 12.0,
     ibv: 5e-3,
     forwardVoltage: 0.70,
+  },
+  "1N4728A": {
+    name: "1N4728A",
+    description: "Diodo Zener de potencia 1W (3.3V, 1W)",
+    is: 1.0e-11,
+    rs: 1.0,
+    n: 1.2,
+    bv: 3.3,
+    ibv: 10e-3,
+    forwardVoltage: 0.75,
+  },
+  "1N4733A": {
+    name: "1N4733A",
+    description: "Diodo Zener de potencia 1W (5.1V, 1W)",
+    is: 1.0e-11,
+    rs: 0.4,
+    n: 1.15,
+    bv: 5.1,
+    ibv: 10e-3,
+    forwardVoltage: 0.75,
+  },
+  "1N4742A": {
+    name: "1N4742A",
+    description: "Diodo Zener de potencia 1W (12V, 1W)",
+    is: 1.0e-11,
+    rs: 0.8,
+    n: 1.15,
+    bv: 12.0,
+    ibv: 10e-3,
+    forwardVoltage: 0.75,
   },
   "LED_RED": {
     name: "LED_RED",
@@ -156,13 +229,45 @@ export const COMMERCIAL_DIODES: Record<string, DiodeCommercialModel> = {
     n: 2.5,
     forwardVoltage: 3.20,
   },
+  "LED_YELLOW": {
+    name: "LED_YELLOW",
+    description: "Diodo Emisor de Luz Amarillo (λ=590nm, VF=2.1V, 20mA)",
+    is: 5.0e-19,
+    rs: 2.8,
+    n: 2.0,
+    forwardVoltage: 2.10,
+  },
+  "LED_WHITE": {
+    name: "LED_WHITE",
+    description: "Diodo Emisor de Luz Blanco (Fósforo, VF=3.0V, 20mA)",
+    is: 1.0e-21,
+    rs: 4.0,
+    n: 2.4,
+    forwardVoltage: 3.00,
+  },
+  "LED_UV": {
+    name: "LED_UV",
+    description: "Diodo Emisor de Luz Ultravioleta (λ=395nm, VF=3.5V, 20mA)",
+    is: 1.0e-23,
+    rs: 5.0,
+    n: 2.8,
+    forwardVoltage: 3.50,
+  },
+  "LED_IR": {
+    name: "LED_IR",
+    description: "Diodo Emisor Infrarrojo (λ=940nm, VF=1.2V, 50mA)",
+    is: 1.0e-15,
+    rs: 1.5,
+    n: 1.5,
+    forwardVoltage: 1.25,
+  },
 };
 
 export const COMMERCIAL_BJTS: Record<string, BjtCommercialModel> = {
   "2N2222": {
     name: "2N2222",
     polarity: "npn",
-    description: "Transistor NPN de propósito general y conmutación rápida",
+    description: "Transistor NPN de propósito general y conmutación rápida (40V, 800mA)",
     is: 1.434e-14,
     bf: 255.9,
     vaf: 74.03,
@@ -174,7 +279,7 @@ export const COMMERCIAL_BJTS: Record<string, BjtCommercialModel> = {
   "2N3904": {
     name: "2N3904",
     polarity: "npn",
-    description: "Transistor NPN de pequeña señal y bajo ruido",
+    description: "Transistor NPN de pequeña señal y bajo ruido (40V, 200mA)",
     is: 6.734e-15,
     bf: 416.4,
     vaf: 74.03,
@@ -186,7 +291,7 @@ export const COMMERCIAL_BJTS: Record<string, BjtCommercialModel> = {
   "BC547": {
     name: "BC547",
     polarity: "npn",
-    description: "Transistor NPN estándar europeo para preamplificación",
+    description: "Transistor NPN estándar europeo para preamplificación (45V, 100mA)",
     is: 1.8e-15,
     bf: 300.0,
     vaf: 90.0,
@@ -195,30 +300,78 @@ export const COMMERCIAL_BJTS: Record<string, BjtCommercialModel> = {
     cje: 11.0e-12,
     cjc: 4.5e-12,
   },
+  "BC548": {
+    name: "BC548",
+    polarity: "npn",
+    description: "Transistor NPN de audio y propósito general (30V, 100mA)",
+    is: 1.8e-15,
+    bf: 280.0,
+    vaf: 80.0,
+    rb: 20.0,
+    rc: 2.0,
+    cje: 11.0e-12,
+    cjc: 4.5e-12,
+  },
+  "BC549": {
+    name: "BC549",
+    polarity: "npn",
+    description: "Transistor NPN de ultra-bajo ruido para preamplificadores (30V, 100mA)",
+    is: 1.8e-15,
+    bf: 450.0,
+    vaf: 90.0,
+    rb: 15.0,
+    rc: 1.5,
+    cje: 11.0e-12,
+    cjc: 4.5e-12,
+  },
   "BD139": {
     name: "BD139",
     polarity: "npn",
-    description: "Transistor NPN Driver de potencia media (80V, 1.5A)",
+    description: "Transistor NPN Driver de potencia media (80V, 1.5A, 12.5W)",
     is: 2.2e-13,
     bf: 120.0,
     vaf: 100.0,
     rb: 3.0,
     rc: 0.3,
   },
+  "TIP31C": {
+    name: "TIP31C",
+    polarity: "npn",
+    description: "Transistor NPN de potencia para fuentes y amplificadores (100V, 3A, 40W)",
+    is: 1.5e-12,
+    bf: 50.0,
+    vaf: 100.0,
+    rb: 2.0,
+    rc: 0.15,
+    cje: 120e-12,
+    cjc: 60e-12,
+  },
   "TIP120": {
     name: "TIP120",
     polarity: "npn",
-    description: "Transistor Darlington NPN de potencia (60V, 5A, Beta 1000)",
+    description: "Transistor Darlington NPN de potencia (60V, 5A, Beta 1000, 65W)",
     is: 1.0e-12,
     bf: 1000.0,
     vaf: 50.0,
     rb: 50.0,
     rc: 0.2,
   },
+  "2N3055": {
+    name: "2N3055",
+    polarity: "npn",
+    description: "Transistor NPN de alta potencia clásico en TO-3 (60V, 15A, 115W)",
+    is: 5.0e-11,
+    bf: 40.0,
+    vaf: 70.0,
+    rb: 0.8,
+    rc: 0.05,
+    cje: 450e-12,
+    cjc: 220e-12,
+  },
   "2N3906": {
     name: "2N3906",
     polarity: "pnp",
-    description: "Transistor PNP complementario de 2N3904",
+    description: "Transistor PNP complementario de 2N3904 (-40V, -200mA)",
     is: 1.41e-15,
     bf: 180.7,
     vaf: 18.7,
@@ -227,29 +380,93 @@ export const COMMERCIAL_BJTS: Record<string, BjtCommercialModel> = {
     cje: 4.5e-12,
     cjc: 3.6e-12,
   },
+  "2N2907": {
+    name: "2N2907",
+    polarity: "pnp",
+    description: "Transistor PNP complementario de 2N2222 (-60V, -600mA)",
+    is: 1.434e-14,
+    bf: 200.0,
+    vaf: 60.0,
+    rb: 10.0,
+    rc: 1.0,
+    cje: 25.0e-12,
+    cjc: 8.0e-12,
+  },
   "BC557": {
     name: "BC557",
     polarity: "pnp",
-    description: "Transistor PNP complementario de BC547",
+    description: "Transistor PNP complementario de BC547 (-45V, -100mA)",
     is: 1.8e-15,
     bf: 250.0,
     vaf: 70.0,
     rb: 20.0,
     rc: 2.0,
   },
+  "BC558": {
+    name: "BC558",
+    polarity: "pnp",
+    description: "Transistor PNP complementario de BC548 (-30V, -100mA)",
+    is: 1.8e-15,
+    bf: 220.0,
+    vaf: 60.0,
+    rb: 20.0,
+    rc: 2.0,
+  },
   "BD140": {
     name: "BD140",
     polarity: "pnp",
-    description: "Transistor PNP Driver complementario de BD139",
+    description: "Transistor PNP Driver complementario de BD139 (-80V, -1.5A)",
     is: 2.2e-13,
     bf: 120.0,
     vaf: 100.0,
     rb: 3.0,
     rc: 0.3,
   },
+  "TIP32C": {
+    name: "TIP32C",
+    polarity: "pnp",
+    description: "Transistor PNP de potencia complementario de TIP31C (-100V, -3A)",
+    is: 1.5e-12,
+    bf: 50.0,
+    vaf: 100.0,
+    rb: 2.0,
+    rc: 0.15,
+    cje: 130e-12,
+    cjc: 70e-12,
+  },
 };
 
 export const COMMERCIAL_MOSFETS: Record<string, MosfetCommercialModel> = {
+  "2N7000": {
+    name: "2N7000",
+    polarity: "nmos",
+    description: "MOSFET Canal N de señal pequeña (60V, 200mA, RDSon 5Ω)",
+    vth: 2.1,
+    ron: 5.0,
+    wOverL: 100.0,
+    cgs: 60e-12,
+    cgd: 15e-12,
+  },
+  "BS170": {
+    name: "BS170",
+    polarity: "nmos",
+    description: "MOSFET Canal N de conmutación rápida (60V, 500mA, RDSon 2.5Ω)",
+    vth: 2.0,
+    ron: 2.5,
+    wOverL: 150.0,
+    cgs: 40e-12,
+    cgd: 10e-12,
+  },
+  "BSS138": {
+    name: "BSS138",
+    polarity: "nmos",
+    description: "MOSFET Canal N SMD de nivel lógico 3.3V/5V (50V, 220mA, RDSon 3.5Ω)",
+    vth: 1.3,
+    ron: 3.5,
+    wOverL: 120.0,
+    cgs: 35e-12,
+    cgd: 8e-12,
+  },
   "IRF540N": {
     name: "IRF540N",
     polarity: "nmos",
@@ -270,25 +487,15 @@ export const COMMERCIAL_MOSFETS: Record<string, MosfetCommercialModel> = {
     cgs: 1.7e-9,
     cgd: 200e-12,
   },
-  "2N7000": {
-    name: "2N7000",
+  "FQP30N06L": {
+    name: "FQP30N06L",
     polarity: "nmos",
-    description: "MOSFET Canal N de señal pequeña (60V, 200mA, RDSon 5Ω)",
-    vth: 2.1,
-    ron: 5.0,
-    wOverL: 100.0,
-    cgs: 60e-12,
-    cgd: 15e-12,
-  },
-  "BS170": {
-    name: "BS170",
-    polarity: "nmos",
-    description: "MOSFET Canal N de conmutación rápida (60V, 500mA)",
-    vth: 2.0,
-    ron: 2.5,
-    wOverL: 150.0,
-    cgs: 40e-12,
-    cgd: 10e-12,
+    description: "MOSFET de potencia Nivel Lógico (60V, 32A, Vth=1.5V, RDSon 35mΩ)",
+    vth: 1.5,
+    ron: 0.035,
+    wOverL: 1200.0,
+    cgs: 1.0e-9,
+    cgd: 120e-12,
   },
   "IRF9540": {
     name: "IRF9540",
@@ -299,6 +506,26 @@ export const COMMERCIAL_MOSFETS: Record<string, MosfetCommercialModel> = {
     wOverL: 1000.0,
     cgs: 1.4e-9,
     cgd: 250e-12,
+  },
+  "BSS84": {
+    name: "BSS84",
+    polarity: "pmos",
+    description: "MOSFET Canal P SMD de nivel lógico (-50V, -130mA, RDSon 8Ω)",
+    vth: -1.4,
+    ron: 8.0,
+    wOverL: 80.0,
+    cgs: 30e-12,
+    cgd: 10e-12,
+  },
+  "BS250": {
+    name: "BS250",
+    polarity: "pmos",
+    description: "MOSFET Canal P de conmutación (-45V, -180mA, RDSon 9Ω)",
+    vth: -2.0,
+    ron: 9.0,
+    wOverL: 70.0,
+    cgs: 25e-12,
+    cgd: 8e-12,
   },
   // Semiconductores de Banda Ancha WBG (SiC & GaN)
   "C3M0065090D": {
@@ -374,6 +601,26 @@ export const COMMERCIAL_JFETS: Record<string, JfetCommercialModel> = {
     cgs: 5.0e-12,
     cgd: 2.0e-12,
   },
+  "J111": {
+    name: "J111",
+    polarity: "njf",
+    description: "JFET Canal N para conmutación analógica rápida (Vp=-3.0V, RDSon<30Ω)",
+    vto: -3.0,
+    beta: 0.006,
+    lambda: 0.02,
+    cgs: 6.0e-12,
+    cgd: 3.0e-12,
+  },
+  "J112": {
+    name: "J112",
+    polarity: "njf",
+    description: "JFET Canal N para conmutadores y choppers (Vp=-2.0V, RDSon<50Ω)",
+    vto: -2.0,
+    beta: 0.004,
+    lambda: 0.015,
+    cgs: 5.0e-12,
+    cgd: 2.5e-12,
+  },
   "2N5460": {
     name: "2N5460",
     polarity: "pjf",
@@ -384,12 +631,32 @@ export const COMMERCIAL_JFETS: Record<string, JfetCommercialModel> = {
     cgs: 4.5e-12,
     cgd: 1.5e-12,
   },
+  "J175": {
+    name: "J175",
+    polarity: "pjf",
+    description: "JFET Canal P para conmutación analógica (Vp=4.0V, RDSon<150Ω)",
+    vto: 4.0,
+    beta: 0.0025,
+    lambda: 0.02,
+    cgs: 6.0e-12,
+    cgd: 3.0e-12,
+  },
+  "J176": {
+    name: "J176",
+    polarity: "pjf",
+    description: "JFET Canal P para preamplificadores y conmutadores (Vp=2.5V, RDSon<250Ω)",
+    vto: 2.5,
+    beta: 0.0015,
+    lambda: 0.015,
+    cgs: 5.0e-12,
+    cgd: 2.5e-12,
+  },
 };
 
 export const COMMERCIAL_OPAMPS: Record<string, OpampCommercialModel> = {
   "LM741": {
     name: "LM741",
-    description: "Amplificador Operacional Estándar de la Industria (Aol=200k, GBW=1MHz, SR=0.5V/μs)",
+    description: "Amplificador Operacional Estándar BJT (Aol=200k, GBW=1MHz, SR=0.5V/μs, Isc=25mA)",
     aol: 200000.0,
     gbwHz: 1.0e6,
     slewRateVUs: 0.5,
@@ -397,21 +664,39 @@ export const COMMERCIAL_OPAMPS: Record<string, OpampCommercialModel> = {
     rout: 75.0,
     vos: 0.001,
     ib: 80e-9,
+    ios: 20e-9,
+    iq: 0.0017,
+    isc: 0.025,
+    vdrop: 1.5,
+    cmrr: 90.0,
+    psrr: 90.0,
+    en: 20e-9,
+    in: 0.5e-12,
+    fc: 100.0,
   },
   "TL072": {
     name: "TL072",
-    description: "Amplificador Operacional BiFET de bajo ruido JFET (Aol=200k, GBW=3MHz, SR=13V/μs)",
+    description: "Amplificador Operacional BiFET JFET de bajo ruido (Aol=200k, GBW=3MHz, SR=13V/μs)",
     aol: 200000.0,
     gbwHz: 3.0e6,
     slewRateVUs: 13.0,
     rin: 1.0e12,
     rout: 50.0,
     vos: 0.003,
-    ib: 5e-12,
+    ib: 30e-12,
+    ios: 5e-12,
+    iq: 0.0014,
+    isc: 0.040,
+    vdrop: 1.5,
+    cmrr: 100.0,
+    psrr: 100.0,
+    en: 18e-9,
+    in: 0.01e-12,
+    fc: 1000.0,
   },
   "NE5532": {
     name: "NE5532",
-    description: "Amplificador Operacional Dual de Audio de Ultra-Bajo Ruido (GBW=10MHz, SR=9V/μs)",
+    description: "Amplificador Operacional Dual de Audio de Ultra-Bajo Ruido (GBW=10MHz, SR=9V/μs, en=5nV)",
     aol: 100000.0,
     gbwHz: 10.0e6,
     slewRateVUs: 9.0,
@@ -419,10 +704,19 @@ export const COMMERCIAL_OPAMPS: Record<string, OpampCommercialModel> = {
     rout: 0.3,
     vos: 0.0005,
     ib: 200e-9,
+    ios: 10e-9,
+    iq: 0.008,
+    isc: 0.038,
+    vdrop: 1.5,
+    cmrr: 100.0,
+    psrr: 100.0,
+    en: 5e-9,
+    in: 0.7e-12,
+    fc: 100.0,
   },
   "LM358": {
     name: "LM358",
-    description: "Amplificador Operacional de Fuente Simple y Bajo Consumo (GBW=1MHz, SR=0.6V/μs)",
+    description: "Amplificador Operacional de Fuente Simple y Bajo Consumo (GBW=1MHz, SR=0.6V/μs, Iq=0.5mA)",
     aol: 100000.0,
     gbwHz: 1.0e6,
     slewRateVUs: 0.6,
@@ -430,10 +724,19 @@ export const COMMERCIAL_OPAMPS: Record<string, OpampCommercialModel> = {
     rout: 50.0,
     vos: 0.002,
     ib: 45e-9,
+    ios: 5e-9,
+    iq: 0.0005,
+    isc: 0.020,
+    vdrop: 1.2,
+    cmrr: 80.0,
+    psrr: 80.0,
+    en: 40e-9,
+    in: 0.1e-12,
+    fc: 100.0,
   },
   "OPA2134": {
     name: "OPA2134",
-    description: "SoundPlus™ OpAmp de Audio de Alta Fidelidad Burr-Brown (GBW=8MHz, SR=20V/μs)",
+    description: "SoundPlus™ OpAmp Audio Hi-Fi Burr-Brown (GBW=8MHz, SR=20V/μs, THD+N=0.00008%)",
     aol: 1200000.0,
     gbwHz: 8.0e6,
     slewRateVUs: 20.0,
@@ -441,6 +744,142 @@ export const COMMERCIAL_OPAMPS: Record<string, OpampCommercialModel> = {
     rout: 10.0,
     vos: 0.0005,
     ib: 5e-12,
+    ios: 2e-12,
+    iq: 0.004,
+    isc: 0.035,
+    vdrop: 1.2,
+    cmrr: 100.0,
+    psrr: 100.0,
+    en: 8e-9,
+    in: 0.003e-12,
+    fc: 500.0,
+  },
+  "MCP6002": {
+    name: "MCP6002",
+    description: "OpAmp CMOS Rail-to-Rail I/O 1.8V-6V (GBW=1MHz, SR=0.6V/μs, Iq=100μA, Vdrop=25mV)",
+    aol: 100000.0,
+    gbwHz: 1.0e6,
+    slewRateVUs: 0.6,
+    rin: 1.0e13,
+    rout: 30.0,
+    vos: 0.0045,
+    ib: 1e-12,
+    ios: 1e-12,
+    iq: 0.0001,
+    isc: 0.023,
+    vdrop: 0.025,
+    cmrr: 76.0,
+    psrr: 86.0,
+    en: 28e-9,
+    in: 0.001e-12,
+    fc: 1000.0,
+  },
+  "OP07": {
+    name: "OP07",
+    description: "OpAmp de Ultra-Bajo Offset y Alta Precisión (Vos=75μV, CMRR=110dB, PSRR=106dB)",
+    aol: 400000.0,
+    gbwHz: 0.6e6,
+    slewRateVUs: 0.3,
+    rin: 33.0e6,
+    rout: 60.0,
+    vos: 0.000075,
+    ib: 1.8e-9,
+    ios: 1.3e-9,
+    iq: 0.002,
+    isc: 0.025,
+    vdrop: 1.5,
+    cmrr: 110.0,
+    psrr: 106.0,
+    en: 10e-9,
+    in: 0.2e-12,
+    fc: 10.0,
   },
 };
+
+/**
+ * Registra o actualiza dinámicamente un modelo de diodo comercial.
+ */
+export function registerCustomDiodeModel(model: DiodeCommercialModel): void {
+  COMMERCIAL_DIODES[model.name] = model;
+}
+
+/**
+ * Registra o actualiza dinámicamente un modelo de transistor BJT comercial.
+ */
+export function registerCustomBjtModel(model: BjtCommercialModel): void {
+  COMMERCIAL_BJTS[model.name] = model;
+}
+
+/**
+ * Registra o actualiza dinámicamente un modelo de MOSFET comercial.
+ */
+export function registerCustomMosfetModel(model: MosfetCommercialModel): void {
+  COMMERCIAL_MOSFETS[model.name] = model;
+}
+
+/**
+ * Registra o actualiza dinámicamente un modelo de JFET comercial.
+ */
+export function registerCustomJfetModel(model: JfetCommercialModel): void {
+  COMMERCIAL_JFETS[model.name] = model;
+}
+
+/**
+ * Registra automáticamente un ParsedSpiceModel en el catálogo comercial según su tipo físico.
+ */
+export function registerParsedSpiceModel(model: import("./spice_library_parser").ParsedSpiceModel): void {
+  const t = model.type.toLowerCase();
+  const p = model.parameters || {};
+  const name = model.name;
+  const desc = model.description || `Modelo SPICE ${name}`;
+
+  if (t === "d") {
+    registerCustomDiodeModel({
+      name,
+      description: desc,
+      is: p["IS"] ?? 1e-14,
+      rs: p["RS"] ?? 0.01,
+      n: p["N"] ?? 1.0,
+      cjo: p["CJO"],
+      tt: p["TT"],
+      bv: p["BV"],
+      ibv: p["IBV"],
+      forwardVoltage: p["VJ"] ?? 0.7,
+    });
+  } else if (t === "npn" || t === "pnp") {
+    registerCustomBjtModel({
+      name,
+      polarity: t,
+      description: desc,
+      is: p["IS"] ?? 1e-14,
+      bf: p["BF"] ?? 100.0,
+      vaf: p["VAF"],
+      rb: p["RB"],
+      rc: p["RC"],
+      cje: p["CJE"],
+      cjc: p["CJC"],
+    });
+  } else if (t === "nmos" || t === "pmos") {
+    registerCustomMosfetModel({
+      name,
+      polarity: t,
+      description: desc,
+      vth: p["VTO"] ?? p["VTH"] ?? (t === "nmos" ? 2.0 : -2.0),
+      ron: p["RD"] ?? p["RON"] ?? 0.05,
+      cgs: p["CGS"],
+      cgd: p["CGD"],
+    });
+  } else if (t === "njf" || t === "pjf") {
+    registerCustomJfetModel({
+      name,
+      polarity: t,
+      description: desc,
+      vto: p["VTO"] ?? (t === "njf" ? -2.0 : 2.0),
+      beta: p["BETA"] ?? 1e-3,
+      lambda: p["LAMBDA"],
+      cgs: p["CGS"],
+      cgd: p["CGD"],
+    });
+  }
+}
 

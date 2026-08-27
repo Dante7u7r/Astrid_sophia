@@ -47,6 +47,7 @@ export function copyComponentConfiguration(
     value: source.value,
     rotation: source.rotation,
     mirror: source.mirror,
+    mirrorY: source.mirrorY,
     wiperPosition: source.wiperPosition,
     lux: source.lux,
     temperatureCelsius: source.temperatureCelsius,

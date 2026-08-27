@@ -9,6 +9,7 @@ import { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { InstrumentCallbacks } from "./instrument_callbacks";
 import { ensureCanvasDpr } from "./canvas_dpr";
 import {
+  autoDetectActiveChannels,
   decodeParallelBus,
   decodeI2cProtocol,
   decodeSpiProtocol,
@@ -194,6 +195,12 @@ export class LogicAnalyzerInstrument {
       }
     });
 
+    if (typeof window !== "undefined") {
+      window.addEventListener("astryd-theme-changed", () => {
+        this.drawWaveforms();
+      });
+    }
+
     // 2. Selector de Decodificador de Protocolo
     const decoderSelect = this.container.querySelector("#logic-decoder-select") as HTMLSelectElement | null;
     decoderSelect?.addEventListener("change", () => {
@@ -321,8 +328,22 @@ export class LogicAnalyzerInstrument {
     for (let i = 0; i < 8; i++) {
       if (i < existingNodes.length) {
         this.channels[i] = existingNodes[i];
+      } else {
+        this.channels[i] = null;
       }
     }
+
+    const channelsHistory = this.channels.map((node) => (node ? this.nodeHistory[node] || [] : []));
+    const detection = autoDetectActiveChannels(channelsHistory, this.selectedThreshold);
+
+    for (let i = 0; i < 8; i++) {
+      this.channelEnabled[i] = this.channels[i] !== null && (detection.activeChannels[i] || i === 0);
+      const chCheck = this.container.querySelector(`#logic-ch-en-${i}`) as HTMLInputElement | null;
+      if (chCheck) {
+        chCheck.checked = this.channelEnabled[i];
+      }
+    }
+
     this.updateSelectors();
     this.drawWaveforms();
   }

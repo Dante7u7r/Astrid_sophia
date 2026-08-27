@@ -120,7 +120,12 @@ export function generateSubcircuitFromTab(
         break;
       case "x": {
         const subName = comp.subcircuitName || String(comp.value || "SUBCKT");
-        lines.push(`X_${comp.id} ${mappedPins.join(" ")} ${subName}`);
+        let paramStr = "";
+        if (comp.instanceParams && Object.keys(comp.instanceParams).length > 0) {
+          const pairs = Object.entries(comp.instanceParams).map(([k, v]) => `${k}=${v}`);
+          paramStr = ` PARAMS: ${pairs.join(" ")}`;
+        }
+        lines.push(`X_${comp.id} ${mappedPins.join(" ")} ${subName}${paramStr}`);
         break;
       }
       default:

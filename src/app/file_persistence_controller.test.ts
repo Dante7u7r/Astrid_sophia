@@ -129,7 +129,7 @@ describe("initFilePersistenceController", () => {
   });
 
   it("carga una demo validada en una pestana nueva", async () => {
-    document.body.innerHTML = `<select id="btn-open-demo"><option value="01.astryd">01</option></select>`;
+    document.body.innerHTML = `<select id="btn-open-demo"><option value="01.biaani">01</option></select>`;
     const tabManager = createTabManagerStub();
     const validated = createValidatedFile();
     const validateCircuitFileForLoad = vi.fn(() => validated);
@@ -152,7 +152,7 @@ describe("initFilePersistenceController", () => {
     });
 
     const select = document.querySelector<HTMLSelectElement>("#btn-open-demo")!;
-    select.value = "01.astryd";
+    select.value = "01.biaani";
     select.dispatchEvent(new Event("change"));
     await flushAsyncHandlers();
 
@@ -181,7 +181,7 @@ describe("initFilePersistenceController", () => {
       getTabManager: () => tabManager,
       documentController,
       addLog: vi.fn(),
-      invokeTauri: vi.fn(async () => ["C:\\tmp\\demo.astryd", "{}"] as [string, string]),
+      invokeTauri: vi.fn(async () => ["C:\\tmp\\demo.biaani", "{}"] as [string, string]),
     });
 
     document.querySelector<HTMLButtonElement>("#btn-open-circuit")!.click();
@@ -189,8 +189,8 @@ describe("initFilePersistenceController", () => {
 
     expect(tabManager.createNewTab).not.toHaveBeenCalled();
     expect(deserializeCircuit).toHaveBeenCalledWith("{}", validated);
-    expect(currentTab.name).toBe("demo.astryd");
-    expect(currentTab.filePath).toBe("C:\\tmp\\demo.astryd");
+    expect(currentTab.name).toBe("demo.biaani");
+    expect(currentTab.filePath).toBe("C:\\tmp\\demo.biaani");
     expect(currentTab.unsaved).toBe(false);
   });
 });

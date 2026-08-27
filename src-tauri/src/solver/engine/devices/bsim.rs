@@ -1,6 +1,7 @@
+use crate::dual3::Dual3;
 use crate::solver::types::ComponentData;
 
-/// Evaluador físico completo BSIM3v3.2 / BSIM3v3.3 para transistores NMOS.
+/// Evaluador físico completo BSIM3v3.2 / BSIM3v3.3 para transistores NMOS con diferenciación automática Dual3.
 /// Implementa formulación analítica unificada continua con transición suave subumbral-fuerte inversión,
 /// degradación de movilidad por campo vertical (MOBMOD=1), saturación de velocidad,
 /// modulación de longitud de canal (CLM) y efecto DIBL en paridad con SPICE LEVEL=49.
@@ -52,92 +53,89 @@ pub fn evaluate_bsim3_nmos(
     // Degradación de movilidad térmica
     let u0 = u0_nom * (tnom / t_actual).powf(ute);
 
-    // Función auxiliar para calcular Ids para un punto de operación (vgs, vds, vbs)
-    let calc_ids = |v_gs: f64, v_ds: f64, v_bs: f64| -> f64 {
-        let v_ds_pos = v_ds.max(0.0);
-        let v_bs_eff = v_bs.min(0.0);
+    let v_gs = Dual3::new(vgs, 0);
+    let v_ds = Dual3::new(vds, 1);
+    let v_bs = Dual3::new(vbs, 2);
 
-        // Umbral local con efecto de cuerpo, efecto de canal corto lateral (pocket / LPE0) y DIBL
-        let sqrt_phi_vbs = (phi_s - v_bs_eff).max(0.01).sqrt();
-        let body_shift = k1 * (sqrt_phi_vbs - sqrt_phi) - k2 * v_bs_eff;
-        let lpe0 = 2.4e-7; // Longitud característica de halo / pocket doping (BSIM3v3 LPE0)
-        let pocket_shift = k1 * ((1.0 + lpe0 / l).sqrt() - 1.0) * sqrt_phi;
-        let v_th_local = vth_thermal + body_shift + pocket_shift - theta_dibl * v_ds_pos;
+    let v_ds_pos = v_ds.max_val(0.0);
+    let v_bs_eff = v_bs.min_val(0.0);
 
-        let v_gst = v_gs - v_th_local;
+    // Umbral local con efecto de cuerpo, efecto de canal corto lateral (pocket / LPE0) y DIBL
+    let sqrt_phi_vbs = (Dual3::constant(phi_s) - v_bs_eff).max_val(0.01).sqrt();
+    let body_shift = (sqrt_phi_vbs - sqrt_phi) * k1 - v_bs_eff * k2;
+    let lpe0 = 2.4e-7; // Longitud característica de halo / pocket doping (BSIM3v3 LPE0)
+    let pocket_shift = k1 * ((1.0 + lpe0 / l).sqrt() - 1.0) * sqrt_phi;
+    let v_th_local = body_shift + (vth_thermal + pocket_shift) - v_ds_pos * theta_dibl;
 
-        // Vgsteff continuo y unificado estándar BSIM3 (Berkeley / SPICE LEVEL=49)
-        let n_vt = n_factor * vt_therm;
-        let voff = -0.08;
-        let v_gsteff = if v_gst > 30.0 * n_vt {
-            v_gst
-        } else if v_gst < -30.0 * n_vt {
-            (2.0 * n_vt) * (v_gst / (2.0 * n_vt)).exp()
-        } else {
-            let exp_term = (v_gst / (2.0 * n_vt)).exp();
-            let num = (2.0 * n_vt) * (1.0 + exp_term).ln();
-            let exp_denom = (-(v_gst - 2.0 * voff) / (2.0 * n_vt)).exp();
-            let denom = 1.0 + 0.08 * exp_denom;
-            num / denom
-        };
+    let v_gst = v_gs - v_th_local;
 
-        if v_gsteff <= 1e-12 {
-            return 0.0;
-        }
-
-        // Campo vertical efectivo y movilidad degradada
-        let e_eff = (v_gsteff + 2.0 * v_th_local.abs()) / (6.0 * tox);
-        let denom_mu = 1.0 + (ua + uc * v_bs_eff) * e_eff + ub * e_eff * e_eff;
-        let mu_eff = u0 / denom_mu.max(0.1);
-
-        // Parámetro de carga de cuerpo Abulk
-        let abulk =
-            1.0 + (k1 / (2.0 * (phi_s - v_bs_eff).max(0.01).sqrt())) * (0.5 * l / (l + 0.15e-6));
-
-        // Velocidad de saturación y Esat
-        let esat = 2.0 * vsat / mu_eff;
-        let esat_l = esat * l;
-
-        // Tensión de saturación Vdsat
-        let vdsat = (esat_l * v_gsteff) / (abulk * esat_l + v_gsteff);
-
-        // Vdseff suave para transición continua entre zona lineal y saturación
-        let delta = 0.02;
-        let diff = vdsat - v_ds_pos - delta;
-        let vdseff = vdsat - 0.5 * (diff + (diff * diff + 4.0 * delta * vdsat).sqrt());
-
-        // Corriente de canal intrínseca Ids0
-        let factor_lin = 1.0 - (abulk * vdseff) / (2.0 * (v_gsteff + 2.0 * vt_therm));
-        let num_ids = w * mu_eff * cox * v_gsteff * factor_lin.max(0.1) * vdseff;
-        let denom_ids = l * (1.0 + vdseff / esat_l);
-        let ids0 = num_ids / denom_ids;
-
-        // Modulación de longitud de canal (CLM) y Early effect
-        let pclm = 0.8;
-        let v_asclm = esat_l / pclm;
-        let clm_factor = 1.0 + (v_ds_pos - vdseff).max(0.0) / (v_asclm + v_ds_pos);
-
-        // Resistencia parasitaria de contacto Rdsw (típica en tecnologías submicrónicas)
-        let rdsw = 100.0 * (1.0e-6 / w); // Ohms
-        (ids0 * clm_factor) / (1.0 + (ids0 * clm_factor) * rdsw / (v_ds_pos + 0.1))
+    // Vgsteff continuo y unificado estándar BSIM3 (Berkeley / SPICE LEVEL=49)
+    let n_vt = n_factor * vt_therm;
+    let voff = -0.08;
+    let v_gsteff = if v_gst.val > 30.0 * n_vt {
+        v_gst
+    } else if v_gst.val < -30.0 * n_vt {
+        (v_gst / (2.0 * n_vt)).exp() * (2.0 * n_vt)
+    } else {
+        let exp_term = (v_gst / (2.0 * n_vt)).exp();
+        let num = (Dual3::constant(1.0) + exp_term).ln() * (2.0 * n_vt);
+        let exp_denom = (-(v_gst - 2.0 * voff) / (2.0 * n_vt)).exp();
+        let denom = Dual3::constant(1.0) + exp_denom * 0.08;
+        num / denom
     };
 
-    let ids = calc_ids(vgs, vds, vbs);
+    if v_gsteff.val <= 1e-12 {
+        return (0.0, 1e-12, 1e-12);
+    }
 
-    // Derivadas numéricas robustas (perturbación diferencial)
-    let delta_v = 1.0e-5;
-    let ids_vgs_plus = calc_ids(vgs + delta_v, vds, vbs);
-    let ids_vgs_minus = calc_ids(vgs - delta_v, vds, vbs);
-    let gm = ((ids_vgs_plus - ids_vgs_minus) / (2.0 * delta_v)).max(1e-12);
+    // Campo vertical efectivo y movilidad degradada
+    let e_eff = (v_gsteff + 2.0 * v_th_local.abs().val) / (6.0 * tox);
+    let denom_mu =
+        Dual3::constant(1.0) + (Dual3::constant(ua) + v_bs_eff * uc) * e_eff + (e_eff * e_eff) * ub;
+    let mu_eff = Dual3::constant(u0) / denom_mu.max_val(0.1);
 
-    let ids_vds_plus = calc_ids(vgs, vds + delta_v, vbs);
-    let ids_vds_minus = calc_ids(vgs, vds - delta_v, vbs);
-    let gds = ((ids_vds_plus - ids_vds_minus) / (2.0 * delta_v)).max(1e-12);
+    // Parámetro de carga de cuerpo Abulk
+    let abulk = (Dual3::constant(k1)
+        / ((Dual3::constant(phi_s) - v_bs_eff).max_val(0.01).sqrt() * 2.0))
+        * (0.5 * l / (l + 0.15e-6))
+        + 1.0;
+
+    // Velocidad de saturación y Esat
+    let esat = mu_eff.powf(-1.0) * (2.0 * vsat);
+    let esat_l = esat * l;
+
+    // Tensión de saturación Vdsat
+    let vdsat = (esat_l * v_gsteff) / (abulk * esat_l + v_gsteff);
+
+    // Vdseff suave para transición continua entre zona lineal y saturación
+    let delta = 0.02;
+    let diff = vdsat - v_ds_pos - delta;
+    let vdseff = vdsat - (diff + (diff * diff + vdsat * (4.0 * delta)).sqrt()) * 0.5;
+
+    // Corriente de canal intrínseca Ids0
+    let factor_lin = Dual3::constant(1.0) - (abulk * vdseff) / ((v_gsteff + 2.0 * vt_therm) * 2.0);
+    let num_ids = (mu_eff * (w * cox)) * v_gsteff * factor_lin.max_val(0.1) * vdseff;
+    let denom_ids = (vdseff / esat_l + 1.0) * l;
+    let ids0 = num_ids / denom_ids;
+
+    // Modulación de longitud de canal (CLM) y Early effect
+    let pclm = 0.8;
+    let v_asclm = esat_l / pclm;
+    let clm_factor = (v_ds_pos - vdseff).max_val(0.0) / (v_asclm + v_ds_pos) + 1.0;
+
+    // Resistencia parasitaria de contacto Rdsw (típica en tecnologías submicrónicas)
+    let rdsw = 100.0 * (1.0e-6 / w); // Ohms
+    let ids_clm = ids0 * clm_factor;
+    let ids_total = ids_clm / (ids_clm * rdsw / (v_ds_pos + 0.1) + 1.0);
+
+    let ids = ids_total.val;
+    let gm = ids_total.deriv[0].max(1e-12);
+    let gds = ids_total.deriv[1].max(1e-12);
 
     (ids, gm, gds)
 }
 
-/// Evaluador físico completo BSIM3v3.2 / BSIM3v3.3 para transistores PMOS.
+/// Evaluador físico completo BSIM3v3.2 / BSIM3v3.3 para transistores PMOS con diferenciación automática Dual3.
 pub fn evaluate_bsim3_pmos(
     vsg: f64,
     vsd: f64,
@@ -178,86 +176,80 @@ pub fn evaluate_bsim3_pmos(
     let phi_s: f64 = 0.7;
     let k1 = 0.53;
     let k2 = -0.0186;
-    let vsb_clamped = vsb.min(0.0);
     let sqrt_phi = phi_s.sqrt();
-    let sqrt_phi_vsb = (phi_s - vsb_clamped).max(0.01).sqrt();
-    let body_shift = k1 * (sqrt_phi_vsb - sqrt_phi) - k2 * vsb_clamped;
-
-    let _vth = vth_thermal + body_shift - theta_dibl * vsd.max(0.0);
 
     let vt_therm = 1.380649e-23 * t_actual / 1.602176634e-19;
     let n_factor = 1.25;
 
     let u0 = u0_nom * (tnom / t_actual).powf(ute);
 
-    let calc_isd = |v_sg: f64, v_sd: f64, v_sb: f64| -> f64 {
-        let v_sd_pos = v_sd.max(0.0);
-        let v_sb_eff = v_sb.min(0.0);
-        let sqrt_phi_vsb = (phi_s - v_sb_eff).max(0.01).sqrt();
-        let body_shift = k1 * (sqrt_phi_vsb - sqrt_phi) - k2 * v_sb_eff;
-        let lpe0 = 2.4e-7;
-        let pocket_shift = k1 * ((1.0 + lpe0 / l).sqrt() - 1.0) * sqrt_phi;
-        let v_th_local = vth_thermal + body_shift + pocket_shift - theta_dibl * v_sd_pos;
+    let v_sg = Dual3::new(vsg, 0);
+    let v_sd = Dual3::new(vsd, 1);
+    let v_sb = Dual3::new(vsb, 2);
 
-        let v_sgt = v_sg - v_th_local;
+    let v_sd_pos = v_sd.max_val(0.0);
+    let v_sb_eff = v_sb.min_val(0.0);
+    let sqrt_phi_vsb = (Dual3::constant(phi_s) - v_sb_eff).max_val(0.01).sqrt();
+    let body_shift = (sqrt_phi_vsb - sqrt_phi) * k1 - v_sb_eff * k2;
+    let lpe0 = 2.4e-7;
+    let pocket_shift = k1 * ((1.0 + lpe0 / l).sqrt() - 1.0) * sqrt_phi;
+    let v_th_local = body_shift + (vth_thermal + pocket_shift) - v_sd_pos * theta_dibl;
 
-        let n_vt = n_factor * vt_therm;
-        let voff = -0.08;
-        let v_sgteff = if v_sgt > 30.0 * n_vt {
-            v_sgt
-        } else if v_sgt < -30.0 * n_vt {
-            (2.0 * n_vt) * (v_sgt / (2.0 * n_vt)).exp()
-        } else {
-            let exp_term = (v_sgt / (2.0 * n_vt)).exp();
-            let num = (2.0 * n_vt) * (1.0 + exp_term).ln();
-            let exp_denom = (-(v_sgt - 2.0 * voff) / (2.0 * n_vt)).exp();
-            let denom = 1.0 + 0.08 * exp_denom;
-            num / denom
-        };
+    let v_sgt = v_sg - v_th_local;
 
-        if v_sgteff <= 1e-12 {
-            return 0.0;
-        }
-
-        let e_eff = (v_sgteff + 2.0 * v_th_local.abs()) / (6.0 * tox);
-        let denom_mu = 1.0 + (ua + uc * v_sb_eff) * e_eff + ub * e_eff * e_eff;
-        let mu_eff = u0 / denom_mu.max(0.1);
-
-        let abulk =
-            1.0 + (k1 / (2.0 * (phi_s - v_sb_eff).max(0.01).sqrt())) * (0.5 * l / (l + 0.15e-6));
-
-        let esat = 2.0 * vsat / mu_eff;
-        let esat_l = esat * l;
-
-        let vsdsat = (esat_l * v_sgteff) / (abulk * esat_l + v_sgteff);
-
-        let delta = 0.02;
-        let diff = vsdsat - v_sd_pos - delta;
-        let vsdeff = vsdsat - 0.5 * (diff + (diff * diff + 4.0 * delta * vsdsat).sqrt());
-
-        let factor_lin = 1.0 - (abulk * vsdeff) / (2.0 * (v_sgteff + 2.0 * vt_therm));
-        let num_isd = w * mu_eff * cox * v_sgteff * factor_lin.max(0.1) * vsdeff;
-        let denom_isd = l * (1.0 + vsdeff / esat_l);
-        let isd0 = num_isd / denom_isd;
-
-        let pclm = 0.8;
-        let v_asclm = esat_l / pclm;
-        let clm_factor = 1.0 + (v_sd_pos - vsdeff).max(0.0) / (v_asclm + v_sd_pos);
-
-        let rdsw = 100.0 * (1.0e-6 / w);
-        (isd0 * clm_factor) / (1.0 + (isd0 * clm_factor) * rdsw / (v_sd_pos + 0.1))
+    let n_vt = n_factor * vt_therm;
+    let voff = -0.08;
+    let v_sgteff = if v_sgt.val > 30.0 * n_vt {
+        v_sgt
+    } else if v_sgt.val < -30.0 * n_vt {
+        (v_sgt / (2.0 * n_vt)).exp() * (2.0 * n_vt)
+    } else {
+        let exp_term = (v_sgt / (2.0 * n_vt)).exp();
+        let num = (Dual3::constant(1.0) + exp_term).ln() * (2.0 * n_vt);
+        let exp_denom = (-(v_sgt - 2.0 * voff) / (2.0 * n_vt)).exp();
+        let denom = Dual3::constant(1.0) + exp_denom * 0.08;
+        num / denom
     };
 
-    let isd = calc_isd(vsg, vsd, vsb);
+    if v_sgteff.val <= 1e-12 {
+        return (0.0, 1e-12, 1e-12);
+    }
 
-    let delta_v = 1.0e-5;
-    let isd_vsg_plus = calc_isd(vsg + delta_v, vsd, vsb);
-    let isd_vsg_minus = calc_isd(vsg - delta_v, vsd, vsb);
-    let gm = ((isd_vsg_plus - isd_vsg_minus) / (2.0 * delta_v)).max(1e-12);
+    let e_eff = (v_sgteff + 2.0 * v_th_local.abs().val) / (6.0 * tox);
+    let denom_mu =
+        Dual3::constant(1.0) + (Dual3::constant(ua) + v_sb_eff * uc) * e_eff + (e_eff * e_eff) * ub;
+    let mu_eff = Dual3::constant(u0) / denom_mu.max_val(0.1);
 
-    let isd_vsd_plus = calc_isd(vsg, vsd + delta_v, vsb);
-    let isd_vsd_minus = calc_isd(vsg, vsd - delta_v, vsb);
-    let gds = ((isd_vsd_plus - isd_vsd_minus) / (2.0 * delta_v)).max(1e-12);
+    let abulk = (Dual3::constant(k1)
+        / ((Dual3::constant(phi_s) - v_sb_eff).max_val(0.01).sqrt() * 2.0))
+        * (0.5 * l / (l + 0.15e-6))
+        + 1.0;
+
+    let esat = mu_eff.powf(-1.0) * (2.0 * vsat);
+    let esat_l = esat * l;
+
+    let vsdsat = (esat_l * v_sgteff) / (abulk * esat_l + v_sgteff);
+
+    let delta = 0.02;
+    let diff = vsdsat - v_sd_pos - delta;
+    let vsdeff = vsdsat - (diff + (diff * diff + vsdsat * (4.0 * delta)).sqrt()) * 0.5;
+
+    let factor_lin = Dual3::constant(1.0) - (abulk * vsdeff) / ((v_sgteff + 2.0 * vt_therm) * 2.0);
+    let num_isd = (mu_eff * (w * cox)) * v_sgteff * factor_lin.max_val(0.1) * vsdeff;
+    let denom_isd = (vsdeff / esat_l + 1.0) * l;
+    let isd0 = num_isd / denom_isd;
+
+    let pclm = 0.8;
+    let v_asclm = esat_l / pclm;
+    let clm_factor = (v_sd_pos - vsdeff).max_val(0.0) / (v_asclm + v_sd_pos) + 1.0;
+
+    let rdsw = 100.0 * (1.0e-6 / w);
+    let isd_clm = isd0 * clm_factor;
+    let isd_total = isd_clm / (isd_clm * rdsw / (v_sd_pos + 0.1) + 1.0);
+
+    let isd = isd_total.val;
+    let gm = isd_total.deriv[0].max(1e-12);
+    let gds = isd_total.deriv[1].max(1e-12);
 
     (isd, gm, gds)
 }

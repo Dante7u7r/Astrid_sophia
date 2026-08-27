@@ -156,36 +156,197 @@ export function drawSwitch(
   comp: ComponentInstance,
 ): void {
   const isClosed = comp.switchState ?? false;
+
+  // 1. Leads exteriores
   ctx.beginPath();
   ctx.moveTo(-40, 0);
-  ctx.lineTo(-15, 0);
-  ctx.moveTo(-15, -5);
-  ctx.lineTo(-15, 5);
+  ctx.lineTo(-14, 0);
+  ctx.moveTo(14, 0);
+  ctx.lineTo(40, 0);
   ctx.stroke();
 
+  // 2. Bornes de contacto circulares
+  ctx.beginPath();
+  ctx.arc(-14, 0, 3, 0, Math.PI * 2);
+  ctx.arc(14, 0, 3, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 3. Palanca articulada
+  ctx.beginPath();
   if (isClosed) {
-    ctx.beginPath();
-    ctx.moveTo(15, 0);
-    ctx.lineTo(40, 0);
-    ctx.moveTo(15, -5);
-    ctx.lineTo(15, 5);
+    ctx.moveTo(-14, 0);
+    ctx.lineTo(14, 0);
+    ctx.save();
+    ctx.strokeStyle = "#10B981";
+    ctx.lineWidth = 2.2;
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-15, 0);
-    ctx.lineTo(15, 0);
-    ctx.strokeStyle = "#2DD4BF";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
+    ctx.restore();
   } else {
-    ctx.beginPath();
-    ctx.moveTo(15, -8);
-    ctx.lineTo(40, -8);
-    ctx.moveTo(15, -8);
-    ctx.lineTo(20, 0);
-    ctx.lineTo(15, 8);
-    ctx.moveTo(40, 0);
-    ctx.lineTo(40, 8);
+    ctx.moveTo(-14, 0);
+    ctx.lineTo(10, -14);
     ctx.stroke();
+  }
+}
+
+export function drawSwitchSpdt(
+  ctx: CanvasRenderingContext2D,
+  comp: ComponentInstance,
+): void {
+  const pos = comp.switchPosition ?? (comp.switchState ? 1 : 0);
+
+  // 1. Terminal COM (Izquierda)
+  ctx.beginPath();
+  ctx.moveTo(-40, 0);
+  ctx.lineTo(-14, 0);
+
+  // 2. Terminales T1 (Arriba) y T2 (Abajo)
+  ctx.moveTo(40, -16);
+  ctx.lineTo(14, -16);
+  ctx.moveTo(40, 16);
+  ctx.lineTo(14, 16);
+  ctx.stroke();
+
+  // 3. Bornes circulares
+  ctx.beginPath();
+  ctx.arc(-14, 0, 3, 0, Math.PI * 2);
+  ctx.arc(14, -16, 3, 0, Math.PI * 2);
+  ctx.arc(14, 16, 3, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 4. Palanca conmutadora
+  ctx.beginPath();
+  ctx.moveTo(-14, 0);
+  if (pos === 0) {
+    ctx.lineTo(14, -16);
+    ctx.save();
+    ctx.strokeStyle = "#10B981";
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.lineTo(14, 16);
+    ctx.save();
+    ctx.strokeStyle = "#38BDF8";
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Etiquetas
+  ctx.save();
+  ctx.font = "bold 7px 'JetBrains Mono', monospace";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.fillText("T1", 20, -18);
+  ctx.fillText("COM", -32, -6);
+  ctx.fillText("T2", 20, 22);
+  ctx.restore();
+}
+
+export function drawSwitchDpdt(
+  ctx: CanvasRenderingContext2D,
+  comp: ComponentInstance,
+): void {
+  const pos = comp.switchPosition ?? (comp.switchState ? 1 : 0);
+
+  // Polo 1 (Superior, y = -16)
+  ctx.beginPath();
+  ctx.moveTo(-40, -16);
+  ctx.lineTo(-14, -16);
+  ctx.moveTo(40, -28);
+  ctx.lineTo(14, -28);
+  ctx.moveTo(40, -4);
+  ctx.lineTo(14, -4);
+
+  // Polo 2 (Inferior, y = 16)
+  ctx.moveTo(-40, 16);
+  ctx.lineTo(-14, 16);
+  ctx.moveTo(40, 4);
+  ctx.lineTo(14, 4);
+  ctx.moveTo(40, 28);
+  ctx.lineTo(14, 28);
+  ctx.stroke();
+
+  // Bornes
+  ctx.beginPath();
+  ctx.arc(-14, -16, 2.5, 0, Math.PI * 2);
+  ctx.arc(14, -28, 2.5, 0, Math.PI * 2);
+  ctx.arc(14, -4, 2.5, 0, Math.PI * 2);
+
+  ctx.arc(-14, 16, 2.5, 0, Math.PI * 2);
+  ctx.arc(14, 4, 2.5, 0, Math.PI * 2);
+  ctx.arc(14, 28, 2.5, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Palancas conectadas
+  ctx.beginPath();
+  if (pos === 0) {
+    ctx.moveTo(-14, -16);
+    ctx.lineTo(14, -28);
+    ctx.moveTo(-14, 16);
+    ctx.lineTo(14, 4);
+  } else {
+    ctx.moveTo(-14, -16);
+    ctx.lineTo(14, -4);
+    ctx.moveTo(-14, 16);
+    ctx.lineTo(14, 28);
+  }
+  ctx.stroke();
+
+  // Barra de acoplamiento mecánico punteada
+  ctx.save();
+  ctx.setLineDash([2, 2]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.beginPath();
+  ctx.moveTo(0, pos === 0 ? -22 : -10);
+  ctx.lineTo(0, pos === 0 ? 10 : 22);
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function drawPushbutton(
+  ctx: CanvasRenderingContext2D,
+  comp: ComponentInstance,
+): void {
+  const isPressed = comp.switchState ?? false;
+  const isNc = comp.isMomentary === false || comp.value === "NC";
+
+  // 1. Leads
+  ctx.beginPath();
+  ctx.moveTo(-40, 0);
+  ctx.lineTo(-14, 0);
+  ctx.moveTo(14, 0);
+  ctx.lineTo(40, 0);
+  ctx.stroke();
+
+  // 2. Bornes
+  ctx.beginPath();
+  ctx.arc(-14, 0, 3, 0, Math.PI * 2);
+  ctx.arc(14, 0, 3, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 3. Barra del pulsador con vástago superior
+  const barY = isNc
+    ? (isPressed ? -10 : 0) // NC: cerrado en reposo, sube al presionar
+    : (isPressed ? 0 : -8);  // NO: abierto en reposo, baja al presionar
+
+  ctx.beginPath();
+  ctx.moveTo(-18, barY);
+  ctx.lineTo(18, barY);
+  ctx.moveTo(0, barY);
+  ctx.lineTo(0, barY - 12); // Vástago
+  ctx.moveTo(-6, barY - 12);
+  ctx.lineTo(6, barY - 12);  // Botón superior
+  ctx.stroke();
+
+  if (isPressed) {
+    ctx.save();
+    ctx.strokeStyle = "#10B981";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-18, barY);
+    ctx.lineTo(18, barY);
+    ctx.stroke();
+    ctx.restore();
   }
 }
 

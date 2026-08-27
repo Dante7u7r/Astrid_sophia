@@ -148,6 +148,7 @@ export function createDesktopControllerRegistry(
     onCircuitLoaded: deps.onCircuitLoaded,
     addLog: deps.addLog,
     logError: deps.logError,
+    getInstrumentsDock: deps.getInstrumentsDock,
     invokeTauri: deps.invokeTauri,
   });
   const circuitDocumentController = workspaceControllers.circuitDocumentController;

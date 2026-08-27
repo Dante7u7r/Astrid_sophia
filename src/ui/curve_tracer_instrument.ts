@@ -9,6 +9,7 @@ import type { CanvasOrchestrator } from "../canvas_orchestrator";
 import { createNoopInstrumentCallbacks, type InstrumentCallbacks } from "./instrument_callbacks";
 import { ensureCanvasDpr } from "./canvas_dpr";
 import {
+  calculateLoadLineAndQPoint,
   DEVICE_PRESETS,
   type DevicePreset,
   generateDeviceTrace,
@@ -33,8 +34,9 @@ export class CurveTracerInstrument {
   private numSteps = 5;
   private selectedCompId: string | null = null;
 
-  // Punto de operación Q interactivo
+  // Estado del cursor de punto Q interactivo y recta de carga
   private isQPointEnabled = false;
+  private isLoadLineEnabled = false;
   private qPoint: { v: number; i: number } | null = null;
 
   // Último resultado generado
@@ -71,9 +73,9 @@ export class CurveTracerInstrument {
           </div>
 
           <!-- Componente Vinculado del Esquema -->
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); padding: 5px 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: var(--bg-deep); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
             <span class="rack-label" style="font-size: 0.56rem;">En Lienzo:</span>
-            <span id="tracer-schematic-link" style="font-family: var(--font-mono); font-size: 0.68rem; font-weight: bold; color: #38bdf8;">[Manual]</span>
+            <span id="tracer-schematic-link" style="font-family: var(--font-mono); font-size: 0.68rem; font-weight: bold; color: var(--cyan);">[Manual]</span>
           </div>
 
           <!-- Tipo de Barrido y Configuración -->
@@ -143,6 +145,9 @@ export class CurveTracerInstrument {
               <button id="tracer-btn-qpoint" type="button" class="tracer-btn" title="Alternar cursor de punto de trabajo Q">
                 📍 Punto Q: OFF
               </button>
+              <button id="tracer-btn-loadline" type="button" class="tracer-btn" title="Alternar visualización de recta de carga DC y cálculo de Q">
+                📈 Recta Carga: OFF
+              </button>
             </div>
 
             <div style="display: flex; gap: 4px; align-items: center;">
@@ -180,6 +185,12 @@ export class CurveTracerInstrument {
   }
 
   private bindEvents(): void {
+    if (typeof window !== "undefined") {
+      window.addEventListener("astryd-theme-changed", () => {
+        this.draw();
+      });
+    }
+
     // 1. Selector de Presets de Semiconductores
     const presetSelect = this.container.querySelector("#tracer-select-preset") as HTMLSelectElement | null;
     presetSelect?.addEventListener("change", () => {
@@ -228,6 +239,28 @@ export class CurveTracerInstrument {
         this.qPoint = { v: midPt.v, i: midPt.i };
       } else {
         this.qPoint = null;
+      }
+      this.draw();
+      this.updateStatusFooter();
+    });
+
+    // 6.1 Recta de Carga ON/OFF
+    const loadLineBtn = this.container.querySelector("#tracer-btn-loadline") as HTMLButtonElement | null;
+    loadLineBtn?.addEventListener("click", () => {
+      this.isLoadLineEnabled = !this.isLoadLineEnabled;
+      loadLineBtn.classList.toggle("active", this.isLoadLineEnabled);
+      loadLineBtn.textContent = this.isLoadLineEnabled ? "📈 Recta Carga: ON" : "📈 Recta Carga: OFF";
+
+      if (this.isLoadLineEnabled && this.lastResult) {
+        const { qPoint } = calculateLoadLineAndQPoint(this.vMax * 0.8, 1000, this.lastResult.traces);
+        if (qPoint) {
+          this.qPoint = qPoint;
+          this.isQPointEnabled = true;
+          if (qBtn) {
+            qBtn.classList.add("active");
+            qBtn.textContent = "📍 Punto Q: ON";
+          }
+        }
       }
       this.draw();
       this.updateStatusFooter();
@@ -333,11 +366,16 @@ export class CurveTracerInstrument {
     if (!this.canvas || !this.ctx) return;
     const { width, height } = ensureCanvasDpr(this.canvas, this.ctx);
 
+    const loadLine = this.isLoadLineEnabled && this.lastResult
+      ? calculateLoadLineAndQPoint(this.vMax * 0.8, 1000, this.lastResult.traces).loadLinePoints
+      : null;
+
     drawCurveTracer(this.ctx, {
       width,
       height,
       result: this.lastResult,
       qPoint: this.qPoint,
+      loadLine,
       showTangent: true,
     });
   }

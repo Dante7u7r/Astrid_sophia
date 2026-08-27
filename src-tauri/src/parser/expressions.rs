@@ -253,128 +253,404 @@ pub fn format_va_expr(expr: &VaExpr) -> String {
     }
 }
 
-/// Evaluador simple de expresiones matemáticas estilo Pratt para interpolación de parámetros
-/// en subcircuitos. Soporta +, -, *, / y valores SPICE (ej: 10k, 1meg).
+/// Evaluador completo de expresiones matemáticas y paramétricas estilo SPICE para subcircuitos
+/// y directivas .PARAM. Soporta +, -, *, /, ^, paréntesis anidados, funciones matemáticas
+/// (sqrt, exp, ln, log10, pow, abs, min, max, sin, cos, tan, sinh, cosh, tanh, floor, ceil, round),
+/// constantes físicas (pi, e, vt, boltz, q) y sufijos de ingeniería estándar (k, meg, u, n, p, f, m, etc.).
 pub fn evaluate_expression(expr: &str, param_env: &HashMap<String, f64>) -> Result<f64, String> {
-    let expr_clean = expr.trim();
-    if expr_clean.is_empty() {
+    let clean = expr.trim().trim_start_matches('{').trim_end_matches('}').trim();
+    if clean.is_empty() {
         return Err("Expresión vacía".to_string());
     }
 
-    // Tokenizar la expresión
-    let mut tokens: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let chars: Vec<char> = expr_clean.chars().collect();
+    let tokens = tokenize_param_expr(clean)?;
+    let mut parser = ParamExprParser::new(tokens, param_env);
+    let result = parser.parse_expression()?;
+    if parser.has_remaining() {
+        return Err(format!(
+            "Tokens no consumidos al final de la expresión: {:?}",
+            parser.peek()
+        ));
+    }
+    Ok(result)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ParamToken {
+    Num(f64),
+    Ident(String),
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    Caret,
+    LParen,
+    RParen,
+    Comma,
+}
+
+fn tokenize_param_expr(s: &str) -> Result<Vec<ParamToken>, String> {
+    let chars: Vec<char> = s.chars().collect();
+    let len = chars.len();
+    let mut tokens = Vec::new();
     let mut i = 0;
 
-    while i < chars.len() {
-        let c = chars[i];
-        match c {
-            '+' | '-' if !current.is_empty() => {
-                tokens.push(current.clone());
-                current.clear();
-                tokens.push(c.to_string());
+    while i < len {
+        let ch = chars[i];
+        if ch.is_whitespace() {
+            i += 1;
+            continue;
+        }
+
+        match ch {
+            '+' => {
+                tokens.push(ParamToken::Plus);
+                i += 1;
             }
-            '+' | '-' if current.is_empty() => {
-                // Signo unario: incluir en el token actual
-                current.push(c);
+            '-' => {
+                tokens.push(ParamToken::Minus);
+                i += 1;
             }
-            '*' | '/' => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
+            '*' => {
+                tokens.push(ParamToken::Mul);
+                i += 1;
+            }
+            '/' => {
+                tokens.push(ParamToken::Div);
+                i += 1;
+            }
+            '^' => {
+                tokens.push(ParamToken::Caret);
+                i += 1;
+            }
+            '(' => {
+                tokens.push(ParamToken::LParen);
+                i += 1;
+            }
+            ')' => {
+                tokens.push(ParamToken::RParen);
+                i += 1;
+            }
+            ',' => {
+                tokens.push(ParamToken::Comma);
+                i += 1;
+            }
+            '0'..='9' | '.' => {
+                let start = i;
+                // Escanear número con posible sufijo SPICE (ej. 10k, 1.5Meg, 100u, 1e-3, 25mil)
+                while i < len {
+                    let c = chars[i];
+                    if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '%' {
+                        // Manejar signos en notación científica como 1e-6
+                        if (c == '+' || c == '-') && i > start {
+                            let prev = chars[i - 1];
+                            if prev == 'e' || prev == 'E' {
+                                i += 1;
+                                continue;
+                            }
+                            break;
+                        }
+                        i += 1;
+                    } else if (c == '+' || c == '-') && i > start && (chars[i - 1] == 'e' || chars[i - 1] == 'E') {
+                        i += 1;
+                    } else {
+                        break;
+                    }
                 }
-                tokens.push(c.to_string());
-            }
-            '(' | ')' => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
+                let raw_token: String = chars[start..i].iter().collect();
+                if let Ok(val) = parse_spice_value(&raw_token) {
+                    tokens.push(ParamToken::Num(val));
+                } else if let Ok(val) = raw_token.parse::<f64>() {
+                    tokens.push(ParamToken::Num(val));
+                } else {
+                    return Err(format!("Número o sufijo SPICE inválido en expresión: '{}'", raw_token));
                 }
-                tokens.push(c.to_string());
             }
-            ' ' | '\t' => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
+            c if c.is_ascii_alphabetic() || c == '_' => {
+                let start = i;
+                while i < len && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                    i += 1;
                 }
+                let ident: String = chars[start..i].iter().collect();
+                tokens.push(ParamToken::Ident(ident));
             }
             _ => {
-                current.push(c);
+                return Err(format!("Carácter inesperado '{}' en expresión SPICE", ch));
             }
         }
-        i += 1;
-    }
-    if !current.is_empty() {
-        tokens.push(current);
     }
 
-    // Resolver variables por sus valores del entorno de parámetros
-    let resolved: Vec<String> = tokens
-        .iter()
-        .map(|t| {
-            if t == "+" || t == "-" || t == "*" || t == "/" || t == "(" || t == ")" {
-                t.clone()
-            } else if let Some(&val) = param_env.get(&t.to_lowercase()) {
-                format!("{}", val)
-            } else {
-                t.clone()
-            }
-        })
-        .collect();
+    Ok(tokens)
+}
 
-    // Evaluar con precedencia: primero * y /, luego + y -
-    // Paso 1: Convertir tokens a valores numéricos y operadores
-    let mut values: Vec<f64> = Vec::new();
-    let mut ops: Vec<char> = Vec::new();
+struct ParamExprParser<'a> {
+    tokens: Vec<ParamToken>,
+    pos: usize,
+    param_env: &'a HashMap<String, f64>,
+}
 
-    let mut idx = 0;
-    while idx < resolved.len() {
-        let t = &resolved[idx];
-        if t == "+" || t == "-" || t == "*" || t == "/" {
-            ops.push(t.chars().next().unwrap());
+impl<'a> ParamExprParser<'a> {
+    fn new(tokens: Vec<ParamToken>, param_env: &'a HashMap<String, f64>) -> Self {
+        ParamExprParser {
+            tokens,
+            pos: 0,
+            param_env,
+        }
+    }
+
+    fn peek(&self) -> Option<&ParamToken> {
+        self.tokens.get(self.pos)
+    }
+
+    fn has_remaining(&self) -> bool {
+        self.pos < self.tokens.len()
+    }
+
+    fn next_token(&mut self) -> Option<ParamToken> {
+        if self.pos < self.tokens.len() {
+            let t = self.tokens[self.pos].clone();
+            self.pos += 1;
+            Some(t)
         } else {
-            let val = parse_spice_value(t)
-                .map_err(|_| format!("No se pudo evaluar '{}' en expresión", t))?;
-            values.push(val);
+            None
         }
-        idx += 1;
     }
 
-    if values.is_empty() {
-        return Err("Expresión sin valores numéricos".to_string());
+    fn parse_expression(&mut self) -> Result<f64, String> {
+        self.parse_additive()
     }
 
-    // Paso 2: Evaluar * y / de izquierda a derecha
-    let mut vals2: Vec<f64> = vec![values[0]];
-    let mut ops2: Vec<char> = Vec::new();
-
-    for i in 0..ops.len() {
-        if ops[i] == '*' {
-            let last = vals2.pop().unwrap();
-            vals2.push(last * values[i + 1]);
-        } else if ops[i] == '/' {
-            let last = vals2.pop().unwrap();
-            if values[i + 1].abs() < 1e-30 {
-                vals2.push(0.0);
-            } else {
-                vals2.push(last / values[i + 1]);
+    fn parse_additive(&mut self) -> Result<f64, String> {
+        let mut left = self.parse_multiplicative()?;
+        while let Some(tok) = self.peek() {
+            match tok {
+                ParamToken::Plus => {
+                    self.next_token();
+                    let right = self.parse_multiplicative()?;
+                    left += right;
+                }
+                ParamToken::Minus => {
+                    self.next_token();
+                    let right = self.parse_multiplicative()?;
+                    left -= right;
+                }
+                _ => break,
             }
+        }
+        Ok(left)
+    }
+
+    fn parse_multiplicative(&mut self) -> Result<f64, String> {
+        let mut left = self.parse_power()?;
+        while let Some(tok) = self.peek() {
+            match tok {
+                ParamToken::Mul => {
+                    self.next_token();
+                    let right = self.parse_power()?;
+                    left *= right;
+                }
+                ParamToken::Div => {
+                    self.next_token();
+                    let right = self.parse_power()?;
+                    if right.abs() < 1e-30 {
+                        left = 0.0;
+                    } else {
+                        left /= right;
+                    }
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
+
+    fn parse_power(&mut self) -> Result<f64, String> {
+        let base = self.parse_unary()?;
+        if let Some(ParamToken::Caret) = self.peek() {
+            self.next_token();
+            let exponent = self.parse_power()?; // asociatividad por la derecha
+            Ok(base.powf(exponent))
         } else {
-            ops2.push(ops[i]);
-            vals2.push(values[i + 1]);
+            Ok(base)
         }
     }
 
-    // Paso 3: Evaluar + y -
-    let mut result = vals2[0];
-    for i in 0..ops2.len() {
-        match ops2[i] {
-            '+' => result += vals2[i + 1],
-            '-' => result -= vals2[i + 1],
-            _ => {}
+    fn parse_unary(&mut self) -> Result<f64, String> {
+        match self.peek() {
+            Some(ParamToken::Plus) => {
+                self.next_token();
+                self.parse_unary()
+            }
+            Some(ParamToken::Minus) => {
+                self.next_token();
+                let val = self.parse_unary()?;
+                Ok(-val)
+            }
+            _ => self.parse_primary(),
         }
     }
 
-    Ok(result)
+    fn parse_primary(&mut self) -> Result<f64, String> {
+        match self.next_token() {
+            Some(ParamToken::Num(v)) => Ok(v),
+            Some(ParamToken::LParen) => {
+                let inner = self.parse_expression()?;
+                match self.next_token() {
+                    Some(ParamToken::RParen) => Ok(inner),
+                    other => Err(format!("Se esperaba ')' en expresión, encontrado: {:?}", other)),
+                }
+            }
+            Some(ParamToken::Ident(name)) => {
+                let name_lower = name.to_lowercase();
+
+                // Verificar si es una llamada a función: func(...)
+                if let Some(ParamToken::LParen) = self.peek() {
+                    self.next_token(); // consumir '('
+                    let mut args = Vec::new();
+                    if let Some(ParamToken::RParen) = self.peek() {
+                        self.next_token(); // consumir ')'
+                    } else {
+                        loop {
+                            let arg = self.parse_expression()?;
+                            args.push(arg);
+                            match self.peek() {
+                                Some(ParamToken::Comma) => {
+                                    self.next_token(); // consumir ','
+                                }
+                                Some(ParamToken::RParen) => {
+                                    self.next_token(); // consumir ')'
+                                    break;
+                                }
+                                other => {
+                                    return Err(format!(
+                                        "Se esperaba ',' o ')' en llamada a función '{}', encontrado: {:?}",
+                                        name, other
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    return self.eval_function(&name_lower, &args);
+                }
+
+                // Constantes científicas predefinidas
+                match name_lower.as_str() {
+                    "pi" => Ok(std::f64::consts::PI),
+                    "e" => Ok(std::f64::consts::E),
+                    "vt" => Ok(0.02585),
+                    "boltz" | "k_b" => Ok(1.380649e-23),
+                    "echarge" | "q" => Ok(1.602176634e-19),
+                    _ => {
+                        // Buscar en el entorno de parámetros
+                        if let Some(&val) = self.param_env.get(&name_lower) {
+                            Ok(val)
+                        } else if let Some(&val) = self.param_env.get(&name) {
+                            Ok(val)
+                        } else if let Ok(val) = parse_spice_value(&name) {
+                            Ok(val)
+                        } else {
+                            Err(format!(
+                                "Parámetro o variable no definido en el entorno: '{}'",
+                                name
+                            ))
+                        }
+                    }
+                }
+            }
+            other => Err(format!("Token inesperado en expresión matemática: {:?}", other)),
+        }
+    }
+
+    fn eval_function(&self, name: &str, args: &[f64]) -> Result<f64, String> {
+        match name {
+            "sqrt" => {
+                let x = args.first().copied().ok_or("sqrt requiere 1 argumento")?;
+                if x < 0.0 {
+                    Err(format!("Argumento negativo para sqrt: {}", x))
+                } else {
+                    Ok(x.sqrt())
+                }
+            }
+            "exp" => {
+                let x = args.first().copied().ok_or("exp requiere 1 argumento")?;
+                Ok(x.exp())
+            }
+            "ln" => {
+                let x = args.first().copied().ok_or("ln requiere 1 argumento")?;
+                if x <= 0.0 {
+                    Err(format!("Argumento no positivo para ln: {}", x))
+                } else {
+                    Ok(x.ln())
+                }
+            }
+            "log" | "log10" => {
+                let x = args.first().copied().ok_or("log10 requiere 1 argumento")?;
+                if x <= 0.0 {
+                    Err(format!("Argumento no positivo para log10: {}", x))
+                } else {
+                    Ok(x.log10())
+                }
+            }
+            "pow" => {
+                if args.len() < 2 {
+                    return Err("pow requiere 2 argumentos: pow(base, exp)".to_string());
+                }
+                Ok(args[0].powf(args[1]))
+            }
+            "abs" => {
+                let x = args.first().copied().ok_or("abs requiere 1 argumento")?;
+                Ok(x.abs())
+            }
+            "min" => {
+                if args.len() < 2 {
+                    return Err("min requiere al menos 2 argumentos".to_string());
+                }
+                Ok(args[0].min(args[1]))
+            }
+            "max" => {
+                if args.len() < 2 {
+                    return Err("max requiere al menos 2 argumentos".to_string());
+                }
+                Ok(args[0].max(args[1]))
+            }
+            "sin" => {
+                let x = args.first().copied().ok_or("sin requiere 1 argumento")?;
+                Ok(x.sin())
+            }
+            "cos" => {
+                let x = args.first().copied().ok_or("cos requiere 1 argumento")?;
+                Ok(x.cos())
+            }
+            "tan" => {
+                let x = args.first().copied().ok_or("tan requiere 1 argumento")?;
+                Ok(x.tan())
+            }
+            "sinh" => {
+                let x = args.first().copied().ok_or("sinh requiere 1 argumento")?;
+                Ok(x.sinh())
+            }
+            "cosh" => {
+                let x = args.first().copied().ok_or("cosh requiere 1 argumento")?;
+                Ok(x.cosh())
+            }
+            "tanh" => {
+                let x = args.first().copied().ok_or("tanh requiere 1 argumento")?;
+                Ok(x.tanh())
+            }
+            "floor" => {
+                let x = args.first().copied().ok_or("floor requiere 1 argumento")?;
+                Ok(x.floor())
+            }
+            "ceil" => {
+                let x = args.first().copied().ok_or("ceil requiere 1 argumento")?;
+                Ok(x.ceil())
+            }
+            "round" => {
+                let x = args.first().copied().ok_or("round requiere 1 argumento")?;
+                Ok(x.round())
+            }
+            _ => Err(format!("Función matemática no reconocida en expresión SPICE: '{}'", name)),
+        }
+    }
 }

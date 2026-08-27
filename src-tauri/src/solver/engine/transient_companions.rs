@@ -8,9 +8,11 @@ use super::transient_state_updates::IntegrationHistoryParams;
 pub(crate) struct CompanionStampState<'a> {
     pub cap_states: &'a HashMap<String, f64>,
     pub cap_states_prev: &'a HashMap<String, f64>,
+    pub cap_history: Option<&'a [HashMap<String, f64>]>,
     pub cap_currents: &'a HashMap<String, f64>,
     pub ind_states: &'a HashMap<String, f64>,
     pub ind_states_prev: &'a HashMap<String, f64>,
+    pub ind_history: Option<&'a [HashMap<String, f64>]>,
     pub ind_voltages: &'a HashMap<String, f64>,
     pub switch_states: &'a HashMap<String, bool>,
     pub local_overrides: &'a ComponentOverrideMap,
@@ -40,16 +42,38 @@ pub(crate) fn stamp_transient_companions(
                 let dt_safe = params.dt.max(1e-18);
                 let cap_val_safe = comp.value.max(1e-18);
 
-                let (g_eq, i_eq) = if params.gear2_active_this_step {
+                let (g_eq, i_eq) = if params.trap_active_this_step {
+                    let prev_ic = *state.cap_currents.get(&comp.id).unwrap_or(&0.0);
+                    let g = 2.0 * cap_val_safe / dt_safe;
+                    let i = prev_ic + g * prev_vc;
+                    (g, i)
+                } else if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+                    let alpha_0 = params.bdf_alphas[0].max(1e-18);
+                    let g = alpha_0 * cap_val_safe;
+                    let mut sum_hist = 0.0;
+                    for j in 1..=params.bdf_order.min(params.bdf_alphas.len() - 1) {
+                        let past_v = if j == 1 {
+                            prev_vc
+                        } else if j == 2 {
+                            *state.cap_states_prev.get(&comp.id).unwrap_or(&prev_vc)
+                        } else if let Some(hist) = state.cap_history {
+                            if j - 1 < hist.len() {
+                                *hist[j - 1].get(&comp.id).unwrap_or(&prev_vc)
+                            } else {
+                                prev_vc
+                            }
+                        } else {
+                            prev_vc
+                        };
+                        sum_hist += params.bdf_alphas[j] * past_v;
+                    }
+                    let i = -cap_val_safe * sum_hist;
+                    (g, i)
+                } else if params.gear2_active_this_step {
                     let prev_prev_vc = *state.cap_states_prev.get(&comp.id).unwrap_or(&prev_vc);
                     let g = params.gear_a * cap_val_safe;
                     let i =
                         -cap_val_safe * (params.gear_b * prev_vc + params.gear_c * prev_prev_vc);
-                    (g, i)
-                } else if params.trap_active_this_step {
-                    let prev_ic = *state.cap_currents.get(&comp.id).unwrap_or(&0.0);
-                    let g = 2.0 * cap_val_safe / dt_safe;
-                    let i = prev_ic + g * prev_vc;
                     (g, i)
                 } else {
                     let g = cap_val_safe / dt_safe;
@@ -99,16 +123,38 @@ pub(crate) fn stamp_transient_companions(
                 }
                 .max(1e-18);
 
-                let (g_eq, i_eq) = if params.gear2_active_this_step {
+                let (g_eq, i_eq) = if params.trap_active_this_step {
+                    let g = dt_safe / (2.0 * ind_val_safe);
+                    let prev_vl = *state.ind_voltages.get(&comp.id).unwrap_or(&0.0);
+                    let i = prev_il + g * prev_vl;
+                    (g, i)
+                } else if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+                    let alpha_0 = params.bdf_alphas[0].max(1e-18);
+                    let g = 1.0 / (alpha_0 * ind_val_safe);
+                    let mut sum_hist = 0.0;
+                    for j in 1..=params.bdf_order.min(params.bdf_alphas.len() - 1) {
+                        let past_i = if j == 1 {
+                            prev_il
+                        } else if j == 2 {
+                            *state.ind_states_prev.get(&comp.id).unwrap_or(&prev_il)
+                        } else if let Some(hist) = state.ind_history {
+                            if j - 1 < hist.len() {
+                                *hist[j - 1].get(&comp.id).unwrap_or(&prev_il)
+                            } else {
+                                prev_il
+                            }
+                        } else {
+                            prev_il
+                        };
+                        sum_hist += params.bdf_alphas[j] * past_i;
+                    }
+                    let i = -(1.0 / alpha_0) * sum_hist;
+                    (g, i)
+                } else if params.gear2_active_this_step {
                     let prev_prev_il = *state.ind_states_prev.get(&comp.id).unwrap_or(&prev_il);
                     let g = 1.0 / (params.gear_a.max(1e-18) * ind_val_safe);
                     let i = -(params.gear_b / params.gear_a.max(1e-18)) * prev_il
                         - (params.gear_c / params.gear_a.max(1e-18)) * prev_prev_il;
-                    (g, i)
-                } else if params.trap_active_this_step {
-                    let g = dt_safe / (2.0 * ind_val_safe);
-                    let prev_vl = *state.ind_voltages.get(&comp.id).unwrap_or(&0.0);
-                    let i = prev_il + g * prev_vl;
                     (g, i)
                 } else {
                     let g = dt_safe / ind_val_safe;
@@ -216,7 +262,9 @@ fn stamp_coupled_inductors(
             continue;
         }
 
-        let step_factor = if params.gear2_active_this_step {
+        let step_factor = if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+            1.0 / params.bdf_alphas[0].max(1e-18)
+        } else if params.gear2_active_this_step {
             1.0 / params.gear_a
         } else {
             params.dt
@@ -239,7 +287,42 @@ fn stamp_coupled_inductors(
 
         let prev_il1 = *state.ind_states.get(&l1.id).unwrap_or(&0.0);
         let prev_il2 = *state.ind_states.get(&l2.id).unwrap_or(&0.0);
-        let (i_eq1, i_eq2) = if params.gear2_active_this_step {
+        let (i_eq1, i_eq2) = if params.bdf_order >= 1 && !params.bdf_alphas.is_empty() {
+            let alpha_0 = params.bdf_alphas[0].max(1e-18);
+            let mut sum1 = 0.0;
+            let mut sum2 = 0.0;
+            for j in 1..=params.bdf_order.min(params.bdf_alphas.len() - 1) {
+                let past_il1 = if j == 1 {
+                    prev_il1
+                } else if j == 2 {
+                    *state.ind_states_prev.get(&l1.id).unwrap_or(&prev_il1)
+                } else if let Some(hist) = state.ind_history {
+                    if j - 1 < hist.len() {
+                        *hist[j - 1].get(&l1.id).unwrap_or(&prev_il1)
+                    } else {
+                        prev_il1
+                    }
+                } else {
+                    prev_il1
+                };
+                let past_il2 = if j == 1 {
+                    prev_il2
+                } else if j == 2 {
+                    *state.ind_states_prev.get(&l2.id).unwrap_or(&prev_il2)
+                } else if let Some(hist) = state.ind_history {
+                    if j - 1 < hist.len() {
+                        *hist[j - 1].get(&l2.id).unwrap_or(&prev_il2)
+                    } else {
+                        prev_il2
+                    }
+                } else {
+                    prev_il2
+                };
+                sum1 += params.bdf_alphas[j] * past_il1;
+                sum2 += params.bdf_alphas[j] * past_il2;
+            }
+            (-(1.0 / alpha_0) * sum1, -(1.0 / alpha_0) * sum2)
+        } else if params.gear2_active_this_step {
             let prev_prev_il1 = *state.ind_states_prev.get(&l1.id).unwrap_or(&prev_il1);
             let prev_prev_il2 = *state.ind_states_prev.get(&l2.id).unwrap_or(&prev_il2);
             (
@@ -323,9 +406,11 @@ mod tests {
             CompanionStampState {
                 cap_states: &self.cap_states,
                 cap_states_prev: &self.cap_states_prev,
+                cap_history: None,
                 cap_currents: &self.cap_currents,
                 ind_states: &self.ind_states,
                 ind_states_prev: &self.ind_states_prev,
+                ind_history: None,
                 ind_voltages: &self.ind_voltages,
                 switch_states: &self.switch_states,
                 local_overrides: &self.local_overrides,
@@ -338,6 +423,8 @@ mod tests {
             integration_method: "euler",
             trap_active_this_step: false,
             gear2_active_this_step: false,
+            bdf_order: 1,
+            bdf_alphas: &[],
             gear_a: 0.0,
             gear_b: 0.0,
             gear_c: 0.0,
@@ -395,6 +482,8 @@ mod tests {
             integration_method: "trap",
             trap_active_this_step: false,
             gear2_active_this_step: false,
+            bdf_order: 1,
+            bdf_alphas: &[2.0, -2.0],
             gear_a: 0.0,
             gear_b: 0.0,
             gear_c: 0.0,
@@ -434,6 +523,8 @@ mod tests {
             integration_method: "trap",
             trap_active_this_step: true,
             gear2_active_this_step: false,
+            bdf_order: 2,
+            bdf_alphas: &[],
             gear_a: 0.0,
             gear_b: 0.0,
             gear_c: 0.0,

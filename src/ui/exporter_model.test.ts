@@ -114,7 +114,7 @@ describe("exporter_model", () => {
 
     const csv = buildMeasurementsCsvExport(s, "Amplificador BJT");
     expect(csv.filename).toBe("mediciones_amplificador_bjt.csv");
-    expect(csv.content).toContain("# Mediciones Automáticas .MEAS - Astryd Sophia");
+    expect(csv.content).toContain("# Mediciones Automáticas .MEAS - Biaani");
     expect(csv.content).toContain("# Circuito: Amplificador BJT");
     expect(csv.content).toContain("meas-1-vpp");
 

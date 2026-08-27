@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Script de inspección en vivo de Astryd Sophia.
- * Lee el estado actual exportado por la aplicación en `.astryd_live/state.json`
+ * Script de inspección en vivo de Biaani.
+ * Lee el estado actual exportado por la aplicación en `.biaani_live/state.json`
  * y presenta un resumen completo de componentes, voltajes, cables y errores de ERC.
  */
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 
-const LIVE_DIR = resolve(process.cwd(), ".astryd_live");
+const LIVE_DIR = resolve(process.cwd(), ".biaani_live");
 const STATE_FILE = join(LIVE_DIR, "state.json");
 const SVG_FILE = join(LIVE_DIR, "schematic.svg");
 
 function formatLiveSummary() {
   if (!existsSync(STATE_FILE)) {
-    console.log("No se encontró un estado en vivo de Astryd Sophia en `.astryd_live/state.json`.");
+    console.log("No se encontró un estado en vivo de Biaani en `.biaani_live/state.json`.");
     console.log("Asegúrate de que la aplicación esté abierta en el simulador.");
     process.exit(0);
   }
@@ -25,7 +25,7 @@ function formatLiveSummary() {
     const state = JSON.parse(raw);
 
     console.log("==================================================================");
-    console.log(`📡 ASTRYD SOPHIA — ESTADO EN VIVO (${state.timestamp})`);
+    console.log(`📡 BIAANI — ESTADO EN VIVO (${state.timestamp})`);
     console.log("==================================================================");
     console.log(`Pestaña activa:     ${state.activeTab?.name ?? "N/A"} [${state.activeTab?.analysisMode ?? "N/A"}]`);
     console.log(`Modificaciones:     ${state.activeTab?.unsaved ? "Con cambios sin guardar" : "Guardado"}`);

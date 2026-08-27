@@ -6,6 +6,7 @@
  */
 
 import type { StabilityAnalysisResult } from "../simulation/tauri_commands";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export function drawPoleZeroPlot(
   ctx: CanvasRenderingContext2D,
@@ -13,8 +14,10 @@ export function drawPoleZeroPlot(
   height: number,
   result: StabilityAnalysisResult | null,
 ): void {
+  const theme = getInstrumentThemeColors();
+
   // Fondo
-  ctx.fillStyle = "#070a14";
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   const pad = 40;
@@ -44,15 +47,15 @@ export function drawPoleZeroPlot(
 
   // 1. Sombreado de estabilidad:
   // Semiplano Izquierdo LHP (\sigma < 0): Estable (azul muy sutil)
-  ctx.fillStyle = "rgba(56, 189, 248, 0.04)";
+  ctx.fillStyle = theme.isClassroom ? "rgba(2, 132, 199, 0.06)" : "rgba(56, 189, 248, 0.04)";
   ctx.fillRect(pad, pad, plotWidth / 2, plotHeight);
 
   // Semiplano Derecho RHP (\sigma > 0): Inestable (rojo sutil)
-  ctx.fillStyle = "rgba(239, 68, 68, 0.06)";
+  ctx.fillStyle = theme.isClassroom ? "rgba(220, 38, 38, 0.08)" : "rgba(239, 68, 68, 0.06)";
   ctx.fillRect(originX, pad, plotWidth / 2, plotHeight);
 
   // 2. Retícula concéntrica de frecuencia natural \omega_n
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
   for (let r = 1; r <= 3; r++) {
     const radius = (maxCoord * (r / 3)) * scale;
@@ -62,7 +65,7 @@ export function drawPoleZeroPlot(
   }
 
   // 3. Ejes de coordenadas (\sigma y j\omega)
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+  ctx.strokeStyle = theme.axisLine;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   // Eje Real (\sigma)
@@ -75,7 +78,7 @@ export function drawPoleZeroPlot(
 
   // Etiquetas de Ejes
   ctx.font = "bold 9px 'JetBrains Mono', Consolas, monospace";
-  ctx.fillStyle = "#38bdf8";
+  ctx.fillStyle = theme.traceColors.ch2;
   ctx.textAlign = "right";
   ctx.fillText("Eje Real σ (rad/s)", pad + plotWidth - 6, originY - 6);
 
@@ -85,11 +88,11 @@ export function drawPoleZeroPlot(
 
   // 4. Zona de Estabilidad Info
   ctx.font = "8px 'JetBrains Mono', Consolas, monospace";
-  ctx.fillStyle = "rgba(56, 189, 248, 0.6)";
+  ctx.fillStyle = theme.isClassroom ? "#0284C7" : "rgba(56, 189, 248, 0.6)";
   ctx.textAlign = "left";
   ctx.fillText("✓ Semiplano Estable (LHP)", pad + 8, pad + 14);
 
-  ctx.fillStyle = "rgba(248, 113, 113, 0.6)";
+  ctx.fillStyle = theme.isClassroom ? "#DC2626" : "rgba(248, 113, 113, 0.6)";
   ctx.textAlign = "right";
   ctx.fillText("⚠ Semiplano Inestable (RHP)", pad + plotWidth - 8, pad + 14);
 

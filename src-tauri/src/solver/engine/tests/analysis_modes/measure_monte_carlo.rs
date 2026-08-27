@@ -101,11 +101,7 @@ fn test_measure_propagation_delay() {
         node_voltages.insert("1".to_string(), v_in);
         node_voltages.insert("2".to_string(), v_out);
 
-        time_steps.push(TimeStepResult {
-            time: t,
-            node_voltages,
-            branch_currents: HashMap::new(),
-        });
+        time_steps.push(TimeStepResult::new(t, node_voltages, HashMap::new()));
     }
 
     // Medir retardo de propagación al 50%

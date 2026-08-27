@@ -7,6 +7,7 @@
  */
 
 import { type FftAnalysisResult, type FftScaleMode } from "./fft_analyzer_model";
+import { getInstrumentThemeColors } from "./instrument_theme";
 
 export interface FftRenderOptions {
   width: number;
@@ -39,8 +40,10 @@ export function drawFftSpectrum(
     cursors,
   } = options;
 
+  const theme = getInstrumentThemeColors();
+
   // 1. Limpieza de pantalla
-  ctx.fillStyle = "#030508";
+  ctx.fillStyle = theme.screenBg;
   ctx.fillRect(0, 0, width, height);
 
   if (width <= 40 || height <= 40) return;
@@ -56,14 +59,14 @@ export function drawFftSpectrum(
   const dbMax = refLevelDb;
 
   // 2. Fondo del Área de Trazado
-  ctx.fillStyle = "rgba(4, 9, 20, 0.95)";
+  ctx.fillStyle = theme.plotAreaBg;
   ctx.fillRect(leftMargin, topMargin, plotW, plotH);
 
   // 3. Cuadrícula Reticular de Laboratorio (10 Divs Horizontales, 8 Divs Verticales)
   const numDivsX = 10;
   const numDivsY = 8;
 
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.12)";
+  ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
 
   // Líneas verticales (Frecuencia)
@@ -85,7 +88,7 @@ export function drawFftSpectrum(
 
     // Etiquetas del eje Y (dB / V)
     const dbVal = dbMax - (d * rangeDb) / numDivsY;
-    ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
+    ctx.fillStyle = theme.axisText;
     ctx.font = "9px monospace";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
@@ -93,21 +96,14 @@ export function drawFftSpectrum(
   }
 
   // Marco exterior
-  ctx.strokeStyle = "rgba(79, 156, 249, 0.35)";
+  ctx.strokeStyle = theme.axisLine;
   ctx.strokeRect(leftMargin, topMargin, plotW, plotH);
-
-  // Etiqueta de escala
-  const unitLabel = scaleMode === "dbu" ? "dBu" : scaleMode === "dbm_600" ? "dBm (600Ω)" : (scaleMode === "dbm_50" || scaleMode === "dbm") ? "dBm (50Ω)" : scaleMode.startsWith("linear") ? "V" : "dBV";
-  ctx.fillStyle = "#66fcf1";
-  ctx.font = "bold 9px monospace";
-  ctx.textAlign = "left";
-  ctx.fillText(`ESCALA: ${unitLabel}`, leftMargin + 4, topMargin - 6);
 
   // 4. Etiquetas de Frecuencia en Eje X
   const maxFreq = result ? result.samplingFreq / 2 : 10000;
   const freqPerDiv = maxFreq / numDivsX;
 
-  ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+  ctx.fillStyle = theme.axisText;
   ctx.font = "9px monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
@@ -119,14 +115,17 @@ export function drawFftSpectrum(
     ctx.fillText(`${fStr}Hz`, x, topMargin + plotH + 6);
   }
 
-  // Encabezado con escala y RBW
+  // Encabezado superior unificado con escala, unidad, RBW y referencia
+  const unitLabel = scaleMode === "dbu" ? "dBu" : scaleMode === "dbm_600" ? "dBm (600Ω)" : (scaleMode === "dbm_50" || scaleMode === "dbm") ? "dBm (50Ω)" : scaleMode.startsWith("linear") ? "V" : "dBV";
+  const rbw = result ? result.samplingFreq / result.numPoints : 0;
+  const rbwStr = rbw >= 1e3 ? `${(rbw / 1e3).toFixed(2)} kHz` : `${rbw.toFixed(1)} Hz`;
+  const scaleValueStr = scaleMode.startsWith("linear") ? `${(rangeDb / numDivsY).toFixed(2)} V/div` : `${(rangeDb / numDivsY).toFixed(0)} dB/div`;
+
   ctx.fillStyle = "#38bdf8";
   ctx.font = "bold 9px monospace";
   ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  const rbw = result ? result.samplingFreq / result.numPoints : 0;
-  const rbwStr = rbw >= 1e3 ? `${(rbw / 1e3).toFixed(2)} kHz` : `${rbw.toFixed(1)} Hz`;
-  ctx.fillText(`ESCALA: ${(rangeDb / numDivsY).toFixed(0)} dB/div | RBW: ${rbwStr} | REF: ${refLevelDb} dB`, leftMargin, topMargin / 2);
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`ESCALA: ${scaleValueStr} (${unitLabel}) | RBW: ${rbwStr} | REF: ${refLevelDb} dB`, leftMargin, topMargin - 4);
 
   if (!result || result.frequencies.length < 2) {
     ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
@@ -159,7 +158,7 @@ export function drawFftSpectrum(
   }
 
   // 6. Trazar Espectro en Vivo (Live Trace vectorial nítido)
-  ctx.strokeStyle = "#38bdf8";
+  ctx.strokeStyle = theme.traceColors.ch2;
   ctx.lineWidth = 1.8;
   ctx.beginPath();
 

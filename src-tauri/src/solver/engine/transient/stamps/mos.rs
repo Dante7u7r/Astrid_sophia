@@ -42,8 +42,9 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     };
 
     let vgs = v_gate - v_source;
-    let mut vds = v_drain - v_source;
-    if vds < 0.0 {
+    let raw_vds = v_drain - v_source;
+    let mut vds = raw_vds;
+    if vds < 0.0 && comp.comp_type != "sic_mosfet" && comp.comp_type != "gan_hemt" && comp.comp_type != "igbt" {
         vds = 0.0;
     }
     let vbs = v_bulk - v_source;
@@ -57,12 +58,44 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let lambda = 0.02;
     let vt = (PHYS_KB * tj_m) / PHYS_Q;
 
-    let (ids, gm, gds, igs, gg) = if comp.comp_type == "bsim4nmos" {
-        evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l)
+    let (ids, gm, gds, igs, gg, c_gs, c_gd, c_ds) = if comp.comp_type == "igbt" {
+        let params = IgbtParams {
+            vth: if comp.value > 0.0 { comp.value } else { 5.0 },
+            kp: comp.igbt_kp.unwrap_or(12.0),
+            alpha_pnp: comp.igbt_alpha.unwrap_or(0.55),
+            tau_hl: comp.igbt_tau.unwrap_or(1.8e-6),
+            wb0: comp.igbt_wb.unwrap_or(90e-6),
+            cge: comp.igbt_cge.unwrap_or(2.2e-9),
+            cgc0: comp.igbt_cgc.unwrap_or(180e-12),
+            ..IgbtParams::default()
+        };
+        let res = evaluate_igbt(vgs, raw_vds, &params, Some(tj_m - 273.15), None, Some(dt));
+        (res.ic, res.gm, res.go, 0.0, 1e-12, res.cge, res.cgc, res.cce)
+    } else if comp.comp_type == "sic_mosfet" {
+        let params = SicMosfetParams {
+            vth: if comp.value > 0.0 { comp.value } else { 3.0 },
+            rds_on: comp.ron.unwrap_or(0.065),
+            ..SicMosfetParams::default()
+        };
+        let res = evaluate_sic_mosfet(vgs, raw_vds, tj_m, &params);
+        (res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds)
+    } else if comp.comp_type == "gan_hemt" {
+        let params = GanHemtParams {
+            vth: if comp.value > 0.0 { comp.value } else { 1.5 },
+            rds_on: comp.ron.unwrap_or(0.035),
+            ..GanHemtParams::default()
+        };
+        let res = evaluate_gan_hemt(vgs, raw_vds, tj_m, &params);
+        (res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds)
+    } else if comp.comp_type == "bsim4nmos" {
+        let (i, g_m, g_ds, i_g, g_g) = evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l);
+        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (i, g_m, g_ds, i_g, g_g, cgs, cgd, cds)
     } else if comp.comp_type == "bsim3nmos" {
         let (ids_v, gm_v, gds_v) =
             evaluate_bsim3_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, None, Some(comp));
-        (ids_v, gm_v, gds_v, 0.0, 1e-12)
+        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (ids_v, gm_v, gds_v, 0.0, 1e-12, cgs, cgd, cds)
     } else if vgs <= vth {
         let i_sub0 = 1e-7;
         let n_factor = 1.5;
@@ -74,8 +107,8 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         let gm_val = ids_val / (n_factor * vt);
         let gds_val =
             i_sub0 * exp_sub * ((exp_vds / vt) * (1.0 + lambda * vds) + sub_factor * lambda);
-
-        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12)
+        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12, cgs, cgd, cds)
     } else if vds < vgs - vth {
         // Región de Triodo con canal corto
         let factor_early = 1.0 + lambda * vds;
@@ -84,8 +117,8 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         let ids_val = triode_curr * factor_early;
         let gm_val = (2.0 * kn * vds) * factor_early;
         let gds_val = (2.0 * kn * (vgs - vth - vds)) * factor_early + triode_curr * lambda;
-
-        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12)
+        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12, cgs, cgd, cds)
     } else {
         // Región de Saturación con canal corto
         let factor_early = 1.0 + lambda * vds;
@@ -94,16 +127,14 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         let ids_val = sat_curr * factor_early;
         let gm_val = (2.0 * kn * (vgs - vth)) * factor_early;
         let gds_val = sat_curr * lambda;
-
-        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12)
+        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12, cgs, cgd, cds)
     };
 
     let ieq = ids - gm * vgs - gds * vds;
     let ieq_g = igs - gg * vgs;
 
     // Estampar capacidades parásitas (Fase 13)
-    let (c_gs, c_gd, c_ds) =
-        get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
     let g_eq_gs = c_gs / dt;
     let g_eq_gd = c_gd / dt;
     let g_eq_ds = c_ds / dt;

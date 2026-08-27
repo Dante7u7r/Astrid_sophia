@@ -70,30 +70,44 @@ export function createComponent(
     newComp.label = valStr;
     newComp.value = valStr;
     const upper = valStr.toUpperCase();
-    if (["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS"].includes(upper)) {
+    if (["GND", "0", "0V", "TIERRA", "GROUND", "AGND", "DGND", "VSS", "VSS-", "EARTH", "CHASSIS", "CHASIS", "PE", "MASA"].includes(upper)) {
       newComp.terminalType = "ground";
+      if (["AGND", "GNDA"].includes(upper)) newComp.terminalStyle = "analog";
+      else if (["DGND", "GNDD"].includes(upper)) newComp.terminalStyle = "digital";
+      else if (["CHASSIS", "CHASIS", "FRAME"].includes(upper)) newComp.terminalStyle = "chassis";
+      else if (["EARTH", "PE", "TIERRA_FISICA"].includes(upper)) newComp.terminalStyle = "earth";
     } else if (["NC", "NO_CONNECT", "NO CONNECT", "N/C", "SIN_CONEXION", "SIN CONEXION"].includes(upper)) {
       newComp.terminalType = "no_connect";
-    } else if (["IN", "INPUT", "ENTRADA"].includes(upper)) {
+    } else if (upper === "TP" || upper.startsWith("TP") || upper.startsWith("TEST") || upper === "TEST_POINT") {
+      newComp.terminalType = "test_point";
+    } else if (["IN", "INPUT", "ENTRADA", "RX", "DIN", "MOSI"].includes(upper)) {
       newComp.terminalType = "input";
-    } else if (["OUT", "OUTPUT", "SALIDA"].includes(upper)) {
+    } else if (["OUT", "OUTPUT", "SALIDA", "TX", "DOUT", "MISO"].includes(upper)) {
       newComp.terminalType = "output";
-    } else if (upper.includes("CLK") || upper.includes("PULSE")) {
+    } else if (["IO", "INOUT", "BIDIR", "BIDIRECCIONAL", "DATA", "SDA", "SCL"].includes(upper) || upper.startsWith("DATA")) {
+      newComp.terminalType = "bidirectional";
+    } else if (/\[\d+:\d+\]|\[\d+\.\.\d+\]/i.test(upper)) {
+      newComp.terminalType = "bus_tap";
+    } else if (upper.includes("CLK") || upper.includes("PULSE") || upper.includes("RELOJ")) {
       newComp.terminalType = "generator";
       newComp.waveType = "square";
       newComp.frequency = 1000;
       newComp.amplitude = 5;
-    } else if (/^[+-]?\d+(\.\d+)?V?$/i.test(upper) || ["VCC", "VDD", "VEE", "VBAT", "VBUS"].includes(upper)) {
+    } else if (/^[+-]?\d+(\.\d+)?V?$/i.test(upper) || ["VCC", "VDD", "VEE", "VBAT", "VBUS", "VREF", "V+", "V-"].includes(upper)) {
       newComp.terminalType = "power";
       const match = upper.match(/^([+-]?\d+(?:\.\d+)?)/);
       if (match) {
         newComp.voltage = parseFloat(match[1]);
-      } else if (upper === "VCC") {
+      } else if (upper === "VCC" || upper === "VBUS") {
         newComp.voltage = 5.0;
       } else if (upper === "VDD") {
         newComp.voltage = 3.3;
       } else if (upper === "VEE") {
         newComp.voltage = -5.0;
+      } else if (upper === "VBAT") {
+        newComp.voltage = 3.7;
+      } else if (upper === "VREF") {
+        newComp.voltage = 2.5;
       }
     } else {
       newComp.terminalType = "signal";
@@ -187,6 +201,21 @@ export function mirrorSelection(
 
   for (const comp of targets) {
     comp.mirror = !comp.mirror;
+  }
+}
+
+export function mirrorSelectionVertical(
+  selectedComponents: readonly ComponentInstance[],
+  selectedComponent: ComponentInstance | null,
+): void {
+  const targets = selectedComponents.length > 0
+    ? selectedComponents
+    : selectedComponent
+      ? [selectedComponent]
+      : [];
+
+  for (const comp of targets) {
+    comp.mirrorY = !comp.mirrorY;
   }
 }
 

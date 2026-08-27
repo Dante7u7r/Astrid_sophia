@@ -17,7 +17,9 @@ use super::dc::*;
 use super::devices::*;
 use super::simulation_types::{SolverNumericalSettings, TimeStepResult, TransientSettings};
 use super::transient_companions::{stamp_transient_companions, CompanionStampState};
-use super::transient_mcu::{update_mcu_accepted_states, McuAcceptedStateMaps};
+use super::transient_mcu::{
+    is_mcu_component, update_mcu_accepted_states, McuAcceptedStateMaps, McuRuntimeManager,
+};
 use super::transient_mixed_signal::{
     detect_mixed_signal_crossings, initialize_mixed_signal_scheduler, process_mixed_signal_events,
 };
@@ -32,11 +34,11 @@ use super::transient_state_updates::{
     update_coupled_inductor_states, update_passive_storage_states, IntegrationHistoryParams,
 };
 use super::transient_step_control::{
-    predict_variable_order_step, update_trapezoidal_history, IntegrationMethodType,
-    VariableOrderController,
+    compute_bdf_coefficients, predict_variable_order_step, update_trapezoidal_history,
+    IntegrationMethodType, VariableOrderController,
 };
 use super::transient_switches::update_switch_states;
-use super::transient_thermal::update_device_junction_temperatures;
+use super::transient_thermal::{initialize_transient_thermal_models, update_device_junction_temperatures};
 use stamps::{stamp_behavioral_sources, stamp_component, StampContext};
 
 pub fn solve_transient_circuit(
@@ -194,6 +196,7 @@ where
         mut mcu_vdaceff,
     } = initialize_mcu_transient_state(netlist, t_amb);
     let mut device_tjunc = initialize_device_junction_temperatures(netlist, t_amb);
+    let mut thermal_models = initialize_transient_thermal_models(netlist, t_amb);
 
     // Armar la matriz lineal estática BASE (Resistores, Fuentes de voltaje independientes)
     let mut matrix_a_linear = DMatrix::<f64>::zeros(size, size);
@@ -208,6 +211,7 @@ where
     )?;
 
     let mut ms_scheduler = initialize_mixed_signal_scheduler(netlist);
+    let mut mcu_manager = McuRuntimeManager::new(netlist)?;
 
     // VARIABLES DE TIEMPO ADAPTATIVO
     let mut dt = settings.dt;
@@ -250,6 +254,10 @@ where
     let mut sol_n2 = current_solution.clone(); // Solución en n-2
     let mut steps_completed = 0;
 
+    let mut cap_history: Vec<HashMap<String, f64>> = Vec::new();
+    let mut ind_history: Vec<HashMap<String, f64>> = Vec::new();
+    let mut recent_dts: Vec<f64> = Vec::new();
+
     // Identificar nodos conectados a componentes dinámicos reactivos para acotar LTE
     let mut dynamic_nodes = std::collections::HashSet::new();
     for comp in &netlist.components {
@@ -267,6 +275,7 @@ where
             || comp.comp_type == "bsim4nmos"
             || comp.comp_type == "bsim4pmos"
             || comp.comp_type.ends_with("_gate")
+            || is_mcu_component(comp)
         {
             for pin in &comp.pins {
                 if let Ok(node_idx) = pin.parse::<usize>() {
@@ -299,19 +308,38 @@ where
         let active_method = order_controller.active_method;
         let trap_active_this_step = active_method == IntegrationMethodType::Trap
             && order_controller.steps_with_current_method >= 1;
-        let gear2_active_this_step = active_method == IntegrationMethodType::Gear2
+        let gear2_active_this_step = (active_method == IntegrationMethodType::Gear2
+            || active_method == IntegrationMethodType::TrBdf2)
             && order_controller.steps_with_current_method >= 2;
+
+        let bdf_order = match active_method {
+            IntegrationMethodType::Euler => 1,
+            IntegrationMethodType::TrBdf2 | IntegrationMethodType::Gear2 => {
+                2.min(order_controller.steps_with_current_method + 1)
+            }
+            IntegrationMethodType::Gear3 => 3.min(order_controller.steps_with_current_method + 1),
+            IntegrationMethodType::Gear4 => 4.min(order_controller.steps_with_current_method + 1),
+            IntegrationMethodType::Gear5 => 5.min(order_controller.steps_with_current_method + 1),
+            IntegrationMethodType::Gear6 => 6.min(order_controller.steps_with_current_method + 1),
+            IntegrationMethodType::Trap => 2,
+        };
+        let mut dts_for_bdf = vec![dt];
+        dts_for_bdf.extend_from_slice(&recent_dts);
+        let bdf_alphas = compute_bdf_coefficients(bdf_order, &dts_for_bdf);
 
         // Respaldar estados antes de intentar resolver el paso
         let cap_states_backup = cap_states.clone();
         let ind_states_backup = ind_states.clone();
         let cap_states_prev_backup = cap_states_prev.clone();
         let ind_states_prev_backup = ind_states_prev.clone();
+        let cap_history_backup = cap_history.clone();
+        let ind_history_backup = ind_history.clone();
         let switch_states_backup = switch_states.clone();
         let mcu_tchip_backup = mcu_tchip.clone();
         let mcu_vsample_backup = mcu_vsample.clone();
         let mcu_vdaceff_backup = mcu_vdaceff.clone();
         let device_tjunc_backup = device_tjunc.clone();
+        let thermal_models_backup = thermal_models.clone();
         let ms_scheduler_backup = ms_scheduler.clone();
 
         // Acotar timestep si se intercepta un evento digital intermedio
@@ -367,6 +395,8 @@ where
             integration_method: active_method.as_str(),
             trap_active_this_step,
             gear2_active_this_step,
+            bdf_order: if active_method.is_bdf() { bdf_order } else { 0 },
+            bdf_alphas: &bdf_alphas,
             gear_a,
             gear_b,
             gear_c,
@@ -379,9 +409,11 @@ where
             &CompanionStampState {
                 cap_states: &cap_states,
                 cap_states_prev: &cap_states_prev,
+                cap_history: Some(&cap_history),
                 cap_currents: &cap_currents,
                 ind_states: &ind_states,
                 ind_states_prev: &ind_states_prev,
+                ind_history: Some(&ind_history),
                 ind_voltages: &ind_voltages,
                 switch_states: &switch_states,
                 local_overrides: &local_overrides,
@@ -542,11 +574,14 @@ where
                 ind_states = ind_states_backup;
                 cap_states_prev = cap_states_prev_backup;
                 ind_states_prev = ind_states_prev_backup;
+                cap_history = cap_history_backup;
+                ind_history = ind_history_backup;
                 switch_states = switch_states_backup;
                 mcu_tchip = mcu_tchip_backup;
                 mcu_vsample = mcu_vsample_backup;
                 mcu_vdaceff = mcu_vdaceff_backup;
                 device_tjunc = device_tjunc_backup;
+                thermal_models = thermal_models_backup;
                 ms_scheduler = ms_scheduler_backup;
 
                 order_controller.active_method = decision.next_method;
@@ -558,6 +593,10 @@ where
                 let accepted_time = step_time;
                 current_solution = step_solution.clone();
                 prev_dt = accepted_dt;
+                recent_dts.insert(0, accepted_dt);
+                if recent_dts.len() > 6 {
+                    recent_dts.pop();
+                }
 
                 // Rotar histórico de soluciones
                 sol_n2 = sol_n1.clone();
@@ -594,10 +633,24 @@ where
                     branch_currents.insert(vs.id.clone(), step_solution[n + vs_idx]);
                 }
 
+                update_device_junction_temperatures(
+                    netlist,
+                    &step_solution,
+                    &mut device_tjunc,
+                    &mut thermal_models,
+                    t_amb,
+                    accepted_dt,
+                );
+
                 results.push(TimeStepResult {
                     time: accepted_time,
                     node_voltages,
                     branch_currents,
+                    device_temperatures: if !device_tjunc.is_empty() {
+                        Some(device_tjunc.clone())
+                    } else {
+                        None
+                    },
                 });
 
                 detect_mixed_signal_crossings(
@@ -608,11 +661,20 @@ where
                     accepted_dt,
                 );
                 process_mixed_signal_events(netlist, &mut ms_scheduler, accepted_time);
+                mcu_manager.step_native_mcus(
+                    netlist,
+                    &step_solution,
+                    t,
+                    accepted_dt,
+                    &mut ms_scheduler,
+                );
 
                 let integration_history = IntegrationHistoryParams {
                     integration_method: active_method.as_str(),
                     trap_active_this_step,
                     gear2_active_this_step,
+                    bdf_order: if active_method.is_bdf() { bdf_order } else { 0 },
+                    bdf_alphas: &bdf_alphas,
                     gear_a,
                     gear_b,
                     gear_c,
@@ -624,8 +686,10 @@ where
                     &step_solution,
                     &mut cap_states,
                     &mut cap_states_prev,
+                    &mut cap_history,
                     &mut ind_states,
                     &mut ind_states_prev,
+                    &mut ind_history,
                     &integration_history,
                 );
                 update_mcu_accepted_states(
@@ -646,14 +710,8 @@ where
                     &step_solution,
                     &mut ind_states,
                     &mut ind_states_prev,
+                    &ind_history,
                     &integration_history,
-                );
-                update_device_junction_temperatures(
-                    netlist,
-                    &step_solution,
-                    &mut device_tjunc,
-                    t_amb,
-                    accepted_dt,
                 );
 
                 // Avanzar exclusivamente con el paso que produjo esta solución.
@@ -691,6 +749,7 @@ where
                 mcu_vsample = mcu_vsample_backup;
                 mcu_vdaceff = mcu_vdaceff_backup;
                 device_tjunc = device_tjunc_backup;
+                thermal_models = thermal_models_backup;
                 ms_scheduler = ms_scheduler_backup;
                 if order_controller.is_auto() {
                     order_controller.active_method = IntegrationMethodType::Euler;

@@ -184,4 +184,30 @@ describe("SimulationRunner streaming", () => {
     expect(harness.frames[59].frame.isFinal).toBe(true);
     expect(harness.completed).toHaveLength(1);
   });
+
+  it("gestiona pausado, reanudacion, avance paso a paso y velocidad", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+    await runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05 },
+      "tab-pause-test",
+    );
+
+    expect(runner.isSimulationPaused()).toBe(false);
+
+    await runner.pauseInteractiveTransient();
+    expect(runner.isSimulationPaused()).toBe(true);
+
+    await runner.stepInteractiveTransient(2);
+    expect(runner.isSimulationPaused()).toBe(true);
+
+    await runner.setSimulationSpeed(2.5);
+
+    await runner.resumeInteractiveTransient();
+    expect(runner.isSimulationPaused()).toBe(false);
+
+    await runner.stopInteractiveTransient();
+    expect(runner.isSimulationPaused()).toBe(false);
+  });
 });

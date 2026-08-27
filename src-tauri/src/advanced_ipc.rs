@@ -418,7 +418,7 @@ pub async fn export_touchstone_file(content: String, n_ports: usize) -> Result<S
     let filter_extensions = [extension.as_str()];
     let file_path = rfd::AsyncFileDialog::new()
         .add_filter("Touchstone", &filter_extensions)
-        .set_file_name(format!("astryd_export.{extension}"))
+        .set_file_name(format!("biaani_export.{extension}"))
         .set_title("Exportar parametros S")
         .save_file()
         .await;

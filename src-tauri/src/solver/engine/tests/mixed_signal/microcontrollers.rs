@@ -403,3 +403,154 @@ fn test_microcontrollers_phd_level() {
         "Debería completar el análisis transitorio electro-térmico mixed-signal."
     );
 }
+
+#[test]
+fn test_native_atmega328p_firmware_execution_drives_analog_nodes() {
+    // Firmware Intel HEX real para ATmega328P:
+    // LDI R16, 0x20 (bit 5 para PB5 / D13 LED)
+    // OUT DDRB, R16 (configura PB5 como salida)
+    // OUT PORTB, R16 (pone PB5 a nivel ALTO / 5V)
+    // RJMP -1 (bucle infinito)
+    let hex_firmware = ":0800000000E204B905B9FFCFCD\n:00000001FF";
+
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "MCU_AVR".to_string(),
+                comp_type: "atmega328p".to_string(),
+                value: 0.0,
+                firmware: Some(hex_firmware.to_string()),
+                mcu_clock_freq: Some(16e6),
+                pins: vec![
+                    "5".to_string(), // Reset conectado a VCC
+                    "2".to_string(), // PB5 / D13 / Pin Out conectado a carga
+                    "0".to_string(), // ADC0 a GND
+                    "0".to_string(), // DAC a GND
+                    "5".to_string(), // VCC (5V)
+                    "0".to_string(), // GND
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_vcc".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["5".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_load".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: Some(false),
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-6,
+        t_max: 10e-6,
+        integration_method: Some("trap".to_string()),
+        fixed_step: Some(false),
+    };
+
+    let (results, _, _) = solve_transient_circuit_with_initial_states(
+        &netlist,
+        &settings,
+        HashMap::new(),
+        HashMap::new(),
+    )
+    .unwrap();
+
+    // Al finalizar el primer microsegundo, el core AVR debe haber ejecutado las instrucciones y puesto PB5 en HIGH (~5V)
+    let last_step = results.last().unwrap();
+    let v_out = *last_step.node_voltages.get("2").unwrap();
+    assert!(
+        v_out > 4.5,
+        "La salida PB5 del ATmega328P debe ser conducida a HIGH (~5V) por el firmware, obtenido: {:.3}V",
+        v_out
+    );
+}
+
+#[test]
+fn test_native_8051_firmware_execution_toggles_port1() {
+    // Firmware Intel HEX real para 8051:
+    // MOV A, #0x01
+    // MOV 0x90, A (escribe 0x01 al puerto P1)
+    // SJMP -2 (bucle infinito)
+    let hex_firmware = ":060000007401F59080FE82\n:00000001FF";
+
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "MCU_8051".to_string(),
+                comp_type: "mcu_8051".to_string(),
+                value: 0.0,
+                firmware: Some(hex_firmware.to_string()),
+                mcu_clock_freq: Some(12e6),
+                pins: vec![
+                    "0".to_string(), // Reset
+                    "2".to_string(), // P1.0 Out
+                    "0".to_string(), // In
+                    "0".to_string(), // DAC
+                    "5".to_string(), // VCC (5V)
+                    "0".to_string(), // GND
+                ],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_vcc".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["5".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_load".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 2000.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: Some(false),
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-6,
+        t_max: 10e-6,
+        integration_method: Some("trap".to_string()),
+        fixed_step: Some(false),
+    };
+
+    let (results, _, _) = solve_transient_circuit_with_initial_states(
+        &netlist,
+        &settings,
+        HashMap::new(),
+        HashMap::new(),
+    )
+    .unwrap();
+
+    let last_step = results.last().unwrap();
+    let v_out = *last_step.node_voltages.get("2").unwrap();
+    assert!(
+        v_out > 4.5,
+        "El puerto P1.0 del 8051 debe ser conducido a HIGH (~5V) por el firmware, obtenido: {:.3}V",
+        v_out
+    );
+}
+

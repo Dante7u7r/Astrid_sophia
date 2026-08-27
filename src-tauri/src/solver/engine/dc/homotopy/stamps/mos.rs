@@ -2,6 +2,8 @@ use crate::solver::types::ComponentData;
 
 use super::super::super::super::devices::{
     evaluate_bsim3_nmos, evaluate_bsim3_pmos, evaluate_bsim4_nmos, evaluate_bsim4_pmos,
+    evaluate_gan_hemt, evaluate_igbt, evaluate_sic_mosfet, GanHemtParams, IgbtParams,
+    SicMosfetParams,
 };
 use super::StampContext;
 
@@ -44,7 +46,36 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vds = v_drain - v_source;
     let vbs = v_bulk - v_source;
 
-    let (ids, gm, gds) = if comp.comp_type == "bsim4nmos" {
+    let (ids, gm, gds) = if comp.comp_type == "igbt" {
+        let params = IgbtParams {
+            vth: if comp.value > 0.0 { comp.value } else { 5.0 },
+            kp: comp.igbt_kp.unwrap_or(12.0),
+            alpha_pnp: comp.igbt_alpha.unwrap_or(0.55),
+            tau_hl: comp.igbt_tau.unwrap_or(1.8e-6),
+            wb0: comp.igbt_wb.unwrap_or(90e-6),
+            cge: comp.igbt_cge.unwrap_or(2.2e-9),
+            cgc0: comp.igbt_cgc.unwrap_or(180e-12),
+            ..IgbtParams::default()
+        };
+        let res = evaluate_igbt(vgs, vds, &params, netlist.temperature, None, None);
+        (res.ic, res.gm, res.go)
+    } else if comp.comp_type == "sic_mosfet" {
+        let params = SicMosfetParams {
+            vth: if comp.value > 0.0 { comp.value } else { 3.0 },
+            rds_on: comp.ron.unwrap_or(0.065),
+            ..SicMosfetParams::default()
+        };
+        let res = evaluate_sic_mosfet(vgs, vds, netlist.temperature.unwrap_or(300.0), &params);
+        (res.ids, res.gm, res.gds)
+    } else if comp.comp_type == "gan_hemt" {
+        let params = GanHemtParams {
+            vth: if comp.value > 0.0 { comp.value } else { 1.5 },
+            rds_on: comp.ron.unwrap_or(0.035),
+            ..GanHemtParams::default()
+        };
+        let res = evaluate_gan_hemt(vgs, vds, netlist.temperature.unwrap_or(300.0), &params);
+        (res.ids, res.gm, res.gds)
+    } else if comp.comp_type == "bsim4nmos" {
         let (ids_val, gm_val, gds_val, _, _) =
             evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l);
         (ids_val, gm_val, gds_val)

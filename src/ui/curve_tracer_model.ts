@@ -622,3 +622,46 @@ export function generateDeviceTrace(
     yLabel: "Corriente en Resistor I (A)",
   };
 }
+
+/**
+ * Calcula los puntos de la recta de carga (DC Load Line) y la intersección del punto de trabajo Q (Vq, Iq)
+ * con la curva de polarización central.
+ */
+export function calculateLoadLineAndQPoint(
+  vcc: number,
+  rl: number,
+  traces: CurveTrace[],
+): { loadLinePoints: [CurvePoint, CurvePoint]; qPoint: CurvePoint | null } {
+  const iMax = rl > 0 ? vcc / rl : 0;
+  const loadLinePoints: [CurvePoint, CurvePoint] = [
+    { v: 0, i: iMax },
+    { v: vcc, i: 0 },
+  ];
+
+  if (traces.length === 0 || rl <= 0) {
+    return { loadLinePoints, qPoint: null };
+  }
+
+  // Tomar la curva central de la familia
+  const midTraceIdx = Math.floor(traces.length / 2);
+  const midTrace = traces[midTraceIdx];
+  if (!midTrace || midTrace.points.length < 2) {
+    return { loadLinePoints, qPoint: null };
+  }
+
+  // Intersección entre la recta de carga: i_load(v) = (vcc - v) / rl y la curva del dispositivo
+  let qPoint: CurvePoint | null = null;
+  let minDiff = Infinity;
+
+  for (let idx = 0; idx < midTrace.points.length; idx++) {
+    const pt = midTrace.points[idx];
+    const iLoad = (vcc - pt.v) / rl;
+    const diff = Math.abs(pt.i - iLoad);
+    if (diff < minDiff && pt.v <= vcc && pt.v >= 0) {
+      minDiff = diff;
+      qPoint = { v: pt.v, i: pt.i };
+    }
+  }
+
+  return { loadLinePoints, qPoint };
+}

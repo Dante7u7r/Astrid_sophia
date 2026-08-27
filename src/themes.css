@@ -1,0 +1,1742 @@
+/* ═══════════════════════════════════════════════════
+   BIAANI — SISTEMA DE TEMAS v3.2
+   Módulo Desacoplado de Temas (Dark Pro & Classroom)
+   ═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   1. TEMA OSCURO (DEFAULT / DARK CAD PRO)
+   ═══════════════════════════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  /* ── Superficies y Fondos Globales ── */
+  --bg-void:     #151A20;
+  --bg-deep:     #182028;
+  --bg-primary:  #1D242C;
+  --bg-elevated: #252E38;
+  --bg-glass:    rgba(29, 36, 44, 0.85);
+  --bg-card:     rgba(37, 46, 56, 0.75);
+  --canvas-bg:   #20262D;
+
+  /* ── Layout Frames ── */
+  --header-bg:       rgba(11, 15, 25, 0.96);
+  --header-border:   rgba(102, 252, 241, 0.14);
+  --footer-bg:       rgba(2, 3, 8, 0.75);
+  --footer-border:   rgba(255, 255, 255, 0.055);
+  --sidebar-bg:      rgba(15, 23, 42, 0.85);
+  --sidebar-border:  rgba(56, 189, 248, 0.18);
+  --tabs-bar-bg:     rgba(4, 6, 12, 0.8);
+
+  /* ── Grupos de Herramientas y Barras del Header ── */
+  --toolbar-group-bg:       rgba(0, 0, 0, 0.35);
+  --toolbar-group-border:   rgba(255, 255, 255, 0.06);
+  --toolbar-group-shadow:   inset 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* ── Botones y Controles ── */
+  --btn-text-only-bg:           rgba(255, 255, 255, 0.04);
+  --btn-text-only-border:       rgba(255, 255, 255, 0.08);
+  --btn-text-only-color:        var(--text-main);
+  --btn-text-only-hover-bg:     rgba(91, 243, 228, 0.1);
+  --btn-text-only-hover-border: rgba(91, 243, 228, 0.3);
+  --btn-text-only-hover-color:  var(--cyan);
+
+  /* ── Selects e Inputs ── */
+  --input-bg:            rgba(0, 0, 0, 0.35);
+  --input-border:        rgba(255, 255, 255, 0.1);
+  --input-color:         var(--text-bright);
+  --input-focus-border:  var(--cyan);
+  --input-focus-glow:    0 0 8px rgba(56, 189, 248, 0.35);
+
+  /* ── Bordes y Separadores ── */
+  --border-subtle:  #2D3742;
+  --border-color:   #38434F;
+  --border-mid:     #4A5968;
+  --border-glow:    rgba(56, 189, 248, 0.35);
+
+  /* ── Acentos Técnicos CAD ── */
+  --cyan:        #38BDF8;
+  --cyan-dim:    #0284C7;
+  --cyan-glow:   rgba(56, 189, 248, 0.20);
+  --blue:        #5B9FD6;
+  --purple:      #A855F7;
+  --purple-glow: rgba(168, 85, 247, 0.20);
+  --green:       #10B981;
+  --red:         #EF4444;
+  --amber:       #F59E0B;
+  --node-gold:   #F2C94C;
+
+  /* Aliases legados */
+  --accent-cyan:   var(--cyan);
+  --accent-blue:   var(--blue);
+  --accent-purple: var(--purple);
+  --accent-color:  var(--cyan);
+  --bg-surface:    var(--bg-elevated);
+  --text-color:    var(--text-bright);
+  --success:       var(--green);
+  --danger:        var(--red);
+  --warning:       var(--amber);
+
+  /* ── Tipografía ── */
+  --text-bright:  #F8FAFC;
+  --text-main:    #E6EAF0;
+  --text-sub:     #94A3B8;
+  --text-muted:   #64748B;
+  --text-inverse: #0F172A;
+
+  /* ── Centro de Instrumentos (Dock & Launcher) ── */
+  --dock-bg:                 rgba(11, 15, 25, 0.98);
+  --dock-border:             rgba(56, 189, 248, 0.25);
+  --dock-shadow:             0 10px 40px rgba(0, 0, 0, 0.6);
+  --dock-tabs-bar-bg:        rgba(7, 10, 20, 0.9);
+  --dock-tab-bg:             var(--bg-elevated);
+  --dock-tab-border:         var(--border-color);
+  --dock-tab-color:          var(--text-muted);
+  --dock-tab-hover-bg:       rgba(56, 189, 248, 0.08);
+  --dock-tab-hover-color:    var(--text-bright);
+  --dock-tab-active-bg:      rgba(56, 189, 248, 0.15);
+  --dock-tab-active-border:  var(--cyan);
+  --dock-tab-active-color:   var(--cyan);
+
+  /* ── Ventanas Flotantes de Instrumentos ── */
+  --floating-window-bg:             rgba(11, 15, 25, 0.96);
+  --floating-window-header-bg:      rgba(15, 23, 42, 0.95);
+  --floating-window-border:         rgba(56, 189, 248, 0.25);
+  --floating-window-shadow:         0 12px 40px rgba(0, 0, 0, 0.5);
+  --floating-window-text:           var(--text-bright);
+  --floating-instrument-subbar-bg:  rgba(13, 20, 38, 0.85);
+  --floating-instrument-card-bg:    rgba(0, 0, 0, 0.35);
+
+  /* ── Panel Derecho (Propiedades) ── */
+  --prop-section-bg:          rgba(29, 36, 44, 0.6);
+  --prop-section-border:      var(--border-subtle);
+  --prop-card-bg:             linear-gradient(180deg, rgba(37, 46, 56, 0.9) 0%, rgba(29, 36, 44, 0.9) 100%);
+  --prop-card-border:         var(--border-color);
+  --btn-apply-changes-bg:     linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  --btn-apply-changes-color:  #ffffff;
+  --btn-apply-changes-hover:  linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+
+  /* ── HUD de Lienzo y Ayudas ── */
+  --hud-tip-bg:      rgba(15, 23, 42, 0.88);
+  --hud-tip-color:   #94a3b8;
+  --hud-tip-border:  rgba(255, 255, 255, 0.08);
+  --hud-tip-shadow:  0 4px 20px rgba(0, 0, 0, 0.4);
+  --hud-btn-bg:      rgba(15, 23, 42, 0.85);
+  --hud-btn-border:  var(--border-color);
+  --hud-btn-color:   var(--text-main);
+
+  /* ── Modales y Cuadros de Diálogo ── */
+  --modal-bg:         rgba(15, 23, 42, 0.96);
+  --modal-header-bg:  rgba(11, 15, 25, 0.9);
+  --modal-border:     rgba(56, 189, 248, 0.25);
+  --modal-shadow:     0 20px 60px rgba(0, 0, 0, 0.7);
+
+  /* ── Menú Contextual ── */
+  --context-menu-bg:          rgba(15, 23, 42, 0.96);
+  --context-menu-border:      rgba(56, 189, 248, 0.2);
+  --context-menu-item-hover:  rgba(56, 189, 248, 0.12);
+
+  /* ── Efectos ── */
+  --glass-blur:       blur(16px) saturate(140%);
+  --shadow-depth:     0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 1px 0 rgba(56, 189, 248, 0.08);
+  --shadow-glow-cyan: 0 0 16px rgba(56, 189, 248, 0.20);
+}
+
+/* ═══════════════════════════════════════════════════
+   2. TEMA AULA / CLARO (CLASSROOM LIGHT HIGH CONTRAST)
+   ═══════════════════════════════════════════════════ */
+[data-theme="classroom"] {
+  /* ── Superficies y Fondos Globales ── */
+  --bg-void:     #F8FAFC;
+  --bg-deep:     #F1F5F9;
+  --bg-primary:  #FFFFFF;
+  --bg-elevated: #F1F5F9;
+  --bg-glass:    rgba(255, 255, 255, 0.96);
+  --bg-card:     #FFFFFF;
+  --canvas-bg:   #FFFFFF;
+
+  /* ── Layout Frames ── */
+  --header-bg:       rgba(255, 255, 255, 0.98);
+  --header-border:   rgba(2, 132, 199, 0.25);
+  --footer-bg:       rgba(248, 250, 252, 0.98);
+  --footer-border:   #CBD5E1;
+  --sidebar-bg:      rgba(255, 255, 255, 0.96);
+  --sidebar-border:  rgba(2, 132, 199, 0.2);
+  --tabs-bar-bg:     rgba(241, 245, 249, 0.95);
+
+  /* ── Grupos de Herramientas y Barras del Header ── */
+  --toolbar-group-bg:       #F1F5F9;
+  --toolbar-group-border:   #CBD5E1;
+  --toolbar-group-shadow:   0 1px 3px rgba(0, 0, 0, 0.05);
+
+  /* ── Botones y Controles ── */
+  --btn-text-only-bg:           #FFFFFF;
+  --btn-text-only-border:       #CBD5E1;
+  --btn-text-only-color:        #0F172A;
+  --btn-text-only-hover-bg:     #E0F2FE;
+  --btn-text-only-hover-border: #0284C7;
+  --btn-text-only-hover-color:  #0284C7;
+
+  /* ── Selects e Inputs ── */
+  --input-bg:            #FFFFFF;
+  --input-border:        #CBD5E1;
+  --input-color:         #0F172A;
+  --input-focus-border:  #0284C7;
+  --input-focus-glow:    0 0 0 2px rgba(2, 132, 199, 0.2);
+
+  /* ── Bordes y Separadores ── */
+  --border-subtle:  #E2E8F0;
+  --border-color:   #CBD5E1;
+  --border-mid:     #94A3B8;
+  --border-glow:    rgba(2, 132, 199, 0.35);
+
+  /* ── Acentos Técnicos CAD ── */
+  --cyan:        #0284C7;
+  --cyan-dim:    #0369A1;
+  --cyan-glow:   rgba(2, 132, 199, 0.20);
+  --blue:        #2563EB;
+  --purple:      #7C3AED;
+  --purple-glow: rgba(124, 58, 237, 0.20);
+  --green:       #059669;
+  --red:         #DC2626;
+  --amber:       #D97706;
+  --node-gold:   #B45309;
+
+  /* Aliases legados */
+  --accent-cyan:   var(--cyan);
+  --accent-blue:   var(--blue);
+  --accent-purple: var(--purple);
+  --accent-color:  var(--cyan);
+  --bg-surface:    var(--bg-elevated);
+  --text-color:    var(--text-bright);
+  --success:       var(--green);
+  --danger:        var(--red);
+  --warning:       var(--amber);
+
+  /* ── Tipografía de Alto Contraste ── */
+  --text-bright:  #0F172A;
+  --text-main:    #1E293B;
+  --text-sub:     #334155;
+  --text-muted:   #475569;
+  --text-inverse: #FFFFFF;
+
+  /* ── Centro de Instrumentos (Dock & Launcher) ── */
+  --dock-bg:                 rgba(255, 255, 255, 0.98);
+  --dock-border:             #CBD5E1;
+  --dock-shadow:             0 8px 30px rgba(0, 0, 0, 0.08);
+  --dock-tabs-bar-bg:        #F8FAFC;
+  --dock-tab-bg:             #FFFFFF;
+  --dock-tab-border:         #CBD5E1;
+  --dock-tab-color:          #334155;
+  --dock-tab-hover-bg:       #E0F2FE;
+  --dock-tab-hover-color:    #0284C7;
+  --dock-tab-active-bg:      #0284C7;
+  --dock-tab-active-border:  #0284C7;
+  --dock-tab-active-color:   #FFFFFF;
+
+  /* ── Ventanas Flotantes de Instrumentos ── */
+  --floating-window-bg:             #FFFFFF;
+  --floating-window-header-bg:      #F1F5F9;
+  --floating-window-border:         #CBD5E1;
+  --floating-window-shadow:         0 12px 36px rgba(0, 0, 0, 0.12);
+  --floating-window-text:           #0F172A;
+  --floating-instrument-subbar-bg:  #F8FAFC;
+  --floating-instrument-card-bg:    #F1F5F9;
+
+  /* ── Panel Derecho (Propiedades) ── */
+  --prop-section-bg:          #F8FAFC;
+  --prop-section-border:      #E2E8F0;
+  --prop-card-bg:             #FFFFFF;
+  --prop-card-border:         #CBD5E1;
+  --btn-apply-changes-bg:     linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+  --btn-apply-changes-color:  #FFFFFF;
+  --btn-apply-changes-hover:  linear-gradient(135deg, #0369A1 0%, #075985 100%);
+
+  /* ── HUD de Lienzo y Ayudas ── */
+  --hud-tip-bg:      rgba(241, 245, 249, 0.95);
+  --hud-tip-color:   #334155;
+  --hud-tip-border:  #CBD5E1;
+  --hud-tip-shadow:  0 4px 16px rgba(0, 0, 0, 0.08);
+  --hud-btn-bg:      #FFFFFF;
+  --hud-btn-border:  #CBD5E1;
+  --hud-btn-color:   #0F172A;
+
+  /* ── Modales y Cuadros de Diálogo ── */
+  --modal-bg:         #FFFFFF;
+  --modal-header-bg:  #F8FAFC;
+  --modal-border:     #CBD5E1;
+  --modal-shadow:     0 20px 50px rgba(0, 0, 0, 0.15);
+
+  /* ── Menú Contextual ── */
+  --context-menu-bg:          #FFFFFF;
+  --context-menu-border:      #CBD5E1;
+  --context-menu-item-hover:  #E0F2FE;
+
+  /* ── Efectos ── */
+  --shadow-depth:     0 4px 16px 0 rgba(0, 0, 0, 0.08), 0 0 1px 0 rgba(0, 0, 0, 0.12);
+  --shadow-glow-cyan: 0 0 16px rgba(2, 132, 199, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════
+   3. REGLAS COMPLEMENTARIAS PARA MODO AULA / CLARO
+   ═══════════════════════════════════════════════════ */
+
+[data-theme="classroom"] .main-header {
+  background: var(--header-bg) !important;
+  border-bottom: 1px solid var(--header-border) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="classroom"] .logo-title {
+  background: linear-gradient(135deg, #0f172a 40%, #0284c7 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+[data-theme="classroom"] .logo-icon {
+  filter: none !important;
+  color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .header-project-group,
+[data-theme="classroom"] .simulation-controls,
+[data-theme="classroom"] .system-status {
+  background: var(--toolbar-group-bg) !important;
+  border: 1px solid var(--toolbar-group-border) !important;
+  box-shadow: var(--toolbar-group-shadow) !important;
+}
+
+[data-theme="classroom"] .header-mode-select,
+[data-theme="classroom"] #btn-open-demo {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  color: var(--input-color) !important;
+}
+
+[data-theme="classroom"] .header-mode-select option,
+[data-theme="classroom"] #btn-open-demo option,
+[data-theme="classroom"] .header-mode-select optgroup,
+[data-theme="classroom"] #btn-open-demo optgroup {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+[data-theme="classroom"] .btn-text-only {
+  background: var(--btn-text-only-bg) !important;
+  border: 1px solid var(--btn-text-only-border) !important;
+  color: var(--btn-text-only-color) !important;
+}
+
+[data-theme="classroom"] .btn-text-only:hover {
+  background: var(--btn-text-only-hover-bg) !important;
+  border-color: var(--btn-text-only-hover-border) !important;
+  color: var(--btn-text-only-hover-color) !important;
+}
+
+[data-theme="classroom"] .ipc-status-pill {
+  background: var(--btn-text-only-bg) !important;
+  border: 1px solid var(--btn-text-only-border) !important;
+  color: var(--input-color) !important;
+}
+
+[data-theme="classroom"] .header-separator {
+  background: var(--border-color);
+}
+
+[data-theme="classroom"] .canvas-help-tip {
+  background: var(--hud-tip-bg);
+  color: var(--hud-tip-color);
+  border: 1px solid var(--hud-tip-border);
+  box-shadow: var(--hud-tip-shadow);
+}
+
+[data-theme="classroom"] #bottom-dock {
+  background: var(--dock-bg) !important;
+  border: 1px solid var(--dock-border) !important;
+  box-shadow: var(--dock-shadow) !important;
+}
+
+[data-theme="classroom"] .instruments-tabs-bar {
+  background: var(--dock-tabs-bar-bg) !important;
+}
+
+[data-theme="classroom"] .instruments-bar-label {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .inst-tab {
+  background: var(--dock-tab-bg) !important;
+  border: 1px solid var(--dock-tab-border) !important;
+  color: var(--dock-tab-color) !important;
+}
+
+[data-theme="classroom"] .inst-tab:hover {
+  background: var(--dock-tab-hover-bg) !important;
+  color: var(--dock-tab-hover-color) !important;
+  border-color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .inst-tab.active {
+  background: var(--dock-tab-active-bg) !important;
+  border-color: var(--dock-tab-active-border) !important;
+  color: var(--dock-tab-active-color) !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="classroom"] .instrument-center-close {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme="classroom"] .instrument-center-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* Modales */
+[data-theme="classroom"] .modal-card {
+  background: var(--modal-bg) !important;
+  border: 1px solid var(--modal-border) !important;
+  box-shadow: var(--modal-shadow) !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .modal-header {
+  background: var(--modal-header-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .modal-body {
+  background: var(--modal-bg) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .modal-footer {
+  background: var(--modal-header-bg) !important;
+  border-top: 1px solid var(--border-color) !important;
+}
+
+/* Paleta de Componentes Izquierda en Modo Aula */
+[data-theme="classroom"] .sidebar-panel {
+  background: var(--sidebar-bg) !important;
+  border-color: var(--sidebar-border) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="classroom"] .palette-top-sticky {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .palette-header-bar {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .palette-search-input,
+[data-theme="classroom"] .palette-search-wrapper .search-input {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .palette-search-input:focus,
+[data-theme="classroom"] .palette-search-wrapper .search-input:focus {
+  background: #ffffff !important;
+  border-color: var(--cyan) !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
+}
+
+[data-theme="classroom"] .palette-search-icon {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .btn-palette-spotlight,
+[data-theme="classroom"] .spotlight-trigger-badge {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .palette-segmented-group {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .palette-segmented-group .btn-seg,
+[data-theme="classroom"] .palette-btn-icon {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .palette-segmented-group .btn-seg:hover,
+[data-theme="classroom"] .palette-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.6) !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .palette-segmented-group .btn-seg.active,
+[data-theme="classroom"] .palette-btn-icon.active {
+  background: #ffffff !important;
+  color: var(--cyan) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="classroom"] .palette-favorites-bar {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .palette-favorite-chip {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="classroom"] .palette-favorite-chip:hover {
+  background: #e0f2fe !important;
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .palette-favorite-chip kbd {
+  background: #e2e8f0 !important;
+  color: var(--text-sub) !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .palette-pill {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-sub) !important;
+}
+
+[data-theme="classroom"] .palette-pill:hover {
+  background: #e2e8f0 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .palette-pill.active {
+  background: #e0f2fe !important;
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .palette-pill .pill-badge {
+  background: #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .category-header {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .category-header:hover {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .category-header.active {
+  background: #e0f2fe !important;
+  border-color: rgba(2, 132, 199, 0.35) !important;
+}
+
+[data-theme="classroom"] .category-header.active .category-header-title {
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .component-card,
+[data-theme="classroom"] .component-card.card-grid,
+[data-theme="classroom"] .component-card.card-list {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="classroom"] .component-card:hover,
+[data-theme="classroom"] .component-card.card-grid:hover,
+[data-theme="classroom"] .component-card.card-list:hover {
+  background: #f8fafc !important;
+  border-color: var(--cyan) !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12) !important;
+}
+
+[data-theme="classroom"] .component-card .comp-icon-box,
+[data-theme="classroom"] .component-card.card-grid .comp-icon-box,
+[data-theme="classroom"] .component-card.card-list .comp-icon-box {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .component-card .comp-name {
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .component-card .comp-desc {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .component-card .comp-badge-shortcut {
+  background: #e2e8f0 !important;
+  color: var(--text-sub) !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Barra Flotante de Herramientas del Lienzo en Modo Aula */
+[data-theme="classroom"] .canvas-controls-floating {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="classroom"] .floater-separator {
+  background: #CBD5E1 !important;
+}
+
+[data-theme="classroom"] .btn-floating {
+  background: #F8FAFC !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="classroom"] .btn-floating:hover {
+  background: #E0F2FE !important;
+  border-color: #0284C7 !important;
+  color: #0284C7 !important;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.2) !important;
+}
+
+[data-theme="classroom"] .btn-floating.btn-active {
+  background: #E0F2FE !important;
+  border-color: #0284C7 !important;
+  color: #0284C7 !important;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.2) !important;
+}
+
+[data-theme="classroom"] .btn-floating.btn-danger-action {
+  color: #DC2626 !important;
+}
+
+[data-theme="classroom"] .btn-floating.btn-danger-action:hover {
+  background: #FEE2E2 !important;
+  border-color: #DC2626 !important;
+  color: #DC2626 !important;
+}
+
+/* Panel Derecho (Propiedades) en Modo Aula */
+[data-theme="classroom"] .prop-section-primary {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+}
+
+[data-theme="classroom"] .prop-op-card {
+  background: #F8FAFC !important;
+  border: 1px solid #CBD5E1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="classroom"] .prop-op-header {
+  color: #0284C7 !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+[data-theme="classroom"] .prop-op-key {
+  color: #64748B !important;
+}
+
+[data-theme="classroom"] .prop-op-val {
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .prop-details-section {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+}
+
+[data-theme="classroom"] .prop-details-section summary {
+  background: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .prop-summary-badge {
+  background: #E0F2FE !important;
+  border: 1px solid #BAE6FD !important;
+  color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .prop-input,
+[data-theme="classroom"] .prop-snap-select {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .btn-adj {
+  background: #F8FAFC !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .btn-adj:hover {
+  background: #E0F2FE !important;
+  border-color: #0284C7 !important;
+  color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .btn-snap {
+  background: #E0F2FE !important;
+  border: 1px solid #BAE6FD !important;
+  color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .btn-snap:hover {
+  background: #BAE6FD !important;
+  border-color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .prop-badge {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .prop-pins-table th {
+  border-bottom: 1px solid #E2E8F0 !important;
+  color: #64748B !important;
+}
+
+[data-theme="classroom"] .prop-pins-table td {
+  border-bottom: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .btn-pin-probe {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #64748B !important;
+}
+
+[data-theme="classroom"] .btn-pin-probe:hover {
+  background: #E0F2FE !important;
+  border-color: #0284C7 !important;
+  color: #0284C7 !important;
+}
+
+[data-theme="classroom"] .btn-pin-probe.active-ch1 {
+  background: #FEF08A !important;
+  border-color: #CA8A04 !important;
+  color: #854D0E !important;
+}
+
+[data-theme="classroom"] .btn-pin-probe.active-ch2 {
+  background: #BFDBFE !important;
+  border-color: #2563EB !important;
+  color: #1E40AF !important;
+}
+
+/* Osciloscopio en Modo Aula */
+[data-theme="classroom"] .osc-theme-rack {
+  background: #f8fafc !important;
+  color: var(--text-main);
+  box-shadow: none;
+}
+
+[data-theme="classroom"] .osc-header-bar {
+  background: #f1f5f9 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="classroom"] .osc-sidebar-controls {
+  background: #f8fafc !important;
+  border-left: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .osc-rack-section {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .osc-measurements-bar {
+  background: #f1f5f9 !important;
+  border-top: 1px solid #cbd5e1 !important;
+  color: var(--text-muted);
+}
+
+[data-theme="classroom"] .osc-select,
+[data-theme="classroom"] .osc-select-mini {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .osc-select option,
+[data-theme="classroom"] .osc-select-mini option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+[data-theme="classroom"] .osc-channel-tab {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .osc-focused-card {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="classroom"] .btn-osc-mini {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .btn-osc-mini:hover {
+  background: #e0f2fe !important;
+  color: var(--cyan) !important;
+  border-color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .btn-osc-mini.active {
+  background: #e0f2fe !important;
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+}
+
+/* Ventanas Flotantes de Instrumentos en Modo Aula */
+[data-theme="classroom"] .floating-instrument-window {
+  background: var(--floating-window-bg) !important;
+  border: 1px solid var(--floating-window-border) !important;
+  box-shadow: var(--floating-window-shadow) !important;
+  color: var(--floating-window-text) !important;
+}
+
+[data-theme="classroom"] .floating-window-header {
+  background: var(--floating-window-header-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--floating-window-text) !important;
+}
+
+[data-theme="classroom"] .floating-window-title {
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .floating-window-btn {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .floating-window-btn:hover {
+  color: var(--text-bright) !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="classroom"] .floating-window-btn.pin-btn.is-pinned {
+  color: var(--cyan) !important;
+  background: #e0f2fe !important;
+  border: 1px solid var(--cyan) !important;
+}
+
+[data-theme="classroom"] .inst-content-box {
+  background: var(--floating-window-bg) !important;
+  color: var(--text-main) !important;
+}
+
+/* Barra de Pestañas del Workspace en Modo Aula */
+[data-theme="classroom"] .tabs-bar {
+  background: var(--tabs-bar-bg) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+[data-theme="classroom"] .btn-tab-toggle {
+  color: var(--text-muted) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+[data-theme="classroom"] .btn-tab-toggle:hover {
+  background: var(--btn-text-only-hover-bg) !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .btn-tab-toggle.active {
+  background: #ffffff !important;
+  color: var(--cyan) !important;
+  box-shadow: inset 0 -2px 0 var(--cyan) !important;
+}
+
+[data-theme="classroom"] .tab-item {
+  color: var(--text-muted) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+[data-theme="classroom"] .tab-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .tab-item.active {
+  background: #ffffff !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .btn-add-tab {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .btn-add-tab:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: var(--cyan) !important;
+}
+
+/* Generador de Funciones en Modo Aula */
+[data-theme="classroom"] .gen-main-layout {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .gen-sidebar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .gen-source-card {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .gen-top-bar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .gen-wave-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .gen-wave-btn:hover {
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+  background: #e0f2fe !important;
+}
+
+[data-theme="classroom"] .gen-wave-btn.active {
+  border-color: var(--cyan) !important;
+  color: #ffffff !important;
+  background: var(--cyan) !important;
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="classroom"] .gen-controls-grid {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .gen-control-card {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+[data-theme="classroom"] .gen-control-label {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .gen-control-val {
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .gen-num-input {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .gen-unit-select {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .gen-preset-chip {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .gen-preset-chip:hover {
+  background: #e0f2fe !important;
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .gen-viewport-frame {
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Analizador Lógico en Modo Aula */
+[data-theme="classroom"] .logic-main-layout {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .logic-sidebar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .logic-top-bar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .logic-telemetry-bar {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .logic-ch-row {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .logic-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .logic-btn:hover {
+  border-color: var(--purple) !important;
+  color: var(--purple) !important;
+  background: #f3e8ff !important;
+}
+
+[data-theme="classroom"] .logic-btn.active {
+  border-color: var(--purple) !important;
+  color: #ffffff !important;
+  background: var(--purple) !important;
+  box-shadow: 0 1px 4px rgba(124, 58, 237, 0.3) !important;
+}
+
+[data-theme="classroom"] .logic-viewport-frame {
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Espectro FFT en Modo Aula */
+[data-theme="classroom"] .fft-main-layout {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .fft-sidebar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .fft-top-bar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .fft-telemetry-bar {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .fft-metric-card {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .fft-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .fft-btn:hover {
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+  background: #e0f2fe !important;
+}
+
+[data-theme="classroom"] .fft-btn.active {
+  border-color: var(--cyan) !important;
+  color: #ffffff !important;
+  background: var(--cyan) !important;
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="classroom"] .fft-viewport-frame {
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Trazador I-V en Modo Aula */
+[data-theme="classroom"] .tracer-main-layout {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .tracer-sidebar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .tracer-top-bar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .tracer-telemetry-bar {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .tracer-metric-card {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .tracer-metric-val {
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .tracer-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .tracer-btn:hover {
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+  background: #e0f2fe !important;
+}
+
+[data-theme="classroom"] .tracer-btn.active {
+  border-color: var(--cyan) !important;
+  color: #ffffff !important;
+  background: var(--cyan) !important;
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="classroom"] .tracer-viewport-frame {
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Analizador Bode en Modo Aula */
+[data-theme="classroom"] .bode-main-layout {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .bode-sidebar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .bode-viewport-frame {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .bode-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .bode-btn:hover {
+  border-color: var(--cyan) !important;
+  color: var(--cyan) !important;
+  background: #e0f2fe !important;
+}
+
+[data-theme="classroom"] .bode-btn.active {
+  border-color: var(--cyan) !important;
+  color: #ffffff !important;
+  background: var(--cyan) !important;
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="classroom"] .gen-input {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+/* Centro de Inteligencia y Asistente IA en Modo Aula */
+[data-theme="classroom"] .intel-main-layout {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .intel-sidebar {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .intel-content-area {
+  background: #f8fafc !important;
+}
+
+[data-theme="classroom"] .intel-header-bar,
+[data-theme="classroom"] .intel-status-header {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .intel-card,
+[data-theme="classroom"] .intel-card-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="classroom"] #intelligence-empty-state {
+  background: #ffffff !important;
+  border: 1px dashed #cbd5e1 !important;
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .intel-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .intel-btn:hover {
+  background: #e0f2fe !important;
+  color: var(--cyan) !important;
+  border-color: var(--cyan) !important;
+}
+
+/* Modales de Confirmación y Diagnóstico */
+[data-theme="classroom"] .confirmation-dialog {
+  background: var(--modal-bg) !important;
+  border: 1px solid var(--modal-border) !important;
+  color: var(--text-bright) !important;
+  box-shadow: var(--modal-shadow) !important;
+}
+
+[data-theme="classroom"] .confirmation-header {
+  background: var(--modal-header-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .diagnostic-dialog {
+  background: var(--modal-bg) !important;
+  border: 1px solid var(--modal-border) !important;
+  color: var(--text-bright) !important;
+  box-shadow: var(--modal-shadow) !important;
+}
+
+[data-theme="classroom"] .diagnostic-header {
+  background: var(--modal-header-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .diagnostic-card {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+/* Barra de Acciones Rápidas */
+[data-theme="classroom"] .quick-actions-bar {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .quick-action-btn {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+/* Modales y Diálogos en Modo Aula */
+[data-theme="classroom"] .modal-box {
+  background: var(--modal-bg) !important;
+  border-color: var(--modal-border) !important;
+  box-shadow: var(--modal-shadow) !important;
+}
+
+[data-theme="classroom"] .modal-box .panel-header {
+  background: var(--modal-header-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .modal-footer {
+  background: #f8fafc !important;
+  border-top: 1px solid var(--border-subtle) !important;
+}
+
+[data-theme="classroom"] .btn-cancel {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .btn-cancel:hover {
+  background: #f1f5f9 !important;
+  color: var(--text-bright) !important;
+}
+
+/* Menú Contextual y Dropdowns en Modo Aula */
+[data-theme="classroom"] .canvas-context-menu {
+  background: var(--context-menu-bg) !important;
+  border: 1px solid var(--context-menu-border) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="classroom"] .context-menu-item {
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .context-menu-item:hover {
+  background: var(--context-menu-item-hover) !important;
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .context-menu-divider {
+  background: var(--border-subtle) !important;
+}
+
+[data-theme="classroom"] .context-menu-shortcut {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .dropdown-menu-box {
+  background: var(--context-menu-bg) !important;
+  border: 1px solid var(--context-menu-border) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="classroom"] .dropdown-menu-item-btn {
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .dropdown-menu-item-btn:hover {
+  background: var(--context-menu-item-hover) !important;
+  color: var(--cyan) !important;
+}
+
+/* Modal Spotlight en Modo Aula */
+[data-theme="classroom"] .spotlight-dialog {
+  background: var(--modal-bg) !important;
+  border: 1px solid var(--modal-border) !important;
+  box-shadow: var(--modal-shadow) !important;
+}
+
+[data-theme="classroom"] .spotlight-search-bar {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .spotlight-search-input {
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .spotlight-search-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .spotlight-search-esc {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-sub) !important;
+}
+
+[data-theme="classroom"] .spotlight-item {
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .spotlight-item:hover,
+[data-theme="classroom"] .spotlight-item.selected {
+  background: #e0f2fe !important;
+}
+
+[data-theme="classroom"] .spotlight-item.selected .spotlight-item-name {
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .spotlight-item-desc {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .spotlight-item-badge {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-sub) !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-pane {
+  background: #f8fafc !important;
+  border-left: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-header {
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-equation {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .spotlight-footer {
+  background: #f1f5f9 !important;
+  border-top: 1px solid #cbd5e1 !important;
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .spotlight-footer-shortcuts span {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-sub) !important;
+}
+
+/* Tooltips en Modo Aula */
+[data-theme="classroom"] .premium-tooltip,
+[data-theme="classroom"] [data-tooltip]::after {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Panel de Depuración MCU en Modo Aula */
+[data-theme="classroom"] #mcu-registers-container,
+[data-theme="classroom"] #mcu-mem-table,
+[data-theme="classroom"] #mcu-memory-hex {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] #mcu-disasm-list {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] #mcu-watch-input,
+[data-theme="classroom"] #mcu-mem-address {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] #mcu-btn-upload {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] #mcu-asm-explainer {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-bright) !important;
+}
+
+/* ── Diálogo de Feedback y Diagnóstico en Modo Aula ── */
+[data-theme="classroom"] .feedback-dialog,
+[data-theme="classroom"] .crash-dialog {
+  background: var(--modal-bg) !important;
+  border: 1px solid var(--modal-border) !important;
+  box-shadow: var(--modal-shadow) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .feedback-header,
+[data-theme="classroom"] .crash-header {
+  background: var(--modal-header-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .feedback-title {
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .feedback-subtitle {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .feedback-close-btn {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .feedback-close-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-bright) !important;
+}
+
+[data-theme="classroom"] .feedback-body,
+[data-theme="classroom"] .crash-body {
+  background: var(--modal-bg) !important;
+}
+
+[data-theme="classroom"] .feedback-label {
+  color: var(--text-sub) !important;
+}
+
+[data-theme="classroom"] .feedback-select,
+[data-theme="classroom"] .feedback-input,
+[data-theme="classroom"] .feedback-textarea {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  color: var(--input-color) !important;
+}
+
+[data-theme="classroom"] .feedback-select:focus,
+[data-theme="classroom"] .feedback-input:focus,
+[data-theme="classroom"] .feedback-textarea:focus {
+  border-color: var(--cyan) !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
+}
+
+[data-theme="classroom"] .feedback-file-upload-zone {
+  background: #f8fafc !important;
+  border: 1px dashed var(--border-color) !important;
+}
+
+[data-theme="classroom"] .feedback-file-upload-zone:hover {
+  border-color: var(--cyan) !important;
+  background: #f1f5f9 !important;
+}
+
+[data-theme="classroom"] .btn-feedback-file-picker {
+  background: #e0f2fe !important;
+  border-color: #0284c7 !important;
+  color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .btn-feedback-file-picker:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="classroom"] .feedback-selected-filename {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .feedback-checklist-section {
+  background: #f8fafc !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .checklist-title {
+  color: var(--text-sub) !important;
+}
+
+[data-theme="classroom"] .feedback-check-label {
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .feedback-preview-accordion {
+  background: #f8fafc !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .preview-summary {
+  color: var(--cyan) !important;
+}
+
+[data-theme="classroom"] .preview-json-box {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .feedback-footer,
+[data-theme="classroom"] .crash-footer {
+  background: var(--modal-header-bg) !important;
+  border-top: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .btn-feedback-secondary,
+[data-theme="classroom"] .btn-crash-secondary,
+[data-theme="classroom"] .btn-crash-dismiss {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .btn-feedback-secondary:hover,
+[data-theme="classroom"] .btn-crash-secondary:hover,
+[data-theme="classroom"] .btn-crash-dismiss:hover {
+  background: #f1f5f9 !important;
+  color: var(--text-bright) !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-theme="classroom"] .btn-feedback-cancel {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="classroom"] .btn-feedback-cancel:hover {
+  color: var(--text-bright) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="classroom"] .crash-message-box {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+}
+
+[data-theme="classroom"] .crash-error-text {
+  color: #b91c1c !important;
+}
+
+[data-theme="classroom"] .crash-stack-details {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .crash-stack-pre {
+  color: #475569 !important;
+}
+
+[data-theme="classroom"] .crash-info-tip {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+[data-theme="classroom"] .zen-exit-pill {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="classroom"] .zen-exit-pill:hover {
+  background: #f1f5f9 !important;
+  border-color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .zen-exit-pill kbd {
+  background: #e2e8f0 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0284c7 !important;
+}
+
+/* ── Tour Guiado Interactivo en Modo Aula ── */
+[data-theme="classroom"] .guide-card {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 16px rgba(2, 132, 199, 0.15) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="classroom"] .guide-card-title {
+  color: #0f172a !important;
+}
+
+[data-theme="classroom"] .guide-card-desc {
+  color: #334155 !important;
+}
+
+[data-theme="classroom"] .guide-topic-select {
+  background-color: #e0f2fe !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  border-color: #0284c7 !important;
+  color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .guide-topic-select:hover {
+  background-color: #bae6fd !important;
+}
+
+[data-theme="classroom"] .guide-topic-select option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+[data-theme="classroom"] .guide-topic-pill {
+  background: #e0f2fe !important;
+  border: 1px solid #0284c7 !important;
+  color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .guide-step-count {
+  color: #64748b !important;
+}
+
+[data-theme="classroom"] .guide-btn-close {
+  color: #64748b !important;
+}
+
+[data-theme="classroom"] .guide-btn-close:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
+}
+
+[data-theme="classroom"] .guide-shortcut-badge {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .guide-action-hint {
+  color: #b45309 !important;
+}
+
+[data-theme="classroom"] .guide-btn-action {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
+  border-color: #0284c7 !important;
+  color: #0369a1 !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2) !important;
+}
+
+[data-theme="classroom"] .guide-btn-action:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+}
+
+[data-theme="classroom"] .guide-card-footer {
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .guide-btn-secondary {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+[data-theme="classroom"] .guide-btn-secondary:hover:not(:disabled) {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-theme="classroom"] .guide-btn-primary {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="classroom"] .guide-btn-primary:hover {
+  background: #0369a1 !important;
+  border-color: #0369a1 !important;
+}
+
+[data-theme="classroom"] .guide-welcome-toast {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15) !important;
+  color: #334155 !important;
+}
+
+[data-theme="classroom"] .guide-spotlight-halo {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 16px rgba(2, 132, 199, 0.5), inset 0 0 12px rgba(2, 132, 199, 0.25) !important;
+}
+
+
+

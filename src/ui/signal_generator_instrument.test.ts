@@ -90,7 +90,7 @@ describe("SignalGeneratorInstrument UI Component", () => {
     const source = orchestrator.addComponent("vsource", 100, 100);
     instrument = new SignalGeneratorInstrument(container, orchestrator, callbacks);
 
-    const clockBtn = container.querySelector('[data-preset-id="clock_10mhz"]') as HTMLButtonElement;
+    const clockBtn = container.querySelector('[data-preset-id="cmos_clock_10mhz"]') as HTMLButtonElement;
     expect(clockBtn).not.toBeNull();
 
     clockBtn.click();
@@ -115,5 +115,48 @@ describe("SignalGeneratorInstrument UI Component", () => {
     outputBtn.click();
     expect(outputBtn.classList.contains("active")).toBe(true);
     expect(outputBtn.textContent).toContain("SALIDA: ACTIVA");
+  });
+
+  it("alterna entre impedancia de 50 ohms y High-Z con el botón de salida", () => {
+    instrument = new SignalGeneratorInstrument(container, orchestrator, callbacks);
+    const zBtn = container.querySelector("#gen-z-toggle") as HTMLButtonElement;
+    expect(zBtn).not.toBeNull();
+
+    zBtn.click();
+    expect(zBtn.textContent).toContain("High-Z");
+
+    zBtn.click();
+    expect(zBtn.textContent).toContain("50 Ω");
+  });
+
+  it("notifica onSourceMutated cuando se cambia la forma de onda o parámetros", () => {
+    const onSourceMutated = vi.fn();
+    callbacks.onSourceMutated = onSourceMutated;
+    const source = orchestrator.addComponent("vsource", 100, 100);
+    instrument = new SignalGeneratorInstrument(container, orchestrator, callbacks);
+
+    const triangleBtn = container.querySelector('[data-wave="triangle"]') as HTMLButtonElement;
+    expect(triangleBtn).not.toBeNull();
+    triangleBtn.click();
+
+    expect(onSourceMutated).toHaveBeenCalledWith(source);
+    expect(source.waveType).toBe("triangle");
+  });
+
+  it("actualiza controles y parámetros al recibir syncFromExternalSource", () => {
+    const source = orchestrator.addComponent("vsource", 100, 100);
+    instrument = new SignalGeneratorInstrument(container, orchestrator, callbacks);
+
+    source.frequency = 440;
+    source.amplitude = 2.5;
+    source.waveType = "sine";
+
+    instrument.syncFromExternalSource(source);
+
+    const ampInput = container.querySelector("#gen-num-amp") as HTMLInputElement;
+    expect(ampInput.value).toBe("2.50");
+
+    const freqBadge = container.querySelector("#gen-val-freq");
+    expect(freqBadge?.textContent).toBe("440 Hz");
   });
 });

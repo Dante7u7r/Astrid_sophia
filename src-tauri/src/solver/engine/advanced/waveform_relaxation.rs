@@ -5,6 +5,11 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+#[inline]
+fn is_ground_or_rail(node: &str) -> bool {
+    node == "0" || node.eq_ignore_ascii_case("gnd")
+}
+
 /// Representa una señal continua de forma de onda muestreada e interpolable en el tiempo.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WaveformSignal {
@@ -140,7 +145,7 @@ impl CircuitPartition {
         global_supplies: &[ComponentData],
         window_start_t: f64,
         window_end_t: f64,
-    ) -> CircuitNetlist {
+    ) -> (CircuitNetlist, HashMap<String, String>) {
         let mut comps = self.components.clone();
 
         // Incorporar fuentes de alimentación DC globales compartidas (VDD, VCC)
@@ -233,16 +238,47 @@ impl CircuitPartition {
             comps.push(v_driver);
         }
 
-        CircuitNetlist {
-            components: comps,
-            wires: vec![],
-            temperature: Some(300.15),
-            fixed_step: None,
-            subcircuit_definitions: None,
-            triggers: None,
-            mutual_inductances: None,
-            thermal_config: None,
+        // Mapear nodos no-tierra de la partición a un rango denso 1..K para evitar saltos de índice
+        let mut node_set = std::collections::BTreeSet::new();
+        for comp in &comps {
+            for pin in &comp.pins {
+                if !is_ground_or_rail(pin) {
+                    node_set.insert(pin.clone());
+                }
+            }
         }
+
+        let mut node_to_dense = HashMap::new();
+        let mut dense_to_node = HashMap::new();
+        for (idx, node_name) in node_set.iter().enumerate() {
+            let dense_str = (idx + 1).to_string();
+            node_to_dense.insert(node_name.clone(), dense_str.clone());
+            dense_to_node.insert(dense_str, node_name.clone());
+        }
+
+        for comp in &mut comps {
+            for pin in &mut comp.pins {
+                if !is_ground_or_rail(pin) {
+                    if let Some(mapped) = node_to_dense.get(pin) {
+                        *pin = mapped.clone();
+                    }
+                }
+            }
+        }
+
+        (
+            CircuitNetlist {
+                components: comps,
+                wires: vec![],
+                temperature: Some(300.15),
+                fixed_step: None,
+                subcircuit_definitions: None,
+                triggers: None,
+                mutual_inductances: None,
+                thermal_config: None,
+            },
+            dense_to_node,
+        )
     }
 }
 
@@ -281,7 +317,99 @@ pub fn partition_circuit_for_relaxation(
     let supply_rail_nodes: HashSet<String> =
         global_supplies.iter().map(|s| s.pins[0].clone()).collect();
 
-    // 2. Agrupar componentes por etapas funcionales (ej. pares PMOS+NMOS en inversores CMOS o filtros RC)
+    let get_conductive_nodes = |comp: &ComponentData| -> Vec<String> {
+        let filter_valid = |p: &String| !is_ground_or_rail(p) && !supply_rail_nodes.contains(p);
+
+        match comp.comp_type.as_str() {
+            "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos"
+            | "sic_mosfet" | "gan_hemt" | "jfet" | "njfet" | "pjfet" => {
+                let mut nodes = Vec::new();
+                if comp.pins.len() >= 2 && filter_valid(&comp.pins[1]) {
+                    nodes.push(comp.pins[1].clone());
+                }
+                if comp.pins.len() >= 3 && filter_valid(&comp.pins[2]) {
+                    nodes.push(comp.pins[2].clone());
+                }
+                nodes
+            }
+            "opamp" | "opamp_ideal" => {
+                if comp.pins.len() >= 3 && filter_valid(&comp.pins[2]) {
+                    vec![comp.pins[2].clone()]
+                } else {
+                    Vec::new()
+                }
+            }
+            "and_gate" | "or_gate" | "not_gate" | "nand_gate" | "nor_gate" | "xor_gate"
+            | "xnor_gate" | "buffer" => {
+                if let Some(out_pin) = comp.pins.last() {
+                    if filter_valid(out_pin) {
+                        vec![out_pin.clone()]
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                }
+            }
+            "vcvs" | "vccs" | "e" | "g" => {
+                let mut nodes = Vec::new();
+                if !comp.pins.is_empty() && filter_valid(&comp.pins[0]) {
+                    nodes.push(comp.pins[0].clone());
+                }
+                if comp.pins.len() >= 2 && filter_valid(&comp.pins[1]) {
+                    nodes.push(comp.pins[1].clone());
+                }
+                nodes
+            }
+            _ => comp
+                .pins
+                .iter()
+                .filter(|p| filter_valid(p))
+                .cloned()
+                .collect(),
+        }
+    };
+
+    let get_input_dependency_nodes = |comp: &ComponentData| -> Vec<String> {
+        match comp.comp_type.as_str() {
+            "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos"
+            | "sic_mosfet" | "gan_hemt" | "jfet" | "njfet" | "pjfet" => {
+                if !comp.pins.is_empty() {
+                    vec![comp.pins[0].clone()]
+                } else {
+                    Vec::new()
+                }
+            }
+            "opamp" | "opamp_ideal" => {
+                let mut inputs = Vec::new();
+                if !comp.pins.is_empty() {
+                    inputs.push(comp.pins[0].clone());
+                }
+                if comp.pins.len() >= 2 {
+                    inputs.push(comp.pins[1].clone());
+                }
+                inputs
+            }
+            "and_gate" | "or_gate" | "not_gate" | "nand_gate" | "nor_gate" | "xor_gate"
+            | "xnor_gate" | "buffer" => {
+                if comp.pins.len() > 1 {
+                    comp.pins[..comp.pins.len() - 1].to_vec()
+                } else {
+                    Vec::new()
+                }
+            }
+            "vcvs" | "vccs" | "e" | "g" => {
+                if comp.pins.len() >= 4 {
+                    vec![comp.pins[2].clone(), comp.pins[3].clone()]
+                } else {
+                    Vec::new()
+                }
+            }
+            _ => Vec::new(),
+        }
+    };
+
+    // 2. Agrupar componentes por etapas funcionales
     let mut visited = vec![false; non_supply_components.len()];
     let mut raw_partitions: Vec<Vec<ComponentData>> = Vec::new();
 
@@ -299,63 +427,14 @@ pub fn partition_circuit_for_relaxation(
             let comp_curr = &non_supply_components[curr_idx];
             current_block.push(comp_curr.clone());
 
-            // Nodos internos conductores del componente actual (drenador, colector, resistor, condensador)
-            // Excluimos compuertas de MOSFETs como conexión bidireccional porque la compuerta es unidireccional (alta impedancia DC).
-            let conductive_nodes: Vec<String> = match comp_curr.comp_type.as_str() {
-                "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => {
-                    // pins[0] = Gate, pins[1] = Drain, pins[2] = Source
-                    let mut nodes = Vec::new();
-                    if comp_curr.pins.len() >= 2
-                        && !is_ground_or_rail(&comp_curr.pins[1])
-                        && !supply_rail_nodes.contains(&comp_curr.pins[1])
-                    {
-                        nodes.push(comp_curr.pins[1].clone());
-                    }
-                    if comp_curr.pins.len() >= 3
-                        && !is_ground_or_rail(&comp_curr.pins[2])
-                        && !supply_rail_nodes.contains(&comp_curr.pins[2])
-                    {
-                        nodes.push(comp_curr.pins[2].clone());
-                    }
-                    nodes
-                }
-                _ => comp_curr
-                    .pins
-                    .iter()
-                    .filter(|p| !is_ground_or_rail(p) && !supply_rail_nodes.contains(*p))
-                    .cloned()
-                    .collect(),
-            };
+            let conductive_nodes = get_conductive_nodes(comp_curr);
 
             for other_idx in 0..non_supply_components.len() {
                 if visited[other_idx] {
                     continue;
                 }
                 let other_comp = &non_supply_components[other_idx];
-                let other_conductive_nodes: Vec<String> = match other_comp.comp_type.as_str() {
-                    "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => {
-                        let mut nodes = Vec::new();
-                        if other_comp.pins.len() >= 2
-                            && !is_ground_or_rail(&other_comp.pins[1])
-                            && !supply_rail_nodes.contains(&other_comp.pins[1])
-                        {
-                            nodes.push(other_comp.pins[1].clone());
-                        }
-                        if other_comp.pins.len() >= 3
-                            && !is_ground_or_rail(&other_comp.pins[2])
-                            && !supply_rail_nodes.contains(&other_comp.pins[2])
-                        {
-                            nodes.push(other_comp.pins[2].clone());
-                        }
-                        nodes
-                    }
-                    _ => other_comp
-                        .pins
-                        .iter()
-                        .filter(|p| !is_ground_or_rail(p) && !supply_rail_nodes.contains(*p))
-                        .cloned()
-                        .collect(),
-                };
+                let other_conductive_nodes = get_conductive_nodes(other_comp);
 
                 let shares_node = conductive_nodes
                     .iter()
@@ -427,14 +506,11 @@ pub fn partition_circuit_for_relaxation(
             }
 
             for comp in &p_i.components {
-                match comp.comp_type.as_str() {
-                    "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => {
-                        let gate_node = &comp.pins[0];
-                        if p_j.internal_nodes.contains(gate_node) {
-                            dependencies.push((i, j, gate_node.clone()));
-                        }
+                let dep_nodes = get_input_dependency_nodes(comp);
+                for dep_node in dep_nodes {
+                    if p_j.internal_nodes.contains(&dep_node) {
+                        dependencies.push((i, j, dep_node));
                     }
-                    _ => {}
                 }
             }
         }
@@ -543,20 +619,10 @@ pub fn solve_waveform_relaxation_transient(
                     // Modo puramente paralelo: todas las particiones resuelven concurrentemente con Rayon
                     let boundary_snapshot = global_waveforms.clone();
 
-                    let partition_outputs: Vec<(
-                        usize,
-                        Result<
-                            (
-                                Vec<TimeStepResult>,
-                                HashMap<String, f64>,
-                                HashMap<String, f64>,
-                            ),
-                            String,
-                        >,
-                    )> = partitions
+                    let partition_outputs: Vec<_> = partitions
                         .par_iter()
                         .map(|part| {
-                            let part_netlist = part.build_partition_netlist(
+                            let (part_netlist, dense_to_node) = part.build_partition_netlist(
                                 &boundary_snapshot,
                                 &global_supplies,
                                 t_start,
@@ -568,16 +634,25 @@ pub fn solve_waveform_relaxation_transient(
                                 part.initial_caps.clone(),
                                 part.initial_inds.clone(),
                             );
-                            (part.partition_id, res)
+                            (part.partition_id, dense_to_node, res)
                         })
                         .collect();
 
-                    for (p_id, res) in partition_outputs {
+                    for (p_id, dense_to_node, res) in partition_outputs {
                         match res {
                             Ok((mut step_results, caps, inds)) => {
                                 // Ajustar el eje temporal local [0, duration] al tiempo global [t_start, t_end]
                                 for step in &mut step_results {
                                     step.time += t_start;
+                                    let mut remapped = HashMap::new();
+                                    for (dense_k, v) in &step.node_voltages {
+                                        if let Some(orig_k) = dense_to_node.get(dense_k) {
+                                            remapped.insert(orig_k.clone(), *v);
+                                        } else {
+                                            remapped.insert(dense_k.clone(), *v);
+                                        }
+                                    }
+                                    step.node_voltages = remapped;
                                 }
                                 for node in &partitions[p_id].internal_nodes {
                                     let sig =
@@ -599,7 +674,7 @@ pub fn solve_waveform_relaxation_transient(
                     let mut active_waveforms = global_waveforms.clone();
 
                     for part in &partitions {
-                        let part_netlist = part.build_partition_netlist(
+                        let (part_netlist, dense_to_node) = part.build_partition_netlist(
                             &active_waveforms,
                             &global_supplies,
                             t_start,
@@ -616,6 +691,15 @@ pub fn solve_waveform_relaxation_transient(
                         {
                             for step in &mut step_results {
                                 step.time += t_start;
+                                let mut remapped = HashMap::new();
+                                for (dense_k, v) in &step.node_voltages {
+                                    if let Some(orig_k) = dense_to_node.get(dense_k) {
+                                        remapped.insert(orig_k.clone(), *v);
+                                    } else {
+                                        remapped.insert(dense_k.clone(), *v);
+                                    }
+                                }
+                                step.node_voltages = remapped;
                             }
                             for node in &part.internal_nodes {
                                 let sig =
@@ -657,23 +741,26 @@ pub fn solve_waveform_relaxation_transient(
         }
 
         if window_converged {
-            // Unir resultados de todas las particiones para esta ventana temporal
-            let num_steps = best_window_results
-                .values()
-                .next()
-                .map(|v| v.len())
-                .unwrap_or(0);
+            // Unir resultados de todas las particiones para esta ventana temporal mediante muestreo multirate continuo
+            let mut unique_times: Vec<f64> = Vec::new();
+            for steps in best_window_results.values() {
+                for s in steps {
+                    unique_times.push(s.time);
+                }
+            }
+            unique_times.sort_by(|a, b| a.total_cmp(b));
+            unique_times.dedup_by(|a, b| (*a - *b).abs() < 1e-13);
 
-            for s_idx in 0..num_steps {
+            for &step_time in &unique_times {
                 let mut merged_voltages = HashMap::new();
                 let mut merged_currents = HashMap::new();
-                let mut step_time = t_start;
 
                 for p_id in 0..num_partitions {
                     if let Some(steps) = best_window_results.get(&p_id) {
-                        if s_idx < steps.len() {
-                            let step = &steps[s_idx];
-                            step_time = step.time;
+                        if let Ok(exact_idx) =
+                            steps.binary_search_by(|s| s.time.total_cmp(&step_time))
+                        {
+                            let step = &steps[exact_idx];
                             for (k, v) in &step.node_voltages {
                                 if !merged_voltages.contains_key(k) {
                                     merged_voltages.insert(k.clone(), *v);
@@ -684,19 +771,29 @@ pub fn solve_waveform_relaxation_transient(
                                     merged_currents.insert(k.clone(), *v);
                                 }
                             }
+                        } else if let Some(part) =
+                            partitions.iter().find(|p| p.partition_id == p_id)
+                        {
+                            for node in &part.internal_nodes {
+                                if !merged_voltages.contains_key(node) {
+                                    if let Some(sig) = global_waveforms.get(node) {
+                                        merged_voltages.insert(node.clone(), sig.eval(step_time));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
                 // Evitar duplicar el punto de frontera inicial exacto si ya existe en all_results
                 if all_results.is_empty()
-                    || (all_results.last().unwrap().time - step_time).abs() > 1e-12
+                    || (all_results.last().unwrap().time - step_time).abs() > 1e-13
                 {
-                    all_results.push(TimeStepResult {
-                        time: step_time,
-                        node_voltages: merged_voltages,
-                        branch_currents: merged_currents,
-                    });
+                    all_results.push(TimeStepResult::new(
+                        step_time,
+                        merged_voltages,
+                        merged_currents,
+                    ));
                 }
             }
 

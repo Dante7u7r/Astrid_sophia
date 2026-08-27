@@ -472,6 +472,8 @@ pub enum ExportCreatedExportkindValue {
     Hdf5,
     #[serde(rename = "pdf")]
     Pdf,
+    #[serde(rename = "json")]
+    Json,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

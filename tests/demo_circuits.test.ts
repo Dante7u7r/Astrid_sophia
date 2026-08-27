@@ -8,14 +8,14 @@ import { extractElectricalNetlist } from "../src/simulation/netlist_extractor";
 import { runElectricalRuleCheck } from "../src/simulation/simulation_dispatcher";
 
 const DEMO_FILES = [
-  "01_filtro_rc.astryd",
-  "02_puente_rectificador.astryd",
-  "03_arduino_led.astryd",
-  "04_amp_bjt_bode.astryd",
-  "05_amplificador_opamp.astryd",
-  "06_inversor_cmos.astryd",
-  "07_rlc_resonante.astryd",
-  "08_control_rele_interactivo.astryd",
+  "01_filtro_rc.biaani",
+  "02_puente_rectificador.biaani",
+  "03_arduino_led.biaani",
+  "04_amp_bjt_bode.biaani",
+  "05_amplificador_opamp.biaani",
+  "06_inversor_cmos.biaani",
+  "07_rlc_resonante.biaani",
+  "08_control_rele_interactivo.biaani",
 ] as const;
 
 function loadDemo(filename: (typeof DEMO_FILES)[number]): CircuitFileData {
@@ -96,7 +96,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el filtro RC conserva alimentacion, salida y retorno separados", () => {
-    const demo = loadDemo("01_filtro_rc.astryd");
+    const demo = loadDemo("01_filtro_rc.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "V1:0", "R1:0");
     expectSameNode(nodes, "R1:1", "C1:0");
@@ -105,7 +105,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el puente conecta ambos diodos y la carga RC en paralelo", () => {
-    const demo = loadDemo("02_puente_rectificador.astryd");
+    const demo = loadDemo("02_puente_rectificador.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "V1:0", "D1:0", "D3:1");
     expectSameNode(nodes, "V1:1", "D2:0", "D4:1");
@@ -115,7 +115,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("Arduino alimenta la salida LED sin exigir conectar GPIO no usados", () => {
-    const demo = loadDemo("03_arduino_led.astryd");
+    const demo = loadDemo("03_arduino_led.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "U1:1", "R1:0");
     expectSameNode(nodes, "R1:1", "LED1:0");
@@ -125,7 +125,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el BJT tiene polarizacion, entrada acoplada y VCC sin cortocircuito", () => {
-    const demo = loadDemo("04_amp_bjt_bode.astryd");
+    const demo = loadDemo("04_amp_bjt_bode.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "VCC:0", "RB1:0", "RC:0");
     expectSameNode(nodes, "Vin:0", "Cin:0");
@@ -137,7 +137,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el amplificador Op-Amp tiene lazo de realimentacion negativa y alimentacion bipolar", () => {
-    const demo = loadDemo("05_amplificador_opamp.astryd");
+    const demo = loadDemo("05_amplificador_opamp.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "Vin:0", "Rin:0");
     expectSameNode(nodes, "Rin:1", "U1:1", "Rf:0");
@@ -149,7 +149,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el inversor CMOS conecta compuertas comunes, drenadores comunes y rieles Vdd/GND", () => {
-    const demo = loadDemo("06_inversor_cmos.astryd");
+    const demo = loadDemo("06_inversor_cmos.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "Vin:0", "Mn1:0", "Mp1:0");
     expectSameNode(nodes, "Mp1:1", "Mn1:1", "Cload:0");
@@ -160,7 +160,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el circuito RLC conecta resistencia, inductor y condensador en serie resonante", () => {
-    const demo = loadDemo("07_rlc_resonante.astryd");
+    const demo = loadDemo("07_rlc_resonante.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "Vin:0", "R1:0");
     expectSameNode(nodes, "R1:1", "L1:0");
@@ -171,7 +171,7 @@ describe("circuitos de demostracion", () => {
   });
 
   test("el control de rele conecta alimentacion, switch, diodo flyback, bobina y lampara", () => {
-    const demo = loadDemo("08_control_rele_interactivo.astryd");
+    const demo = loadDemo("08_control_rele_interactivo.biaani");
     const { pinToNodeMap: nodes } = extractElectricalNetlist(demo.components, demo.wires, getComponentPins);
     expectSameNode(nodes, "V12:0", "SW1:0", "K1:2");
     expectSameNode(nodes, "SW1:1", "K1:0", "Dfly:1");
@@ -182,42 +182,42 @@ describe("circuitos de demostracion", () => {
   });
 
   test("todos los demos tienen probes activos y modos de analisis validos", () => {
-    const rc = loadDemo("01_filtro_rc.astryd");
+    const rc = loadDemo("01_filtro_rc.biaani");
     expect(rc.activeAnalysisMode).toBe("TRAN");
     expect(rc.probes?.ch1ProbeNode).toBe("1");
     expect(rc.probes?.ch2ProbeNode).toBe("2");
 
-    const puente = loadDemo("02_puente_rectificador.astryd");
+    const puente = loadDemo("02_puente_rectificador.biaani");
     expect(puente.activeAnalysisMode).toBe("TRAN");
     expect(puente.probes?.ch1ProbeNode).toBe("1");
     expect(puente.probes?.ch2ProbeNode).toBe("3");
 
-    const arduino = loadDemo("03_arduino_led.astryd");
+    const arduino = loadDemo("03_arduino_led.biaani");
     expect(arduino.activeAnalysisMode).toBe("TRAN");
     expect(arduino.probes?.ch1ProbeNode).toBe("1");
     expect(arduino.probes?.ch2ProbeNode).toBe("2");
 
-    const bjt = loadDemo("04_amp_bjt_bode.astryd");
+    const bjt = loadDemo("04_amp_bjt_bode.biaani");
     expect(bjt.activeAnalysisMode).toBe("AC");
     expect(bjt.probes?.ch1ProbeNode).toBe("1");
     expect(bjt.probes?.ch2ProbeNode).toBe("3");
 
-    const opamp = loadDemo("05_amplificador_opamp.astryd");
+    const opamp = loadDemo("05_amplificador_opamp.biaani");
     expect(opamp.activeAnalysisMode).toBe("TRAN");
     expect(opamp.probes?.ch1ProbeNode).toBe("1");
     expect(opamp.probes?.ch2ProbeNode).toBe("6");
 
-    const cmos = loadDemo("06_inversor_cmos.astryd");
+    const cmos = loadDemo("06_inversor_cmos.biaani");
     expect(cmos.activeAnalysisMode).toBe("TRAN");
     expect(cmos.probes?.ch1ProbeNode).toBe("1");
     expect(cmos.probes?.ch2ProbeNode).toBe("3");
 
-    const rlc = loadDemo("07_rlc_resonante.astryd");
+    const rlc = loadDemo("07_rlc_resonante.biaani");
     expect(rlc.activeAnalysisMode).toBe("TRAN");
     expect(rlc.probes?.ch1ProbeNode).toBe("1");
     expect(rlc.probes?.ch2ProbeNode).toBe("3");
 
-    const rele = loadDemo("08_control_rele_interactivo.astryd");
+    const rele = loadDemo("08_control_rele_interactivo.biaani");
     expect(rele.activeAnalysisMode).toBe("TRAN");
     expect(rele.probes?.ch1ProbeNode).toBe("2");
     expect(rele.probes?.ch2ProbeNode).toBe("3");

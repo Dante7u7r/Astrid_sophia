@@ -51,3 +51,5 @@ test-results/
 validation/.tools/
 .astryd_live/
 src-tauri/.astryd_live/
+.biaani_live/
+src-tauri/.biaani_live/

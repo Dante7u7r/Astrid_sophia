@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   addSubcircuitCardToPalette,
+  enableHorizontalScrollWithWheelAndDrag,
   initComponentPaletteController,
 } from "./component_palette_controller";
 import type { ParsedSubcircuit } from "../simulation/spice_library_parser";
@@ -178,5 +179,119 @@ describe("ComponentPaletteController", () => {
 
     expect(macromodelosGroup.style.display).toBe("block");
     expect(card?.style.display).toBe("flex");
+  });
+
+  it("renderiza el catalogo completo de componentes de forma dinamica en #left-panel-body", () => {
+    document.body.innerHTML = `<div id="left-panel-body"></div>`;
+    initComponentPaletteController();
+
+    const panelBody = document.querySelector<HTMLElement>("#left-panel-body")!;
+    expect(panelBody.querySelector(".palette-top-sticky")).not.toBeNull();
+    expect(panelBody.querySelector(".palette-header-bar")).not.toBeNull();
+    expect(panelBody.querySelector(".palette-favorites-bar")).not.toBeNull();
+    expect(panelBody.querySelector(".palette-category-pills")).not.toBeNull();
+    expect(panelBody.querySelector(".components-categories")).not.toBeNull();
+
+    // Comprobar tarjetas renderizadas
+    const cards = panelBody.querySelectorAll(".component-card");
+    expect(cards.length).toBeGreaterThan(20);
+  });
+
+  it("permite colapsar y expandir categorias despues de filtrar por pills", () => {
+    document.body.innerHTML = `<div id="left-panel-body"></div>`;
+    initComponentPaletteController();
+
+    // Filtrar por Pasivos
+    const pasivosPill = document.querySelector<HTMLButtonElement>('.palette-pill[data-category="pasivos"]')!;
+    pasivosPill.click();
+
+    const pasivosHeader = document.querySelector<HTMLElement>("#group-pasivos .category-header")!;
+    const pasivosContent = document.querySelector<HTMLElement>("#cat-pasivos")!;
+
+    expect(pasivosContent.classList.contains("open")).toBe(true);
+
+    // Clic en header para colapsar
+    pasivosHeader.click();
+    expect(pasivosContent.classList.contains("open")).toBe(false);
+    expect(pasivosHeader.classList.contains("active")).toBe(false);
+
+    // Clic en header para reabrir
+    pasivosHeader.click();
+    expect(pasivosContent.classList.contains("open")).toBe(true);
+    expect(pasivosHeader.classList.contains("active")).toBe(true);
+  });
+
+  it("conmuta la vista entre Grid y Lista tecnica y persiste la seleccion", () => {
+    document.body.innerHTML = `<div id="left-panel-body"></div>`;
+    initComponentPaletteController();
+
+    const btnList = document.querySelector<HTMLButtonElement>("#btn-palette-view-list")!;
+    const btnGrid = document.querySelector<HTMLButtonElement>("#btn-palette-view-grid")!;
+
+    btnList.click();
+    expect(localStorage.getItem("astryd_palette_view_mode")).toBe("list");
+    expect(document.querySelector(".category-content")?.classList.contains("view-list")).toBe(true);
+
+    btnGrid.click();
+    expect(localStorage.getItem("astryd_palette_view_mode")).toBe("grid");
+    expect(document.querySelector(".category-content")?.classList.contains("view-grid")).toBe(true);
+  });
+
+  it("conmuta la norma de simbologia entre IEEE e IEC", () => {
+    document.body.innerHTML = `<div id="left-panel-body"></div>`;
+    initComponentPaletteController();
+
+    const btnIec = document.querySelector<HTMLButtonElement>("#btn-std-iec")!;
+    btnIec.click();
+    expect(localStorage.getItem("astryd_palette_symbol_std")).toBe("IEC");
+
+    const btnIeee = document.querySelector<HTMLButtonElement>("#btn-std-ieee")!;
+    btnIeee.click();
+    expect(localStorage.getItem("astryd_palette_symbol_std")).toBe("IEEE");
+  });
+
+  it("arma y desarma la herramienta Stamp al hacer clic en tarjetas o chips de favoritos", () => {
+    document.body.innerHTML = `<div id="left-panel-body"></div>`;
+    initComponentPaletteController();
+
+    const resistorCard = document.querySelector<HTMLElement>('.component-card[data-type="resistor"]')!;
+    resistorCard.click();
+
+    expect(resistorCard.classList.contains("palette-card-armed")).toBe(true);
+
+    // Clic de nuevo para desarmar
+    resistorCard.click();
+    expect(resistorCard.classList.contains("palette-card-armed")).toBe(false);
+  });
+
+  it("permite el desplazamiento horizontal de la barra de categorias con la rueda del raton y arrastre", () => {
+    const container = document.createElement("div");
+    container.scrollLeft = 0;
+    enableHorizontalScrollWithWheelAndDrag(container);
+
+    // 1. Evento wheel vertical -> scrollLeft
+    const wheelEvent = new WheelEvent("wheel", { deltaY: 50, deltaX: 0, cancelable: true });
+    container.dispatchEvent(wheelEvent);
+    expect(container.scrollLeft).toBe(50);
+
+    // 2. Evento wheel horizontal nativo (touchpad) -> no debe duplicarse ni sobreescribirse
+    const trackpadWheel = new WheelEvent("wheel", { deltaY: 0, deltaX: 30, cancelable: true });
+    container.dispatchEvent(trackpadWheel);
+    expect(container.scrollLeft).toBe(50);
+
+    // 3. Arrastre de ratón (mouse drag)
+    const mousedown = new MouseEvent("mousedown", { button: 0, clientX: 100 });
+    Object.defineProperty(mousedown, "pageX", { value: 100 });
+    container.dispatchEvent(mousedown);
+
+    const mousemove = new MouseEvent("mousemove", { clientX: 70 });
+    Object.defineProperty(mousemove, "pageX", { value: 70 });
+    container.dispatchEvent(mousemove);
+
+    // Arrastró 30px hacia la izquierda -> scrollLeft aumenta en 30px (50 + 30 = 80)
+    expect(container.scrollLeft).toBe(80);
+
+    const mouseup = new MouseEvent("mouseup", {});
+    container.dispatchEvent(mouseup);
   });
 });

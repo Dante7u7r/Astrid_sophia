@@ -3,10 +3,14 @@ import type { ComponentInstance } from "../canvas_orchestrator";
 import {
   ACTUATOR_MODEL_EDITORS,
   DEDICATED_VALUE_EDITORS,
+  analyzeBatchSelection,
   buildLiveMutations,
+  calculateComponentOperatingPoint,
   clampSwitchProperties,
   clampTransformerProperties,
   finiteOr,
+  formatComponentSpiceCard,
+  formatEngineeringBadge,
   getUnitDisplayConfig,
   getValueEditorPresentation,
   supportsLiveMutation,
@@ -30,11 +34,12 @@ describe("property_model", () => {
 
   it("devuelve rangos de unidad por tipo", () => {
     expect(getUnitDisplayConfig("resistor")).toEqual({
-      label: "Ohmios (Ohm)",
+      label: "Ohmios (Ω)",
+      unitSymbol: "Ω",
       min: "1",
-      max: "10000",
+      max: "10000000",
     });
-    expect(getUnitDisplayConfig("nmos").min).toBe("-3");
+    expect(getUnitDisplayConfig("nmos").min).toBe("-10");
     expect(getUnitDisplayConfig("ground").label).toBe("Referencia 0 V");
   });
 
@@ -58,7 +63,7 @@ describe("property_model", () => {
     expect(getValueEditorPresentation("resistor")).toMatchObject({
       showValueGroup: true,
       showUnitGroup: true,
-      showSliderControls: true,
+      showSliderControls: false,
     });
     expect(getValueEditorPresentation("net_label")).toMatchObject({
       showValueGroup: true,
@@ -126,4 +131,114 @@ describe("property_model", () => {
       { componentId: "S1", field: "switch_state", value: 1 },
     ]);
   });
+
+  it("formatea badges de ingeniería en tiempo real con notación SPICE y expresiones", () => {
+    const rBadge = formatEngineeringBadge("4.7k", "resistor");
+    expect(rBadge.valid).toBe(true);
+    expect(rBadge.badgeText).toContain("4.7k Ω");
+    expect(rBadge.baseValue).toBe(4700);
+
+    const cBadge = formatEngineeringBadge("100n", "capacitor");
+    expect(cBadge.valid).toBe(true);
+    expect(cBadge.badgeText).toContain("100n F");
+    expect(cBadge.baseValue).toBeCloseTo(1e-7);
+
+    const exprBadge = formatEngineeringBadge("{R_LOAD / 2}", "resistor");
+    expect(exprBadge.valid).toBe(true);
+    expect(exprBadge.isExpression).toBe(true);
+    expect(exprBadge.badgeText).toBe("Expresión: R_LOAD / 2");
+
+    const invalidBadge = formatEngineeringBadge("4.7xyz", "resistor");
+    expect(invalidBadge.valid).toBe(false);
+  });
+
+  it("calcula telemetría de punto de operación y pequeña señal para transistores", () => {
+    const bjt = component("Q1", "npn");
+    bjt.bjtBf = 200;
+    bjt.bjtVaf = 100;
+
+    const pinNodes = [
+      { pinIndex: 0, pinName: "Base (B)", nodeId: "NET_B" },
+      { pinIndex: 1, pinName: "Colector (C)", nodeId: "NET_C" },
+      { pinIndex: 2, pinName: "Emisor (E)", nodeId: "0" },
+    ];
+    const nodeVoltages = { NET_B: 0.75, NET_C: 5.0, "0": 0.0 };
+    const branchCurrents = { Q1: 0.002 }; // 2 mA
+
+    const op = calculateComponentOperatingPoint(bjt, pinNodes, nodeVoltages, branchCurrents);
+    expect(op).not.toBeNull();
+    expect(op!.region).toContain("Activa Directa");
+    expect(op!.smallSignal).toBeDefined();
+    expect(op!.smallSignal!.gm).toBeGreaterThan(0.05); // ~ 2mA / 25.85mV ≈ 0.077 S
+    expect(op!.smallSignal!.rpi).toBeGreaterThan(1000);
+    expect(op!.smallSignal!.ro).toBeGreaterThan(10000);
+    expect(op!.pins.length).toBe(3);
+  });
+
+  it("analiza selecciones múltiples homogéneas y heterogéneas para edición por lote", () => {
+    const r1 = component("R1", "resistor");
+    r1.value = 1000;
+    r1.tolerance = 1;
+    const r2 = component("R2", "resistor");
+    r2.value = 1000;
+    r2.tolerance = 1;
+    const r3 = component("R3", "resistor");
+    r3.value = 4700;
+    r3.tolerance = 1;
+
+    const homogeneousBatch = analyzeBatchSelection([r1, r2]);
+    expect(homogeneousBatch.isMultiple).toBe(true);
+    expect(homogeneousBatch.isHomogeneous).toBe(true);
+    expect(homogeneousBatch.typeLabel).toBe("Resistores");
+    expect(homogeneousBatch.hasMixedValues).toBe(false);
+    expect(homogeneousBatch.sharedValue).toBe(1000);
+    expect(homogeneousBatch.sharedTolerance).toBe(1);
+
+    const mixedValuesBatch = analyzeBatchSelection([r1, r2, r3]);
+    expect(mixedValuesBatch.isMultiple).toBe(true);
+    expect(mixedValuesBatch.isHomogeneous).toBe(true);
+    expect(mixedValuesBatch.hasMixedValues).toBe(true);
+    expect(mixedValuesBatch.sharedValue).toBeUndefined();
+    expect(mixedValuesBatch.sharedTolerance).toBe(1);
+
+    const c1 = component("C1", "capacitor");
+    const heterogeneousBatch = analyzeBatchSelection([r1, c1]);
+    expect(heterogeneousBatch.isMultiple).toBe(true);
+    expect(heterogeneousBatch.isHomogeneous).toBe(false);
+    expect(heterogeneousBatch.typeLabel).toBe("Componentes Mixtos");
+  });
+
+  it("genera directivas SPICE precisas para diferentes componentes", () => {
+    const r = component("R1", "resistor");
+    r.value = 4700;
+    r.tolerance = 1;
+    r.powerRating = 0.5;
+    const rCard = formatComponentSpiceCard(r, [
+      { pinName: "1", nodeId: "NET_IN" },
+      { pinName: "2", nodeId: "NET_OUT" },
+    ]);
+    expect(rCard).toBe("R_R1 NET_IN NET_OUT 4.7k tol=1% pwr=0.5W");
+
+    const cap = component("C1", "capacitor");
+    cap.value = 1e-7;
+    cap.esr = 0.05;
+    cap.initialCondition = 5.0;
+    const capCard = formatComponentSpiceCard(cap, [
+      { pinName: "1", nodeId: "NET_OUT" },
+      { pinName: "2", nodeId: "0" },
+    ]);
+    expect(capCard).toBe("C_C1 NET_OUT 0 100n esr=50m IC=5V");
+
+    const bjt = component("Q1", "npn");
+    bjt.modelName = "2N2222";
+    bjt.bjtBf = 200;
+    const bjtCard = formatComponentSpiceCard(bjt, [
+      { pinName: "B", nodeId: "NET_B" },
+      { pinName: "C", nodeId: "NET_C" },
+      { pinName: "E", nodeId: "0" },
+    ]);
+    expect(bjtCard).toContain("Q_Q1 NET_C NET_B 0 2N2222");
+    expect(bjtCard).toContain(".MODEL 2N2222 NPN (IS=1e-14 BF=200 VAF=100)");
+  });
 });
+

@@ -39,10 +39,21 @@ export interface StabilityPole {
   im: number;
 }
 
+export interface LoopGainPoint {
+  frequencyHz: number;
+  magnitudeDb: number;
+  phaseDeg: number;
+}
+
 export interface StabilityAnalysisResult {
   isStable: boolean;
   poles: StabilityPole[];
   zeros?: StabilityPole[];
+  loopGainMarginDb?: number;
+  loopPhaseMarginDeg?: number;
+  unityGainFrequencyHz?: number;
+  phaseCrossoverFrequencyHz?: number;
+  loopGainSweep?: LoopGainPoint[];
   converged?: boolean;
 }
 

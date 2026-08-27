@@ -178,6 +178,89 @@ fn test_trap_integration_lc_resonance() {
         "TRAP debe producir oscilación, amplitud: {}",
         amp_trap
     );
-    // TRAP should have similar or better amplitude than Euler (both are valid integration methods)
-    // The key difference is that TRAP is 2nd order and Euler is 1st order
+}
+
+#[test]
+fn test_gear3_to_gear6_rc_step_exactness() {
+    // Circuito RC clásico con escalón DC de 5V: V(t) = 5 * (1 - exp(-t / (R*C)))
+    // R = 1k, C = 1uF -> tau = 1 ms
+    let netlist_rc = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "Vin".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 1e-6,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "ic1".to_string(),
+                comp_type: "ic_directive".to_string(),
+                pins: vec!["2".to_string()],
+                value: 0.0,
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: None,
+        fixed_step: Some(true),
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let _tau = 1e-3;
+    let t_eval = 1e-3; // t = 1 tau -> V_exact = 5.0 * (1 - exp(-1)) = 3.1606027941427883 V
+    let v_exact = 5.0 * (1.0 - (-1.0_f64).exp());
+
+    let methods = vec!["gear2", "gear3", "gear4", "gear5", "gear6"];
+    for method in methods {
+        let settings = TransientSettings {
+            dt: 1e-5,
+            t_max: 2e-3,
+            fixed_step: Some(true),
+            integration_method: Some(method.to_string()),
+        };
+        let results = solve_transient_circuit(&netlist_rc, &settings)
+            .unwrap_or_else(|e| panic!("Fallo al simular con {}: {}", method, e));
+
+        assert!(!results.is_empty());
+
+        // Encontrar el paso más cercano a t = tau
+        let sample = results
+            .iter()
+            .min_by(|a, b| {
+                (a.time - t_eval)
+                    .abs()
+                    .partial_cmp(&(b.time - t_eval).abs())
+                    .unwrap()
+            })
+            .unwrap();
+
+        let v_c = *sample.node_voltages.get("2").unwrap();
+        let error = (v_c - v_exact).abs();
+        assert!(
+            error < 0.02,
+            "Método {} excede la tolerancia en t=tau: obtenido={}, exacto={}, error={}",
+            method,
+            v_c,
+            v_exact,
+            error
+        );
+    }
 }

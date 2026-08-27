@@ -18,12 +18,15 @@ import { isTypingInFormField, installWebviewKeyGuards, installWebviewAutofillGua
 import { TooltipManager } from "./ui/tooltip_manager";
 import { TabManager } from "./ui/tab_manager";
 import { PropertyEditor } from "./ui/property_editor";
+import { buildLiveMutations } from "./ui/property_model";
 import { CircuitSnapshotHistory } from "./app/circuit_snapshot_history";
 import { PanelLayoutManager } from "./ui/panel_layout_manager";
 import { InstrumentsDock } from "./ui/instruments_dock";
 import { FloatingInstrumentManager } from "./ui/floating_instrument_manager";
+import type { InteractiveMutationField } from "./simulation/simulation_runner";
 import { createInstrumentCenterController } from "./ui/instrument_center_controller";
-import { initComponentPaletteController } from "./ui/component_palette_controller";
+import { createAutoHideController, type AutoHideController } from "./ui/auto_hide_controller";
+import { getActiveSymbolStandard, initComponentPaletteController } from "./ui/component_palette_controller";
 import { createSidePanelController, type SidePanelController } from "./ui/side_panel_controller";
 import { createConsoleLogController } from "./ui/console_log_controller";
 import { initAppKeyboardShortcuts } from "./ui/app_keyboard_shortcuts_controller";
@@ -61,6 +64,10 @@ import {
   createLiveStateExporter,
   type LiveStateExporter,
 } from "./app/live_state_exporter";
+import { GuideEngine } from "./guide";
+import { CrashReporter } from "./app/crash_reporter";
+import { FeedbackModal } from "./ui/feedback_modal";
+import type { DiagnosticCollectorDeps } from "./feedback/diagnostic_collector";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
 const visualAudit = resolveVisualAuditConfig(window.location.search, {
@@ -132,6 +139,7 @@ let propertyEditor: PropertyEditor | null = null;
 let oscilloscopePanel: OscilloscopePanel | null = null;
 let circuitDocumentController: CircuitDocumentController | null = null;
 let renderController: RenderController | null = null;
+let autoHideController: AutoHideController | null = null;
 const probePlacementController = createProbePlacementController({
   getOscilloscopePanel: () => oscilloscopePanel,
 });
@@ -162,6 +170,7 @@ let sparFEnd = 100000.0;
 let sparPPD = 20;
 
 let liveStateExporter: LiveStateExporter | null = null;
+let guideEngine: GuideEngine | null = null;
 
 function updateCanvasRendering(immediate = false): void {
   renderController?.updateCanvasRendering(immediate);
@@ -199,6 +208,15 @@ function initInstrumentCenter(): void {
     isTypingInFormField,
     onResizeRequested: () => window.dispatchEvent(new Event("resize")),
   }).init();
+}
+
+function initAutoHide(): void {
+  autoHideController = createAutoHideController({
+    getPanelLayoutManager: () => panelLayoutManager,
+    isTypingInFormField,
+    isGuideActive: () => Boolean(guideEngine?.getState().isActive),
+  });
+  autoHideController.init();
 }
 // --- ACTUALIZACIÓN DE PROPIEDADES EN EL PANEL DERECHO DELEGADO ---
 
@@ -331,6 +349,13 @@ function initCanvasCAD() {
   if (!canvasElement) return;
 
   orchestrator = new CanvasOrchestrator(canvasElement, overlayCanvasElement);
+  orchestrator.setSymbolStandard(getActiveSymbolStandard());
+  window.addEventListener("symbol-standard-changed", (e: Event) => {
+    const customEvt = e as CustomEvent<"IEEE" | "IEC">;
+    if (customEvt.detail === "IEEE" || customEvt.detail === "IEC") {
+      orchestrator?.setSymbolStandard(customEvt.detail);
+    }
+  });
   installPerformanceHarness({
     enabled: performanceAuditEnabled,
     getOrchestrator: () => orchestrator,
@@ -369,6 +394,22 @@ function initCanvasCAD() {
       requestRender: (immediate: boolean) => updateCanvasRendering(immediate),
       getPinNode: (pinKey: string) => circuitState.getPinNode(pinKey),
       log: (text: string, type: "system" | "error" = "system") => addLog(text, type),
+      isSimulating: () => simulationRunner?.isSimulationActive() ?? false,
+      onSourceMutated: (source) => {
+        if (orchestrator?.selectedComponent?.id === source.id) {
+          propertyEditor?.updatePropertiesPanel(source);
+        }
+        if (simulationRunner?.isSimulationActive()) {
+          const mutations = buildLiveMutations(source, Number(source.value) || 0);
+          for (const m of mutations) {
+            void simulationRunner.mutateComponent(
+              m.componentId,
+              m.field as InteractiveMutationField,
+              m.value,
+            );
+          }
+        }
+      },
     });
     floatingInstrumentManager = new FloatingInstrumentManager();
   }
@@ -435,7 +476,14 @@ function initCanvasCAD() {
       return true;
     },
     onSwitchDoubleClick: async (comp) => {
-      comp.switchState = !(comp.switchState ?? false);
+      if (comp.type === "switch_spdt" || comp.type === "switch_dpdt") {
+        const curPos = comp.switchPosition ?? (comp.switchState ? 1 : 0);
+        comp.switchPosition = curPos === 0 ? 1 : 0;
+        comp.switchState = comp.switchPosition === 1;
+      } else {
+        comp.switchState = !(comp.switchState ?? false);
+      }
+
       if (simulationRunner && simulationRunner.isSimulationActive()) {
         try {
           await simulationRunner.mutateComponent(
@@ -443,12 +491,15 @@ function initCanvasCAD() {
             "switch_state",
             comp.switchState ? 1.0 : 0.0,
           );
+          const stateLabel = comp.type === "switch_spdt" || comp.type === "switch_dpdt"
+            ? `Posición ${comp.switchPosition === 0 ? "T1" : "T2"}`
+            : (comp.switchState ? "Cerrado" : "Abierto");
           addLog(
-            `Switch [${comp.id}] → ${comp.switchState ? "Cerrado" : "Abierto"} (mutación en caliente)`,
+            `Interruptor [${comp.id}] → ${stateLabel} (mutación en caliente)`,
             "system",
           );
         } catch (err) {
-          addLog(`Error al mutar switch: ${err}`, "error");
+          addLog(`Error al mutar interruptor: ${err}`, "error");
         }
       }
     },
@@ -511,6 +562,8 @@ function initCanvasCAD() {
     onRedo: () => circuitHistory.redo(),
     onWireMode: () => addLog("Modo cable activo: haz clic en un pin para trazar la conexión.", "system"),
   });
+
+  initComponentPaletteController();
 }
 
 // --- CARGA GENERAL DEL DOM ---
@@ -530,6 +583,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   initSidebars();
   initInstrumentCenter();
+  initAutoHide();
 
   const controllers = createDesktopControllerRegistry({
     visualAudit,
@@ -627,9 +681,99 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   liveStateExporter.scheduleExport(500);
 
+  // Inicialización del Tour Guiado Interactivo (desacoplado)
+  guideEngine = new GuideEngine({
+    onPanelOpenRequest: (panel) => {
+      panelLayoutManager?.setPanelCollapsed(panel, false);
+      sidePanelController?.syncDrawerState();
+    },
+    onInstrumentTabRequest: (tabId) => {
+      panelLayoutManager?.setPanelCollapsed("dock", false);
+      sidePanelController?.syncDrawerState();
+      instrumentsDock?.switchTab(tabId);
+    },
+    onActionTrigger: (actionId) => {
+      if (actionId === "load_demo_rc") {
+        const selectDemo = document.querySelector<HTMLSelectElement>("#btn-open-demo");
+        if (selectDemo) {
+          selectDemo.value = "01_filtro_rc.biaani";
+          selectDemo.dispatchEvent(new Event("change"));
+        }
+      } else if (actionId === "open_oscilloscope") {
+        panelLayoutManager?.setPanelCollapsed("dock", false);
+        sidePanelController?.syncDrawerState();
+        instrumentsDock?.switchTab("oscilloscope");
+        document.querySelector<HTMLElement>("#btn-dock-toggle-bottom")?.focus();
+      } else if (actionId === "open_mna_inspector") {
+        guideEngine?.exit();
+        document.querySelector<HTMLElement>("#btn-mna-inspector")?.click();
+      } else if (actionId === "open_settings") {
+        guideEngine?.exit();
+        document.querySelector<HTMLElement>("#settings-trigger-btn")?.click();
+      } else if (actionId === "open_spotlight") {
+        guideEngine?.exit();
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+      } else if (actionId === "open_optimizer") {
+        panelLayoutManager?.setPanelCollapsed("dock", false);
+        sidePanelController?.syncDrawerState();
+        instrumentsDock?.switchTab("optimizer");
+      } else if (actionId === "open_feedback") {
+        guideEngine?.exit();
+        document.querySelector<HTMLElement>("#btn-feedback-trigger")?.click();
+      }
+    },
+  });
+
+  const btnGuideTour = document.querySelector<HTMLButtonElement>("#btn-guide-tour");
+  btnGuideTour?.addEventListener("click", () => {
+    guideEngine?.toggle();
+  });
+
+  // Inicializar Capturador Global de Crashes y Emergencia
+  CrashReporter.install({
+    deps: getDiagnosticCollectorDeps(),
+    onCrashObserved: (err) => {
+      addLog(`Error crítico interceptado: ${String(err)}`, "error");
+    },
+  });
+
+  // Comprobar si hay un circuito recuperado tras un crash previo
+  if (circuitDocumentController) {
+    CrashReporter.checkAndPromptEmergencyRecovery(circuitDocumentController, {
+      onRestored: () => {
+        addLog("Circuito recuperado tras cierre de emergencia.", "system");
+      },
+    });
+  }
+
+  // Botón de Feedback en Barra Superior
+  const btnFeedbackTrigger = document.querySelector<HTMLButtonElement>("#btn-feedback-trigger");
+  btnFeedbackTrigger?.addEventListener("click", () => {
+    FeedbackModal.show({
+      deps: getDiagnosticCollectorDeps(),
+    });
+  });
+
+  setTimeout(() => {
+    guideEngine?.showWelcomeToastIfFirstVisit();
+  }, 1200);
+
   addLog("Entorno de escritorio cargado con telemetría de rendimiento activa.", "system");
   addLog("Colocación de sondas interactivas: Haz Shift+Click en Canal 1 o Canal 2 para conectar las sondas en el circuito.", "system");
 });
+
+function getDiagnosticCollectorDeps(): DiagnosticCollectorDeps {
+  return {
+    getOrchestrator: () => orchestrator,
+    getCircuitDocumentController: () => circuitDocumentController,
+    getSimulationSettings: () => simSettings,
+    getActiveAnalysisMode: () => activeAnalysisMode,
+    isSimulationActive: () => Boolean(orchestrator?.simulationActive || simulationRunner?.isSimulationActive()),
+    getRecentLogs: () => consoleLogController.getLogs(),
+    getCanvasElement: () => document.querySelector<HTMLCanvasElement>("#circuit-canvas"),
+    getActiveTabName: () => tabManager?.getActiveTab()?.name || "Esquema 1",
+  };
+}
 
 // --- EXPORTADORES PREMIUM DE REPORTES CIENTÍFICOS (DELEGADOS) ---
 // (Ver src/ui/exporter_panel.ts)
@@ -662,6 +806,11 @@ function initTabManager() {
     getSidePanelController: () => sidePanelController,
     isTypingInFormField,
     getOpenCircuitButton: () => document.querySelector("#btn-open-circuit"),
+    getGuideTourButton: () => document.querySelector("#btn-guide-tour"),
+    onOpenGuide: () => guideEngine?.toggle(),
+    getFeedbackButton: () => document.querySelector("#btn-feedback-trigger"),
+    onOpenFeedback: () => FeedbackModal.show({ deps: getDiagnosticCollectorDeps() }),
+    onToggleZenMode: () => autoHideController?.toggleZenMode(),
   }));
   initComponentPaletteController();
 }

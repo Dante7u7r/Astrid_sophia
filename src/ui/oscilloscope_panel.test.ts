@@ -1,9 +1,29 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { OscilloscopePanel, type TimeStepResult } from "./oscilloscope_panel";
 
 describe("OscilloscopePanel", () => {
   beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      fillText: vi.fn(),
+      strokeRect: vi.fn(),
+      setLineDash: vi.fn(),
+      setTransform: vi.fn(),
+      scale: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      measureText: vi.fn(() => ({ width: 50 })),
+      roundRect: vi.fn(),
+      closePath: vi.fn(),
+    })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+
     document.body.innerHTML = `
       <div id="inst-oscilloscope" class="inst-content-box" style="display: flex;">
         <button id="osc-ch1-btn" class="btn-osc-mini active ch1-badge" type="button">CH1</button>
@@ -22,6 +42,7 @@ describe("OscilloscopePanel", () => {
 
         <select id="osc-trigger-mode"><option value="ch1">CH1</option></select>
         <select id="osc-trigger-edge"><option value="rising">Subida</option></select>
+        <button id="osc-trigger-50-btn">⚡ 50%</button>
         <input id="osc-trigger-level" type="range" value="0" />
         <select id="osc-trigger-sweep-mode"><option value="auto">Auto</option></select>
 
@@ -33,10 +54,18 @@ describe("OscilloscopePanel", () => {
           <span id="osc-focused-title">CANAL 1 (CH1)</span>
           <button id="osc-focused-toggle-btn" class="active">ON</button>
           <input id="osc-focused-node" value="1" />
-          <button id="osc-focused-dc" class="active">DC</button>
-          <button id="osc-focused-ac">AC</button>
-          <button id="osc-focused-gnd">GND</button>
-          <button id="osc-focused-inv">INV</button>
+          <div id="osc-math-presets-row" style="display: none;">
+            <button id="osc-math-preset-diff">CH1-CH2</button>
+            <button id="osc-math-preset-mult">CH1*CH2</button>
+            <button id="osc-math-preset-deriv">d/dt</button>
+            <button id="osc-math-preset-integ">∫dt</button>
+          </div>
+          <div id="osc-coupling-row">
+            <button id="osc-focused-dc" class="active">DC</button>
+            <button id="osc-focused-ac">AC</button>
+            <button id="osc-focused-gnd">GND</button>
+            <button id="osc-focused-inv">INV</button>
+          </div>
           <select id="osc-focused-volts"><option value="1">1.0 V/div</option></select>
           <span id="osc-focused-volts-badge">1.0 V/div</span>
           <input id="osc-focused-offset" type="range" value="0" />
@@ -299,6 +328,122 @@ describe("OscilloscopePanel", () => {
     });
     expect(panel.isMaskTestingEnabled).toBe(true);
     expect(panel.activeMask).toBeDefined();
+  });
+
+  it("ajusta el nivel de disparo al 50% mediante setTriggerTo50Percent", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.triggerChannel = "ch1";
+    panel.transientResults = [
+      { time: 0.0, nodeVoltages: { "1": 1.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "1": 5.0 }, branchCurrents: {} },
+    ];
+
+    panel.setTriggerTo50Percent();
+    expect(panel.triggerLevel).toBe(3.0);
+  });
+
+  it("aplica presets matemáticos rápidos al hacer clic en los botones", () => {
+    const panel = new OscilloscopePanel();
+    panel.setFocusedChannel("math");
+
+    const diffBtn = document.querySelector<HTMLButtonElement>("#osc-math-preset-diff");
+    const multBtn = document.querySelector<HTMLButtonElement>("#osc-math-preset-mult");
+    const derivBtn = document.querySelector<HTMLButtonElement>("#osc-math-preset-deriv");
+    const integBtn = document.querySelector<HTMLButtonElement>("#osc-math-preset-integ");
+
+    diffBtn?.click();
+    expect(panel.mathExpression).toBe("CH1 - CH2");
+
+    multBtn?.click();
+    expect(panel.mathExpression).toBe("CH1 * CH2");
+
+    derivBtn?.click();
+    expect(panel.mathExpression).toBe("DERIV(CH1)");
+
+    integBtn?.click();
+    expect(panel.mathExpression).toBe("INTEG(CH1)");
+  });
+
+  it("ajusta la velocidad de simulación y sincroniza el HUD", () => {
+    const panel = new OscilloscopePanel();
+    let emittedSpeed = 0;
+    panel.onSpeedChanged = (spd) => {
+      emittedSpeed = spd;
+    };
+
+    panel.setSimulationSpeed(2.0);
+    expect(panel.simulationSpeedMultiplier).toBe(2.0);
+
+    const speedSelect = document.querySelector<HTMLSelectElement>("#osc-sim-speed");
+    if (speedSelect) {
+      speedSelect.value = "5";
+      speedSelect.dispatchEvent(new Event("change"));
+      expect(panel.simulationSpeedMultiplier).toBe(5.0);
+      expect(emittedSpeed).toBe(5.0);
+    }
+  });
+
+  it("sincroniza el selector timeDivSelect tanto con formato decimal como exponencial", () => {
+    const panel = new OscilloscopePanel();
+    const timeSelect = document.querySelector<HTMLSelectElement>("#osc-time-div");
+    if (timeSelect) {
+      timeSelect.innerHTML = `
+        <option value="1e-8">10 ns/div</option>
+        <option value="0.001">1 ms/div</option>
+        <option value="0.02">20 ms/div</option>
+        <option value="1">1 s/div</option>
+      `;
+
+      panel.syncTimeDivSelect(1e-8);
+      expect(timeSelect.value).toBe("1e-8");
+
+      panel.syncTimeDivSelect(0.001);
+      expect(timeSelect.value).toBe("0.001");
+
+      panel.syncTimeDivSelect(1.0);
+      expect(timeSelect.value).toBe("1");
+    }
+  });
+
+  it("actualiza tarjetas de medición con formato correcto de kHz y MHz", () => {
+    const panel = new OscilloscopePanel();
+    const ch1Meas = document.querySelector("#osc-meas-ch1");
+    if (ch1Meas) {
+      ch1Meas.innerHTML = `
+        <span class="val-vpp">--</span>
+        <span class="val-vrms">--</span>
+        <span class="val-vavg">--</span>
+        <span class="val-freq">--</span>
+        <span class="val-duty">--</span>
+      `;
+    }
+
+    panel.ch1ProbeNode = "1";
+    // Crear señal senoidal de 16 MHz (T = 62.5 ns)
+    const period = 62.5e-9;
+    panel.transientResults = [];
+    for (let i = 0; i <= 200; i++) {
+      const t = (i / 200) * (period * 5);
+      const v = Math.sin((2 * Math.PI * t) / period) * 2.5 + 2.5;
+      panel.transientResults.push({
+        time: t,
+        nodeVoltages: { "1": v },
+        branchCurrents: {},
+      });
+    }
+
+    const canvas = document.querySelector<HTMLCanvasElement>("#osc-canvas");
+    if (canvas) {
+      Object.defineProperty(canvas, "clientWidth", { value: 800, configurable: true });
+      Object.defineProperty(canvas, "clientHeight", { value: 400, configurable: true });
+      canvas.getClientRects = () => [{ width: 800, height: 400, top: 0, left: 0, bottom: 400, right: 800, x: 0, y: 0, toJSON: () => ({}) }] as unknown as DOMRectList;
+    }
+
+    panel.draw();
+
+    const freqEl = ch1Meas?.querySelector(".val-freq");
+    expect(freqEl?.textContent).toBe("16.00 MHz");
   });
 });
 

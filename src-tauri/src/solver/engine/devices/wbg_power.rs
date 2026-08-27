@@ -105,7 +105,9 @@ pub struct WbgEvaluationResult {
     pub cds: f64, // Capacidad instantánea Drain-Source no lineal (F)
 }
 
-/// Evalúa el modelo de SiC MOSFET con conducción de 3er cuadrante y body diode
+use crate::dual3::Dual3;
+
+/// Evalúa el modelo de SiC MOSFET con conducción de 3er cuadrante y body diode mediante diferenciación automática Dual3.
 pub fn evaluate_sic_mosfet(
     vgs: f64,
     vds: f64,
@@ -122,72 +124,62 @@ pub fn evaluate_sic_mosfet(
 
     let vt = (1.380649e-23 * temp_k) / 1.602176634e-19; // kT/q
 
-    let (ids, gm, gds) = if vds >= 0.0 {
+    let v_gs = Dual3::new(vgs, 0);
+    let v_ds = Dual3::new(vds, 1);
+
+    let ids_dual = if vds >= 0.0 {
         // ====================================================================
         // 1ER CUADRANTE: CONDUCCIÓN DIRECTA
         // ====================================================================
-        let vov = vgs - vth; // Tensión de sobremarcha
+        let vov = v_gs - vth; // Tensión de sobremarcha
 
-        if vov <= 0.0 {
+        if vov.val <= 0.0 {
             // Sub-umbral (corriente de fuga)
-            let vov_norm = (vov / (1.5 * vt)).max(-40.0);
-            let isub = 1e-12 * vov_norm.exp() * (1.0 - (-vds / vt).exp());
-            let gds_sub = 1e-12 * vov_norm.exp() * (1.0 / vt) * (-vds / vt).exp();
-            let gm_sub = isub / (1.5 * vt);
-            (isub, gm_sub.max(1e-12), gds_sub.max(1e-12))
-        } else if vds < vov {
+            let vov_norm = (vov / (1.5 * vt)).max_val(-40.0);
+            Dual3::constant(1e-12) * vov_norm.exp() * (Dual3::constant(1.0) - (-v_ds / vt).exp())
+        } else if v_ds.val < vov.val {
             // Región lineal / Óhmica
-            let denom = 1.0 + params.theta * vov;
-            let ids_lin =
-                g_on * (vov * vds - 0.5 * vds * vds) / (vov * denom) * (1.0 + params.lambda * vds);
-            let gds_lin = g_on * (vov - vds) / (vov * denom) * (1.0 + params.lambda * vds)
-                + ids_lin * params.lambda / (1.0 + params.lambda * vds);
-            let gm_lin = g_on * vds / (vov * denom);
-            (ids_lin, gm_lin.max(1e-12), gds_lin.max(1e-12))
+            let denom = Dual3::constant(1.0) + params.theta * vov;
+            let ids_lin_core = (vov * v_ds - v_ds * v_ds * 0.5) / (vov * denom) * g_on;
+            ids_lin_core * (Dual3::constant(1.0) + params.lambda * v_ds)
         } else {
             // Región de saturación
-            let denom = 1.0 + params.theta * vov;
-            let ids_sat = 0.5 * g_on * vov / denom * (1.0 + params.lambda * vds);
-            let gds_sat = ids_sat * params.lambda / (1.0 + params.lambda * vds);
-            let gm_sat = 0.5 * g_on / (denom * denom);
-            (ids_sat, gm_sat.max(1e-12), gds_sat.max(1e-12))
+            let denom = Dual3::constant(1.0) + params.theta * vov;
+            let ids_sat_core = vov * (0.5 * g_on) / denom;
+            ids_sat_core * (Dual3::constant(1.0) + params.lambda * v_ds)
         }
     } else {
         // ====================================================================
         // 3ER CUADRANTE: CONDUCCIÓN INVERSA (BODY DIODE + CANAL SÍNCRONO)
         // ====================================================================
         // 1. Body Diode de SiC con rodilla alta (~3.2V) y resistencia de cuerpo
-        let v_diode = -vds; // Tensión directa del diodo interno
+        let v_diode = -v_ds; // Tensión directa del diodo interno
         let n_vt = params.n_body * vt;
         let v_over = v_diode - params.v_knee_body;
 
-        let (i_body, g_body) = if v_over > 0.0 {
+        let i_body = if v_over.val > 0.0 {
             let r_body = params.rds_on * 1.5;
             let g_b = 1.0 / r_body;
-            let i_b = v_over * g_b + 0.001 * (v_over / n_vt).min(10.0).exp();
-            (i_b, g_b)
-        } else if v_over > -0.5 {
-            let i_b = 0.001 * ((v_over / n_vt).max(-20.0)).exp();
-            let g_b = (0.001 / n_vt) * ((v_over / n_vt).max(-20.0)).exp();
-            (i_b, g_b)
+            v_over * g_b + Dual3::constant(0.001) * (v_over / n_vt).min_val(10.0).exp()
+        } else if v_over.val > -0.5 {
+            Dual3::constant(0.001) * (v_over / n_vt).max_val(-20.0).exp()
         } else {
-            (0.0, 1e-12)
+            Dual3::constant(0.0)
         };
 
         // 2. Conducción por canal si Vgs > Vth (Rectificación Síncrona)
-        let (i_channel, gm_chan, g_chan): (f64, f64, f64) = if vgs > vth {
-            let i_ch = vds * g_on; // Corriente negativa
-            (i_ch, 0.0, g_on)
+        let i_channel = if vgs > vth {
+            v_ds * g_on // Corriente negativa
         } else {
-            (0.0, 0.0, 1e-12)
+            Dual3::constant(0.0)
         };
 
-        let total_ids: f64 = i_channel - i_body; // Fluye de Source a Drain (negativa)
-        let total_gds: f64 = g_chan + g_body;
-        let total_gm: f64 = gm_chan;
-
-        (total_ids, total_gm.max(1e-12), total_gds.max(1e-12))
+        i_channel - i_body // Fluye de Source a Drain (negativa)
     };
+
+    let ids = ids_dual.val;
+    let gm = ids_dual.deriv[0].abs().max(1e-12);
+    let gds = ids_dual.deriv[1].abs().max(1e-12);
 
     // ========================================================================
     // CAPACITANCIAS NO LINEALES DEPENDIENTES DE TENSIÓN
@@ -207,7 +199,7 @@ pub fn evaluate_sic_mosfet(
     }
 }
 
-/// Evalúa el modelo de GaN E-HEMT (2DEG, 3er cuadrante sin body diode Qrr=0)
+/// Evalúa el modelo de GaN E-HEMT (2DEG, 3er cuadrante sin body diode Qrr=0) mediante Dual3.
 pub fn evaluate_gan_hemt(
     vgs: f64,
     vds: f64,
@@ -219,51 +211,48 @@ pub fn evaluate_gan_hemt(
     let rds_on = params.rds_on * temp_ratio.powf(params.temp_coeff_r);
     let g_on = 1.0 / rds_on.max(1e-6);
 
-    let (ids, gm, gds) = if vds >= 0.0 {
+    let v_gs = Dual3::new(vgs, 0);
+    let v_ds = Dual3::new(vds, 1);
+
+    let ids_dual = if vds >= 0.0 {
         // ====================================================================
         // 1ER CUADRANTE: CANAL 2DEG DIRECTO
         // ====================================================================
-        let vov = vgs - params.vth;
+        let vov = v_gs - params.vth;
 
-        if vov <= 0.0 {
-            (1e-12 * vds, 1e-12, 1e-12)
-        } else if vds < vov {
+        if vov.val <= 0.0 {
+            Dual3::constant(1e-12) * v_ds
+        } else if v_ds.val < vov.val {
             // Región lineal
-            let ids_lin = params.beta * (vov * vds - 0.5 * vds * vds) * (1.0 + params.lambda * vds);
-            let gds_lin =
-                params.beta * (vov - vds) * (1.0 + params.lambda * vds) + ids_lin * params.lambda;
-            let gm_lin = params.beta * vds * (1.0 + params.lambda * vds);
-            (ids_lin, gm_lin.max(1e-12), gds_lin.max(1e-12))
+            let ids_lin_core = (vov * v_ds - v_ds * v_ds * 0.5) * params.beta;
+            ids_lin_core * (Dual3::constant(1.0) + params.lambda * v_ds)
         } else {
             // Región de saturación
-            let ids_sat = 0.5 * params.beta * vov * vov * (1.0 + params.lambda * vds);
-            let gds_sat = ids_sat * params.lambda;
-            let gm_sat = params.beta * vov * (1.0 + params.lambda * vds);
-            (ids_sat, gm_sat.max(1e-12), gds_sat.max(1e-12))
+            let ids_sat_core = (vov * vov * 0.5) * params.beta;
+            ids_sat_core * (Dual3::constant(1.0) + params.lambda * v_ds)
         }
     } else {
         // ====================================================================
         // 3ER CUADRANTE: CONDUCCIÓN INVERSA BIDIRECCIONAL 2DEG (SIN DIODO, Qrr=0)
         // ====================================================================
-        // En GaN HEMT, el canal conduce inversamente cuando Vgd = Vgs - Vds > Vth
-        let vgd = vgs - vds;
+        let vgd = v_gs - v_ds;
 
         if vgs >= params.vth {
             // Canal completamente abierto en modo síncrono
-            let i_rev = vds * g_on;
-            (i_rev, 0.0, g_on)
-        } else if vgd > params.vth {
+            v_ds * g_on
+        } else if vgd.val > params.vth {
             // Conducción inversa en estado OFF con caída intrínseca Vdrop = Vth - Vgs
             let vov_rev = vgd - params.vth;
-            let i_rev = -0.5 * params.beta * vov_rev * vov_rev;
-            let gds_rev = params.beta * vov_rev; // dI_rev/dVds
-            let gm_rev = -params.beta * vov_rev;
-            (i_rev, gm_rev.abs().max(1e-12), gds_rev.max(1e-12))
+            Dual3::constant(-0.5 * params.beta) * vov_rev * vov_rev
         } else {
             // Bloqueo total
-            (1e-12 * vds, 1e-12, 1e-12)
+            Dual3::constant(1e-12) * v_ds
         }
     };
+
+    let ids = ids_dual.val;
+    let gm = ids_dual.deriv[0].abs().max(1e-12);
+    let gds = ids_dual.deriv[1].abs().max(1e-12);
 
     // Capacitancias no lineales ultra-bajas GaN
     let vds_pos = vds.max(0.0);

@@ -315,6 +315,253 @@ impl AdValue {
             b.clone()
         }
     }
+
+    /// Seno hiperbólico: z = sinh(a)
+    /// dz/dv_i = cosh(a) * da/dv_i
+    #[inline(always)]
+    pub fn sinh(a: &AdValue) -> AdValue {
+        let val = a.value.sinh();
+        let mut grad = HashMap::new();
+        if !a.grad.is_empty() {
+            let factor = a.value.cosh();
+            if factor.is_finite() {
+                for (&k, &v) in &a.grad {
+                    grad.insert(k, factor * v);
+                }
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Coseno hiperbólico: z = cosh(a)
+    /// dz/dv_i = sinh(a) * da/dv_i
+    #[inline(always)]
+    pub fn cosh(a: &AdValue) -> AdValue {
+        let val = a.value.cosh();
+        let mut grad = HashMap::new();
+        if !a.grad.is_empty() {
+            let factor = a.value.sinh();
+            if factor.is_finite() {
+                for (&k, &v) in &a.grad {
+                    grad.insert(k, factor * v);
+                }
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Tangente hiperbólica: z = tanh(a)
+    /// dz/dv_i = sech^2(a) * da/dv_i = (1 - tanh^2(a)) * da/dv_i
+    #[inline(always)]
+    pub fn tanh(a: &AdValue) -> AdValue {
+        let val = a.value.tanh();
+        let mut grad = HashMap::new();
+        if !a.grad.is_empty() {
+            let factor = 1.0 - val * val;
+            for (&k, &v) in &a.grad {
+                grad.insert(k, factor * v);
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Arco seno: z = asin(a)
+    /// dz/dv_i = (1 / sqrt(1 - a^2)) * da/dv_i
+    #[inline(always)]
+    pub fn asin(a: &AdValue) -> AdValue {
+        let clamped = a.value.clamp(-0.999999999999, 0.999999999999);
+        let val = clamped.asin();
+        let mut grad = HashMap::new();
+        if !a.grad.is_empty() {
+            let denom = (1.0 - clamped * clamped).sqrt();
+            let factor = 1.0 / denom.max(1e-12);
+            for (&k, &v) in &a.grad {
+                grad.insert(k, factor * v);
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Arco coseno: z = acos(a)
+    /// dz/dv_i = (-1 / sqrt(1 - a^2)) * da/dv_i
+    #[inline(always)]
+    pub fn acos(a: &AdValue) -> AdValue {
+        let clamped = a.value.clamp(-0.999999999999, 0.999999999999);
+        let val = clamped.acos();
+        let mut grad = HashMap::new();
+        if !a.grad.is_empty() {
+            let denom = (1.0 - clamped * clamped).sqrt();
+            let factor = -1.0 / denom.max(1e-12);
+            for (&k, &v) in &a.grad {
+                grad.insert(k, factor * v);
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Arco tangente: z = atan(a)
+    /// dz/dv_i = (1 / (1 + a^2)) * da/dv_i
+    #[inline(always)]
+    pub fn atan(a: &AdValue) -> AdValue {
+        let val = a.value.atan();
+        let mut grad = HashMap::new();
+        if !a.grad.is_empty() {
+            let factor = 1.0 / (1.0 + a.value * a.value);
+            for (&k, &v) in &a.grad {
+                grad.insert(k, factor * v);
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Arco tangente de 2 variables: z = atan2(y, x)
+    /// dz = (x * dy - y * dx) / (x^2 + y^2)
+    #[inline(always)]
+    pub fn atan2(y: &AdValue, x: &AdValue) -> AdValue {
+        let val = y.value.atan2(x.value);
+        let denom = x.value * x.value + y.value * y.value;
+        let mut grad = HashMap::new();
+        if denom > 1e-30 {
+            let inv_denom = 1.0 / denom;
+            for (&k, &dy) in &y.grad {
+                *grad.entry(k).or_insert(0.0) += (x.value * dy) * inv_denom;
+            }
+            for (&k, &dx) in &x.grad {
+                *grad.entry(k).or_insert(0.0) -= (y.value * dx) * inv_denom;
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Hipotenusa: z = hypot(x, y) = sqrt(x^2 + y^2)
+    /// dz/dv = (x*dx + y*dy) / hypot(x, y)
+    #[inline(always)]
+    pub fn hypot(x: &AdValue, y: &AdValue) -> AdValue {
+        let val = x.value.hypot(y.value);
+        let mut grad = HashMap::new();
+        if val > 1e-30 {
+            let inv_val = 1.0 / val;
+            for (&k, &dx) in &x.grad {
+                *grad.entry(k).or_insert(0.0) += (x.value * dx) * inv_val;
+            }
+            for (&k, &dy) in &y.grad {
+                *grad.entry(k).or_insert(0.0) += (y.value * dy) * inv_val;
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Máximo suave $C^1$: z = 0.5 * (a + b + sqrt((a - b)^2 + k^2))
+    #[inline(always)]
+    pub fn smooth_max(a: &AdValue, b: &AdValue, k: f64) -> AdValue {
+        let diff = a.value - b.value;
+        let root = (diff * diff + k * k).sqrt();
+        let val = 0.5 * (a.value + b.value + root);
+        let mut grad = HashMap::new();
+        let d_diff = if root > 1e-30 { diff / root } else { 0.0 };
+        let factor_a = 0.5 * (1.0 + d_diff);
+        let factor_b = 0.5 * (1.0 - d_diff);
+
+        for (&node, &va) in &a.grad {
+            *grad.entry(node).or_insert(0.0) += factor_a * va;
+        }
+        for (&node, &vb) in &b.grad {
+            *grad.entry(node).or_insert(0.0) += factor_b * vb;
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Mínimo suave $C^1$: z = 0.5 * (a + b - sqrt((a - b)^2 + k^2))
+    #[inline(always)]
+    pub fn smooth_min(a: &AdValue, b: &AdValue, k: f64) -> AdValue {
+        let diff = a.value - b.value;
+        let root = (diff * diff + k * k).sqrt();
+        let val = 0.5 * (a.value + b.value - root);
+        let mut grad = HashMap::new();
+        let d_diff = if root > 1e-30 { diff / root } else { 0.0 };
+        let factor_a = 0.5 * (1.0 - d_diff);
+        let factor_b = 0.5 * (1.0 + d_diff);
+
+        for (&node, &va) in &a.grad {
+            *grad.entry(node).or_insert(0.0) += factor_a * va;
+        }
+        for (&node, &vb) in &b.grad {
+            *grad.entry(node).or_insert(0.0) += factor_b * vb;
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Limitador: clamp(x, min_val, max_val)
+    #[inline(always)]
+    pub fn limit(x: &AdValue, min_val: f64, max_val: f64) -> AdValue {
+        if x.value < min_val {
+            AdValue::constant(min_val)
+        } else if x.value > max_val {
+            AdValue::constant(max_val)
+        } else {
+            x.clone()
+        }
+    }
+
+    /// Escalón Heaviside suave $S(x) = \frac{1}{1 + e^{-20x}}$
+    #[inline(always)]
+    pub fn stp(x: &AdValue) -> AdValue {
+        let exp_term = (-20.0 * x.value).clamp(-60.0, 60.0).exp();
+        let s = 1.0 / (1.0 + exp_term);
+        let mut grad = HashMap::new();
+        if !x.grad.is_empty() {
+            let ds = 20.0 * s * (1.0 - s);
+            for (&k, &v) in &x.grad {
+                grad.insert(k, ds * v);
+            }
+        }
+        AdValue { value: s, grad }
+    }
+
+    /// Signo: sign(x)
+    #[inline(always)]
+    pub fn sign(x: &AdValue) -> AdValue {
+        let s = if x.value > 0.0 {
+            1.0
+        } else if x.value < 0.0 {
+            -1.0
+        } else {
+            0.0
+        };
+        AdValue::constant(s)
+    }
+
+    /// Potencia absoluta: z = |x|^y
+    #[inline(always)]
+    pub fn pwr(x: &AdValue, exp: f64) -> AdValue {
+        let abs_x = x.value.abs();
+        let val = abs_x.powf(exp);
+        let mut grad = HashMap::new();
+        if exp != 0.0 && abs_x > 1e-30 && !x.grad.is_empty() {
+            let sgn = if x.value >= 0.0 { 1.0 } else { -1.0 };
+            let factor = exp * abs_x.powf(exp - 1.0) * sgn;
+            for (&k, &v) in &x.grad {
+                grad.insert(k, factor * v);
+            }
+        }
+        AdValue { value: val, grad }
+    }
+
+    /// Potencia con signo: z = |x|^y * sgn(x)
+    #[inline(always)]
+    pub fn pwrs(x: &AdValue, exp: f64) -> AdValue {
+        let abs_x = x.value.abs();
+        let sgn = if x.value >= 0.0 { 1.0 } else { -1.0 };
+        let val = abs_x.powf(exp) * sgn;
+        let mut grad = HashMap::new();
+        if exp != 0.0 && abs_x > 1e-30 && !x.grad.is_empty() {
+            let factor = exp * abs_x.powf(exp - 1.0);
+            for (&k, &v) in &x.grad {
+                grad.insert(k, factor * v);
+            }
+        }
+        AdValue { value: val, grad }
+    }
 }
 
 // ==========================================================================
@@ -533,5 +780,49 @@ mod tests {
         // df/dV1 = 1/(1+1) * 1 = 0.5
         let df_dv = *r.grad.get(&1).unwrap_or(&0.0);
         assert!((df_dv - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_ad_hyperbolic_and_inverse_trig() {
+        let x = v1(0.5);
+        let s = AdValue::sinh(&x);
+        let c = AdValue::cosh(&x);
+        let t = AdValue::tanh(&x);
+
+        assert!((s.value - 0.5f64.sinh()).abs() < 1e-14);
+        assert!(((*s.grad.get(&1).unwrap()) - 0.5f64.cosh()).abs() < 1e-14);
+
+        assert!((c.value - 0.5f64.cosh()).abs() < 1e-14);
+        assert!(((*c.grad.get(&1).unwrap()) - 0.5f64.sinh()).abs() < 1e-14);
+
+        assert!((t.value - 0.5f64.tanh()).abs() < 1e-14);
+        let expected_dt = 1.0 - 0.5f64.tanh().powi(2);
+        assert!(((*t.grad.get(&1).unwrap()) - expected_dt).abs() < 1e-14);
+
+        let at = AdValue::atan(&x);
+        assert!((at.value - 0.5f64.atan()).abs() < 1e-14);
+        assert!(((*at.grad.get(&1).unwrap()) - (1.0 / 1.25)).abs() < 1e-14);
+
+        let as_val = AdValue::asin(&x);
+        assert!((as_val.value - 0.5f64.asin()).abs() < 1e-14);
+        assert!(((*as_val.grad.get(&1).unwrap()) - (1.0 / (1.0 - 0.25f64).sqrt())).abs() < 1e-14);
+    }
+
+    #[test]
+    fn test_ad_smooth_max_min_and_stp() {
+        let a = v1(3.0);
+        let b = v2(1.0);
+        let smax = AdValue::smooth_max(&a, &b, 0.1);
+        let smin = AdValue::smooth_min(&a, &b, 0.1);
+
+        assert!(smax.value > 2.99 && smax.value < 3.01);
+        assert!(smin.value > 0.99 && smin.value < 1.01);
+        assert!(*smax.grad.get(&1).unwrap() > 0.95);
+        assert!(*smax.grad.get(&2).unwrap() < 0.05);
+
+        let zero = v1(0.0);
+        let step_zero = AdValue::stp(&zero);
+        assert!((step_zero.value - 0.5).abs() < 1e-14);
+        assert!((*step_zero.grad.get(&1).unwrap() - 5.0).abs() < 1e-14);
     }
 }

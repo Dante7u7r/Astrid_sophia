@@ -19,6 +19,7 @@ import {
 
 import {
   DiodeDefinition,
+  IgbtDefinition,
   LedDefinition,
   NjfDefinition,
   NmosDefinition,
@@ -36,17 +37,47 @@ import {
 } from "./semiconductors";
 
 import {
+  DiacDefinition,
+  ScrDefinition,
+  Tl431Definition,
+  TriacDefinition,
+} from "./power_electronics";
+
+import {
+  FrequencyCounterDefinition,
+  LogicProbeDefinition,
+  PulseGeneratorDefinition,
+  StbProbeDefinition,
+  WattmeterDefinition,
+} from "./instruments";
+
+import {
+  CccsDefinition,
+  CcvsDefinition,
   IsourceDefinition,
   OpampDefinition,
   OpampIdealDefinition,
+  VccsDefinition,
+  VcvsDefinition,
   VsourceDefinition,
 } from "./analog";
 
 import {
   BuzzerDefinition,
+  DcMotorDefinition,
   LampDefinition,
+  Lcd16x2Definition,
+  PushbuttonDefinition,
   RelayDefinition,
+  SevenSegmentDefinition,
+  ServoMotorDefinition,
+  StepperMotorDefinition,
+  SpeakerDefinition,
+  SolenoidDefinition,
+  SsrDefinition,
   SwitchDefinition,
+  SwitchDpdtDefinition,
+  SwitchSpdtDefinition,
 } from "./actuators";
 
 import {
@@ -59,10 +90,26 @@ import {
 } from "./logic_gates";
 
 import {
+  BcdTo7SegDefinition,
+  FlipFlopDDefinition,
+  FlipFlopJKDefinition,
+  ShiftRegister595Definition,
+} from "./sequential_logic";
+
+import {
+  BcdCounter90Definition,
+  Decoder138Definition,
+  JohnsonCounter4017Definition,
+  Multiplexer151Definition,
+  UpDownCounter193Definition,
+} from "./digital_ics";
+
+import {
   ArduinoUnoDefinition,
   Esp32Definition,
   Mcu8051Definition,
   McuAvrDefinition,
+  Pic16f84aDefinition,
   RaspberryPiPicoDefinition,
 } from "./microcontrollers";
 
@@ -88,6 +135,11 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   GroundDefinition,
   TransformerDefinition,
   DmmDefinition,
+  WattmeterDefinition,
+  LogicProbeDefinition,
+  PulseGeneratorDefinition,
+  FrequencyCounterDefinition,
+  StbProbeDefinition,
 
   // Semiconductores
   DiodeDefinition,
@@ -96,6 +148,7 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   LedDefinition,
   NmosDefinition,
   PmosDefinition,
+  IgbtDefinition,
   NpnDefinition,
   PnpDefinition,
   NjfDefinition,
@@ -105,20 +158,39 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   Bsim3PmosDefinition,
   Bsim4NmosDefinition,
   Bsim4PmosDefinition,
+  ScrDefinition,
+  TriacDefinition,
+  DiacDefinition,
+  Tl431Definition,
 
-  // Analógicos
-  OpampDefinition,
-  OpampIdealDefinition,
+  // Fuentes y Activos Analógicos
   VsourceDefinition,
   IsourceDefinition,
+  VcvsDefinition,
+  VccsDefinition,
+  CcvsDefinition,
+  CccsDefinition,
+  OpampDefinition,
+  OpampIdealDefinition,
 
-  // Actuadores
+  // Actuadores e Interruptores
   LampDefinition,
   RelayDefinition,
   BuzzerDefinition,
   SwitchDefinition,
+  SwitchSpdtDefinition,
+  SwitchDpdtDefinition,
+  PushbuttonDefinition,
+  DcMotorDefinition,
+  ServoMotorDefinition,
+  StepperMotorDefinition,
+  SpeakerDefinition,
+  SolenoidDefinition,
+  SsrDefinition,
+  SevenSegmentDefinition,
+  Lcd16x2Definition,
 
-  // Lógica Digital
+  // Lógica Digital Combinacional
   AndGateDefinition,
   OrGateDefinition,
   NotGateDefinition,
@@ -126,9 +198,21 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   NorGateDefinition,
   XorGateDefinition,
 
+  // Lógica Secuencial & CIs Digitales
+  FlipFlopDDefinition,
+  FlipFlopJKDefinition,
+  BcdTo7SegDefinition,
+  ShiftRegister595Definition,
+  JohnsonCounter4017Definition,
+  BcdCounter90Definition,
+  UpDownCounter193Definition,
+  Decoder138Definition,
+  Multiplexer151Definition,
+
   // Microcontroladores
   Mcu8051Definition,
   McuAvrDefinition,
+  Pic16f84aDefinition,
   ArduinoUnoDefinition,
   Esp32Definition,
   RaspberryPiPicoDefinition,

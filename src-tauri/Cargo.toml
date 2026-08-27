@@ -1,11 +1,11 @@
 [package]
-name = "astryd-sophia"
+name = "biaani"
 version = "0.1.0"
 description = "Simulador de circuitos electronicos de escritorio"
-authors = ["Astryd Sophia Project"]
+authors = ["Biaani Project"]
 license-file = "../LICENSE"
 edition = "2021"
-default-run = "astryd-sophia"
+default-run = "biaani"
 
 [features]
 wdio = ["dep:tauri-plugin-wdio"]
@@ -17,7 +17,7 @@ wdio = ["dep:tauri-plugin-wdio"]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "astryd_sophia_lib"
+name = "biaani_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

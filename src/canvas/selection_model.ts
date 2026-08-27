@@ -20,9 +20,14 @@ export function findTopComponentAt(
   components: readonly ComponentInstance[],
   worldX: number,
   worldY: number,
+  spatialIndex?: { queryComponentCandidates(point: Point2D, radius?: number): ComponentInstance[] } | null,
 ): ComponentInstance | null {
-  for (let i = components.length - 1; i >= 0; i--) {
-    const comp = components[i];
+  const list = (spatialIndex && components.length > 30)
+    ? spatialIndex.queryComponentCandidates({ x: worldX, y: worldY }, 30)
+    : components;
+
+  for (let i = list.length - 1; i >= 0; i--) {
+    const comp = list[i];
     if (hitTestComponentAt(comp, worldX, worldY)) {
       return comp;
     }
@@ -37,8 +42,9 @@ export function selectComponentAt(
   worldX: number,
   worldY: number,
   isShift = false,
+  spatialIndex?: { queryComponentCandidates(point: Point2D, radius?: number): ComponentInstance[] } | null,
 ): ComponentSelectionResult {
-  const hitComponent = findTopComponentAt(components, worldX, worldY);
+  const hitComponent = findTopComponentAt(components, worldX, worldY, spatialIndex);
 
   if (!hitComponent) {
     if (isShift) return { ...state, hitComponent: null };

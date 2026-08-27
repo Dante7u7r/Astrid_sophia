@@ -1,8 +1,8 @@
-# Astrid Sophia (Phase 37 Milestone)
+# Biaani
 
-**Interactive circuit simulator — Rust MNA engine + reactive vector canvas (TypeScript).**
+**Simulador interactivo de circuitos electrónicos — Motor MNA en Rust + lienzo vectorial reactivo (TypeScript).**
 
-Astrid Sophia combines Modified Nodal Analysis (MNA), a Tauri v2 desktop schematic editor and several advanced analysis prototypes. It is currently intended for closed educational/research pilots, not for safety-critical or sign-off engineering work.
+Biaani combina Análisis Nodal Modificado (MNA) de alta precisión, un editor esquemático de escritorio con Tauri v2 y capacidades avanzadas de análisis y simulación.
 
 ---
 

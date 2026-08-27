@@ -142,6 +142,24 @@ pub struct ComponentData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opamp_ib: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_isc: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_iq: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_vdrop: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_ios: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_cmrr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_psrr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_en: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_in: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opamp_fc: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub va_model_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub va_ports: Option<Vec<String>>,
@@ -157,6 +175,19 @@ pub struct ComponentData {
     pub bsim_theta: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub va_equations: Option<Vec<(String, String, String)>>, // (from_port, to_port, expr_string)
+    // Parámetros de IGBT (Hefner)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub igbt_kp: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub igbt_alpha: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub igbt_tau: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub igbt_wb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub igbt_cge: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub igbt_cgc: Option<f64>,
     // Parámetros térmicos por componente (overridable desde netlist)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rth: Option<f64>, // Resistencia térmica unión-ambiente (°C/W)
@@ -185,6 +216,10 @@ pub struct ComponentData {
     pub lot_correlation: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pwl_points: Option<Vec<(f64, f64)>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub firmware: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcu_clock_freq: Option<f64>,
 }
 
 /// Configuración de simulación electro-térmica acoplada.

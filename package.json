@@ -1,9 +1,9 @@
 {
-  "name": "astryd-sophia",
+  "name": "biaani",
   "private": true,
   "version": "0.1.0",
   "description": "simulador de circuitos electronicos de escritorio con backend Rust y Tauri",
-  "author": "Astryd Sophia Project",
+  "author": "Biaani Project",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -11,8 +11,8 @@
     "npm": "11.16.0"
   },
   "bin": {
-    "astryd-sophia": "./scripts/headless_cli.mjs",
-    "astryd-spice-lsp": "./scripts/spice_lsp_server.mjs"
+    "biaani": "./scripts/headless_cli.mjs",
+    "biaani-spice-lsp": "./scripts/spice_lsp_server.mjs"
   },
   "scripts": {
     "dev": "vite",
@@ -24,7 +24,7 @@
     "version:check": "node scripts/check_version_consistency.mjs",
     "feedback:contracts": "node scripts/generate_feedback_contracts.mjs",
     "feedback:contracts:check": "node scripts/generate_feedback_contracts.mjs --check",
-    "feedback:mcp": "node scripts/astryd_feedback_mcp.mjs",
+    "feedback:mcp": "node scripts/biaani_feedback_mcp.mjs",
     "audit:production-guard": "npm run build && node tests/visual_audit.mjs --expect-production",
     "audit:ui": "npm run build:audit && node tests/visual_audit.mjs && npm run audit:production-guard",
     "audit:performance": "npm run build:audit && node tests/performance_audit.mjs",

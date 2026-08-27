@@ -75,6 +75,15 @@ fn stamp_linear_components_sparse_mode(
                 stamp_conductance(matrix_a, node_a, node_b, -conductance);
                 stamp_conductance(matrix_a, node_b, node_a, -conductance);
             }
+            "stb_probe" | "probe_stb" => {
+                let node_a = comp.pins[0].parse::<usize>().unwrap();
+                let node_b = comp.pins[1].parse::<usize>().unwrap();
+                let conductance = 1e6;
+                stamp_conductance(matrix_a, node_a, node_a, conductance);
+                stamp_conductance(matrix_a, node_b, node_b, conductance);
+                stamp_conductance(matrix_a, node_a, node_b, -conductance);
+                stamp_conductance(matrix_a, node_b, node_a, -conductance);
+            }
             "vsource" | "bvoltage" => {
                 let node_pos = comp.pins[0].parse::<usize>().unwrap();
                 let node_neg = comp.pins[1].parse::<usize>().unwrap();

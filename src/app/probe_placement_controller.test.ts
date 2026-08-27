@@ -39,4 +39,23 @@ describe("ProbePlacementController", () => {
     controller.clearMode();
     expect(controller.getMode()).toBeNull();
   });
+
+  it("conecta sondas diferenciales V(pos,neg) y sincroniza con el panel", () => {
+    const panel = {
+      ch1ProbeNode: null,
+      ch2ProbeNode: null,
+      ch3ProbeNode: null,
+      ch4ProbeNode: null,
+      setChannelActive: () => {},
+    } as unknown as OscilloscopePanel;
+    const controller = createProbePlacementController({
+      getOscilloscopePanel: () => panel,
+    });
+
+    const logMessage = controller.placeDifferentialProbe("CH2", "5", "3");
+    expect(controller.getNode("CH2")).toBe("V(5,3)");
+    expect(panel.ch2ProbeNode).toBe("V(5,3)");
+    expect(logMessage).toContain("Sonda Diferencial del Canal 2");
+    expect(logMessage).toContain("entre Nodos 5 y 3");
+  });
 });

@@ -4,6 +4,8 @@ import {
   calculateOscilloscopeMetrics,
   calculateAutoFitSettings,
   calculateAutoFitForValues,
+  calculateTrigger50Percent,
+  calculatePhaseDifferenceDeg,
   buildTyTracePoints,
   interpolateSincTrace,
   findTriggerStartIndex,
@@ -15,6 +17,8 @@ import {
   searchNextPeak,
   calculateWaveformHistogram,
   evaluateMaskTest,
+  formatOscilloscopeTime,
+  OSCILLOSCOPE_TIME_PER_DIV,
   type MaskToleranceDefinition,
 } from "./oscilloscope_model";
 
@@ -118,7 +122,7 @@ describe("oscilloscope_model", () => {
       point(0.001, -2),
     ], "1");
 
-    expect(settings).toEqual({ voltsPerDiv: 1, timeDivValue: 0.0002, centerVoltage: 0 });
+    expect(settings).toEqual({ voltsPerDiv: 1, timeDivValue: 0.0002, centerVoltage: 0, triggerLevel50: 0 });
   });
 
   it("auto-escala sin desbordar el máximo de la interfaz y conserva el nivel DC", () => {
@@ -130,6 +134,58 @@ describe("oscilloscope_model", () => {
     expect(settings.voltsPerDiv).toBe(20);
     expect(settings.timeDivValue).toBe(0.1);
     expect(settings.centerVoltage).toBe(50);
+    expect(settings.triggerLevel50).toBe(50);
+  });
+
+  it("auto-escala señales con ripple pequeño sobre offset DC alto para que quepan en pantalla", () => {
+    // 158 mV de ripple sobre +13.79 V DC
+    const settingsDc = calculateAutoFitSettings([
+      point(0, 13.71),
+      point(0.001, 13.87),
+      point(0.002, 13.71),
+    ], "1", "dc");
+
+    // A 5 V/div, 13.79 V / 5 = 2.758 div de offset, cabe perfectamente en la pantalla (<= 3.5 div)
+    expect(settingsDc.voltsPerDiv).toBe(5);
+    expect(settingsDc.centerVoltage).toBeCloseTo(13.79, 2);
+
+    // En modo AC, se elimina el nivel continuo y solo escala el ripple de 158 mV
+    const settingsAc = calculateAutoFitSettings([
+      point(0, 13.71),
+      point(0.001, 13.87),
+      point(0.002, 13.71),
+    ], "1", "ac");
+
+    expect(settingsAc.voltsPerDiv).toBe(0.05); // 50 mV/div
+    expect(settingsAc.centerVoltage).toBe(0);
+  });
+
+  it("calcula el nivel de disparo al 50% de la señal", () => {
+    const pts = [
+      point(0, 0.5),
+      point(0.001, 4.5),
+      point(0.002, 2.5),
+    ];
+    const trig50 = calculateTrigger50Percent(pts, "1");
+    expect(trig50).toBeCloseTo(2.5, 3);
+  });
+
+  it("calcula el desfase angular entre dos canales periódicos", () => {
+    // Generar dos señales senoidales desfasadas 90 grados a 1kHz (T = 1ms)
+    const samples = [];
+    for (let t = 0; t <= 0.005; t += 0.00005) {
+      const v1 = 5.0 * Math.sin(2 * Math.PI * 1000 * t);
+      const v2 = 5.0 * Math.sin(2 * Math.PI * 1000 * t - Math.PI / 2); // retrasada 90 deg
+      samples.push({
+        time: t,
+        nodeVoltages: { "1": v1, "2": v2 },
+        branchCurrents: {},
+      });
+    }
+
+    const deg = calculatePhaseDifferenceDeg(samples, "1", "2");
+    expect(deg).toBeDefined();
+    expect(Math.abs(deg! - 90)).toBeLessThan(10); // tolerancia de muestreo discreto
   });
 
   it("aplica acoplamiento AC, GND e inversion de traza", () => {
@@ -298,5 +354,73 @@ describe("oscilloscope_model", () => {
     // El punto medio debe estar cerca del pico
     const midPoint = interpolated[Math.floor(interpolated.length / 2)];
     expect(midPoint.y).toBeGreaterThan(20);
+  });
+
+  it("formatea correctamente tiempos desde nanosegundos hasta segundos", () => {
+    expect(formatOscilloscopeTime(1e-8)).toBe("10 ns/div");
+    expect(formatOscilloscopeTime(5e-8)).toBe("50 ns/div");
+    expect(formatOscilloscopeTime(1e-7)).toBe("100 ns/div");
+    expect(formatOscilloscopeTime(1e-6)).toBe("1 µs/div");
+    expect(formatOscilloscopeTime(2e-5)).toBe("20 µs/div");
+    expect(formatOscilloscopeTime(0.005)).toBe("5 ms/div");
+    expect(formatOscilloscopeTime(0.02)).toBe("20 ms/div");
+    expect(formatOscilloscopeTime(1.0)).toBe("1.0 s/div");
+    expect(formatOscilloscopeTime(5.0)).toBe("5.0 s/div");
+    expect(formatOscilloscopeTime(10.0)).toBe("10 s/div");
+  });
+
+  it("contiene rango extendido de base de tiempo de 10ns a 10s", () => {
+    expect(OSCILLOSCOPE_TIME_PER_DIV[0]).toBe(1e-8);
+    expect(OSCILLOSCOPE_TIME_PER_DIV[OSCILLOSCOPE_TIME_PER_DIV.length - 1]).toBe(10.0);
+    expect(OSCILLOSCOPE_TIME_PER_DIV).toContain(1e-7);
+    expect(OSCILLOSCOPE_TIME_PER_DIV).toContain(0.02);
+    expect(OSCILLOSCOPE_TIME_PER_DIV).toContain(1.0);
+  });
+
+  it("calcula autoFit correctamente para señales de alta frecuencia (nanosegundos)", () => {
+    // Señal de 16 MHz (T = 62.5 ns)
+    const period = 62.5e-9;
+    const samples: TimeStepResult[] = [];
+    for (let i = 0; i <= 200; i++) {
+      const t = (i / 200) * (period * 5);
+      const v = Math.sin((2 * Math.PI * t) / period) * 2.5 + 2.5;
+      samples.push(point(t, v));
+    }
+
+    const fit = calculateAutoFitSettings(samples, "1", "dc");
+    expect(fit.timeDivValue).toBeLessThanOrEqual(5e-7);
+    expect(fit.timeDivValue).toBeGreaterThanOrEqual(1e-8);
+  });
+
+  it("extrae voltaje diferencial V(A,B) y calcula métricas correctamente", () => {
+    const samples: TimeStepResult[] = [];
+    for (let i = 0; i < 100; i++) {
+      const t = i * 0.001;
+      samples.push({
+        time: t,
+        nodeVoltages: {
+          "1": 10.0 + Math.sin(2 * Math.PI * 10 * t) * 5.0,
+          "2": 10.0, // Referencia flotante a 10V
+        },
+        branchCurrents: {},
+      });
+    }
+
+    // Directamente sobre nodo 1 (V1 = 10 + 5*sin(wt))
+    const mNodal = calculateOscilloscopeMetrics(samples, "1");
+    expect(mNodal.vavg).toBeCloseTo(10.0, 1);
+    expect(mNodal.vpp).toBeCloseTo(10.0, 1);
+
+    // Sonda diferencial V(1,2) (V1 - V2 = 5*sin(wt))
+    const mDiff = calculateOscilloscopeMetrics(samples, "V(1,2)");
+    expect(mDiff.vavg).toBeCloseTo(0.0, 1);
+    expect(mDiff.vpp).toBeCloseTo(10.0, 1);
+    expect(mDiff.vmax).toBeCloseTo(5.0, 1);
+    expect(mDiff.vmin).toBeCloseTo(-5.0, 1);
+
+    // Sintaxis alternativa "1-2"
+    const mDash = calculateOscilloscopeMetrics(samples, "1-2");
+    expect(mDash.vavg).toBeCloseTo(0.0, 1);
+    expect(mDash.vpp).toBeCloseTo(10.0, 1);
   });
 });

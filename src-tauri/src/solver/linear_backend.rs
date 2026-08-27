@@ -68,12 +68,12 @@ impl FaerFactorizedReal {
     }
 }
 
-/// Estructura de factorización LU compleja pre-calculada con `faer` vía sistema aumentado $2N \times 2N$.
-/// Permite resolver múltiples vectores RHS complejos en barridos de ruido y sensibilidad en $O(N^2)$.
+/// Estructura de factorización LU compleja pre-calculada con `faer` de dimensión nativa $N \times N$.
+/// Permite resolver múltiples vectores RHS complejos en barridos de ruido, AC y sensibilidad en $O(N^2)$.
 #[derive(Debug, Clone)]
 pub struct FaerFactorizedComplex {
     size: usize,
-    mat_2n: Mat<f64>,
+    mat_c: Mat<c64>,
 }
 
 impl FaerFactorizedComplex {
@@ -89,26 +89,23 @@ impl FaerFactorizedComplex {
             ));
         }
 
-        let n2 = 2 * n;
-        let mut vec_2n = Col::<f64>::zeros(n2);
+        let mut vec_b = Col::<c64>::zeros(n);
         for i in 0..n {
-            vec_2n[i] = rhs[i].re;
-            vec_2n[i + n] = rhs[i].im;
+            vec_b[i] = c64::new(rhs[i].re, rhs[i].im);
         }
 
-        let lu_2n = self.mat_2n.full_piv_lu();
-        let sol_2n = lu_2n.solve(&vec_2n);
+        let lu = self.mat_c.full_piv_lu();
+        let sol_col = lu.solve(&vec_b);
         let mut solution = Vec::with_capacity(n);
         for i in 0..n {
-            let re = sol_2n[i];
-            let im = sol_2n[i + n];
-            if !re.is_finite() || !im.is_finite() {
+            let val = sol_col[i];
+            if !val.re.is_finite() || !val.im.is_finite() {
                 return Err(
                     "Error numérico complejo en FaerFactorizedComplex: NaN/Inf detectado"
                         .to_string(),
                 );
             }
-            solution.push(Complex::new(re, im));
+            solution.push(Complex::new(val.re, val.im));
         }
 
         Ok(solution)
@@ -135,30 +132,23 @@ impl FaerLinearSolver {
         Ok(FaerFactorizedReal { size: n, mat_a })
     }
 
-    /// Pre-factoriza una matriz compleja vía sistema aumentado $2N \times 2N$.
+    /// Pre-factoriza una matriz compleja directamente en dimensión $N \times N$ nativa.
     pub fn factorize_complex(
         &self,
         matrix: &ComplexSparseMatrix,
     ) -> Result<FaerFactorizedComplex, String> {
         let n = matrix.size;
-        let n2 = 2 * n;
-        let mut mat_2n = Mat::<f64>::zeros(n2, n2);
+        let mut mat_c = Mat::<c64>::zeros(n, n);
 
         for (r, row_map) in matrix.rows.iter().enumerate() {
             for (&c, val) in row_map {
                 if r < n && c < n {
-                    let re = val.re;
-                    let im = val.im;
-
-                    mat_2n[(r, c)] += re;
-                    mat_2n[(r, c + n)] -= im;
-                    mat_2n[(r + n, c)] += im;
-                    mat_2n[(r + n, c + n)] += re;
+                    mat_c[(r, c)] += c64::new(val.re, val.im);
                 }
             }
         }
 
-        Ok(FaerFactorizedComplex { size: n, mat_2n })
+        Ok(FaerFactorizedComplex { size: n, mat_c })
     }
 }
 
@@ -371,5 +361,35 @@ mod tests {
         let expected = 1.0 / Complex::new(1.0, w * 1e3 * 1e-6);
         assert!((sol[1].re - expected.re).abs() < 1e-6);
         assert!((sol[1].im - expected.im).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_faer_factorized_complex_multiple_rhs() {
+        let mut mat = ComplexSparseMatrix::new(2);
+        // Sistema complejo:
+        // [ (2 + 1j)   (1 - 1j) ] [ x ] = [ rhs_1 ] o [ rhs_2 ]
+        // [ (1 + 0j)   (3 + 2j) ] [ y ]
+        mat.add_element(0, 0, Complex::new(2.0, 1.0));
+        mat.add_element(0, 1, Complex::new(1.0, -1.0));
+        mat.add_element(1, 0, Complex::new(1.0, 0.0));
+        mat.add_element(1, 1, Complex::new(3.0, 2.0));
+
+        let fact = factorize_linear_complex(&mat).expect("Factorización compleja fallida");
+
+        // Caso 1: rhs = [ (3 + 0j), (4 + 2j) ] -> Solución exacta x = (1, 0), y = (1, 0)
+        let rhs1 = vec![Complex::new(3.0, 0.0), Complex::new(4.0, 2.0)];
+        let sol1 = fact.solve(&rhs1).expect("Solución compleja 1 fallida");
+        assert!((sol1[0].re - 1.0).abs() < 1e-9);
+        assert!(sol1[0].im.abs() < 1e-9);
+        assert!((sol1[1].re - 1.0).abs() < 1e-9);
+        assert!(sol1[1].im.abs() < 1e-9);
+
+        // Caso 2: rhs = [ (1 - 1j), (3 + 2j) ] -> Solución exacta x = 0, y = 1 (1 + 0j)
+        let rhs2 = vec![Complex::new(1.0, -1.0), Complex::new(3.0, 2.0)];
+        let sol2 = fact.solve(&rhs2).expect("Solución compleja 2 fallida");
+        assert!(sol2[0].re.abs() < 1e-9);
+        assert!(sol2[0].im.abs() < 1e-9);
+        assert!((sol2[1].re - 1.0).abs() < 1e-9);
+        assert!(sol2[1].im.abs() < 1e-9);
     }
 }

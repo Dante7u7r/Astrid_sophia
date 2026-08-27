@@ -22,7 +22,10 @@ mod tests {
         mcu.step(&inputs); // ADD A, #0x01
 
         assert_eq!(mcu.read_acc(), 0x80);
-        assert!(mcu.get_ov(), "OV flag should be set for positive+positive = negative");
+        assert!(
+            mcu.get_ov(),
+            "OV flag should be set for positive+positive = negative"
+        );
         assert!(mcu.get_ac(), "AC flag should be set for nibble carry");
         assert!(!mcu.get_cy(), "CY should not be set");
     }
@@ -50,8 +53,11 @@ mod tests {
     fn test_8051_mul_div() {
         let mut mcu = Mcu8051::new();
         // MOV A, #0x12; MOV B, #0x34; MUL AB
-        mcu.code_memory[0] = 0x74; mcu.code_memory[1] = 0x12; // MOV A, #18
-        mcu.code_memory[2] = 0x75; mcu.code_memory[3] = SFR_B; mcu.code_memory[4] = 0x34; // MOV B, #52
+        mcu.code_memory[0] = 0x74;
+        mcu.code_memory[1] = 0x12; // MOV A, #18
+        mcu.code_memory[2] = 0x75;
+        mcu.code_memory[3] = SFR_B;
+        mcu.code_memory[4] = 0x34; // MOV B, #52
         mcu.code_memory[5] = 0xA4; // MUL AB (18 * 52 = 936 = 0x03A8)
 
         let inputs = GpioInputs::default();
@@ -99,8 +105,10 @@ mod tests {
         let mut mcu = Mcu8051::new();
         // MOV R2, #0x03
         // LOOP: DJNZ R2, LOOP (-2)
-        mcu.code_memory[0] = 0x7A; mcu.code_memory[1] = 0x03;
-        mcu.code_memory[2] = 0xDA; mcu.code_memory[3] = 0xFE as u8; // -2 relative
+        mcu.code_memory[0] = 0x7A;
+        mcu.code_memory[1] = 0x03;
+        mcu.code_memory[2] = 0xDA;
+        mcu.code_memory[3] = 0xFE; // -2 relative
 
         let inputs = GpioInputs::default();
         mcu.step(&inputs); // MOV R2, #3
@@ -125,9 +133,12 @@ mod tests {
         // LDI R16, 0x10 (0xE100)
         // LDI R17, 0x20 (0xE210)
         // ADD R16, R17 (0x0F01)
-        mcu.flash[0] = 0x00; mcu.flash[1] = 0xE1;
-        mcu.flash[2] = 0x10; mcu.flash[3] = 0xE2;
-        mcu.flash[4] = 0x01; mcu.flash[5] = 0x0F;
+        mcu.flash[0] = 0x00;
+        mcu.flash[1] = 0xE1;
+        mcu.flash[2] = 0x10;
+        mcu.flash[3] = 0xE2;
+        mcu.flash[4] = 0x01;
+        mcu.flash[5] = 0x0F;
 
         let inputs = GpioInputs::default();
         mcu.step(&inputs); // LDI R16, 0x10
@@ -144,8 +155,10 @@ mod tests {
         let mut mcu = Atmega328p::new();
         // LDI R16, 0x05 (0xE005)
         // SUBI R16, 0x05 (0x5005)
-        mcu.flash[0] = 0x05; mcu.flash[1] = 0xE0;
-        mcu.flash[2] = 0x05; mcu.flash[3] = 0x50;
+        mcu.flash[0] = 0x05;
+        mcu.flash[1] = 0xE0;
+        mcu.flash[2] = 0x05;
+        mcu.flash[3] = 0x50;
 
         let inputs = GpioInputs::default();
         mcu.step(&inputs);
@@ -162,9 +175,12 @@ mod tests {
         // LDI R16, 0xFF
         // OUT DDRB, R16 (0xBB04)
         // OUT PORTB, R16 (0xBB05)
-        mcu.flash[0] = 0x0F; mcu.flash[1] = 0xEF; // LDI R16, 0xFF
-        mcu.flash[2] = 0x04; mcu.flash[3] = 0xB9; // OUT 0x04, R16 (DDRB)
-        mcu.flash[4] = 0x05; mcu.flash[5] = 0xB9; // OUT 0x05, R16 (PORTB)
+        mcu.flash[0] = 0x0F;
+        mcu.flash[1] = 0xEF; // LDI R16, 0xFF
+        mcu.flash[2] = 0x04;
+        mcu.flash[3] = 0xB9; // OUT 0x04, R16 (DDRB)
+        mcu.flash[4] = 0x05;
+        mcu.flash[5] = 0xB9; // OUT 0x05, R16 (PORTB)
 
         let inputs = GpioInputs::default();
         mcu.step(&inputs);
@@ -183,11 +199,16 @@ mod tests {
         // Word 2: NOP (0x0000)
         // Word 3: LDI R16, 0x77 (0xE707)
         // Word 4: RET (0x9508)
-        mcu.flash[0] = 0x02; mcu.flash[1] = 0xD0;
-        mcu.flash[2] = 0x00; mcu.flash[3] = 0x00;
-        mcu.flash[4] = 0x00; mcu.flash[5] = 0x00;
-        mcu.flash[6] = 0x07; mcu.flash[7] = 0xE7;
-        mcu.flash[8] = 0x08; mcu.flash[9] = 0x95;
+        mcu.flash[0] = 0x02;
+        mcu.flash[1] = 0xD0;
+        mcu.flash[2] = 0x00;
+        mcu.flash[3] = 0x00;
+        mcu.flash[4] = 0x00;
+        mcu.flash[5] = 0x00;
+        mcu.flash[6] = 0x07;
+        mcu.flash[7] = 0xE7;
+        mcu.flash[8] = 0x08;
+        mcu.flash[9] = 0x95;
 
         let inputs = GpioInputs::default();
         mcu.step(&inputs); // RCALL
