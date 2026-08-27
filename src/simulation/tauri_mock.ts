@@ -51,6 +51,22 @@ function mutateWebTransient(mutation?: { componentId?: string; field?: string; v
   webActiveMutations.set(key, mutation.value);
 }
 
+let webTransientPaused = false;
+
+function pauseWebTransient(runId?: number): void {
+  if (runId !== undefined && webActiveExternalRunId !== null && runId !== webActiveExternalRunId) {
+    return;
+  }
+  webTransientPaused = true;
+}
+
+function resumeWebTransient(runId?: number): void {
+  if (runId !== undefined && webActiveExternalRunId !== null && runId !== webActiveExternalRunId) {
+    return;
+  }
+  webTransientPaused = false;
+}
+
 function stopWebTransient(expectedRunId?: number): void {
   if (
     expectedRunId !== undefined
@@ -59,6 +75,7 @@ function stopWebTransient(expectedRunId?: number): void {
   ) {
     return;
   }
+  webTransientPaused = false;
   webTransientRunId += 1;
   webActiveExternalRunId = null;
   webTransientTimers.forEach((timer) => clearTimeout(timer));
@@ -67,6 +84,7 @@ function stopWebTransient(expectedRunId?: number): void {
 
 function startWebTransient(args?: Record<string, unknown>): void {
   stopWebTransient();
+  webTransientPaused = false;
   webActiveMutations.clear();
   const cancellationId = webTransientRunId;
   const runId = typeof args?.runId === "number" ? args.runId : cancellationId;
@@ -89,6 +107,11 @@ function startWebTransient(args?: Record<string, unknown>): void {
 
   const emitStep = (index: number) => {
     if (cancellationId !== webTransientRunId) return;
+    if (webTransientPaused) {
+      const retryTimer = setTimeout(() => emitStep(index), 30);
+      webTransientTimers.push(retryTimer);
+      return;
+    }
 
     const time = tMax * (index / (frameCount - 1));
     const isFinal = index === frameCount - 1;
@@ -330,7 +353,13 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>)
       return undefined as T;
 
     case "pause_interactive_transient":
+      pauseWebTransient(typeof args?.runId === "number" ? args.runId : undefined);
+      return undefined as T;
+
     case "resume_interactive_transient":
+      resumeWebTransient(typeof args?.runId === "number" ? args.runId : undefined);
+      return undefined as T;
+
     case "step_interactive_transient":
     case "set_interactive_simulation_speed":
       return undefined as T;

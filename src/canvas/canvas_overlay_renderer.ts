@@ -35,6 +35,7 @@ export interface CanvasOverlayHost {
   selectionStart: Point2D | null;
   selectionEnd: Point2D | null;
   activeAlignmentGuides?: CanvasOrchestrator["activeAlignmentGuides"];
+  simulationPaused?: boolean;
   showCurrentAnimation?: boolean;
   currentFlowMode?: "conventional" | "electron";
   currentAnimationSpeed?: number;
@@ -114,6 +115,7 @@ export class CanvasOverlayRenderer {
         visibleWorldBounds,
         now,
         this.host.zoom,
+        Boolean(this.host.simulationPaused),
       );
     }
 

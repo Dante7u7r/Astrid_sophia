@@ -27,6 +27,8 @@ function createHarness(overrides: {
     pvtTraces: [],
     start: vi.fn(),
     stop: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
   } as unknown as OscilloscopePanel;
 
   const settings: SimulationSettings = {
@@ -160,5 +162,29 @@ describe("SimulationController", () => {
     expect(oscilloscopePanel.stop).toHaveBeenCalledOnce();
     expect(deps.resetPerformanceCaches).toHaveBeenCalledOnce();
     expect(deps.setSimulationRunning).toHaveBeenCalledWith(false);
+  });
+
+  it("gestiona pausar y reanudar simulación correctamente", async () => {
+    const pauseInteractiveTransient = vi.fn(async () => undefined);
+    const resumeInteractiveTransient = vi.fn(async () => undefined);
+    const setSimulationPaused = vi.fn();
+    const { controller, deps, oscilloscopePanel } = createHarness();
+    deps.getSimulationRunner = () => ({
+      pauseInteractiveTransient,
+      resumeInteractiveTransient,
+    }) as never;
+    (deps as Record<string, unknown>).setSimulationPaused = setSimulationPaused;
+
+    await controller.pauseSimulation();
+
+    expect(pauseInteractiveTransient).toHaveBeenCalledOnce();
+    expect(oscilloscopePanel.pause).toHaveBeenCalledOnce();
+    expect(setSimulationPaused).toHaveBeenCalledWith(true);
+
+    await controller.resumeSimulation();
+
+    expect(resumeInteractiveTransient).toHaveBeenCalledOnce();
+    expect(oscilloscopePanel.resume).toHaveBeenCalledOnce();
+    expect(setSimulationPaused).toHaveBeenCalledWith(false);
   });
 });

@@ -185,7 +185,7 @@ export const GUIDE_STEPS: GuideStep[] = [
     topicTitle: "Laboratorio Virtual",
     title: "Optimizador Paramétrico y Auto-Tuning",
     description: "Sintoniza automáticamente los valores de tu circuito (resistencias, condensadores, fuentes) para alcanzar metas de diseño específicas con algoritmos de optimización.",
-    targetSelector: ".inst-tab[data-tab='optimizer'], #bottom-dock",
+    targetSelector: ".inst-tab[data-tab='optimizer']",
     placement: "top",
     requiresPanel: "dock",
     requiresInstrumentTab: "optimizer",

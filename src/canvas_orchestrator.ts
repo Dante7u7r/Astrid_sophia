@@ -405,6 +405,7 @@ export interface WireDragState {
 export class CanvasOrchestrator {
   private canvas: HTMLCanvasElement;
   public simulationActive: boolean = false;
+  public simulationPaused: boolean = false;
   public transientResults?: readonly { time?: number; nodeVoltages?: Record<string, number>; branchCurrents?: Record<string, number> }[];
   private readonly sceneRenderer: CanvasSceneRenderer;
   private overlayRenderer: CanvasOverlayRenderer | null = null;

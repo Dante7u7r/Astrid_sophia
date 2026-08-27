@@ -63,21 +63,23 @@ export class ComponentSpotlightModal {
 
     backdrop.innerHTML = `
       <div class="spotlight-dialog">
-        <div class="spotlight-header">
+        <div class="spotlight-header spotlight-search-bar">
           <span class="spotlight-search-icon">🔍</span>
-          <input type="text" id="spotlight-search-input" class="spotlight-input" placeholder="Buscar componente o valor (ej: R 4.7k, Diodo, GND, 7408)..." autocomplete="off" spellcheck="false" />
-          <kbd class="spotlight-esc-hint">ESC</kbd>
+          <input type="text" id="spotlight-search-input" class="spotlight-input spotlight-search-input" placeholder="Buscar componente o valor (ej: R 4.7k, Diodo, GND, 7408)..." autocomplete="off" spellcheck="false" />
+          <kbd class="spotlight-esc-hint spotlight-search-esc">ESC</kbd>
         </div>
         <div class="spotlight-body">
           <ul class="spotlight-results" id="spotlight-results" role="listbox" aria-label="Resultados de componentes"></ul>
-          <aside class="spotlight-preview" id="spotlight-preview" aria-live="polite">
+          <aside class="spotlight-preview spotlight-preview-pane" id="spotlight-preview" aria-live="polite">
             <div class="spotlight-preview-empty">Selecciona un componente para ver su ficha física y modelo SPICE</div>
           </aside>
         </div>
         <div class="spotlight-footer">
-          <span><kbd>↑</kbd><kbd>↓</kbd> Navegar</span>
-          <span><kbd>↵</kbd> Colocar en cursor</span>
-          <span><kbd>ESC</kbd> Cerrar</span>
+          <div class="spotlight-footer-shortcuts">
+            <span><kbd>↑</kbd><kbd>↓</kbd> Navegar</span>
+            <span><kbd>↵</kbd> Colocar en cursor</span>
+            <span><kbd>ESC</kbd> Cerrar</span>
+          </div>
         </div>
       </div>
     `;
@@ -103,7 +105,7 @@ export class ComponentSpotlightModal {
       }
 
       const svgSymbol = standard === "IEC" ? item.svgIconIec : item.svgIconIeee;
-      const equationHtml = item.physicsEquation ? `<div class="spotlight-preview-eq"><code>${item.physicsEquation}</code></div>` : "";
+      const equationHtml = item.physicsEquation ? `<div class="spotlight-preview-eq spotlight-preview-equation"><code>${item.physicsEquation}</code></div>` : "";
       const spiceBadge = item.spiceModelLevel ? `<div class="spotlight-preview-spice">🔬 <strong>SPICE:</strong> ${item.spiceModelLevel}</div>` : "";
 
       previewBox.innerHTML = `
@@ -113,12 +115,12 @@ export class ComponentSpotlightModal {
               ${svgSymbol}
             </svg>
           </div>
-          <div>
+          <div class="spotlight-preview-heading">
             <h4 class="spotlight-preview-title">${item.name}</h4>
-            <span class="spotlight-preview-badge">${item.categoryLabel} · ${item.unit}</span>
+            <span class="spotlight-preview-badge">${item.categoryLabel} · ${item.unit || "—"}</span>
           </div>
         </div>
-        <p class="spotlight-preview-desc">${item.academicSummary || item.description}</p>
+        <p class="spotlight-preview-desc spotlight-preview-details">${item.academicSummary || item.description}</p>
         ${equationHtml}
         ${spiceBadge}
       `;
@@ -139,17 +141,19 @@ export class ComponentSpotlightModal {
         li.setAttribute("role", "option");
         li.setAttribute("aria-selected", String(isSelected));
 
-        const hotkeyBadge = item.hotkey ? `<kbd class="spotlight-item-hotkey">${item.hotkey}</kbd>` : "";
+        const hotkeyBadge = item.hotkey ? `<kbd class="spotlight-item-badge spotlight-item-hotkey">${item.hotkey}</kbd>` : "";
         const svgSymbol = standard === "IEC" ? item.svgIconIec : item.svgIconIeee;
 
         li.innerHTML = `
           <div class="spotlight-item-left">
-            <svg viewBox="0 0 40 40" width="22" height="22" class="spotlight-item-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              ${svgSymbol}
-            </svg>
-            <div class="spotlight-item-text">
+            <div class="spotlight-item-icon">
+              <svg viewBox="0 0 40 40" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                ${svgSymbol}
+              </svg>
+            </div>
+            <div class="spotlight-item-info spotlight-item-text">
               <span class="spotlight-item-name">${item.name}</span>
-              <span class="spotlight-item-cat">${item.categoryLabel}</span>
+              <span class="spotlight-item-desc spotlight-item-cat">${item.categoryLabel}</span>
             </div>
           </div>
           <div class="spotlight-item-right">

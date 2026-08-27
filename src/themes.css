@@ -1325,78 +1325,120 @@
 
 /* Modal Spotlight en Modo Aula */
 [data-theme="classroom"] .spotlight-dialog {
-  background: var(--modal-bg) !important;
-  border: 1px solid var(--modal-border) !important;
-  box-shadow: var(--modal-shadow) !important;
+  background: var(--modal-bg, #ffffff) !important;
+  border: 1px solid var(--modal-border, #cbd5e1) !important;
+  box-shadow: var(--modal-shadow, 0 20px 40px rgba(0, 0, 0, 0.15)) !important;
+  color: #1e293b !important;
 }
 
+[data-theme="classroom"] .spotlight-header,
 [data-theme="classroom"] .spotlight-search-bar {
   background: #f8fafc !important;
   border-bottom: 1px solid #cbd5e1 !important;
 }
 
+[data-theme="classroom"] .spotlight-input,
 [data-theme="classroom"] .spotlight-search-input {
-  color: var(--text-bright) !important;
+  color: #0f172a !important;
 }
 
+[data-theme="classroom"] .spotlight-input::placeholder,
 [data-theme="classroom"] .spotlight-search-input::placeholder {
-  color: var(--text-muted) !important;
+  color: #94a3b8 !important;
 }
 
+[data-theme="classroom"] .spotlight-esc-hint,
 [data-theme="classroom"] .spotlight-search-esc {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
-  color: var(--text-sub) !important;
+  color: var(--text-sub, #64748b) !important;
 }
 
 [data-theme="classroom"] .spotlight-item {
-  color: var(--text-main) !important;
+  color: var(--text-main, #334155) !important;
 }
 
 [data-theme="classroom"] .spotlight-item:hover,
 [data-theme="classroom"] .spotlight-item.selected {
   background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+}
+
+[data-theme="classroom"] .spotlight-item-name {
+  color: #0f172a !important;
 }
 
 [data-theme="classroom"] .spotlight-item.selected .spotlight-item-name {
-  color: var(--cyan) !important;
+  color: #0284c7 !important;
 }
 
-[data-theme="classroom"] .spotlight-item-desc {
-  color: var(--text-muted) !important;
-}
-
-[data-theme="classroom"] .spotlight-item-badge {
+[data-theme="classroom"] .spotlight-item-icon {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
-  color: var(--text-sub) !important;
+  color: #334155 !important;
 }
 
+[data-theme="classroom"] .spotlight-item-desc,
+[data-theme="classroom"] .spotlight-item-cat {
+  color: var(--text-muted, #64748b) !important;
+}
+
+[data-theme="classroom"] .spotlight-item-badge,
+[data-theme="classroom"] .spotlight-item-hotkey {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-sub, #475569) !important;
+}
+
+[data-theme="classroom"] .spotlight-preview,
 [data-theme="classroom"] .spotlight-preview-pane {
   background: #f8fafc !important;
   border-left: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-title {
+  color: #0f172a !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-icon {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0284c7 !important;
 }
 
 [data-theme="classroom"] .spotlight-preview-header {
   border-bottom: 1px solid #cbd5e1 !important;
 }
 
+[data-theme="classroom"] .spotlight-preview-desc,
+[data-theme="classroom"] .spotlight-preview-details {
+  color: #475569 !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-eq,
 [data-theme="classroom"] .spotlight-preview-equation {
   background: #ffffff !important;
   border-color: #cbd5e1 !important;
-  color: var(--text-main) !important;
+  color: var(--text-main, #1e293b) !important;
+}
+
+[data-theme="classroom"] .spotlight-preview-spice {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
 }
 
 [data-theme="classroom"] .spotlight-footer {
   background: #f1f5f9 !important;
   border-top: 1px solid #cbd5e1 !important;
-  color: var(--text-muted) !important;
+  color: var(--text-muted, #64748b) !important;
 }
 
+[data-theme="classroom"] .spotlight-footer-shortcuts kbd,
 [data-theme="classroom"] .spotlight-footer-shortcuts span {
   background: #ffffff !important;
   border-color: #cbd5e1 !important;
-  color: var(--text-sub) !important;
+  color: var(--text-sub, #334155) !important;
 }
 
 /* Tooltips en Modo Aula */

@@ -68,4 +68,22 @@ describe("ComponentSpotlightModal", () => {
     expect(ComponentSpotlightModal.isOpen()).toBe(false);
     expect(callback).not.toHaveBeenCalled();
   });
+
+  it("renderiza la estructura visual del buscador, lista y panel de vista previa", () => {
+    const callback = vi.fn();
+    ComponentSpotlightModal.open(callback);
+
+    const searchBar = document.querySelector(".spotlight-search-bar");
+    expect(searchBar).not.toBeNull();
+
+    const results = document.querySelector(".spotlight-results");
+    expect(results).not.toBeNull();
+
+    const previewPane = document.querySelector(".spotlight-preview-pane");
+    expect(previewPane).not.toBeNull();
+
+    const previewTitle = document.querySelector(".spotlight-preview-title");
+    expect(previewTitle).not.toBeNull();
+    expect(previewTitle?.textContent).toBe("Resistencia");
+  });
 });

@@ -3,7 +3,7 @@ import "./components";
 import { CanvasOrchestrator, ComponentInstance } from "./canvas_orchestrator";
 import { TelemetryPanel } from "./ui/telemetry_panel";
 import { DEFAULT_TRANSIENT_DURATION_SECONDS, SimulationSettings } from "./ui/settings_modal";
-import { type AnalysisMode } from "./ui/simulation_controls";
+import { type AnalysisMode, type SimulationControls } from "./ui/simulation_controls";
 import { OscilloscopePanel, TimeStepResult } from "./ui/oscilloscope_panel";
 import {
   extractElectricalNetlist,
@@ -187,6 +187,7 @@ function resetPerformanceCaches(): void {
 // Instancia global del runner de simulación interactiva
 let simulationRunner: SimulationRunner | null = null;
 let simulationController: SimulationController | null = null;
+let simulationControls: SimulationControls | null = null;
 
 function addLog(text: string, type: 'system' | 'send' | 'receive' | 'error' = 'system') {
   consoleLogController.addLog(text, type);
@@ -322,8 +323,12 @@ function initOscilloscopeInterface() {
   });
 
   if (oscPauseBtn) {
-    oscPauseBtn.addEventListener("click", () => {
-      if (oscilloscopePanel) {
+    oscPauseBtn.addEventListener("click", async () => {
+      if (simulationRunner?.isSimulationPaused()) {
+        await simulationController?.resumeSimulation();
+      } else if (simulationControls?.isSimulationRunning()) {
+        await simulationController?.pauseSimulation();
+      } else if (oscilloscopePanel) {
         if (!oscilloscopePanel.isOscPaused) {
           oscilloscopePanel.pause();
           circuitState.audioOrchestrator.stopAll();
@@ -331,7 +336,7 @@ function initOscilloscopeInterface() {
           oscilloscopePanel.resume();
         }
         oscPauseBtn.classList.toggle("active");
-        oscPauseBtn.textContent = oscilloscopePanel.isOscPaused ? "Reanudar" : "Pausar";
+        oscPauseBtn.textContent = oscilloscopePanel.isOscPaused ? "Reanudar" : "Pausa";
       }
     });
   }
@@ -628,6 +633,7 @@ window.addEventListener("DOMContentLoaded", () => {
   propertyEditor = controllers.propertyEditor;
   simulationRunner = controllers.simulationRunner;
   simulationController = controllers.simulationController;
+  simulationControls = controllers.simulationControls;
   oscilloscopePanel = controllers.oscilloscopePanel;
   mcuDebugPanel = controllers.mcuDebugPanel;
   runStartupSequence(visualAudit, {
@@ -712,7 +718,12 @@ window.addEventListener("DOMContentLoaded", () => {
         document.querySelector<HTMLElement>("#settings-trigger-btn")?.click();
       } else if (actionId === "open_spotlight") {
         guideEngine?.exit();
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+        const btnSpotlight = document.querySelector<HTMLButtonElement>("#btn-palette-spotlight");
+        if (btnSpotlight) {
+          btnSpotlight.click();
+        } else {
+          window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+        }
       } else if (actionId === "open_optimizer") {
         panelLayoutManager?.setPanelCollapsed("dock", false);
         sidePanelController?.syncDrawerState();

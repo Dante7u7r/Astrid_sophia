@@ -90,6 +90,8 @@ export const ANALYSIS_MODES_METADATA: Record<AnalysisMode, AnalysisModeMeta> = {
 export interface SimulationControlHandlers {
   readonly onRunSimulation: (netlist: CircuitNetlist, mode: AnalysisMode) => Promise<void>;
   readonly onStopSimulation: () => Promise<void>;
+  readonly onPauseSimulation?: () => Promise<void>;
+  readonly onResumeSimulation?: () => Promise<void>;
   readonly setActiveAnalysisMode: (mode: AnalysisMode) => void;
   readonly addLog: (text: string, type: 'system' | 'send' | 'receive' | 'error') => void;
   readonly updateCanvasRendering: () => void;
@@ -97,7 +99,9 @@ export interface SimulationControlHandlers {
 
 export interface SimulationControls {
   setSimulationRunning: (running: boolean) => void;
+  setSimulationPaused: (paused: boolean) => void;
   isSimulationRunning: () => boolean;
+  isSimulationPaused: () => boolean;
   setActiveModeButton: (mode: AnalysisMode) => void;
   destroy: () => void;
 }
@@ -122,15 +126,39 @@ export function initSimulationControls(
   runSimBtn = document.querySelector('#run-sim-btn') as HTMLButtonElement | null;
   stopSimBtn = document.querySelector('#stop-sim-btn') as HTMLButtonElement | null;
   let simulationRunning = false;
+  let simulationPaused = false;
 
   function updateButtonLabelsForCurrentMode(): void {
     const meta = ANALYSIS_MODES_METADATA[currentMode] ?? ANALYSIS_MODES_METADATA.DC;
     if (runSimBtn) {
       const labelSpan = runSimBtn.querySelector('.header-action-label');
       if (labelSpan) {
-        labelSpan.textContent = simulationRunning && meta.isStreaming ? 'Pausar' : meta.buttonLabel;
+        if (simulationRunning && meta.isStreaming) {
+          labelSpan.textContent = simulationPaused ? 'Reanudar' : 'Pausar';
+        } else {
+          labelSpan.textContent = meta.buttonLabel;
+        }
       }
-      runSimBtn.setAttribute('data-tooltip', simulationRunning && meta.isStreaming ? 'Pausar simulación interactiva' : meta.tooltip);
+      const iconSpan = runSimBtn.querySelector('.btn-icon');
+      if (iconSpan) {
+        if (simulationRunning) {
+          if (meta.isStreaming) {
+            iconSpan.textContent = simulationPaused ? '▶' : '⏸';
+          } else {
+            iconSpan.textContent = '⏳';
+          }
+        } else {
+          iconSpan.textContent = '▶';
+        }
+      }
+      if (simulationRunning && meta.isStreaming) {
+        runSimBtn.setAttribute(
+          'data-tooltip',
+          simulationPaused ? 'Reanudar simulación interactiva' : 'Pausar simulación interactiva',
+        );
+      } else {
+        runSimBtn.setAttribute('data-tooltip', meta.tooltip);
+      }
       runSimBtn.setAttribute('aria-label', meta.label);
     }
     if (stopSimBtn) {
@@ -139,8 +167,9 @@ export function initSimulationControls(
     }
   }
 
-  function applySimulationVisualState(running: boolean): void {
+  function applySimulationVisualState(running: boolean, paused: boolean = false): void {
     simulationRunning = running;
+    simulationPaused = running && paused;
     if (!runSimBtn || !stopSimBtn) return;
 
     const meta = ANALYSIS_MODES_METADATA[currentMode] ?? ANALYSIS_MODES_METADATA.DC;
@@ -148,10 +177,22 @@ export function initSimulationControls(
     stopSimBtn.disabled = !running;
 
     if (running) {
-      runSimBtn.classList.add('sim-active');
+      if (meta.isStreaming) {
+        if (simulationPaused) {
+          runSimBtn.classList.remove('sim-active');
+          const icon = runSimBtn.querySelector('.btn-icon');
+          if (icon) icon.textContent = '▶';
+        } else {
+          runSimBtn.classList.add('sim-active');
+          const icon = runSimBtn.querySelector('.btn-icon');
+          if (icon) icon.textContent = '⏸';
+        }
+      } else {
+        runSimBtn.classList.add('sim-active');
+        const icon = runSimBtn.querySelector('.btn-icon');
+        if (icon) icon.textContent = '⏳';
+      }
       stopSimBtn.classList.add('btn-stop');
-      const icon = runSimBtn.querySelector('.btn-icon');
-      if (icon) icon.textContent = meta.isStreaming ? '⏸' : '⏳';
     } else {
       runSimBtn.classList.remove('sim-active');
       stopSimBtn.classList.remove('btn-stop');
@@ -163,7 +204,7 @@ export function initSimulationControls(
 
     const recIndicator = document.getElementById('sim-rec-indicator');
     if (recIndicator) {
-      recIndicator.classList.toggle('active', running);
+      recIndicator.classList.toggle('active', running && !simulationPaused);
     }
 
     const fileButtons = [
@@ -185,7 +226,7 @@ export function initSimulationControls(
 
       // Si había una simulación continua corriendo, detenerla inmediatamente al cambiar de modo
       if (simulationRunning) {
-        applySimulationVisualState(false);
+        applySimulationVisualState(false, false);
         await handlers.onStopSimulation();
       }
 
@@ -205,18 +246,28 @@ export function initSimulationControls(
     runSimBtn.addEventListener('click', async () => {
       const meta = ANALYSIS_MODES_METADATA[currentMode] ?? ANALYSIS_MODES_METADATA.DC;
       if (simulationRunning && meta.isStreaming) {
-        // Pausar/Detener si ya estaba corriendo en transitorio interactivo
-        applySimulationVisualState(false);
-        await handlers.onStopSimulation();
+        if (simulationPaused) {
+          if (handlers.onResumeSimulation) {
+            await handlers.onResumeSimulation();
+          } else {
+            applySimulationVisualState(true, false);
+          }
+        } else {
+          if (handlers.onPauseSimulation) {
+            await handlers.onPauseSimulation();
+          } else {
+            applySimulationVisualState(true, true);
+          }
+        }
         return;
       }
 
-      applySimulationVisualState(true);
+      applySimulationVisualState(true, false);
       await handlers.onRunSimulation({} as CircuitNetlist, currentMode);
     });
 
     stopSimBtn.addEventListener('click', async () => {
-      applySimulationVisualState(false);
+      applySimulationVisualState(false, false);
       await handlers.onStopSimulation();
       handlers.updateCanvasRendering();
     });
@@ -227,11 +278,19 @@ export function initSimulationControls(
 
   return {
     setSimulationRunning(running: boolean): void {
-      applySimulationVisualState(running);
+      applySimulationVisualState(running, simulationPaused);
+    },
+
+    setSimulationPaused(paused: boolean): void {
+      applySimulationVisualState(simulationRunning, paused);
     },
 
     isSimulationRunning(): boolean {
       return simulationRunning;
+    },
+
+    isSimulationPaused(): boolean {
+      return simulationPaused;
     },
 
     setActiveModeButton(mode: AnalysisMode): void {

@@ -77,12 +77,42 @@ export function createDesktopSimulationControllers(
 
   const setSimulationRunning = (running: boolean): void => {
     simulationControls?.setSimulationRunning(running);
+    if (!running) {
+      simulationControls?.setSimulationPaused(false);
+    }
     const orch = deps.getOrchestrator();
     if (orch) {
       orch.simulationActive = running;
+      if (!running) {
+        orch.simulationPaused = false;
+      }
+    }
+    const oscPauseBtn = document.querySelector("#osc-pause-btn") as HTMLButtonElement | null;
+    if (oscPauseBtn && !running) {
+      oscPauseBtn.classList.remove("active");
+      oscPauseBtn.textContent = "Pausa";
     }
     updateQaState({ simulationRunning: running });
     deps.updateCanvasRendering();
+  };
+
+  const setSimulationPaused = (paused: boolean): void => {
+    simulationControls?.setSimulationPaused(paused);
+    const orch = deps.getOrchestrator();
+    if (orch) {
+      orch.simulationPaused = paused;
+    }
+    const osc = deps.getOscilloscopePanel();
+    if (osc) {
+      osc.isOscPaused = paused;
+    }
+    const oscPauseBtn = document.querySelector("#osc-pause-btn") as HTMLButtonElement | null;
+    if (oscPauseBtn) {
+      oscPauseBtn.classList.toggle("active", paused);
+      oscPauseBtn.textContent = paused ? "Reanudar" : "Pausa";
+    }
+    deps.updateCanvasRendering();
+    deps.updateOscilloscopeRendering();
   };
 
   const setActiveAnalysisMode = (mode: AnalysisMode): void => {
@@ -132,6 +162,7 @@ export function createDesktopSimulationControllers(
     getSimulationSettings: deps.getSimulationSettings,
     setSimulationSettings: deps.setSimulationSettings,
     setSimulationRunning,
+    setSimulationPaused,
     setActiveAnalysisMode,
     getActiveTabId: () => deps.getTabManager()?.getActiveTabId() ?? null,
     bindTransientResultsToTab: (tabId, transientResults) => {

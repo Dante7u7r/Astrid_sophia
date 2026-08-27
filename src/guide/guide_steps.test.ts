@@ -42,6 +42,7 @@ describe("guide_steps catalog", () => {
     const optStep = GUIDE_STEPS.find((s) => s.id === "circuit_optimizer");
     expect(optStep?.requiresInstrumentTab).toBe("optimizer");
     expect(optStep?.requiresPanel).toBe("dock");
+    expect(optStep?.targetSelector).toBe(".inst-tab[data-tab='optimizer']");
 
     const mcuStep = GUIDE_STEPS.find((s) => s.id === "mcu_cosimulation");
     expect(mcuStep?.requiresPanel).toBe("left");

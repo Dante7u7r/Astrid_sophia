@@ -27,6 +27,7 @@ export class CurrentAnimationRenderer {
     visibleWorldBounds: BoundingBox,
     now: number,
     zoom: number = 1.0,
+    isPaused: boolean = false,
   ): void {
     if (!branchCurrents || (Object.keys(branchCurrents).length === 0 && Object.keys(nodeVoltages).length === 0)) {
       return;
@@ -37,7 +38,7 @@ export class CurrentAnimationRenderer {
       return;
     }
 
-    const dt = Math.min((now - this.lastTime) / 1000, 0.05);
+    const dt = isPaused ? 0 : Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
     this.baseOffset += dt * 40;
 

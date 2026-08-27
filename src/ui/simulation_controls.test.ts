@@ -65,4 +65,55 @@ describe("SimulationControls", () => {
     expect(controls.isSimulationRunning()).toBe(false);
     expect(runBtnLabel.textContent).toBe(ANALYSIS_MODES_METADATA.TRAN.buttonLabel);
   });
+
+  test("gestiona pausar y reanudar en modo transitorio interactivo", async () => {
+    const onRunSimulation = vi.fn(async () => undefined);
+    const onStopSimulation = vi.fn(async () => undefined);
+    const onPauseSimulation = vi.fn(async () => undefined);
+    const onResumeSimulation = vi.fn(async () => undefined);
+
+    const controls = initSimulationControls({
+      onRunSimulation,
+      onStopSimulation,
+      onPauseSimulation,
+      onResumeSimulation,
+      setActiveAnalysisMode: vi.fn(),
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+    });
+
+    controls.setActiveModeButton("TRAN");
+    const runBtn = document.querySelector<HTMLButtonElement>("#run-sim-btn")!;
+    const runBtnLabel = document.querySelector("#run-sim-btn .header-action-label")!;
+    const runBtnIcon = document.querySelector("#run-sim-btn .btn-icon")!;
+
+    expect(runBtnLabel.textContent).toBe("Simular");
+    expect(runBtnIcon.textContent).toBe("▶");
+
+    // Iniciar simulación
+    runBtn.click();
+    expect(onRunSimulation).toHaveBeenCalledTimes(1);
+    expect(controls.isSimulationRunning()).toBe(true);
+    expect(controls.isSimulationPaused()).toBe(false);
+    expect(runBtnLabel.textContent).toBe("Pausar");
+    expect(runBtnIcon.textContent).toBe("⏸");
+
+    // Pausar simulación
+    runBtn.click();
+    expect(onPauseSimulation).toHaveBeenCalledTimes(1);
+    controls.setSimulationPaused(true);
+    expect(controls.isSimulationRunning()).toBe(true);
+    expect(controls.isSimulationPaused()).toBe(true);
+    expect(runBtnLabel.textContent).toBe("Reanudar");
+    expect(runBtnIcon.textContent).toBe("▶");
+
+    // Reanudar simulación
+    runBtn.click();
+    expect(onResumeSimulation).toHaveBeenCalledTimes(1);
+    controls.setSimulationPaused(false);
+    expect(controls.isSimulationRunning()).toBe(true);
+    expect(controls.isSimulationPaused()).toBe(false);
+    expect(runBtnLabel.textContent).toBe("Pausar");
+    expect(runBtnIcon.textContent).toBe("⏸");
+  });
 });

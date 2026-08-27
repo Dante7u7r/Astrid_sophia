@@ -44,6 +44,7 @@ export interface SimulationControllerDependencies {
   getSimulationSettings(): SimulationSettings;
   setSimulationSettings?(settings: SimulationSettings): void;
   setSimulationRunning(running: boolean): void;
+  setSimulationPaused?(paused: boolean): void;
   setActiveAnalysisMode(mode: AnalysisMode): void;
   getActiveTabId(): string | null;
   bindTransientResultsToTab(tabId: string, transientResults: TimeStepResult[]): void;
@@ -87,6 +88,8 @@ export class SimulationController {
     return {
       onRunSimulation: async (_netlist, mode) => this.runSimulation(mode),
       onStopSimulation: async () => this.stopSimulation(),
+      onPauseSimulation: async () => this.pauseSimulation(),
+      onResumeSimulation: async () => this.resumeSimulation(),
       setActiveAnalysisMode: (mode) => this.setActiveAnalysisMode(mode),
       addLog: (text, type) => this.dependencies.addLog(text, type),
       updateCanvasRendering: () => this.dependencies.updateCanvasRendering(),
@@ -369,6 +372,25 @@ export class SimulationController {
     });
   }
 
+  async pauseSimulation(): Promise<void> {
+    this.dependencies.addLog("Pausando simulación física interactiva.", "system");
+    await this.dependencies.getSimulationRunner()?.pauseInteractiveTransient();
+    this.dependencies.circuitState.audioOrchestrator.stopAll();
+    this.dependencies.getOscilloscopePanel()?.pause();
+    this.dependencies.setSimulationPaused?.(true);
+    this.dependencies.updateCanvasRendering();
+    this.dependencies.updateOscilloscopeRendering();
+  }
+
+  async resumeSimulation(): Promise<void> {
+    this.dependencies.addLog("Reanudando simulación física interactiva.", "system");
+    await this.dependencies.getSimulationRunner()?.resumeInteractiveTransient();
+    this.dependencies.getOscilloscopePanel()?.resume();
+    this.dependencies.setSimulationPaused?.(false);
+    this.dependencies.updateCanvasRendering();
+    this.dependencies.updateOscilloscopeRendering();
+  }
+
   async stopSimulation(): Promise<void> {
     this.dependencies.addLog("Deteniendo simulación física del circuito.", "system");
     clearPendingTimeouts();
@@ -385,6 +407,7 @@ export class SimulationController {
     // También invalida cualquier reproducción visual de resultados ya
     // calculados; «Detener» debe dejar el lienzo inmediatamente en reposo.
     this.dependencies.resetPerformanceCaches();
+    this.dependencies.setSimulationPaused?.(false);
     this.dependencies.setSimulationRunning(false);
     this.dependencies.updateCanvasRendering();
   }
