@@ -421,5 +421,80 @@ describe("canvas_input_controller", () => {
     // El menú no debe haberse insertado en el DOM
     expect(document.getElementById("canvas-context-menu")).toBeNull();
   });
+
+  it("gestiona atajos de teclado para deshacer y rehacer con insensibilidad a mayúsculas", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const orchestrator = {
+      selectedComponents: [],
+      selectedComponent: null,
+      selectedWire: null,
+    } as unknown as CanvasOrchestrator;
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    // Ctrl+Z (minúscula)
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    expect(inputCallbacks.onUndo).toHaveBeenCalledTimes(1);
+
+    // Ctrl+Z (mayúscula por Bloq Mayús)
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Z", ctrlKey: true, bubbles: true }));
+    expect(inputCallbacks.onUndo).toHaveBeenCalledTimes(2);
+
+    // Ctrl+Shift+Z (Rehacer estándar)
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Z", ctrlKey: true, shiftKey: true, bubbles: true }));
+    expect(inputCallbacks.onRedo).toHaveBeenCalledTimes(1);
+
+    // Ctrl+Y (Rehacer alternativo)
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "y", ctrlKey: true, bubbles: true }));
+    expect(inputCallbacks.onRedo).toHaveBeenCalledTimes(2);
+  });
+
+  it("gestiona atajos de teclado para copiar, cortar y pegar componentes", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const copySelected = vi.fn(() => 2);
+    const cutSelected = vi.fn(() => 2);
+    const mockPastedComp = { id: "R2", type: "resistor", x: 100, y: 100, value: 1000, rotation: 0 };
+    const paste = vi.fn(() => ({
+      components: [mockPastedComp],
+      wires: [],
+    }));
+
+    const orchestrator = {
+      copySelected,
+      cutSelected,
+      paste,
+      selectedComponents: [],
+      selectedComponent: null,
+      selectedWire: null,
+    } as unknown as CanvasOrchestrator;
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    // 1. Ctrl + C
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true }));
+    expect(copySelected).toHaveBeenCalledOnce();
+    expect(inputCallbacks.log).toHaveBeenCalledWith(
+      "Lote de 2 elementos copiado al portapapeles.",
+      "system",
+    );
+
+    // 2. Ctrl + X
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "x", ctrlKey: true, bubbles: true }));
+    expect(cutSelected).toHaveBeenCalledOnce();
+    expect(inputCallbacks.onNetlistSync).toHaveBeenCalled();
+    expect(inputCallbacks.onCanvasModified).toHaveBeenCalled();
+
+    // 3. Ctrl + V
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, bubbles: true }));
+    expect(paste).toHaveBeenCalledOnce();
+    expect(inputCallbacks.onSelectionChanged).toHaveBeenCalledWith(mockPastedComp);
+    expect(inputCallbacks.onCanvasModified).toHaveBeenCalledTimes(2);
+    expect(inputCallbacks.log).toHaveBeenCalledWith(
+      "Componente [R2] pegado en el lienzo.",
+      "system",
+    );
+  });
 });
 

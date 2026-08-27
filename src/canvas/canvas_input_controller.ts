@@ -108,6 +108,8 @@ export function attachCanvasInput(
   let isSpacePressed = false;
   let lastMousePos = { x: 0, y: 0 };
   let draggingCanvasProbe: "CH1" | "CH2" | "CH3" | "CH4" | null = null;
+  let lastMouseWorldPt: { x: number; y: number } | null = null;
+  let isMouseOverCanvas = false;
 
   const onMouseDown = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
@@ -228,6 +230,8 @@ export function attachCanvasInput(
     const rect = canvas.getBoundingClientRect();
     const { screenX, screenY } = clientToCanvasPoint(rect, e);
     const worldPt = orchestrator.screenToWorld(screenX, screenY);
+    lastMouseWorldPt = { x: worldPt.x, y: worldPt.y };
+    isMouseOverCanvas = true;
 
     if (draggingCanvasProbe) {
       orchestrator.checkHover(worldPt.x, worldPt.y);
@@ -509,6 +513,7 @@ export function attachCanvasInput(
     if (isTypingInFormField()) return;
 
     const ctrl = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
 
     // --- Global shortcuts (no selection required) ---
     if ((e.code === "Space" || e.key === " ") && !isSpacePressed) {
@@ -520,28 +525,81 @@ export function attachCanvasInput(
       return;
     }
 
-    if (ctrl && e.key === "z" && !e.shiftKey) {
+    if (ctrl && key === "z" && !e.shiftKey) {
       e.preventDefault();
       callbacks.onUndo();
       callbacks.requestRender(true);
       return;
     }
 
-    if ((ctrl && e.shiftKey && e.key === "z") || (ctrl && e.key === "y")) {
+    if ((ctrl && e.shiftKey && key === "z") || (ctrl && key === "y")) {
       e.preventDefault();
       callbacks.onRedo();
       callbacks.requestRender(true);
       return;
     }
 
-    if (ctrl && e.key === "a") {
+    if (ctrl && key === "c") {
+      e.preventDefault();
+      const count = orchestrator.copySelected();
+      if (count > 0) {
+        callbacks.log(
+          count === 1
+            ? "Componente copiado al portapapeles."
+            : `Lote de ${count} elementos copiado al portapapeles.`,
+          "system",
+        );
+      }
+      return;
+    }
+
+    if (ctrl && key === "x") {
+      e.preventDefault();
+      const count = orchestrator.cutSelected();
+      if (count > 0) {
+        callbacks.onSelectionChanged(null);
+        callbacks.onNetlistSync();
+        callbacks.requestRender(true);
+        callbacks.onCanvasModified();
+        callbacks.log(
+          count === 1
+            ? "Componente cortado al portapapeles."
+            : `Lote de ${count} elementos cortado al portapapeles.`,
+          "system",
+        );
+      }
+      return;
+    }
+
+    if (ctrl && key === "v") {
+      e.preventDefault();
+      const targetPt = isMouseOverCanvas && lastMouseWorldPt ? lastMouseWorldPt : undefined;
+      const pasted = orchestrator.paste(targetPt);
+      if (pasted && pasted.components.length > 0) {
+        callbacks.onNetlistSync();
+        callbacks.onSelectionChanged(
+          pasted.components.length === 1 ? pasted.components[0] : null,
+        );
+        callbacks.requestRender(true);
+        callbacks.onCanvasModified();
+        callbacks.log(
+          pasted.components.length === 1
+            ? `Componente [${pasted.components[0].id}] pegado en el lienzo.`
+            : `Lote de ${pasted.components.length} componentes pegado en el lienzo.`,
+          "system",
+        );
+      }
+      return;
+    }
+
+    if (ctrl && key === "a") {
       e.preventDefault();
       callbacks.onSelectAll();
       callbacks.requestRender(true);
       return;
     }
 
-    if (ctrl && (e.key === "k" || e.key === "K")) {
+    if (ctrl && key === "k") {
       e.preventDefault();
       ComponentSpotlightModal.open((item) => {
         armStampTool({
@@ -586,13 +644,7 @@ export function attachCanvasInput(
       return;
     }
 
-    if (e.key === "f" || e.key === "F") {
-      callbacks.onFitAll();
-      callbacks.requestRender(true);
-      return;
-    }
-
-    if (e.key === "m" || e.key === "M") {
+    if (key === "m") {
       e.preventDefault();
       if (e.shiftKey) {
         orchestrator.mirrorSelectedComponentVertical();
@@ -605,7 +657,7 @@ export function attachCanvasInput(
       return;
     }
 
-    if (ctrl && (e.key === "d" || e.key === "D")) {
+    if (ctrl && key === "d") {
       e.preventDefault();
       orchestrator.duplicateSelected();
       callbacks.requestRender(true);
@@ -614,7 +666,7 @@ export function attachCanvasInput(
       return;
     }
 
-    if (e.key === "w" || e.key === "W") {
+    if (key === "w") {
       callbacks.onWireMode();
       callbacks.requestRender(true);
       return;
@@ -634,7 +686,7 @@ export function attachCanvasInput(
       return;
     }
 
-    if (e.key === "f" || e.key === "F" || e.key === "0") {
+    if (key === "f" || e.key === "0") {
       e.preventDefault();
       if (orchestrator.fitToScreen()) {
         callbacks.requestRender(true);
@@ -643,7 +695,7 @@ export function attachCanvasInput(
       return;
     }
 
-    if (e.key === "l" || e.key === "L") {
+    if (key === "l") {
       e.preventDefault();
       orchestrator.showWireLabels = !orchestrator.showWireLabels;
       const btnToggle = document.querySelector<HTMLButtonElement>("#btn-toggle-labels");
@@ -664,7 +716,7 @@ export function attachCanvasInput(
 
     if (!hasSelection) return;
 
-    if (e.key === "r" || e.key === "R") {
+    if (key === "r") {
       orchestrator.rotateSelectedComponent();
       if (orchestrator.selectedComponents.length > 0) {
         callbacks.log(
@@ -747,10 +799,21 @@ export function attachCanvasInput(
 
     showCanvasContextMenu(e, canvas, orchestrator, callbacks);
   };
+
+  const onMouseEnter = () => {
+    isMouseOverCanvas = true;
+  };
+
+  const onMouseLeave = (e: MouseEvent) => {
+    isMouseOverCanvas = false;
+    completeConnection(e);
+  };
+
   canvas.addEventListener("mousedown", onMouseDown);
   canvas.addEventListener("mousemove", onMouseMove);
   canvas.addEventListener("mouseup", completeConnection);
-  canvas.addEventListener("mouseleave", completeConnection);
+  canvas.addEventListener("mouseenter", onMouseEnter);
+  canvas.addEventListener("mouseleave", onMouseLeave);
   canvas.addEventListener("dblclick", onDblClick);
   canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("contextmenu", onContextMenu);
@@ -766,7 +829,8 @@ export function attachCanvasInput(
     canvas.removeEventListener("mousedown", onMouseDown);
     canvas.removeEventListener("mousemove", onMouseMove);
     canvas.removeEventListener("mouseup", completeConnection);
-    canvas.removeEventListener("mouseleave", completeConnection);
+    canvas.removeEventListener("mouseenter", onMouseEnter);
+    canvas.removeEventListener("mouseleave", onMouseLeave);
     canvas.removeEventListener("dblclick", onDblClick);
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("contextmenu", onContextMenu);

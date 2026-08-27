@@ -19,6 +19,8 @@ export type ContextMenuCallbacks = Pick<
   | "getPinNode"
   | "onFitAll"
   | "log"
+  | "onUndo"
+  | "onRedo"
 >;
 
 export function showCanvasContextMenu(
@@ -231,12 +233,40 @@ function populateComponentMenu(
     callbacks.onNetlistSync();
   }, "↕️"));
 
+  menu.appendChild(createMenuItem("Copiar", "Ctrl+C", () => {
+    const count = orchestrator.copySelected();
+    if (count > 0) {
+      callbacks.log(
+        count === 1
+          ? "Componente copiado al portapapeles."
+          : `Lote de ${count} elementos copiado al portapapeles.`,
+        "system",
+      );
+    }
+  }, "📋"));
+
+  menu.appendChild(createMenuItem("Cortar", "Ctrl+X", () => {
+    const count = orchestrator.cutSelected();
+    if (count > 0) {
+      callbacks.onSelectionChanged(null);
+      callbacks.onNetlistSync();
+      callbacks.requestRender(true);
+      callbacks.onCanvasModified();
+      callbacks.log(
+        count === 1
+          ? "Componente cortado al portapapeles."
+          : `Lote de ${count} elementos cortado al portapapeles.`,
+        "system",
+      );
+    }
+  }, "✂️"));
+
   menu.appendChild(createMenuItem("Duplicar", "Ctrl+D", () => {
     orchestrator.duplicateSelected();
     callbacks.requestRender(true);
     callbacks.onCanvasModified();
     callbacks.onNetlistSync();
-  }, "📋"));
+  }, "📑"));
 
   // Submenú Sondas
   const { wrapper: probeWrapper, submenu: probeSubmenu } = createSubmenu("Colocar Sonda Osciloscopio", "📍");
@@ -577,6 +607,36 @@ function populateCanvasMenu(
   menu.appendChild(viewWrapper);
 
   appendDivider(menu);
+
+  if (orchestrator.hasClipboardData()) {
+    menu.appendChild(createMenuItem("Pegar", "Ctrl+V", () => {
+      const pasted = orchestrator.paste(worldPt);
+      if (pasted && pasted.components.length > 0) {
+        callbacks.onNetlistSync();
+        callbacks.onSelectionChanged(
+          pasted.components.length === 1 ? pasted.components[0] : null,
+        );
+        callbacks.requestRender(true);
+        callbacks.onCanvasModified();
+        callbacks.log(
+          pasted.components.length === 1
+            ? `Componente [${pasted.components[0].id}] pegado en el lienzo.`
+            : `Lote de ${pasted.components.length} componentes pegado en el lienzo.`,
+          "system",
+        );
+      }
+    }, "📋"));
+  }
+
+  menu.appendChild(createMenuItem("Deshacer", "Ctrl+Z", () => {
+    callbacks.onUndo();
+    callbacks.requestRender(true);
+  }, "↩️"));
+
+  menu.appendChild(createMenuItem("Rehacer", "Ctrl+Y", () => {
+    callbacks.onRedo();
+    callbacks.requestRender(true);
+  }, "↪️"));
 
   menu.appendChild(createMenuItem("Seleccionar Todo", "Ctrl+A", () => {
     callbacks.onSelectAll();

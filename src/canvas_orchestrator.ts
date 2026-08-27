@@ -68,6 +68,7 @@ import {
   type ProbeBadges,
   type SParameterMarker,
 } from "./canvas/render_overlays";
+import { globalCircuitClipboard } from "./canvas/circuit_clipboard";
 
 export {
   copyComponentConfiguration,
@@ -988,6 +989,22 @@ export class CanvasOrchestrator {
   public mirrorSelectedComponentVertical(): void {
     mirrorSelectionVertical(this.selectedComponents, this.selectedComponent);
     this.syncWireConnections();
+  }
+
+  public copySelected(): number {
+    return globalCircuitClipboard.copy(this);
+  }
+
+  public cutSelected(): number {
+    return globalCircuitClipboard.cut(this);
+  }
+
+  public paste(targetPoint?: Point2D): { components: ComponentInstance[]; wires: WireInstance[] } | null {
+    return globalCircuitClipboard.paste(this, targetPoint);
+  }
+
+  public hasClipboardData(): boolean {
+    return globalCircuitClipboard.hasData();
   }
 
   public duplicateSelected(): void {

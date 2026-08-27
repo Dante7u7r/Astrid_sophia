@@ -162,6 +162,35 @@ describe("CanvasOrchestrator", () => {
       expect(err).toBeNull();
       expect(c1.id).toBe("R_LOAD");
     });
+
+    it("copia, corta y pega componentes conservando cables y propiedades", () => {
+      const r1 = orchestrator.addComponent("resistor", 100, 100, 1000);
+      const c1 = orchestrator.addComponent("capacitor", 200, 100, 1e-6);
+      orchestrator.connectPins(
+        { componentId: r1.id, pinIndex: 1, x: 140, y: 100 },
+        { componentId: c1.id, pinIndex: 0, x: 180, y: 100 },
+      );
+
+      orchestrator.selectedComponents = [r1, c1];
+      expect(orchestrator.hasClipboardData()).toBe(false);
+
+      const count = orchestrator.copySelected();
+      expect(count).toBe(2);
+      expect(orchestrator.hasClipboardData()).toBe(true);
+
+      const pasted = orchestrator.paste({ x: 300, y: 300 });
+      expect(pasted).not.toBeNull();
+      expect(pasted!.components.length).toBe(2);
+      expect(pasted!.wires.length).toBe(1);
+      expect(orchestrator.components.length).toBe(4);
+      expect(orchestrator.wires.length).toBe(2);
+
+      // Cortar los pegados
+      orchestrator.selectedComponents = pasted!.components;
+      const cutCount = orchestrator.cutSelected();
+      expect(cutCount).toBe(2);
+      expect(orchestrator.components.length).toBe(2);
+    });
   });
 
   describe("Conexionado y Enrutamiento de Cables", () => {
