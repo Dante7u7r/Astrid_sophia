@@ -55,20 +55,20 @@ export function hitTestOscilloscopeCursor(
   const pyV1 = centerY - (state.cursorV1 / vPerDiv) * (scale.height / 8) - offsetPx;
   const pyV2 = centerY - (state.cursorV2 / vPerDiv) * (scale.height / 8) - offsetPx;
 
-  // 1. Time Cursors & Bezel Tabs Check
+  // 1. Time Cursors & Bottom Bezel Tabs Check (avoids top HUD collision)
   if (testTime) {
     const handleTol = Math.max(tolerance * 1.5, 14);
-    if ((y <= 24 || y >= scale.height - 24) && Math.abs(x - pxT1) < handleTol) return "T1";
-    if ((y <= 24 || y >= scale.height - 24) && Math.abs(x - pxT2) < handleTol) return "T2";
+    if (y >= scale.height - 24 && Math.abs(x - pxT1) < handleTol) return "T1";
+    if (y >= scale.height - 24 && Math.abs(x - pxT2) < handleTol) return "T2";
     if (Math.abs(x - pxT1) < tolerance) return "T1";
     if (Math.abs(x - pxT2) < tolerance) return "T2";
   }
 
-  // 2. Voltage Cursors & Bezel Tabs Check
+  // 2. Voltage Cursors & Left Bezel Tabs Check (shifted to x = 20..80 to avoid ground marker collision)
   if (testVoltage) {
     const handleTol = Math.max(tolerance * 1.5, 14);
-    if ((x <= 42 || x >= scale.width - 42) && Math.abs(y - pyV1) < handleTol) return "V1";
-    if ((x <= 42 || x >= scale.width - 42) && Math.abs(y - pyV2) < handleTol) return "V2";
+    if (x >= 20 && x <= 80 && Math.abs(y - pyV1) < handleTol) return "V1";
+    if (x >= 20 && x <= 80 && Math.abs(y - pyV2) < handleTol) return "V2";
     if (Math.abs(y - pyV1) < tolerance) return "V1";
     if (Math.abs(y - pyV2) < tolerance) return "V2";
   }

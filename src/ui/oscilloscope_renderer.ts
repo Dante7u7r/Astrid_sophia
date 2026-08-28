@@ -503,7 +503,6 @@ export function drawOscilloscopeCursors(
   const hovered = options.hoveredCursor ?? null;
   const dragging = options.draggingCursor ?? null;
   const centerY = height / 2;
-  const prefix = options.sourceLabel ? `[${options.sourceLabel.toUpperCase()}] ` : "";
 
   ctx.save();
 
@@ -512,7 +511,6 @@ export function drawOscilloscopeCursors(
   const x2 = Math.round(cursorT2 * width) + 0.5;
   const t1Sec = cursorT1 * timeDivValue * 10;
   const t2Sec = cursorT2 * timeDivValue * 10;
-  const deltaTime = Math.abs(cursorT2 - cursorT1) * timeDivValue * 10;
 
   if (drawTime) {
     // --- T1 Cursor ---
@@ -539,34 +537,35 @@ export function drawOscilloscopeCursors(
     ctx.lineTo(x1, height);
     ctx.stroke();
 
-    // Top Bezel Handle Tab for T1
+    // Bottom Bezel Handle Tab for T1 (prevents collision with top HUD overlay)
     const t1Text = `T1: ${formatCursorTime(t1Sec)}`;
     ctx.font = "bold 9px var(--font-mono)";
     const t1W = Math.max(56, ctx.measureText(t1Text).width + 12);
     const t1TabX = Math.max(4, Math.min(width - t1W - 4, x1 - t1W / 2));
+    const t1TabY = height - 19;
 
     ctx.fillStyle = isT1Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
     ctx.strokeStyle = isT1Active ? "#FDE047" : "#FACC15";
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.roundRect(t1TabX, 3, t1W, 16, 3);
+    ctx.roundRect(t1TabX, t1TabY, t1W, 16, 3);
     ctx.fill();
     ctx.stroke();
 
-    // Small notch pointing down to line
+    // Small notch pointing up to vertical line
     ctx.fillStyle = isT1Active ? "#FDE047" : "#FACC15";
     ctx.beginPath();
-    ctx.moveTo(x1 - 3, 19);
-    ctx.lineTo(x1 + 3, 19);
-    ctx.lineTo(x1, 22);
+    ctx.moveTo(x1 - 3, t1TabY);
+    ctx.lineTo(x1 + 3, t1TabY);
+    ctx.lineTo(x1, t1TabY - 3);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = isT1Active ? "#FEF08A" : "#FACC15";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(t1Text, t1TabX + t1W / 2, 11);
+    ctx.fillText(t1Text, t1TabX + t1W / 2, t1TabY + 8);
 
     // --- T2 Cursor ---
     const isT2Active = hovered === "T2" || dragging === "T2";
@@ -591,32 +590,33 @@ export function drawOscilloscopeCursors(
     ctx.lineTo(x2, height);
     ctx.stroke();
 
-    // Top Bezel Handle Tab for T2
+    // Bottom Bezel Handle Tab for T2
     const t2Text = `T2: ${formatCursorTime(t2Sec)}`;
     const t2W = Math.max(56, ctx.measureText(t2Text).width + 12);
     const t2TabX = Math.max(4, Math.min(width - t2W - 4, x2 - t2W / 2));
+    const t2TabY = height - 19;
 
     ctx.fillStyle = isT2Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
     ctx.strokeStyle = isT2Active ? "#FDE047" : "#FACC15";
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.roundRect(t2TabX, 3, t2W, 16, 3);
+    ctx.roundRect(t2TabX, t2TabY, t2W, 16, 3);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = isT2Active ? "#FDE047" : "#FACC15";
     ctx.beginPath();
-    ctx.moveTo(x2 - 3, 19);
-    ctx.lineTo(x2 + 3, 19);
-    ctx.lineTo(x2, 22);
+    ctx.moveTo(x2 - 3, t2TabY);
+    ctx.lineTo(x2 + 3, t2TabY);
+    ctx.lineTo(x2, t2TabY - 3);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = isT2Active ? "#FEF08A" : "#FACC15";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(t2Text, t2TabX + t2W / 2, 11);
+    ctx.fillText(t2Text, t2TabX + t2W / 2, t2TabY + 8);
   }
 
   // 2. RENDER VOLTAGE CURSORS (V1 & V2)
@@ -624,7 +624,6 @@ export function drawOscilloscopeCursors(
   const v2Actual = isTrack && options.trackV2 !== undefined && options.trackV2 !== null ? options.trackV2 : cursorV2;
   const y1 = Math.round(centerY - (v1Actual / voltsPerDiv) * divHeight - voltageOffset) + 0.5;
   const y2 = Math.round(centerY - (v2Actual / voltsPerDiv) * divHeight - voltageOffset) + 0.5;
-  const deltaVoltage = Math.abs(v2Actual - v1Actual);
 
   if (drawVoltage) {
     // --- V1 Cursor ---
@@ -650,25 +649,35 @@ export function drawOscilloscopeCursors(
     ctx.lineTo(width, y1);
     ctx.stroke();
 
-    // Left Bezel Handle Tab for V1
+    // Left Bezel Handle Tab for V1 (offset to x=22 to clear ground tags at x=0..18)
     const v1Text = `V1: ${formatCursorVoltage(v1Actual)}`;
     ctx.font = "bold 9px var(--font-mono)";
     const v1W = Math.max(54, ctx.measureText(v1Text).width + 10);
     const v1TabY = Math.max(4, Math.min(height - 20, y1 - 8));
+    const v1TabX = 22;
 
     ctx.fillStyle = isV1Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
     ctx.strokeStyle = isV1Active ? "#FB7185" : "#F43F5E";
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.roundRect(2, v1TabY, v1W, 16, 3);
+    ctx.roundRect(v1TabX, v1TabY, v1W, 16, 3);
     ctx.fill();
     ctx.stroke();
+
+    // Left pointer notch
+    ctx.fillStyle = isV1Active ? "#FB7185" : "#F43F5E";
+    ctx.beginPath();
+    ctx.moveTo(v1TabX, y1 - 3);
+    ctx.lineTo(v1TabX, y1 + 3);
+    ctx.lineTo(v1TabX - 3, y1);
+    ctx.closePath();
+    ctx.fill();
 
     ctx.fillStyle = isV1Active ? "#FDA4AF" : "#F43F5E";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(v1Text, 2 + v1W / 2, v1TabY + 8);
+    ctx.fillText(v1Text, v1TabX + v1W / 2, v1TabY + 8);
 
     // --- V2 Cursor ---
     const isV2Active = hovered === "V2" || dragging === "V2";
@@ -693,24 +702,34 @@ export function drawOscilloscopeCursors(
     ctx.lineTo(width, y2);
     ctx.stroke();
 
-    // Left Bezel Handle Tab for V2
+    // Left Bezel Handle Tab for V2 (offset to x=22 to clear ground tags at x=0..18)
     const v2Text = `V2: ${formatCursorVoltage(v2Actual)}`;
     const v2W = Math.max(54, ctx.measureText(v2Text).width + 10);
     const v2TabY = Math.max(4, Math.min(height - 20, y2 - 8));
+    const v2TabX = 22;
 
     ctx.fillStyle = isV2Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
     ctx.strokeStyle = isV2Active ? "#FB7185" : "#F43F5E";
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.roundRect(2, v2TabY, v2W, 16, 3);
+    ctx.roundRect(v2TabX, v2TabY, v2W, 16, 3);
     ctx.fill();
     ctx.stroke();
+
+    // Left pointer notch
+    ctx.fillStyle = isV2Active ? "#FB7185" : "#F43F5E";
+    ctx.beginPath();
+    ctx.moveTo(v2TabX, y2 - 3);
+    ctx.lineTo(v2TabX, y2 + 3);
+    ctx.lineTo(v2TabX - 3, y2);
+    ctx.closePath();
+    ctx.fill();
 
     ctx.fillStyle = isV2Active ? "#FDA4AF" : "#F43F5E";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(v2Text, 2 + v2W / 2, v2TabY + 8);
+    ctx.fillText(v2Text, v2TabX + v2W / 2, v2TabY + 8);
   }
 
   // 3. TRACK MODE WAVEFORM CROSSHAIR MARKERS
@@ -765,56 +784,6 @@ export function drawOscilloscopeCursors(
 
     renderTrackTarget(x1, y1, "T1", v1Actual);
     renderTrackTarget(x2, y2, "T2", v2Actual);
-  }
-
-  // 4. ON-SCREEN DELTA HUD BADGE (Responsive & Anti-Collision)
-  // Only render on canvas if there is sufficient space so it does not collide with .osc-hud-overlay and TRIG badge
-  const canFitTopBadge = !options.suppressTopBadge && width >= 580 && height >= 200;
-  if (canFitTopBadge) {
-    const frequency = deltaTime > 0 ? 1 / deltaTime : 0;
-    const deltaSymbol = "\u0394";
-
-    let dtFormatted = `${(deltaTime * 1_000).toFixed(2)} ms`;
-    if (deltaTime < 1e-6) {
-      dtFormatted = `${(deltaTime * 1e9).toFixed(1)} ns`;
-    } else if (deltaTime < 1e-3) {
-      dtFormatted = `${(deltaTime * 1e6).toFixed(1)} µs`;
-    } else if (deltaTime >= 1.0) {
-      dtFormatted = `${deltaTime.toFixed(2)} s`;
-    }
-
-    let freqFormatted = `${frequency.toFixed(1)} Hz`;
-    if (frequency >= 1e6) {
-      freqFormatted = `${(frequency / 1e6).toFixed(2)} MHz`;
-    } else if (frequency >= 1e3) {
-      freqFormatted = `${(frequency / 1e3).toFixed(2)} kHz`;
-    }
-
-    let label = `${prefix}${deltaSymbol}t: ${dtFormatted} | 1/${deltaSymbol}t: ${freqFormatted} | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
-    if (options.signalPeriod && options.signalPeriod > 0) {
-      const phaseDeg = ((deltaTime / options.signalPeriod) * 360) % 360;
-      label += ` | Fase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
-    }
-
-    ctx.font = "bold 9px var(--font-sans)";
-    const textWidth = ctx.measureText(label).width;
-    const badgeW = textWidth + 18;
-    const badgeX = width / 2 - badgeW / 2;
-    const badgeY = 6;
-
-    ctx.fillStyle = "rgba(10, 15, 25, 0.92)";
-    ctx.strokeStyle = "rgba(251, 191, 36, 0.6)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, 18, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "hsl(174, 97%, 69%)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, width / 2, badgeY + 9);
   }
 
   ctx.restore();

@@ -39,10 +39,10 @@ describe("oscilloscope_cursor_model", () => {
   });
 
   it("detecta pestañas de manijas en los bordes con tolerancia ampliada", () => {
-    // Manija superior T1 en y=10, x=108 (cerca de pxT1=100)
-    expect(hitTestOscilloscopeCursor(108, 10, state, legacyScale)).toBe("T1");
-    // Manija lateral V1 en x=15, y=82 (cerca de pyV1=75)
-    expect(hitTestOscilloscopeCursor(15, 82, state, legacyScale)).toBe("V1");
+    // Manija inferior T1 en y=190 (cerca de pxT1=100 con height=200)
+    expect(hitTestOscilloscopeCursor(108, 190, state, legacyScale)).toBe("T1");
+    // Manija lateral V1 en x=35, y=82 (en zona desplazada x=20..80, pyV1=75)
+    expect(hitTestOscilloscopeCursor(35, 82, state, legacyScale)).toBe("V1");
   });
 
   it("filtra cursores segun el modo activo", () => {

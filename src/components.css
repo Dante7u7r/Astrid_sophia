@@ -2602,8 +2602,16 @@ select.prop-input option,
 .meas-digital-card.ch4 .meas-badge { background: rgba(74, 222, 128, 0.2); color: #4ADE80; }
 .meas-digital-card.cursors .meas-badge { background: rgba(250, 204, 21, 0.25); color: #FDE047; letter-spacing: 0.5px; }
 .meas-digital-card.cursors .cell-lbl { color: #93c5fd; }
-.meas-digital-card.cursors .cell-num { color: #fef08a; font-size: 0.52rem; }
-
+.meas-digital-card.cursors .cell-num { color: #fef08a; font-size: 0.50rem; white-space: nowrap; }
+.meas-cursors-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr) 1.35fr;
+  gap: 2px;
+}
+#meas-cursor-v1v2 {
+  font-size: 0.44rem;
+  letter-spacing: -0.2px;
+}
 
 .meas-node-badge {
   font-size: 0.48rem;

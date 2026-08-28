@@ -210,33 +210,8 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
     expect(ctx.roundRect).toHaveBeenCalled();
   });
 
-  it("renderiza etiqueta de canal origen cuando se especifica sourceLabel", () => {
+  it("dibuja manijas en bordes inferiores y laterales con formato de tiempo y voltaje", () => {
     const ctx = createMockContext();
-    drawOscilloscopeCursors(
-      ctx,
-      800,
-      400,
-      50,
-      0.2,
-      0.7,
-      1.0,
-      3.5,
-      5.0,
-      0,
-      0.001,
-      undefined,
-      "ch2",
-    );
-    expect(ctx.fillText).toHaveBeenCalledWith(
-      expect.stringContaining("[CH2]"),
-      expect.any(Number),
-      expect.any(Number),
-    );
-  });
-
-  it("formatea correctamente cursores en escalas de nanosegundos y MHz", () => {
-    const ctx = createMockContext();
-    // DeltaT = 0.5 * 1e-8 * 10 = 50 ns -> freq = 20 MHz
     drawOscilloscopeCursors(
       ctx,
       800,
@@ -251,12 +226,22 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
       1e-8,
     );
     expect(ctx.fillText).toHaveBeenCalledWith(
-      expect.stringContaining("50.0 ns"),
+      expect.stringContaining("T1: 10.0 ns"),
       expect.any(Number),
       expect.any(Number),
     );
     expect(ctx.fillText).toHaveBeenCalledWith(
-      expect.stringContaining("20.00 MHz"),
+      expect.stringContaining("T2: 60.0 ns"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("V1: +1.00 V"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("V2: +2.00 V"),
       expect.any(Number),
       expect.any(Number),
     );
@@ -295,31 +280,6 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
       expect.any(Number),
       expect.any(Number),
     );
-  });
-
-  it("omite el badge superior en anchos compactos o minimizados para evitar solapamiento", () => {
-    const ctx = createMockContext();
-    drawOscilloscopeCursors(
-      ctx,
-      400, // width < 580 (compacto)
-      180, // height < 200
-      25,
-      0.2,
-      0.7,
-      1.0,
-      2.0,
-      1.0,
-      0,
-      0.001,
-      {
-        mode: "time",
-        suppressTopBadge: false,
-      },
-    );
-
-    // Solo debe dibujar las manijas T1 y T2, sin dibujar el badge superior centrado
-    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("T1:"), expect.any(Number), expect.any(Number));
-    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("T2:"), expect.any(Number), expect.any(Number));
   });
 });
 

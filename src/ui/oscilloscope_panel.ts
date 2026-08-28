@@ -1694,7 +1694,7 @@ export class OscilloscopePanel {
         }
         if (t1El) t1El.textContent = formatCursorTime(this.cursorT1 * this.timeDivValue * 10);
         if (t2El) t2El.textContent = formatCursorTime(this.cursorT2 * this.timeDivValue * 10);
-        if (v1v2El) v1v2El.textContent = `${formatCursorVoltage(v1Actual)} / ${formatCursorVoltage(v2Actual)}`;
+        if (v1v2El) v1v2El.textContent = `${formatCursorVoltage(v1Actual)} | ${formatCursorVoltage(v2Actual)}`;
       }
     }
   }
