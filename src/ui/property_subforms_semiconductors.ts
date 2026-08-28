@@ -21,6 +21,7 @@ export const SEMICONDUCTOR_TYPES: readonly ComponentInstance["type"][] = [
   "pjf",
   "opamp",
   "opamp_ideal",
+  "comparator_ideal",
 ];
 
 function createAdvancedInput(id: string, label: string, value: string | number): string {
@@ -78,7 +79,7 @@ export function updateSemiconductorsSubform(comp: ComponentInstance): void {
     models = Object.fromEntries(Object.entries(COMMERCIAL_JFETS).filter(([, m]) => m.polarity === "njf"));
   } else if (comp.type === "pjf") {
     models = Object.fromEntries(Object.entries(COMMERCIAL_JFETS).filter(([, m]) => m.polarity === "pjf"));
-  } else if (comp.type === "opamp" || comp.type === "opamp_ideal") {
+  } else if (comp.type === "opamp" || comp.type === "opamp_ideal" || comp.type === "comparator_ideal") {
     models = COMMERCIAL_OPAMPS;
   }
 
@@ -275,7 +276,7 @@ export function applySemiconductorsSubform(selected: ComponentInstance): void {
           selected.jfetCgd = jm.cgd;
           selected.value = jm.vto;
         }
-      } else if (selected.type === "opamp" || selected.type === "opamp_ideal") {
+      } else if (selected.type === "opamp" || selected.type === "opamp_ideal" || selected.type === "comparator_ideal") {
         const om = COMMERCIAL_OPAMPS[modelKey];
         if (om) {
           selected.openLoopGain = om.aol;

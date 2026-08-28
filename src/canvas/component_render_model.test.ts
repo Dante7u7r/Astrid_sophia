@@ -57,6 +57,7 @@ describe("component_render_model", () => {
     expect(shouldDrawStandardLeads("resistor")).toBe(true);
     expect(shouldDrawStandardLeads("opamp")).toBe(false);
     expect(shouldDrawStandardLeads("opamp_ideal")).toBe(false);
+    expect(shouldDrawStandardLeads("comparator_ideal")).toBe(false);
     expect(shouldDrawValueLabel("resistor")).toBe(true);
     expect(shouldDrawValueLabel("dmm")).toBe(false);
   });

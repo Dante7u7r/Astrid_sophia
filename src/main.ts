@@ -702,10 +702,10 @@ window.addEventListener("DOMContentLoaded", () => {
       instrumentsDock?.switchTab(tabId);
     },
     onActionTrigger: (actionId) => {
-      if (actionId === "load_demo_rc") {
+      if (actionId === "load_demo_rc" || actionId === "load_demo_amp") {
         const selectDemo = document.querySelector<HTMLSelectElement>("#btn-open-demo");
         if (selectDemo) {
-          selectDemo.value = "01_filtro_rc.biaani";
+          selectDemo.value = "01_amplificador_no_inversor.biaani";
           selectDemo.dispatchEvent(new Event("change"));
         }
       } else if (actionId === "open_oscilloscope") {

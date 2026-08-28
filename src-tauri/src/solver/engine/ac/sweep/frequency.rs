@@ -291,7 +291,7 @@ pub(super) fn solve_ac_frequencies(
                             }
                         }
                     }
-                    "opamp" | "opamp_ideal" => {
+                    "opamp" | "opamp_ideal" | "comparator_ideal" => {
                         let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
                         let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
                         let pin_out = if comp.pins.len() >= 5 {

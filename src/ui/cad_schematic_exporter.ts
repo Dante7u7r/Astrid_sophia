@@ -390,6 +390,7 @@ function renderComponentSvgSymbol(comp: ComponentInstance, palette: ColorPalette
 
     case "opamp":
     case "opamp_ideal":
+    case "comparator_ideal":
       s += `      <polygon points="-24,-24 -24,24 24,0" fill="${palette.componentBody}" stroke="${palette.componentStroke}" stroke-width="1.8" />\n`;
       s += `      <line x1="-34" y1="-12" x2="-24" y2="-12" stroke="${palette.componentStroke}" stroke-width="1.8" />\n`;
       s += `      <line x1="-34" y1="12" x2="-24" y2="12" stroke="${palette.componentStroke}" stroke-width="1.8" />\n`;

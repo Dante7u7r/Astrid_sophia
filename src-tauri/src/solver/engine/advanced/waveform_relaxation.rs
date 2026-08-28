@@ -332,7 +332,7 @@ pub fn partition_circuit_for_relaxation(
                 }
                 nodes
             }
-            "opamp" | "opamp_ideal" => {
+            "opamp" | "opamp_ideal" | "comparator_ideal" => {
                 if comp.pins.len() >= 3 && filter_valid(&comp.pins[2]) {
                     vec![comp.pins[2].clone()]
                 } else {
@@ -380,7 +380,7 @@ pub fn partition_circuit_for_relaxation(
                     Vec::new()
                 }
             }
-            "opamp" | "opamp_ideal" => {
+            "opamp" | "opamp_ideal" | "comparator_ideal" => {
                 let mut inputs = Vec::new();
                 if !comp.pins.is_empty() {
                     inputs.push(comp.pins[0].clone());

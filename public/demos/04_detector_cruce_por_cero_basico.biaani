@@ -1,0 +1,443 @@
+{
+  "version": "3.0",
+  "components": [
+    {
+      "id": "V1",
+      "type": "vsource",
+      "value": 10,
+      "x": 120,
+      "y": 300,
+      "rotation": 90,
+      "amplitude": 10,
+      "frequency": 60,
+      "offset": 0,
+      "dutyCycle": 0.5,
+      "phase": 0,
+      "sourceResistance": 0,
+      "waveType": "sine"
+    },
+    {
+      "id": "GND1",
+      "type": "ground",
+      "value": 0,
+      "x": 120,
+      "y": 420,
+      "rotation": 0
+    },
+    {
+      "id": "DMM1",
+      "type": "dmm",
+      "value": "V",
+      "x": 200,
+      "y": 180,
+      "rotation": 0
+    },
+    {
+      "id": "NET_VIN",
+      "type": "net_label",
+      "value": "V_IN",
+      "x": 240,
+      "y": 260,
+      "rotation": 0,
+      "terminalType": "test_point"
+    },
+    {
+      "id": "GND2",
+      "type": "ground",
+      "value": 0,
+      "x": 240,
+      "y": 380,
+      "rotation": 0
+    },
+    {
+      "id": "U1",
+      "type": "opamp",
+      "value": 0,
+      "x": 360,
+      "y": 300,
+      "rotation": 0,
+      "offsetVoltage": 0.002,
+      "openLoopGain": 100000
+    },
+    {
+      "id": "NET_VCC",
+      "type": "net_label",
+      "value": "15",
+      "x": 360,
+      "y": 220,
+      "rotation": 0,
+      "voltage": 15,
+      "terminalStyle": "arrow",
+      "terminalType": "power"
+    },
+    {
+      "id": "NET_VEE",
+      "type": "net_label",
+      "value": "-15",
+      "x": 360,
+      "y": 380,
+      "rotation": 0,
+      "voltage": -15,
+      "terminalStyle": "arrow",
+      "terminalType": "power"
+    },
+    {
+      "id": "DMM2",
+      "type": "dmm",
+      "value": "A",
+      "x": 460,
+      "y": 300,
+      "rotation": 0
+    },
+    {
+      "id": "RL1",
+      "type": "resistor",
+      "value": 10000,
+      "x": 560,
+      "y": 360,
+      "rotation": 90,
+      "tolerance": 1,
+      "powerRating": 0.25
+    },
+    {
+      "id": "NET_VOUT",
+      "type": "net_label",
+      "value": "V_ZCD_OUT",
+      "x": 620,
+      "y": 300,
+      "rotation": 0,
+      "terminalType": "test_point"
+    },
+    {
+      "id": "GND3",
+      "type": "ground",
+      "value": 0,
+      "x": 560,
+      "y": 440,
+      "rotation": 0
+    }
+  ],
+  "wires": [
+    {
+      "id": "wire_V1_p1_to_GND1_p0",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 1,
+        "x": 120,
+        "y": 340,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "GND1",
+        "pinIndex": 0,
+        "x": 120,
+        "y": 400,
+        "label": "GND"
+      },
+      "points": [
+        { "x": 120, "y": 340 },
+        { "x": 120, "y": 400 }
+      ]
+    },
+    {
+      "id": "wire_V1_p0_to_NET_VIN_p0",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 0,
+        "x": 120,
+        "y": 260,
+        "label": "+"
+      },
+      "to": {
+        "componentId": "NET_VIN",
+        "pinIndex": 0,
+        "x": 240,
+        "y": 260,
+        "label": "NET"
+      },
+      "points": [
+        { "x": 120, "y": 260 },
+        { "x": 240, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_DMM1_p0_to_V1_p0",
+      "from": {
+        "componentId": "DMM1",
+        "pinIndex": 0,
+        "x": 170,
+        "y": 180,
+        "label": "+"
+      },
+      "to": {
+        "componentId": "V1",
+        "pinIndex": 0,
+        "x": 120,
+        "y": 260,
+        "label": "+"
+      },
+      "points": [
+        { "x": 170, "y": 180 },
+        { "x": 120, "y": 180 },
+        { "x": 120, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_DMM1_p1_to_GND1_p0",
+      "from": {
+        "componentId": "DMM1",
+        "pinIndex": 1,
+        "x": 230,
+        "y": 180,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "GND1",
+        "pinIndex": 0,
+        "x": 120,
+        "y": 400,
+        "label": "GND"
+      },
+      "points": [
+        { "x": 230, "y": 180 },
+        { "x": 230, "y": 400 },
+        { "x": 120, "y": 400 }
+      ]
+    },
+    {
+      "id": "wire_NET_VIN_p0_to_U1_p0",
+      "from": {
+        "componentId": "NET_VIN",
+        "pinIndex": 0,
+        "x": 240,
+        "y": 260,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "U1",
+        "pinIndex": 0,
+        "x": 320,
+        "y": 285,
+        "label": "+",
+        "name": "In+"
+      },
+      "points": [
+        { "x": 240, "y": 260 },
+        { "x": 280, "y": 260 },
+        { "x": 280, "y": 285 },
+        { "x": 320, "y": 285 }
+      ]
+    },
+    {
+      "id": "wire_GND2_p0_to_U1_p1",
+      "from": {
+        "componentId": "GND2",
+        "pinIndex": 0,
+        "x": 240,
+        "y": 360,
+        "label": "GND"
+      },
+      "to": {
+        "componentId": "U1",
+        "pinIndex": 1,
+        "x": 320,
+        "y": 315,
+        "label": "-",
+        "name": "In-"
+      },
+      "points": [
+        { "x": 240, "y": 360 },
+        { "x": 280, "y": 360 },
+        { "x": 280, "y": 315 },
+        { "x": 320, "y": 315 }
+      ]
+    },
+    {
+      "id": "wire_NET_VCC_p0_to_U1_p2",
+      "from": {
+        "componentId": "NET_VCC",
+        "pinIndex": 0,
+        "x": 360,
+        "y": 220,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "U1",
+        "pinIndex": 2,
+        "x": 360,
+        "y": 260,
+        "label": "V+",
+        "name": "VCC"
+      },
+      "points": [
+        { "x": 360, "y": 220 },
+        { "x": 360, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_NET_VEE_p0_to_U1_p3",
+      "from": {
+        "componentId": "NET_VEE",
+        "pinIndex": 0,
+        "x": 360,
+        "y": 380,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "U1",
+        "pinIndex": 3,
+        "x": 360,
+        "y": 340,
+        "label": "V-",
+        "name": "VEE"
+      },
+      "points": [
+        { "x": 360, "y": 380 },
+        { "x": 360, "y": 340 }
+      ]
+    },
+    {
+      "id": "wire_U1_p4_to_DMM2_p0",
+      "from": {
+        "componentId": "U1",
+        "pinIndex": 4,
+        "x": 400,
+        "y": 300,
+        "label": "OUT",
+        "name": "Salida"
+      },
+      "to": {
+        "componentId": "DMM2",
+        "pinIndex": 0,
+        "x": 430,
+        "y": 300,
+        "label": "+",
+        "name": "Terminal Positivo (V·Ω·mA)"
+      },
+      "points": [
+        { "x": 400, "y": 300 },
+        { "x": 430, "y": 300 }
+      ]
+    },
+    {
+      "id": "wire_DMM2_p1_to_RL1_p0",
+      "from": {
+        "componentId": "DMM2",
+        "pinIndex": 1,
+        "x": 490,
+        "y": 300,
+        "label": "-",
+        "name": "Terminal Común (COM)"
+      },
+      "to": {
+        "componentId": "RL1",
+        "pinIndex": 0,
+        "x": 560,
+        "y": 320,
+        "label": "1"
+      },
+      "points": [
+        { "x": 490, "y": 300 },
+        { "x": 560, "y": 300 },
+        { "x": 560, "y": 320 }
+      ]
+    },
+    {
+      "id": "wire_RL1_p0_to_NET_VOUT_p0",
+      "from": {
+        "componentId": "RL1",
+        "pinIndex": 0,
+        "x": 560,
+        "y": 320,
+        "label": "1"
+      },
+      "to": {
+        "componentId": "NET_VOUT",
+        "pinIndex": 0,
+        "x": 620,
+        "y": 300,
+        "label": "NET"
+      },
+      "points": [
+        { "x": 560, "y": 320 },
+        { "x": 560, "y": 300 },
+        { "x": 620, "y": 300 }
+      ]
+    },
+    {
+      "id": "wire_RL1_p1_to_GND3_p0",
+      "from": {
+        "componentId": "RL1",
+        "pinIndex": 1,
+        "x": 560,
+        "y": 400,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "GND3",
+        "pinIndex": 0,
+        "x": 560,
+        "y": 420,
+        "label": "GND"
+      },
+      "points": [
+        { "x": 560, "y": 400 },
+        { "x": 560, "y": 420 }
+      ]
+    }
+  ],
+  "viewport": {
+    "zoom": 1.2,
+    "offsetX": 50,
+    "offsetY": 20
+  },
+  "simSettings": {
+    "dt": 0.00005,
+    "tolerance": 0.00001,
+    "maxIterations": 100,
+    "transientDuration": 0.05
+  },
+  "activeAnalysisMode": "TRAN",
+  "probes": {
+    "ch1ProbeNode": "1",
+    "ch2ProbeNode": "4",
+    "ch3ProbeNode": "0",
+    "ch4ProbeNode": "0"
+  },
+  "sparPorts": [],
+  "oscilloscope": {
+    "channelsEnabled": [
+      true,
+      true,
+      false,
+      false
+    ],
+    "voltsPerDiv": [
+      5,
+      5,
+      1,
+      1
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "timeDivValue": 0.005,
+    "isXyMode": false,
+    "isCursorsEnabled": true,
+    "isMathEnabled": false,
+    "mathExpression": "CH1 - CH2",
+    "mathVoltsPerDiv": 5,
+    "mathOffset": 0,
+    "cursorTargetChannel": "ch1",
+    "triggerChannel": "ch1",
+    "triggerEdge": "rising",
+    "triggerLevel": 0,
+    "cursorT1": 0.00833,
+    "cursorT2": 0.01667,
+    "cursorV1": 0,
+    "cursorV2": 0
+  }
+}

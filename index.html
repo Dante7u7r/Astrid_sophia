@@ -32,15 +32,11 @@
             </button>
             <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo" aria-label="Cargar circuito de ejemplo">
               <option value="">📋 Demos…</option>
-              <option value="01_filtro_rc.biaani">Filtro RC pasa-bajos</option>
-              <option value="02_puente_rectificador.biaani">Puente rectificador</option>
-              <option value="03_arduino_led.biaani">Arduino + LED</option>
-              <option value="04_amp_bjt_bode.biaani">Amp BJT (Bode)</option>
-              <option value="05_amplificador_opamp.biaani">Amp Op-Amp Inversor</option>
-              <option value="06_inversor_cmos.biaani">Inversor Digital CMOS</option>
-              <option value="07_rlc_resonante.biaani">Circuito RLC Resonante</option>
-              <option value="08_control_rele_interactivo.biaani">Control con Relé Interactivo</option>
-              <option value="09_integrador_opamp.biaani">Integrador Op-Amp</option>
+              <option value="01_amplificador_no_inversor.biaani">1. Amplificador No Inversor (Op-Amp)</option>
+              <option value="02_rectificador_filtro_c.biaani">2. Rectificador con Filtro C</option>
+              <option value="03_puente_wheatstone_desbalanceado.biaani">3. Puente de Wheatstone Desbalanceado</option>
+              <option value="04_detector_cruce_por_cero_basico.biaani">4. Detector Cruce por Cero (Op-Amp)</option>
+              <option value="05_detector_cruce_por_cero_aislado.biaani">5. Detector Cruce por Cero Aislado (Optoacoplador)</option>
             </select>
             <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
               <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
@@ -285,6 +281,23 @@
                         <div class="meas-cell"><span class="cell-lbl">Duty</span><span class="cell-num" id="meas-duty-ch4">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Tr</span><span class="cell-num" id="meas-tr-ch4">--</span></div>
                         <div class="meas-cell"><span class="cell-lbl">Tf</span><span class="cell-num" id="meas-tf-ch4">--</span></div>
+                      </div>
+                    </div>
+
+                    <!-- Cursors Telemetry Readout (Dedicated Anti-Collision Card) -->
+                    <div id="osc-meas-cursors" class="meas-digital-card cursors">
+                      <div class="meas-card-header">
+                        <span class="meas-badge cursor-badge">📏 CURSORES</span>
+                        <span class="meas-node-badge" id="osc-meas-cursor-mode-badge">Modo: Ambos (XY)</span>
+                      </div>
+                      <div class="meas-metrics-grid meas-cursors-grid">
+                        <div class="meas-cell"><span class="cell-lbl">Δt</span><span class="cell-num" id="meas-cursor-dt">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">1/Δt (f)</span><span class="cell-num" id="meas-cursor-freq">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">ΔV</span><span class="cell-num" id="meas-cursor-dv">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">ΔV/Δt</span><span class="cell-num" id="meas-cursor-slew">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">T1</span><span class="cell-num" id="meas-cursor-t1">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">T2</span><span class="cell-num" id="meas-cursor-t2">--</span></div>
+                        <div class="meas-cell"><span class="cell-lbl">V1 / V2</span><span class="cell-num" id="meas-cursor-v1v2">--</span></div>
                       </div>
                     </div>
                   </div>
@@ -1225,7 +1238,8 @@
             </div>
             <div class="property-group">
               <label class="property-label" for="settings-transient-duration-input">Duración transitoria (s)</label>
-              <input id="settings-transient-duration-input" class="prop-input" type="number" min="0.001" max="600" step="any" value="10" />
+              <input id="settings-transient-duration-input" class="prop-input" type="number" min="0" max="3600" step="any" value="0" placeholder="0 = Infinito (continuo)" />
+              <span class="property-hint" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">0 = Simulación continua indefinida (sin límite de tiempo)</span>
             </div>
             <div class="property-group">
               <label class="property-label" for="settings-tol-input">Tolerancia DC/TRAN/PSS</label>

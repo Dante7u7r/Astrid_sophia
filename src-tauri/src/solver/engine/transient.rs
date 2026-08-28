@@ -137,7 +137,11 @@ pub(crate) fn solve_transient_circuit_inner<F>(
 where
     F: FnMut(&TimeStepResult) -> bool,
 {
-    settings.validate()?;
+    if live_run_id.is_some() {
+        settings.validate_interactive()?;
+    } else {
+        settings.validate()?;
+    }
     numerical_settings.validate()?;
     let n = crate::topology::validate_netlist_topology(netlist, false)?;
     let (vt, _is_temp) = get_thermal_parameters(netlist.temperature, None);
@@ -640,6 +644,9 @@ where
                     accepted_dt,
                 );
 
+                if live_run_id.is_some() {
+                    results.clear();
+                }
                 results.push(TimeStepResult {
                     time: accepted_time,
                     node_voltages,

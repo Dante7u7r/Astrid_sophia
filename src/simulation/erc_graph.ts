@@ -41,6 +41,7 @@ function dcConnectivityPairs(type: string, pinCount: number): readonly (readonly
     case "opamp":
       return [[0, 1], [4, "0"]];
     case "opamp_ideal":
+    case "comparator_ideal":
       return [[0, 1], [2, "0"]];
     case "not_gate":
       return [[1, "0"]];

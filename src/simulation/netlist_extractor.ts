@@ -715,7 +715,7 @@ export function extractElectricalNetlist(
         l2_id: `${comp.id}__L2`,
         k_coeff: k,
       });
-    } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal') {
+    } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal' || comp.type === 'comparator_ideal') {
       const pinsMapped = getComponentNodes(pinsKeys);
 
       let pin0Node = "0"; // In+
@@ -724,7 +724,7 @@ export function extractElectricalNetlist(
       let pin3Node = "0"; // V-
       let pin4Node = "0"; // Out
 
-      if (comp.type === 'opamp_ideal') {
+      if (comp.type === 'opamp_ideal' || comp.type === 'comparator_ideal') {
         pin0Node = pinsMapped[0] || "0"; // In+
         pin1Node = pinsMapped[1] || "0"; // In-
         pin4Node = pinsMapped[2] || "0"; // Out

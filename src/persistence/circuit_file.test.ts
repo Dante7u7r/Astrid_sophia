@@ -210,11 +210,16 @@ describe("archivo .astryd 3.0", () => {
       ch3ProbeNode: "3",
       ch4ProbeNode: "4",
     });
-    expect(parsed.data.simSettings.transientDuration).toBe(10);
+    expect(parsed.data.simSettings.transientDuration).toBe(0);
   });
 
   test("conserva y limita la duración transitoria", () => {
     const snapshot = completeSnapshot();
+    snapshot.simSettings.transientDuration = 0;
+    const parsedZero = parseCircuitFile(serializeCircuitFile(snapshot));
+    expect(parsedZero.ok).toBe(true);
+    if (parsedZero.ok) expect(parsedZero.data.simSettings.transientDuration).toBe(0);
+
     snapshot.simSettings.transientDuration = 12;
     const parsed = parseCircuitFile(serializeCircuitFile(snapshot));
 
@@ -225,7 +230,7 @@ describe("archivo .astryd 3.0", () => {
       version: "3.0",
       components: [],
       wires: [],
-      simSettings: { transientDuration: 601 },
+      simSettings: { transientDuration: 3601 },
     }));
     expect(invalid.ok).toBe(false);
   });

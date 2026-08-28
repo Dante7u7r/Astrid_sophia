@@ -54,6 +54,7 @@ import {
 import {
   CccsDefinition,
   CcvsDefinition,
+  ComparatorIdealDefinition,
   IsourceDefinition,
   OpampDefinition,
   OpampIdealDefinition,
@@ -172,6 +173,7 @@ export const ALL_COMPONENT_DEFINITIONS: readonly ComponentDefinition[] = [
   CccsDefinition,
   OpampDefinition,
   OpampIdealDefinition,
+  ComparatorIdealDefinition,
 
   // Actuadores e Interruptores
   LampDefinition,

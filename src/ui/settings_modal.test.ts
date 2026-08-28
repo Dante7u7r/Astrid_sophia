@@ -112,6 +112,22 @@ describe("SettingsModal", () => {
     expect(modal.getAttribute("aria-hidden")).toBe("true");
   });
 
+  test("guarda duración transitoria 0 como modo continuo infinito", () => {
+    const onSave = vi.fn();
+    const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement;
+    new SettingsModal({ dt: 0.001, tolerance: 0.00001, maxIterations: 80, transientDuration: 10 }, onSave);
+    trigger.click();
+
+    (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "0";
+    (document.querySelector("#btn-save-settings") as HTMLButtonElement).click();
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transientDuration: 0,
+      }),
+    );
+  });
+
   test("rechaza valores no físicos y mantiene abierto el diálogo", () => {
     const onSave = vi.fn();
     const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement;
@@ -120,7 +136,7 @@ describe("SettingsModal", () => {
     trigger.click();
 
     (document.querySelector("#settings-dt-input") as HTMLInputElement).value = "-0.001";
-    (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "0";
+    (document.querySelector("#settings-transient-duration-input") as HTMLInputElement).value = "-5";
     (document.querySelector("#settings-tol-input") as HTMLInputElement).value = "NaN";
     (document.querySelector("#settings-iter-input") as HTMLInputElement).value = "0";
     (document.querySelector("#btn-save-settings") as HTMLButtonElement).click();

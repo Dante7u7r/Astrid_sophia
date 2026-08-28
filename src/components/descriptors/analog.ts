@@ -188,6 +188,81 @@ export const OpampIdealDefinition: ComponentDefinition = {
   },
 };
 
+export const ComparatorIdealDefinition: ComponentDefinition = {
+  type: "comparator_ideal",
+  name: "Comparador Ideal (3 pines)",
+  category: "analogicos",
+  prefix: "U",
+  defaultProperties: { value: 0, openLoopGain: 1000000 },
+  halfExtents: { halfW: 45, halfH: 35 },
+  hasStandardLeads: false,
+  optionalFloatingPins: [2], // Salida abierta
+  getPins: () => [
+    { index: 0, x: -40, y: -15, label: "+", name: "In+" },
+    { index: 1, x: -40, y: 15, label: "-", name: "In-" },
+    { index: 2, x: 40, y: 0, label: "OUT", name: "Salida" },
+  ],
+  render: (ctx, comp, state, options) => {
+    if (options.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+
+    const vInPlus = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const vInMinus = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const isHigh = vInPlus > vInMinus;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+
+    ctx.save();
+    // Triángulo principal
+    ctx.beginPath();
+    ctx.moveTo(-25, -30);
+    ctx.lineTo(-25, 30);
+    ctx.lineTo(25, 0);
+    ctx.closePath();
+    ctx.fillStyle = isHigh
+      ? (isClassroom ? "rgba(16, 185, 129, 0.18)" : "rgba(16, 185, 129, 0.22)")
+      : (isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.85)");
+    ctx.fill();
+    ctx.strokeStyle = isHigh ? "#10B981" : state.color;
+    ctx.lineWidth = state.lineWidth;
+    ctx.stroke();
+
+    // Terminales (+ y -) y salida
+    ctx.beginPath();
+    ctx.moveTo(-40, -15);
+    ctx.lineTo(-25, -15);
+    ctx.moveTo(-40, 15);
+    ctx.lineTo(-25, 15);
+    ctx.moveTo(25, 0);
+    ctx.lineTo(40, 0);
+    ctx.stroke();
+
+    // Plus (+) en pin 0
+    ctx.strokeStyle = state.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-21, -15);
+    ctx.lineTo(-15, -15);
+    ctx.moveTo(-18, -18);
+    ctx.lineTo(-18, -12);
+
+    // Minus (-) en pin 1
+    ctx.moveTo(-21, 15);
+    ctx.lineTo(-15, 15);
+    ctx.stroke();
+
+    // Distintivo de comparador en el centro: "COMP"
+    ctx.fillStyle = isHigh ? "#10B981" : (isClassroom ? "#64748B" : "#94A3B8");
+    ctx.font = "bold 8px 'Inter', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("COMP", -2, 0);
+
+    ctx.restore();
+  },
+};
+
 /**
  * Dibuja un glifo miniatura de la forma de onda dentro del círculo de la fuente.
  * Se invoca solo cuando waveType !== "dc" y !== undefined.

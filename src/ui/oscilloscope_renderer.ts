@@ -7,12 +7,26 @@ import {
 } from "./oscilloscope_model";
 import type { AcSweepResult, PvtTrace, TimeStepResult } from "./oscilloscope_panel";
 import { getInstrumentThemeColors } from "./instrument_theme";
+import type { CursorMode, OscilloscopeCursor } from "./oscilloscope_cursor_model";
 
 export interface OscilloscopeChannelView {
   node: string | null;
   color: string;
   active: boolean;
 }
+
+export interface OscilloscopeCursorOptions {
+  mode?: CursorMode;
+  hoveredCursor?: OscilloscopeCursor | null;
+  draggingCursor?: OscilloscopeCursor | null;
+  trackV1?: number | null;
+  trackV2?: number | null;
+  trackNodeLabel?: string;
+  sourceLabel?: string;
+  signalPeriod?: number;
+  suppressTopBadge?: boolean;
+}
+
 
 export function drawAcSweep(
   ctx: CanvasRenderingContext2D,
@@ -440,6 +454,22 @@ export function drawSplitTyReticle(
   ctx.restore();
 }
 
+export function formatCursorTime(valSeconds: number): string {
+  const abs = Math.abs(valSeconds);
+  const sign = valSeconds < 0 ? "-" : "";
+  if (abs < 1e-6) return `${sign}${(abs * 1e9).toFixed(1)} ns`;
+  if (abs < 1e-3) return `${sign}${(abs * 1e6).toFixed(1)} µs`;
+  if (abs < 1.0) return `${sign}${(abs * 1e3).toFixed(2)} ms`;
+  return `${sign}${abs.toFixed(3)} s`;
+}
+
+export function formatCursorVoltage(valVolts: number): string {
+  const abs = Math.abs(valVolts);
+  const sign = valVolts >= 0 ? "+" : "-";
+  if (abs < 1e-3) return `${sign}${(abs * 1e3).toFixed(1)} mV`;
+  return `${sign}${abs.toFixed(2)} V`;
+}
+
 export function drawOscilloscopeCursors(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -452,84 +482,344 @@ export function drawOscilloscopeCursors(
   voltsPerDiv: number,
   voltageOffset: number,
   timeDivValue: number,
-  signalPeriod?: number,
+  signalPeriodOrOptions?: number | OscilloscopeCursorOptions,
   sourceLabel?: string,
 ): void {
-  ctx.strokeStyle = "rgba(251, 191, 36, 0.7)";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([3, 3]);
-  const x1 = cursorT1 * width;
-  const x2 = cursorT2 * width;
-  ctx.beginPath();
-  ctx.moveTo(x1, 0);
-  ctx.lineTo(x1, height);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x2, 0);
-  ctx.lineTo(x2, height);
-  ctx.stroke();
-  ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
-  ctx.font = "8px var(--font-mono)";
-  ctx.fillText("t1", x1 + 4, 12);
-  ctx.fillText("t2", x2 + 4, 12);
+  const options: OscilloscopeCursorOptions =
+    typeof signalPeriodOrOptions === "object" && signalPeriodOrOptions !== null
+      ? signalPeriodOrOptions
+      : {
+          signalPeriod: typeof signalPeriodOrOptions === "number" ? signalPeriodOrOptions : undefined,
+          sourceLabel,
+        };
 
+  const mode = options.mode ?? "both";
+  if (mode === "off") return;
+
+  const drawTime = mode === "time" || mode === "both" || mode === "track";
+  const drawVoltage = mode === "voltage" || mode === "both";
+  const isTrack = mode === "track";
+
+  const hovered = options.hoveredCursor ?? null;
+  const dragging = options.draggingCursor ?? null;
   const centerY = height / 2;
-  const y1 = centerY - (cursorV1 / voltsPerDiv) * divHeight - voltageOffset;
-  const y2 = centerY - (cursorV2 / voltsPerDiv) * divHeight - voltageOffset;
-  ctx.strokeStyle = "rgba(244, 63, 94, 0.7)";
-  ctx.beginPath();
-  ctx.moveTo(0, y1);
-  ctx.lineTo(width, y1);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, y2);
-  ctx.lineTo(width, y2);
-  ctx.stroke();
-  ctx.fillStyle = "rgba(244, 63, 94, 0.9)";
-  ctx.fillText("v1", 4, y1 - 4);
-  ctx.fillText("v2", 4, y2 - 4);
-  ctx.setLineDash([]);
+  const prefix = options.sourceLabel ? `[${options.sourceLabel.toUpperCase()}] ` : "";
 
+  ctx.save();
+
+  // 1. RENDER TIME CURSORS (T1 & T2)
+  const x1 = Math.round(cursorT1 * width) + 0.5;
+  const x2 = Math.round(cursorT2 * width) + 0.5;
+  const t1Sec = cursorT1 * timeDivValue * 10;
+  const t2Sec = cursorT2 * timeDivValue * 10;
   const deltaTime = Math.abs(cursorT2 - cursorT1) * timeDivValue * 10;
-  const deltaVoltage = Math.abs(cursorV2 - cursorV1);
-  const frequency = deltaTime > 0 ? 1 / deltaTime : 0;
-  const deltaSymbol = "\u0394";
-  const prefix = sourceLabel ? `[${sourceLabel.toUpperCase()}] ` : "";
 
-  let dtFormatted = `${(deltaTime * 1_000).toFixed(2)} ms`;
-  if (deltaTime < 1e-6) {
-    dtFormatted = `${(deltaTime * 1e9).toFixed(1)} ns`;
-  } else if (deltaTime < 1e-3) {
-    dtFormatted = `${(deltaTime * 1e6).toFixed(1)} µs`;
-  } else if (deltaTime >= 1.0) {
-    dtFormatted = `${deltaTime.toFixed(2)} s`;
+  if (drawTime) {
+    // --- T1 Cursor ---
+    const isT1Active = hovered === "T1" || dragging === "T1";
+    ctx.strokeStyle = isT1Active ? "#FDE047" : "rgba(250, 204, 21, 0.85)";
+    ctx.lineWidth = isT1Active ? 2 : 1.2;
+    ctx.setLineDash(isT1Active ? [] : [4, 3]);
+
+    if (isT1Active) {
+      // Glow pass
+      ctx.save();
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.35)";
+      ctx.lineWidth = 5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(x1, 0);
+      ctx.lineTo(x1, height);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(x1, 0);
+    ctx.lineTo(x1, height);
+    ctx.stroke();
+
+    // Top Bezel Handle Tab for T1
+    const t1Text = `T1: ${formatCursorTime(t1Sec)}`;
+    ctx.font = "bold 9px var(--font-mono)";
+    const t1W = Math.max(56, ctx.measureText(t1Text).width + 12);
+    const t1TabX = Math.max(4, Math.min(width - t1W - 4, x1 - t1W / 2));
+
+    ctx.fillStyle = isT1Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
+    ctx.strokeStyle = isT1Active ? "#FDE047" : "#FACC15";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.roundRect(t1TabX, 3, t1W, 16, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Small notch pointing down to line
+    ctx.fillStyle = isT1Active ? "#FDE047" : "#FACC15";
+    ctx.beginPath();
+    ctx.moveTo(x1 - 3, 19);
+    ctx.lineTo(x1 + 3, 19);
+    ctx.lineTo(x1, 22);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = isT1Active ? "#FEF08A" : "#FACC15";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t1Text, t1TabX + t1W / 2, 11);
+
+    // --- T2 Cursor ---
+    const isT2Active = hovered === "T2" || dragging === "T2";
+    ctx.strokeStyle = isT2Active ? "#FDE047" : "rgba(250, 204, 21, 0.85)";
+    ctx.lineWidth = isT2Active ? 2 : 1.2;
+    ctx.setLineDash(isT2Active ? [] : [4, 3]);
+
+    if (isT2Active) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.35)";
+      ctx.lineWidth = 5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(x2, 0);
+      ctx.lineTo(x2, height);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(x2, 0);
+    ctx.lineTo(x2, height);
+    ctx.stroke();
+
+    // Top Bezel Handle Tab for T2
+    const t2Text = `T2: ${formatCursorTime(t2Sec)}`;
+    const t2W = Math.max(56, ctx.measureText(t2Text).width + 12);
+    const t2TabX = Math.max(4, Math.min(width - t2W - 4, x2 - t2W / 2));
+
+    ctx.fillStyle = isT2Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
+    ctx.strokeStyle = isT2Active ? "#FDE047" : "#FACC15";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.roundRect(t2TabX, 3, t2W, 16, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isT2Active ? "#FDE047" : "#FACC15";
+    ctx.beginPath();
+    ctx.moveTo(x2 - 3, 19);
+    ctx.lineTo(x2 + 3, 19);
+    ctx.lineTo(x2, 22);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = isT2Active ? "#FEF08A" : "#FACC15";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t2Text, t2TabX + t2W / 2, 11);
   }
 
-  let freqFormatted = `${frequency.toFixed(1)} Hz`;
-  if (frequency >= 1e6) {
-    freqFormatted = `${(frequency / 1e6).toFixed(2)} MHz`;
-  } else if (frequency >= 1e3) {
-    freqFormatted = `${(frequency / 1e3).toFixed(2)} kHz`;
+  // 2. RENDER VOLTAGE CURSORS (V1 & V2)
+  const v1Actual = isTrack && options.trackV1 !== undefined && options.trackV1 !== null ? options.trackV1 : cursorV1;
+  const v2Actual = isTrack && options.trackV2 !== undefined && options.trackV2 !== null ? options.trackV2 : cursorV2;
+  const y1 = Math.round(centerY - (v1Actual / voltsPerDiv) * divHeight - voltageOffset) + 0.5;
+  const y2 = Math.round(centerY - (v2Actual / voltsPerDiv) * divHeight - voltageOffset) + 0.5;
+  const deltaVoltage = Math.abs(v2Actual - v1Actual);
+
+  if (drawVoltage) {
+    // --- V1 Cursor ---
+    const isV1Active = hovered === "V1" || dragging === "V1";
+    ctx.strokeStyle = isV1Active ? "#FB7185" : "rgba(244, 63, 94, 0.85)";
+    ctx.lineWidth = isV1Active ? 2 : 1.2;
+    ctx.setLineDash(isV1Active ? [] : [4, 3]);
+
+    if (isV1Active) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(244, 63, 94, 0.35)";
+      ctx.lineWidth = 5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(0, y1);
+      ctx.lineTo(width, y1);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(0, y1);
+    ctx.lineTo(width, y1);
+    ctx.stroke();
+
+    // Left Bezel Handle Tab for V1
+    const v1Text = `V1: ${formatCursorVoltage(v1Actual)}`;
+    ctx.font = "bold 9px var(--font-mono)";
+    const v1W = Math.max(54, ctx.measureText(v1Text).width + 10);
+    const v1TabY = Math.max(4, Math.min(height - 20, y1 - 8));
+
+    ctx.fillStyle = isV1Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
+    ctx.strokeStyle = isV1Active ? "#FB7185" : "#F43F5E";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.roundRect(2, v1TabY, v1W, 16, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isV1Active ? "#FDA4AF" : "#F43F5E";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(v1Text, 2 + v1W / 2, v1TabY + 8);
+
+    // --- V2 Cursor ---
+    const isV2Active = hovered === "V2" || dragging === "V2";
+    ctx.strokeStyle = isV2Active ? "#FB7185" : "rgba(244, 63, 94, 0.85)";
+    ctx.lineWidth = isV2Active ? 2 : 1.2;
+    ctx.setLineDash(isV2Active ? [] : [4, 3]);
+
+    if (isV2Active) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(244, 63, 94, 0.35)";
+      ctx.lineWidth = 5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(0, y2);
+      ctx.lineTo(width, y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(0, y2);
+    ctx.lineTo(width, y2);
+    ctx.stroke();
+
+    // Left Bezel Handle Tab for V2
+    const v2Text = `V2: ${formatCursorVoltage(v2Actual)}`;
+    const v2W = Math.max(54, ctx.measureText(v2Text).width + 10);
+    const v2TabY = Math.max(4, Math.min(height - 20, y2 - 8));
+
+    ctx.fillStyle = isV2Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
+    ctx.strokeStyle = isV2Active ? "#FB7185" : "#F43F5E";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.roundRect(2, v2TabY, v2W, 16, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isV2Active ? "#FDA4AF" : "#F43F5E";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(v2Text, 2 + v2W / 2, v2TabY + 8);
   }
 
-  let label = `${prefix}${deltaSymbol}t: ${dtFormatted} | 1/${deltaSymbol}t: ${freqFormatted} | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
-  if (signalPeriod && signalPeriod > 0) {
-    const phaseDeg = ((deltaTime / signalPeriod) * 360) % 360;
-    label += ` | Fase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
+  // 3. TRACK MODE WAVEFORM CROSSHAIR MARKERS
+  if (isTrack) {
+    const renderTrackTarget = (xPos: number, yPos: number, label: string, val: number) => {
+      ctx.save();
+      ctx.setLineDash([]);
+
+      // Glowing outer ring
+      ctx.strokeStyle = "#38BDF8";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(xPos, yPos, 6, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Crosshair spokes
+      ctx.beginPath();
+      ctx.moveTo(xPos - 9, yPos);
+      ctx.lineTo(xPos + 9, yPos);
+      ctx.moveTo(xPos, yPos - 9);
+      ctx.lineTo(xPos, yPos + 9);
+      ctx.stroke();
+
+      // Center solid dot
+      ctx.fillStyle = "#FACC15";
+      ctx.beginPath();
+      ctx.arc(xPos, yPos, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Track Tag next to target
+      const tagText = `${label}: ${formatCursorVoltage(val)}`;
+      ctx.font = "bold 8.5px var(--font-mono)";
+      const tagW = ctx.measureText(tagText).width + 8;
+      const tagX = Math.min(width - tagW - 4, xPos + 10);
+      const tagY = Math.max(22, Math.min(height - 20, yPos - 8));
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.strokeStyle = "#38BDF8";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(tagX, tagY, tagW, 16, 3);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#E0F2FE";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(tagText, tagX + tagW / 2, tagY + 8);
+
+      ctx.restore();
+    };
+
+    renderTrackTarget(x1, y1, "T1", v1Actual);
+    renderTrackTarget(x2, y2, "T2", v2Actual);
   }
 
-  ctx.font = "bold 9px var(--font-sans)";
-  const textWidth = ctx.measureText(label).width;
-  ctx.fillStyle = "rgba(10, 15, 25, 0.9)";
-  ctx.strokeStyle = "rgba(251, 191, 36, 0.5)";
-  ctx.beginPath();
-  ctx.roundRect(width / 2 - textWidth / 2 - 8, 12, textWidth + 16, 18, 4);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "hsl(174, 97%, 69%)";
-  ctx.textAlign = "center";
-  ctx.fillText(label, width / 2, 24);
+  // 4. ON-SCREEN DELTA HUD BADGE (Responsive & Anti-Collision)
+  // Only render on canvas if there is sufficient space so it does not collide with .osc-hud-overlay and TRIG badge
+  const canFitTopBadge = !options.suppressTopBadge && width >= 580 && height >= 200;
+  if (canFitTopBadge) {
+    const frequency = deltaTime > 0 ? 1 / deltaTime : 0;
+    const deltaSymbol = "\u0394";
+
+    let dtFormatted = `${(deltaTime * 1_000).toFixed(2)} ms`;
+    if (deltaTime < 1e-6) {
+      dtFormatted = `${(deltaTime * 1e9).toFixed(1)} ns`;
+    } else if (deltaTime < 1e-3) {
+      dtFormatted = `${(deltaTime * 1e6).toFixed(1)} µs`;
+    } else if (deltaTime >= 1.0) {
+      dtFormatted = `${deltaTime.toFixed(2)} s`;
+    }
+
+    let freqFormatted = `${frequency.toFixed(1)} Hz`;
+    if (frequency >= 1e6) {
+      freqFormatted = `${(frequency / 1e6).toFixed(2)} MHz`;
+    } else if (frequency >= 1e3) {
+      freqFormatted = `${(frequency / 1e3).toFixed(2)} kHz`;
+    }
+
+    let label = `${prefix}${deltaSymbol}t: ${dtFormatted} | 1/${deltaSymbol}t: ${freqFormatted} | ${deltaSymbol}V: ${deltaVoltage.toFixed(2)} V`;
+    if (options.signalPeriod && options.signalPeriod > 0) {
+      const phaseDeg = ((deltaTime / options.signalPeriod) * 360) % 360;
+      label += ` | Fase \u03B8: ${phaseDeg.toFixed(1)}\u00B0`;
+    }
+
+    ctx.font = "bold 9px var(--font-sans)";
+    const textWidth = ctx.measureText(label).width;
+    const badgeW = textWidth + 18;
+    const badgeX = width / 2 - badgeW / 2;
+    const badgeY = 6;
+
+    ctx.fillStyle = "rgba(10, 15, 25, 0.92)";
+    ctx.strokeStyle = "rgba(251, 191, 36, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, 18, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "hsl(174, 97%, 69%)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, width / 2, badgeY + 9);
+  }
+
+  ctx.restore();
 }
+
 
 export function drawWaveformHistogram(
   ctx: CanvasRenderingContext2D,

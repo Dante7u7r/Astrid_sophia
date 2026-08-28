@@ -212,8 +212,11 @@ export function createDesktopWorkspaceControllers(
     const extra = (settings.currentFlowMode || settings.currentAnimationSpeed)
       ? `, flujo=${settings.currentFlowMode ?? "convencional"}, vel=${settings.currentAnimationSpeed ?? 1.0}x`
       : "";
+    const tTranLabel = (settings.transientDuration === 0 || !settings.transientDuration)
+      ? "Infinito (continuo)"
+      : `${settings.transientDuration} s`;
     deps.addLog(
-      `Ajustes guardados: dt=${settings.dt}, tTRAN=${settings.transientDuration ?? 10} s, tol=${settings.tolerance}, iterMax=${settings.maxIterations}${extra}`,
+      `Ajustes guardados: dt=${settings.dt}, tTRAN=${tTranLabel}, tol=${settings.tolerance}, iterMax=${settings.maxIterations}${extra}`,
       "system",
     );
   });

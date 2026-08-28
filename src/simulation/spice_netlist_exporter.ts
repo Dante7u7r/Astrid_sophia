@@ -1,4 +1,4 @@
-﻿// ==========================================================================
+// ==========================================================================
 // SPICE NETLIST EXPORTER — Generador de Netlists Estándar (.cir / .sp / .net)
 // ==========================================================================
 
@@ -148,7 +148,8 @@ export function exportToSpiceNetlist(
       }
 
       case "opamp":
-      case "opamp_ideal": {
+      case "opamp_ideal":
+      case "comparator_ideal": {
         // Modelo ideal E (VCVS con ganancia Aol)
         lines.push(`E_${comp.id} ${p3} 0 ${p1} ${p2} 200k`);
         break;

@@ -92,6 +92,16 @@ describe("OscilloscopePanel", () => {
         <div id="osc-meas-ch2"></div>
         <div id="osc-meas-ch3"></div>
         <div id="osc-meas-ch4"></div>
+        <div id="osc-meas-cursors" class="meas-digital-card cursors">
+          <span id="osc-meas-cursor-mode-badge"></span>
+          <span id="meas-cursor-dt"></span>
+          <span id="meas-cursor-freq"></span>
+          <span id="meas-cursor-dv"></span>
+          <span id="meas-cursor-slew"></span>
+          <span id="meas-cursor-t1"></span>
+          <span id="meas-cursor-t2"></span>
+          <span id="meas-cursor-v1v2"></span>
+        </div>
       </div>
     `;
   });
@@ -445,6 +455,80 @@ describe("OscilloscopePanel", () => {
     const freqEl = ch1Meas?.querySelector(".val-freq");
     expect(freqEl?.textContent).toBe("16.00 MHz");
   });
+
+  it("alterna cíclicamente los modos de cursores al hacer clic en el botón", () => {
+    const panel = new OscilloscopePanel();
+    const cursorsBtn = document.querySelector<HTMLButtonElement>("#osc-cursors-btn");
+    expect(panel.cursorMode).toBe("off");
+    expect(cursorsBtn?.textContent).toBe("📏 Cursores: OFF");
+
+    // Click 1: off -> both
+    cursorsBtn?.click();
+    expect(panel.cursorMode).toBe("both");
+    expect(panel.isCursorsEnabled).toBe(true);
+    expect(cursorsBtn?.textContent).toBe("📏 Ambos (XY)");
+
+    // Click 2: both -> time
+    cursorsBtn?.click();
+    expect(panel.cursorMode).toBe("time");
+    expect(cursorsBtn?.textContent).toBe("📏 Tiempo (X)");
+
+    // Click 3: time -> voltage
+    cursorsBtn?.click();
+    expect(panel.cursorMode).toBe("voltage");
+    expect(cursorsBtn?.textContent).toBe("📏 Voltaje (Y)");
+
+    // Click 4: voltage -> track
+    cursorsBtn?.click();
+    expect(panel.cursorMode).toBe("track");
+    expect(cursorsBtn?.textContent).toBe("📏 Rastreo (Track)");
+
+    // Click 5: track -> off
+    cursorsBtn?.click();
+    expect(panel.cursorMode).toBe("off");
+    expect(panel.isCursorsEnabled).toBe(false);
+    expect(cursorsBtn?.textContent).toBe("📏 Cursores: OFF");
+  });
+
+  it("actualiza la tarjeta de telemetría de cursores (#osc-meas-cursors) al activar cursores", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.timeDivValue = 0.01; // 10ms/div (ventana 100ms)
+
+    const cursorsCard = document.querySelector("#osc-meas-cursors");
+    expect(cursorsCard?.classList.contains("active")).toBe(false);
+
+    panel.setCursorMode("both");
+    expect(cursorsCard?.classList.contains("active")).toBe(true);
+
+    const modeBadge = document.querySelector("#osc-meas-cursor-mode-badge");
+    expect(modeBadge?.textContent).toContain("Ambos (XY)");
+
+    const dtEl = document.querySelector("#meas-cursor-dt");
+    const dvEl = document.querySelector("#meas-cursor-dv");
+    // Default: cursorT1 = 0.25, cursorT2 = 0.75 -> deltaT = 0.5 * 100ms = 50ms
+    expect(dtEl?.textContent).toBe("50.00 ms");
+    // Default: cursorV1 = 1.0, cursorV2 = -1.0 -> deltaV = 2.00 V
+    expect(dvEl?.textContent).toBe("+2.00 V");
+  });
+
+  it("persiste y restaura correctamente cursorMode en getPersistentState y applyPersistentState", () => {
+    const panel = new OscilloscopePanel();
+    panel.setCursorMode("track");
+
+    const state = panel.getPersistentState();
+    expect(state.cursorMode).toBe("track");
+    expect(state.isCursorsEnabled).toBe(true);
+
+    const newPanel = new OscilloscopePanel();
+    newPanel.applyPersistentState(state);
+    expect(newPanel.cursorMode).toBe("track");
+    expect(newPanel.isCursorsEnabled).toBe(true);
+
+    const cursorsBtn = document.querySelector<HTMLButtonElement>("#osc-cursors-btn");
+    expect(cursorsBtn?.textContent).toBe("📏 Rastreo (Track)");
+  });
 });
+
 
 

@@ -7,6 +7,7 @@ export const DEDICATED_VALUE_EDITORS = new Set<ComponentInstance["type"]>([
   "thermistor",
   "opamp",
   "opamp_ideal",
+  "comparator_ideal",
   "switch",
   "transformer",
   "x",
@@ -289,6 +290,7 @@ export function supportsLiveMutation(type: ComponentInstance["type"]): boolean {
     "switch",
     "opamp",
     "opamp_ideal",
+    "comparator_ideal",
     "net_label",
     "and_gate",
     "or_gate",
@@ -336,7 +338,7 @@ export function buildLiveMutations(
 ): LiveMutation[] {
   const mutations: LiveMutation[] = [];
 
-  if (component.type !== "switch" && component.type !== "opamp" && component.type !== "opamp_ideal" && component.type !== "net_label") {
+  if (component.type !== "switch" && component.type !== "opamp" && component.type !== "opamp_ideal" && component.type !== "comparator_ideal" && component.type !== "net_label") {
     mutations.push({ componentId: component.id, field: "value", value: nominalValue });
   }
   if (component.type === "net_label") {
@@ -384,7 +386,7 @@ export function buildLiveMutations(
       value: component.switchState ? 1 : 0,
     });
   }
-  if (component.type === "opamp" || component.type === "opamp_ideal") {
+  if (component.type === "opamp" || component.type === "opamp_ideal" || component.type === "comparator_ideal") {
     mutations.push({ componentId: `${component.id}__vos`, field: "value", value: component.offsetVoltage ?? 0.002 });
     mutations.push({ componentId: component.id, field: "value", value: component.openLoopGain ?? 100000.0 });
   }

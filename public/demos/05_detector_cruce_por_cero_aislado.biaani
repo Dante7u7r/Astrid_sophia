@@ -1,0 +1,622 @@
+{
+  "version": "3.0",
+  "components": [
+    {
+      "id": "V1",
+      "type": "vsource",
+      "value": 24,
+      "x": 80,
+      "y": 360,
+      "rotation": 90,
+      "amplitude": 24,
+      "frequency": 60,
+      "offset": 0,
+      "dutyCycle": 0.5,
+      "phase": 0,
+      "sourceResistance": 0,
+      "waveType": "sine"
+    },
+    {
+      "id": "GND_AC",
+      "type": "ground",
+      "value": 0,
+      "x": 80,
+      "y": 480,
+      "rotation": 0
+    },
+    {
+      "id": "DMM1",
+      "type": "dmm",
+      "value": "V",
+      "x": 80,
+      "y": 200,
+      "rotation": 0
+    },
+    {
+      "id": "NET_AC",
+      "type": "net_label",
+      "value": "V_AC_IN",
+      "x": 160,
+      "y": 300,
+      "rotation": 0,
+      "terminalType": "test_point"
+    },
+    {
+      "id": "D1",
+      "type": "diode",
+      "value": 0,
+      "x": 260,
+      "y": 260,
+      "rotation": 0
+    },
+    {
+      "id": "D2",
+      "type": "diode",
+      "value": 0,
+      "x": 260,
+      "y": 340,
+      "rotation": 180
+    },
+    {
+      "id": "D3",
+      "type": "diode",
+      "value": 0,
+      "x": 260,
+      "y": 380,
+      "rotation": 0
+    },
+    {
+      "id": "D4",
+      "type": "diode",
+      "value": 0,
+      "x": 260,
+      "y": 460,
+      "rotation": 180
+    },
+    {
+      "id": "NET_RECT",
+      "type": "net_label",
+      "value": "V_RECT",
+      "x": 340,
+      "y": 220,
+      "rotation": 0,
+      "terminalType": "test_point"
+    },
+    {
+      "id": "R1",
+      "type": "resistor",
+      "value": 2200,
+      "x": 400,
+      "y": 260,
+      "rotation": 0,
+      "tolerance": 1,
+      "powerRating": 0.5
+    },
+    {
+      "id": "DMM2",
+      "type": "dmm",
+      "value": "A",
+      "x": 500,
+      "y": 260,
+      "rotation": 0
+    },
+    {
+      "id": "OK1",
+      "type": "opto",
+      "value": 1,
+      "x": 600,
+      "y": 320,
+      "rotation": 0
+    },
+    {
+      "id": "R2",
+      "type": "resistor",
+      "value": 10000,
+      "x": 640,
+      "y": 200,
+      "rotation": 90,
+      "tolerance": 1,
+      "powerRating": 0.25
+    },
+    {
+      "id": "NET_VCC",
+      "type": "net_label",
+      "value": "5",
+      "x": 640,
+      "y": 120,
+      "rotation": 0,
+      "voltage": 5,
+      "terminalStyle": "arrow",
+      "terminalType": "power"
+    },
+    {
+      "id": "NET_PULSE",
+      "type": "net_label",
+      "value": "V_ZCD_PULSE",
+      "x": 740,
+      "y": 280,
+      "rotation": 0,
+      "terminalType": "test_point"
+    },
+    {
+      "id": "GND_SEC",
+      "type": "ground",
+      "value": 0,
+      "x": 640,
+      "y": 420,
+      "rotation": 0
+    }
+  ],
+  "wires": [
+    {
+      "id": "wire_V1_p1_to_GND_AC_p0",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 1,
+        "x": 80,
+        "y": 400,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "GND_AC",
+        "pinIndex": 0,
+        "x": 80,
+        "y": 460,
+        "label": "GND"
+      },
+      "points": [
+        { "x": 80, "y": 400 },
+        { "x": 80, "y": 460 }
+      ]
+    },
+    {
+      "id": "wire_V1_p0_to_NET_AC_p0",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 0,
+        "x": 80,
+        "y": 320,
+        "label": "+"
+      },
+      "to": {
+        "componentId": "NET_AC",
+        "pinIndex": 0,
+        "x": 160,
+        "y": 300,
+        "label": "NET"
+      },
+      "points": [
+        { "x": 80, "y": 320 },
+        { "x": 160, "y": 320 },
+        { "x": 160, "y": 300 }
+      ]
+    },
+    {
+      "id": "wire_DMM1_p0_to_V1_p0",
+      "from": {
+        "componentId": "DMM1",
+        "pinIndex": 0,
+        "x": 50,
+        "y": 200,
+        "label": "+"
+      },
+      "to": {
+        "componentId": "V1",
+        "pinIndex": 0,
+        "x": 80,
+        "y": 320,
+        "label": "+"
+      },
+      "points": [
+        { "x": 50, "y": 200 },
+        { "x": 50, "y": 320 },
+        { "x": 80, "y": 320 }
+      ]
+    },
+    {
+      "id": "wire_DMM1_p1_to_GND_AC_p0",
+      "from": {
+        "componentId": "DMM1",
+        "pinIndex": 1,
+        "x": 110,
+        "y": 200,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "GND_AC",
+        "pinIndex": 0,
+        "x": 80,
+        "y": 460,
+        "label": "GND"
+      },
+      "points": [
+        { "x": 110, "y": 200 },
+        { "x": 110, "y": 460 },
+        { "x": 80, "y": 460 }
+      ]
+    },
+    {
+      "id": "wire_NET_AC_p0_to_D1_p0",
+      "from": {
+        "componentId": "NET_AC",
+        "pinIndex": 0,
+        "x": 160,
+        "y": 300,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "D1",
+        "pinIndex": 0,
+        "x": 220,
+        "y": 260,
+        "label": "A"
+      },
+      "points": [
+        { "x": 160, "y": 300 },
+        { "x": 180, "y": 300 },
+        { "x": 180, "y": 260 },
+        { "x": 220, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_NET_AC_p0_to_D2_p1",
+      "from": {
+        "componentId": "NET_AC",
+        "pinIndex": 0,
+        "x": 160,
+        "y": 300,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "D2",
+        "pinIndex": 1,
+        "x": 220,
+        "y": 340,
+        "label": "K"
+      },
+      "points": [
+        { "x": 160, "y": 300 },
+        { "x": 180, "y": 300 },
+        { "x": 180, "y": 340 },
+        { "x": 220, "y": 340 }
+      ]
+    },
+    {
+      "id": "wire_V1_p1_to_D3_p0",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 1,
+        "x": 80,
+        "y": 400,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "D3",
+        "pinIndex": 0,
+        "x": 220,
+        "y": 380,
+        "label": "A"
+      },
+      "points": [
+        { "x": 80, "y": 400 },
+        { "x": 160, "y": 400 },
+        { "x": 160, "y": 380 },
+        { "x": 220, "y": 380 }
+      ]
+    },
+    {
+      "id": "wire_V1_p1_to_D4_p1",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 1,
+        "x": 80,
+        "y": 400,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "D4",
+        "pinIndex": 1,
+        "x": 220,
+        "y": 460,
+        "label": "K"
+      },
+      "points": [
+        { "x": 80, "y": 400 },
+        { "x": 160, "y": 400 },
+        { "x": 160, "y": 460 },
+        { "x": 220, "y": 460 }
+      ]
+    },
+    {
+      "id": "wire_D1_p1_to_R1_p0",
+      "from": {
+        "componentId": "D1",
+        "pinIndex": 1,
+        "x": 300,
+        "y": 260,
+        "label": "K"
+      },
+      "to": {
+        "componentId": "R1",
+        "pinIndex": 0,
+        "x": 360,
+        "y": 260,
+        "label": "1"
+      },
+      "points": [
+        { "x": 300, "y": 260 },
+        { "x": 360, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_D3_p1_to_R1_p0",
+      "from": {
+        "componentId": "D3",
+        "pinIndex": 1,
+        "x": 300,
+        "y": 380,
+        "label": "K"
+      },
+      "to": {
+        "componentId": "R1",
+        "pinIndex": 0,
+        "x": 360,
+        "y": 260,
+        "label": "1"
+      },
+      "points": [
+        { "x": 300, "y": 380 },
+        { "x": 340, "y": 380 },
+        { "x": 340, "y": 260 },
+        { "x": 360, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_D1_p1_to_NET_RECT_p0",
+      "from": {
+        "componentId": "D1",
+        "pinIndex": 1,
+        "x": 300,
+        "y": 260,
+        "label": "K"
+      },
+      "to": {
+        "componentId": "NET_RECT",
+        "pinIndex": 0,
+        "x": 340,
+        "y": 220,
+        "label": "NET"
+      },
+      "points": [
+        { "x": 300, "y": 260 },
+        { "x": 340, "y": 260 },
+        { "x": 340, "y": 220 }
+      ]
+    },
+    {
+      "id": "wire_D2_p0_to_OK1_p1",
+      "from": {
+        "componentId": "D2",
+        "pinIndex": 0,
+        "x": 300,
+        "y": 340,
+        "label": "A"
+      },
+      "to": {
+        "componentId": "OK1",
+        "pinIndex": 1,
+        "x": 560,
+        "y": 340,
+        "label": "K"
+      },
+      "points": [
+        { "x": 300, "y": 340 },
+        { "x": 560, "y": 340 }
+      ]
+    },
+    {
+      "id": "wire_D4_p0_to_D2_p0",
+      "from": {
+        "componentId": "D4",
+        "pinIndex": 0,
+        "x": 300,
+        "y": 460,
+        "label": "A"
+      },
+      "to": {
+        "componentId": "D2",
+        "pinIndex": 0,
+        "x": 300,
+        "y": 340,
+        "label": "A"
+      },
+      "points": [
+        { "x": 300, "y": 460 },
+        { "x": 300, "y": 340 }
+      ]
+    },
+    {
+      "id": "wire_R1_p1_to_DMM2_p0",
+      "from": {
+        "componentId": "R1",
+        "pinIndex": 1,
+        "x": 440,
+        "y": 260,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "DMM2",
+        "pinIndex": 0,
+        "x": 470,
+        "y": 260,
+        "label": "+"
+      },
+      "points": [
+        { "x": 440, "y": 260 },
+        { "x": 470, "y": 260 }
+      ]
+    },
+    {
+      "id": "wire_DMM2_p1_to_OK1_p0",
+      "from": {
+        "componentId": "DMM2",
+        "pinIndex": 1,
+        "x": 530,
+        "y": 260,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "OK1",
+        "pinIndex": 0,
+        "x": 560,
+        "y": 300,
+        "label": "A"
+      },
+      "points": [
+        { "x": 530, "y": 260 },
+        { "x": 560, "y": 260 },
+        { "x": 560, "y": 300 }
+      ]
+    },
+    {
+      "id": "wire_NET_VCC_p0_to_R2_p0",
+      "from": {
+        "componentId": "NET_VCC",
+        "pinIndex": 0,
+        "x": 640,
+        "y": 120,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "R2",
+        "pinIndex": 0,
+        "x": 640,
+        "y": 160,
+        "label": "1"
+      },
+      "points": [
+        { "x": 640, "y": 120 },
+        { "x": 640, "y": 160 }
+      ]
+    },
+    {
+      "id": "wire_R2_p1_to_OK1_p2",
+      "from": {
+        "componentId": "R2",
+        "pinIndex": 1,
+        "x": 640,
+        "y": 240,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "OK1",
+        "pinIndex": 2,
+        "x": 640,
+        "y": 300,
+        "label": "C"
+      },
+      "points": [
+        { "x": 640, "y": 240 },
+        { "x": 640, "y": 300 }
+      ]
+    },
+    {
+      "id": "wire_OK1_p2_to_NET_PULSE_p0",
+      "from": {
+        "componentId": "OK1",
+        "pinIndex": 2,
+        "x": 640,
+        "y": 300,
+        "label": "C"
+      },
+      "to": {
+        "componentId": "NET_PULSE",
+        "pinIndex": 0,
+        "x": 740,
+        "y": 280,
+        "label": "NET"
+      },
+      "points": [
+        { "x": 640, "y": 300 },
+        { "x": 680, "y": 300 },
+        { "x": 680, "y": 280 },
+        { "x": 740, "y": 280 }
+      ]
+    },
+    {
+      "id": "wire_OK1_p3_to_GND_SEC_p0",
+      "from": {
+        "componentId": "OK1",
+        "pinIndex": 3,
+        "x": 640,
+        "y": 340,
+        "label": "E"
+      },
+      "to": {
+        "componentId": "GND_SEC",
+        "pinIndex": 0,
+        "x": 640,
+        "y": 400,
+        "label": "GND"
+      },
+      "points": [
+        { "x": 640, "y": 340 },
+        { "x": 640, "y": 400 }
+      ]
+    }
+  ],
+  "viewport": {
+    "zoom": 1.1,
+    "offsetX": 40,
+    "offsetY": 10
+  },
+  "simSettings": {
+    "dt": 0.00005,
+    "tolerance": 0.00001,
+    "maxIterations": 100,
+    "transientDuration": 0.05
+  },
+  "activeAnalysisMode": "TRAN",
+  "probes": {
+    "ch1ProbeNode": "1",
+    "ch2ProbeNode": "2",
+    "ch3ProbeNode": "5",
+    "ch4ProbeNode": "0"
+  },
+  "sparPorts": [],
+  "oscilloscope": {
+    "channelsEnabled": [
+      true,
+      true,
+      true,
+      false
+    ],
+    "voltsPerDiv": [
+      10,
+      10,
+      2,
+      1
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "timeDivValue": 0.005,
+    "isXyMode": false,
+    "isCursorsEnabled": true,
+    "isMathEnabled": false,
+    "mathExpression": "CH1 - CH2",
+    "mathVoltsPerDiv": 5,
+    "mathOffset": 0,
+    "cursorTargetChannel": "ch3",
+    "triggerChannel": "ch1",
+    "triggerEdge": "rising",
+    "triggerLevel": 0,
+    "cursorT1": 0.00833,
+    "cursorT2": 0.01667,
+    "cursorV1": 5,
+    "cursorV2": 0
+  }
+}

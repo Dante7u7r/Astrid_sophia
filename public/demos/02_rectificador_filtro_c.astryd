@@ -1,0 +1,620 @@
+{
+  "version": "3.0",
+  "components": [
+    {
+      "id": "V1",
+      "type": "vsource",
+      "value": 10,
+      "x": -580,
+      "y": 460,
+      "rotation": 90,
+      "amplitude": 10,
+      "frequency": 100,
+      "offset": 0,
+      "dutyCycle": 0.5,
+      "waveType": "sine"
+    },
+    {
+      "id": "GND1",
+      "type": "ground",
+      "value": 0,
+      "x": -580,
+      "y": 560,
+      "rotation": 0
+    },
+    {
+      "id": "R1",
+      "type": "resistor",
+      "value": 100000,
+      "x": -300,
+      "y": 480,
+      "rotation": 90
+    },
+    {
+      "id": "D1",
+      "type": "diode",
+      "value": 0,
+      "x": -420,
+      "y": 420,
+      "rotation": 0
+    },
+    {
+      "id": "C1",
+      "type": "capacitor",
+      "value": 1.0000000000000001e-7,
+      "x": -360,
+      "y": 480,
+      "rotation": 90
+    },
+    {
+      "id": "V2",
+      "type": "vsource",
+      "value": 10,
+      "x": -560,
+      "y": 280,
+      "rotation": 90,
+      "amplitude": 10,
+      "frequency": 100,
+      "offset": 0,
+      "dutyCycle": 0.5,
+      "waveType": "sine"
+    },
+    {
+      "id": "GND",
+      "type": "ground",
+      "value": 0,
+      "x": -480,
+      "y": 360,
+      "rotation": 0
+    },
+    {
+      "id": "R2",
+      "type": "resistor",
+      "value": 100000,
+      "x": -360,
+      "y": 280,
+      "rotation": 90
+    },
+    {
+      "id": "D2",
+      "type": "diode",
+      "value": 0,
+      "x": -480,
+      "y": 240,
+      "rotation": 0
+    },
+    {
+      "id": "V3",
+      "type": "vsource",
+      "value": 10,
+      "x": -600,
+      "y": 760,
+      "rotation": 90,
+      "amplitude": 10,
+      "frequency": 100,
+      "offset": 0,
+      "dutyCycle": 0.5,
+      "waveType": "sine"
+    },
+    {
+      "id": "GND2",
+      "type": "ground",
+      "value": 0,
+      "x": -480,
+      "y": 840,
+      "rotation": 0
+    },
+    {
+      "id": "R3",
+      "type": "resistor",
+      "value": 100000,
+      "x": -220,
+      "y": 760,
+      "rotation": 90
+    },
+    {
+      "id": "D3",
+      "type": "diode",
+      "value": 0,
+      "x": -480,
+      "y": 720,
+      "rotation": 0
+    },
+    {
+      "id": "C2",
+      "type": "capacitor",
+      "value": 0.00009999999999999999,
+      "x": -380,
+      "y": 760,
+      "rotation": 90,
+      "dielectricType": "electrolytic"
+    }
+  ],
+  "wires": [
+    {
+      "id": "wire_GND1_p0_to_V1_p1",
+      "from": {
+        "componentId": "GND1",
+        "pinIndex": 0
+      },
+      "to": {
+        "componentId": "V1",
+        "pinIndex": 1
+      },
+      "points": [
+        {
+          "x": -580,
+          "y": 540
+        },
+        {
+          "x": -580,
+          "y": 500
+        }
+      ]
+    },
+    {
+      "id": "wire_V1_p0_to_D1_p0",
+      "from": {
+        "componentId": "V1",
+        "pinIndex": 0
+      },
+      "to": {
+        "componentId": "D1",
+        "pinIndex": 0
+      },
+      "points": [
+        {
+          "x": -580,
+          "y": 420
+        },
+        {
+          "x": -460,
+          "y": 420
+        }
+      ],
+      "customPath": true
+    },
+    {
+      "id": "wire_D1_p1_to_C1_p0",
+      "from": {
+        "componentId": "D1",
+        "pinIndex": 1
+      },
+      "to": {
+        "componentId": "C1",
+        "pinIndex": 0
+      },
+      "points": [
+        {
+          "x": -380,
+          "y": 420
+        },
+        {
+          "x": -360,
+          "y": 420
+        },
+        {
+          "x": -360,
+          "y": 440
+        }
+      ]
+    },
+    {
+      "id": "wire_C1_p1_to_GND1_p0",
+      "from": {
+        "componentId": "C1",
+        "pinIndex": 1
+      },
+      "to": {
+        "componentId": "GND1",
+        "pinIndex": 0
+      },
+      "points": [
+        {
+          "x": -360,
+          "y": 520
+        },
+        {
+          "x": -580,
+          "y": 520
+        },
+        {
+          "x": -580,
+          "y": 540
+        }
+      ]
+    },
+    {
+      "id": "wire_R1_p1_to_C1_p1",
+      "from": {
+        "componentId": "R1",
+        "pinIndex": 1
+      },
+      "to": {
+        "componentId": "C1",
+        "pinIndex": 1
+      },
+      "points": [
+        {
+          "x": -300,
+          "y": 520
+        },
+        {
+          "x": -360,
+          "y": 520
+        }
+      ],
+      "customPath": true
+    },
+    {
+      "id": "wire_D1_p1_to_R1_p0",
+      "from": {
+        "componentId": "D1",
+        "pinIndex": 1
+      },
+      "to": {
+        "componentId": "R1",
+        "pinIndex": 0
+      },
+      "points": [
+        {
+          "x": -380,
+          "y": 420
+        },
+        {
+          "x": -300,
+          "y": 420
+        },
+        {
+          "x": -300,
+          "y": 440
+        }
+      ]
+    },
+    {
+      "id": "wire_D2_p0_to_V2_p0",
+      "from": {
+        "componentId": "D2",
+        "pinIndex": 0,
+        "x": -460,
+        "y": 240,
+        "label": "A",
+        "name": "Ánodo"
+      },
+      "to": {
+        "componentId": "V2",
+        "pinIndex": 0,
+        "x": -560,
+        "y": 240,
+        "label": "+"
+      },
+      "points": [
+        {
+          "x": -520,
+          "y": 240
+        },
+        {
+          "x": -560,
+          "y": 240
+        }
+      ]
+    },
+    {
+      "id": "wire_V2_p1_to_GND_p0",
+      "from": {
+        "componentId": "V2",
+        "pinIndex": 1,
+        "x": -560,
+        "y": 320,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "GND",
+        "pinIndex": 0,
+        "x": -440,
+        "y": 300,
+        "label": "GND"
+      },
+      "points": [
+        {
+          "x": -560,
+          "y": 320
+        },
+        {
+          "x": -480,
+          "y": 320
+        },
+        {
+          "x": -480,
+          "y": 340
+        }
+      ]
+    },
+    {
+      "id": "wire_R2_p1_to_GND_p0",
+      "from": {
+        "componentId": "R2",
+        "pinIndex": 1,
+        "x": -320,
+        "y": 320,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "GND",
+        "pinIndex": 0,
+        "x": -440,
+        "y": 300,
+        "label": "GND"
+      },
+      "points": [
+        {
+          "x": -360,
+          "y": 320
+        },
+        {
+          "x": -480,
+          "y": 320
+        },
+        {
+          "x": -480,
+          "y": 340
+        }
+      ]
+    },
+    {
+      "id": "wire_R2_p0_to_D2_p1",
+      "from": {
+        "componentId": "R2",
+        "pinIndex": 0,
+        "x": -320,
+        "y": 240,
+        "label": "1"
+      },
+      "to": {
+        "componentId": "D2",
+        "pinIndex": 1,
+        "x": -380,
+        "y": 240,
+        "label": "K",
+        "name": "Cátodo"
+      },
+      "points": [
+        {
+          "x": -360,
+          "y": 240
+        },
+        {
+          "x": -440,
+          "y": 240
+        }
+      ]
+    },
+    {
+      "id": "wire_V3_p0_to_D3_p0",
+      "from": {
+        "componentId": "V3",
+        "pinIndex": 0,
+        "x": -580,
+        "y": 720,
+        "label": "+"
+      },
+      "to": {
+        "componentId": "D3",
+        "pinIndex": 0,
+        "x": -480,
+        "y": 680,
+        "label": "A",
+        "name": "Ánodo"
+      },
+      "points": [
+        {
+          "x": -600,
+          "y": 720
+        },
+        {
+          "x": -520,
+          "y": 720
+        }
+      ]
+    },
+    {
+      "id": "wire_C2_p1_to_GND2_p0",
+      "from": {
+        "componentId": "C2",
+        "pinIndex": 1,
+        "x": -380,
+        "y": 820,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "GND2",
+        "pinIndex": 0,
+        "x": -480,
+        "y": 820,
+        "label": "GND"
+      },
+      "points": [
+        {
+          "x": -380,
+          "y": 800
+        },
+        {
+          "x": -480,
+          "y": 800
+        },
+        {
+          "x": -480,
+          "y": 820
+        }
+      ]
+    },
+    {
+      "id": "wire_V3_p1_to_GND2_p0",
+      "from": {
+        "componentId": "V3",
+        "pinIndex": 1,
+        "x": -580,
+        "y": 800,
+        "label": "-"
+      },
+      "to": {
+        "componentId": "GND2",
+        "pinIndex": 0,
+        "x": -480,
+        "y": 820,
+        "label": "GND"
+      },
+      "points": [
+        {
+          "x": -600,
+          "y": 800
+        },
+        {
+          "x": -480,
+          "y": 800
+        },
+        {
+          "x": -480,
+          "y": 820
+        }
+      ]
+    },
+    {
+      "id": "wire_R3_p0_to_C2_p0",
+      "from": {
+        "componentId": "R3",
+        "pinIndex": 0,
+        "x": -220,
+        "y": 700,
+        "label": "1"
+      },
+      "to": {
+        "componentId": "C2",
+        "pinIndex": 0,
+        "x": -380,
+        "y": 740,
+        "label": "1"
+      },
+      "points": [
+        {
+          "x": -220,
+          "y": 720
+        },
+        {
+          "x": -380,
+          "y": 720
+        }
+      ]
+    },
+    {
+      "id": "wire_D3_p1_to_C2_p0",
+      "from": {
+        "componentId": "D3",
+        "pinIndex": 1,
+        "x": -440,
+        "y": 720,
+        "label": "K",
+        "name": "Cátodo"
+      },
+      "to": {
+        "componentId": "C2",
+        "pinIndex": 0,
+        "x": -380,
+        "y": 740,
+        "label": "1"
+      },
+      "points": [
+        {
+          "x": -440,
+          "y": 720
+        },
+        {
+          "x": -380,
+          "y": 720
+        }
+      ]
+    },
+    {
+      "id": "wire_R3_p1_to_C2_p1",
+      "from": {
+        "componentId": "R3",
+        "pinIndex": 1,
+        "x": -220,
+        "y": 780,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "C2",
+        "pinIndex": 1,
+        "x": -380,
+        "y": 820,
+        "label": "2"
+      },
+      "points": [
+        {
+          "x": -220,
+          "y": 800
+        },
+        {
+          "x": -380,
+          "y": 800
+        }
+      ],
+      "customPath": true
+    }
+  ],
+  "viewport": {
+    "zoom": 1.5780116010726393,
+    "offsetX": 1152.6888221080653,
+    "offsetY": -441.29872037026405
+  },
+  "simSettings": {
+    "dt": 0.0001,
+    "tolerance": 0.00001,
+    "maxIterations": 100,
+    "transientDuration": 10
+  },
+  "activeAnalysisMode": "TRAN",
+  "probes": {
+    "ch1ProbeNode": "3",
+    "ch2ProbeNode": "4",
+    "ch3ProbeNode": "2",
+    "ch4ProbeNode": "6"
+  },
+  "sparPorts": [],
+  "oscilloscope": {
+    "channelsEnabled": [
+      true,
+      false,
+      false,
+      false
+    ],
+    "voltsPerDiv": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "timeDivValue": 0.02,
+    "isXyMode": false,
+    "isCursorsEnabled": false,
+    "isMathEnabled": false,
+    "mathExpression": "CH1 - CH2",
+    "mathVoltsPerDiv": 1,
+    "mathOffset": 0,
+    "cursorTargetChannel": "ch1",
+    "triggerChannel": "ch1",
+    "triggerEdge": "rising",
+    "triggerLevel": 0,
+    "cursorT1": 0.25,
+    "cursorT2": 0.75,
+    "cursorV1": 1,
+    "cursorV2": -1
+  }
+}

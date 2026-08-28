@@ -1,6 +1,6 @@
 import type { AnalysisMode } from "./simulation_controls";
 
-export const DEFAULT_TRANSIENT_DURATION_SECONDS = 10;
+export const DEFAULT_TRANSIENT_DURATION_SECONDS = 0;
 
 export type ThemeMode = "dark" | "classroom";
 
@@ -217,9 +217,9 @@ export class SettingsModal {
           : "El paso temporal debe ser un número mayor que cero.",
       );
       this.transientDurationInput.setCustomValidity(
-        Number.isFinite(transientDuration) && transientDuration >= 0.001 && transientDuration <= 600
+        Number.isFinite(transientDuration) && (transientDuration === 0 || (transientDuration >= 0.001 && transientDuration <= 3600))
           ? ""
-          : "La duración transitoria debe estar entre 0.001 y 600 segundos.",
+          : "La duración transitoria debe ser 0 (infinito / continuo) o estar entre 0.001 y 3600 segundos.",
       );
       this.tolInput.setCustomValidity(
         Number.isFinite(tolerance) && tolerance > 0 && tolerance <= 1

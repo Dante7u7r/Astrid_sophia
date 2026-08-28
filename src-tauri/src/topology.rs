@@ -18,7 +18,7 @@ fn expected_pin_range(comp_type: &str) -> Option<(usize, usize)> {
         "npn" | "pnp" | "njf" | "pjf" => Some((3, 3)),
         "vcvs" | "vccs" | "opto" => Some((4, 4)),
         "opamp" => Some((5, 5)),
-        "opamp_ideal" => Some((3, 5)),
+        "opamp_ideal" | "comparator_ideal" => Some((3, 5)),
         "not_gate" | "buffer" => Some((2, 2)),
         "and_gate" | "or_gate" | "nand_gate" | "nor_gate" | "xor_gate" | "xnor_gate" => {
             Some((3, 3))
@@ -245,7 +245,7 @@ fn dc_conduction_pin_pairs(comp_type: &str, pin_count: usize) -> Vec<(usize, usi
         }
         "npn" | "pnp" | "njf" | "pjf" => vec![(0, 1), (0, 2), (1, 2)],
         "opto" => vec![(0, 1), (2, 3)],
-        "opamp" | "opamp_ideal" => {
+        "opamp" | "opamp_ideal" | "comparator_ideal" => {
             if pin_count == 3 {
                 vec![(0, 1), (2, usize::MAX)]
             } else {

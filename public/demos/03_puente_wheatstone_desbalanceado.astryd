@@ -1,0 +1,511 @@
+{
+  "version": "3.0",
+  "components": [
+    {
+      "id": "GND1",
+      "type": "ground",
+      "value": 0,
+      "x": 780,
+      "y": 440,
+      "rotation": 0
+    },
+    {
+      "id": "R1",
+      "type": "resistor",
+      "value": 10000,
+      "x": 360,
+      "y": 360,
+      "rotation": 0,
+      "tolerance": 1,
+      "powerRating": 0.25
+    },
+    {
+      "id": "R2",
+      "type": "resistor",
+      "value": 10000,
+      "x": 360,
+      "y": 480,
+      "rotation": 0,
+      "tolerance": 1,
+      "powerRating": 0.25
+    },
+    {
+      "id": "R3",
+      "type": "resistor",
+      "value": 20000,
+      "x": 640,
+      "y": 360,
+      "rotation": 0,
+      "tolerance": 1,
+      "powerRating": 0.25
+    },
+    {
+      "id": "R4",
+      "type": "resistor",
+      "value": 10000,
+      "x": 640,
+      "y": 480,
+      "rotation": 0,
+      "tolerance": 1,
+      "powerRating": 0.25
+    },
+    {
+      "id": "NET1",
+      "type": "net_label",
+      "value": "NET_A",
+      "x": 160,
+      "y": 420,
+      "rotation": 0,
+      "voltage": 30,
+      "terminalStyle": "arrow",
+      "terminalType": "power"
+    },
+    {
+      "id": "DMM1",
+      "type": "dmm",
+      "value": "V",
+      "x": 500,
+      "y": 420,
+      "rotation": 0
+    }
+  ],
+  "wires": [
+    {
+      "id": "wire_NET1_p0_to_j_277_420",
+      "from": {
+        "componentId": "NET1",
+        "pinIndex": 0,
+        "x": 160,
+        "y": 420,
+        "label": "NET"
+      },
+      "to": {
+        "componentId": "junction_277_420",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 277,
+          "y": 420
+        }
+      },
+      "points": [
+        {
+          "x": 160,
+          "y": 420
+        },
+        {
+          "x": 277,
+          "y": 420
+        }
+      ]
+    },
+    {
+      "id": "wire_j_277_420_to_R2_p0",
+      "from": {
+        "componentId": "junction_277_420",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 277,
+          "y": 420
+        }
+      },
+      "to": {
+        "componentId": "R2",
+        "pinIndex": 0,
+        "x": 280,
+        "y": 480,
+        "label": "1"
+      },
+      "points": [
+        {
+          "x": 277,
+          "y": 420
+        },
+        {
+          "x": 280,
+          "y": 440
+        },
+        {
+          "x": 280,
+          "y": 480
+        },
+        {
+          "x": 320,
+          "y": 480
+        }
+      ],
+      "customPath": true
+    },
+    {
+      "id": "wire_R1_p0_to_j_277_420",
+      "from": {
+        "componentId": "R1",
+        "pinIndex": 0,
+        "x": 300,
+        "y": 360,
+        "label": "1"
+      },
+      "to": {
+        "componentId": "junction_277_420",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 277,
+          "y": 420
+        }
+      },
+      "points": [
+        {
+          "x": 320,
+          "y": 360
+        },
+        {
+          "x": 320,
+          "y": 420
+        },
+        {
+          "x": 277,
+          "y": 420
+        }
+      ]
+    },
+    {
+      "id": "wire_R1_p1_to_j_494_360",
+      "from": {
+        "componentId": "R1",
+        "pinIndex": 1,
+        "x": 380,
+        "y": 360,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "junction_494_360",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 494,
+          "y": 360
+        }
+      },
+      "points": [
+        {
+          "x": 400,
+          "y": 360
+        },
+        {
+          "x": 494,
+          "y": 360
+        }
+      ]
+    },
+    {
+      "id": "wire_j_494_360_to_R3_p0",
+      "from": {
+        "componentId": "junction_494_360",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 494,
+          "y": 360
+        }
+      },
+      "to": {
+        "componentId": "R3",
+        "pinIndex": 0,
+        "x": 600,
+        "y": 360,
+        "label": "1"
+      },
+      "points": [
+        {
+          "x": 494,
+          "y": 360
+        },
+        {
+          "x": 600,
+          "y": 360
+        }
+      ]
+    },
+    {
+      "id": "wire_DMM1_p0_to_j_494_360",
+      "from": {
+        "componentId": "DMM1",
+        "pinIndex": 0,
+        "x": 470,
+        "y": 420,
+        "label": "+",
+        "name": "Terminal Positivo (V·Ω·mA)"
+      },
+      "to": {
+        "componentId": "junction_494_360",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 494,
+          "y": 360
+        }
+      },
+      "points": [
+        {
+          "x": 470,
+          "y": 420
+        },
+        {
+          "x": 480,
+          "y": 400
+        },
+        {
+          "x": 480,
+          "y": 360
+        },
+        {
+          "x": 494,
+          "y": 360
+        }
+      ]
+    },
+    {
+      "id": "wire_R2_p1_to_j_521_480",
+      "from": {
+        "componentId": "R2",
+        "pinIndex": 1,
+        "x": 360,
+        "y": 480,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "junction_521_480",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 521,
+          "y": 480
+        }
+      },
+      "points": [
+        {
+          "x": 400,
+          "y": 480
+        },
+        {
+          "x": 521,
+          "y": 480
+        }
+      ]
+    },
+    {
+      "id": "wire_j_521_480_to_R4_p0",
+      "from": {
+        "componentId": "junction_521_480",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 521,
+          "y": 480
+        }
+      },
+      "to": {
+        "componentId": "R4",
+        "pinIndex": 0,
+        "x": 600,
+        "y": 480,
+        "label": "1"
+      },
+      "points": [
+        {
+          "x": 521,
+          "y": 480
+        },
+        {
+          "x": 600,
+          "y": 480
+        }
+      ]
+    },
+    {
+      "id": "wire_DMM1_p1_to_j_521_480",
+      "from": {
+        "componentId": "DMM1",
+        "pinIndex": 1,
+        "x": 530,
+        "y": 420,
+        "label": "-",
+        "name": "Terminal Común (COM)"
+      },
+      "to": {
+        "componentId": "junction_521_480",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 521,
+          "y": 480
+        }
+      },
+      "points": [
+        {
+          "x": 530,
+          "y": 420
+        },
+        {
+          "x": 540,
+          "y": 440
+        },
+        {
+          "x": 540,
+          "y": 480
+        },
+        {
+          "x": 521,
+          "y": 480
+        }
+      ]
+    },
+    {
+      "id": "wire_R4_p1_to_j_680_429",
+      "from": {
+        "componentId": "R4",
+        "pinIndex": 1,
+        "x": 680,
+        "y": 480,
+        "label": "2"
+      },
+      "to": {
+        "componentId": "junction_680_429",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 680,
+          "y": 429
+        }
+      },
+      "points": [
+        {
+          "x": 680,
+          "y": 480
+        },
+        {
+          "x": 680,
+          "y": 429
+        }
+      ]
+    },
+    {
+      "id": "wire_j_680_429_to_R3_p1",
+      "from": {
+        "componentId": "junction_680_429",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 680,
+          "y": 429
+        }
+      },
+      "to": {
+        "componentId": "R3",
+        "pinIndex": 1,
+        "x": 680,
+        "y": 360,
+        "label": "2"
+      },
+      "points": [
+        {
+          "x": 680,
+          "y": 429
+        },
+        {
+          "x": 680,
+          "y": 360
+        }
+      ]
+    },
+    {
+      "id": "wire_GND1_p0_to_j_680_429",
+      "from": {
+        "componentId": "GND1",
+        "pinIndex": 0,
+        "x": 780,
+        "y": 420,
+        "label": "GND"
+      },
+      "to": {
+        "componentId": "junction_680_429",
+        "pinIndex": 0,
+        "isJunction": true,
+        "junctionPos": {
+          "x": 680,
+          "y": 429
+        }
+      },
+      "points": [
+        {
+          "x": 780,
+          "y": 420
+        },
+        {
+          "x": 700,
+          "y": 420
+        },
+        {
+          "x": 680,
+          "y": 429
+        }
+      ]
+    }
+  ],
+  "viewport": {
+    "zoom": 1,
+    "offsetX": 0,
+    "offsetY": 0
+  },
+  "simSettings": {
+    "dt": 0.0001,
+    "tolerance": 0.00001,
+    "maxIterations": 100,
+    "transientDuration": 0
+  },
+  "activeAnalysisMode": "TRAN",
+  "probes": {
+    "ch1ProbeNode": "1",
+    "ch2ProbeNode": "2",
+    "ch3ProbeNode": "3",
+    "ch4ProbeNode": "4"
+  },
+  "sparPorts": [],
+  "oscilloscope": {
+    "channelsEnabled": [
+      true,
+      false,
+      false,
+      false
+    ],
+    "voltsPerDiv": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "offsets": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "timeDivValue": 0.02,
+    "isXyMode": false,
+    "isCursorsEnabled": false,
+    "isMathEnabled": false,
+    "mathExpression": "CH1 - CH2",
+    "mathVoltsPerDiv": 1,
+    "mathOffset": 0,
+    "cursorTargetChannel": "ch1",
+    "triggerChannel": "ch1",
+    "triggerEdge": "rising",
+    "triggerLevel": 0,
+    "cursorT1": 0.25,
+    "cursorT2": 0.75,
+    "cursorV1": 1,
+    "cursorV2": -1
+  }
+}

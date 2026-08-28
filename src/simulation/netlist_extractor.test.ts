@@ -587,6 +587,50 @@ describe("extractElectricalNetlist", () => {
     expect(opamp?.pins[4]).not.toBe("0");
   });
 
+  test("extrae correctamente un comparator_ideal de 3 pines mapeando a entradas y salida", () => {
+    const components: ComponentInstance[] = [
+      { id: "COMP1", type: "comparator_ideal", value: 1000000, x: 100, y: 100, rotation: 0 },
+      { id: "GND1", type: "ground", value: 0, x: 50, y: 150, rotation: 0 },
+      { id: "V1", type: "vsource", value: 3.3, x: 50, y: 100, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 150, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "comparator_ideal") {
+        return [
+          { componentId: c.id, pinIndex: 0, x: c.x - 40, y: c.y - 15 }, // In+
+          { componentId: c.id, pinIndex: 1, x: c.x - 40, y: c.y + 15 }, // In-
+          { componentId: c.id, pinIndex: 2, x: c.x + 40, y: c.y },      // OUT
+        ];
+      }
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x, y: c.y - 20 },
+        { componentId: c.id, pinIndex: 1, x: c.x, y: c.y + 20 },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "COMP1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w3", from: { componentId: "COMP1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "COMP1", pinIndex: 2 }, to: { componentId: "R1", pinIndex: 0 } },
+      { id: "w5", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND1", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+    const comp = res.netlist.components.find(c => c.id === "COMP1");
+    expect(comp).toBeDefined();
+    expect(comp?.type).toBe("opamp");
+    expect(comp?.pins).toHaveLength(5);
+    expect(comp?.pins[0]).not.toBe("0"); // In+ conectado a V1:0
+    expect(comp?.pins[1]).toBe("0"); // In- conectado a GND
+    expect(comp?.pins[4]).not.toBe("0"); // OUT conectado a R1:0
+  });
+
   test("terminal de alimentacion +5V y terminal de tierra GND inyectan fuente virtual de potencia", () => {
     const components: ComponentInstance[] = [
       { id: "PWR1", type: "net_label", value: "+5V", label: "+5V", terminalType: "power", voltage: 5, x: 0, y: 0, rotation: 0 },

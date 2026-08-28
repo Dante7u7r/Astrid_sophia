@@ -407,3 +407,130 @@ fn test_transient_dc_operating_point_steady_state() {
         );
     }
 }
+
+#[test]
+fn test_continuous_interactive_transient_does_not_reject_large_tmax() {
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 5.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R1".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 1000.0,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let settings = TransientSettings {
+        dt: 1e-4,
+        t_max: 1e12, // Modo continuo indefinido
+        fixed_step: Some(true),
+        integration_method: Some("BE".to_string()),
+    };
+
+    let mut step_count = 0;
+    let res = solve_transient_circuit_inner(
+        &netlist,
+        &settings,
+        HashMap::new(),
+        HashMap::new(),
+        crate::solver::SolverNumericalSettings::default(),
+        None,
+        Some(100), // live_run_id = Some(100)
+        Some(|_step: &TimeStepResult| -> bool {
+            step_count += 1;
+            step_count < 10 // Detener tras 10 pasos
+        }),
+    );
+
+    assert!(res.is_ok(), "El modo interactivo en vivo no debe ser rechazado: {:?}", res.err());
+    assert_eq!(step_count, 10);
+}
+
+#[test]
+fn test_comparator_ideal_dc_saturation() {
+    // Comparador Ideal con In+ = 2.0V, In- = 0V -> Debe saturar positivo (> 13V)
+    let netlist_high = CircuitNetlist {
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 2.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "COMP1".to_string(),
+                comp_type: "comparator_ideal".to_string(),
+                value: 1e6,
+                pins: vec!["1".to_string(), "0".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rload".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10_000.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let dc_res_high = solve_dc_circuit(&netlist_high).expect("DC Comparador solve falló");
+    let v_out_high = dc_res_high.node_voltages.get("2").copied().unwrap_or(0.0);
+    assert!(
+        v_out_high > 13.0,
+        "Vout debe saturar positivo cuando In+ > In-, obtenido: {:.4}V",
+        v_out_high
+    );
+
+    // Comparador Ideal con In+ = -2.0V, In- = 0V -> Debe saturar negativo (< -13V)
+    let netlist_low = CircuitNetlist {
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: -2.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "COMP1".to_string(),
+                comp_type: "comparator_ideal".to_string(),
+                value: 1e6,
+                pins: vec!["1".to_string(), "0".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "Rload".to_string(),
+                comp_type: "resistor".to_string(),
+                value: 10_000.0,
+                pins: vec!["2".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let dc_res_low = solve_dc_circuit(&netlist_low).expect("DC Comparador solve falló");
+    let v_out_low = dc_res_low.node_voltages.get("2").copied().unwrap_or(0.0);
+    assert!(
+        v_out_low < -13.0,
+        "Vout debe saturar negativo cuando In+ < In-, obtenido: {:.4}V",
+        v_out_low
+    );
+}
+
+

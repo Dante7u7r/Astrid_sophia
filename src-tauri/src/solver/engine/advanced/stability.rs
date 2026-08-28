@@ -500,7 +500,7 @@ pub fn calculate_middlebrook_loop_gain(
         // Fallback: Detectar OpAmp con lazo de realimentación
         let mut found_pair = None;
         for comp in &netlist.components {
-            if comp.comp_type == "opamp" || comp.comp_type == "opamp_ideal" {
+            if comp.comp_type == "opamp" || comp.comp_type == "opamp_ideal" || comp.comp_type == "comparator_ideal" {
                 let pin_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                 let pin_out = if comp.pins.len() >= 5 {
                     comp.pins[4].parse::<usize>().unwrap_or(0)
@@ -626,7 +626,7 @@ pub fn calculate_middlebrook_loop_gain(
                         stamp_conductance(mat, na, nb, -g);
                         stamp_conductance(mat, nb, na, -g);
                     }
-                    "opamp" | "opamp_ideal" => {
+                    "opamp" | "opamp_ideal" | "comparator_ideal" => {
                         let pin_in_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
                         let pin_in_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                         let pin_out = if comp.pins.len() >= 5 {

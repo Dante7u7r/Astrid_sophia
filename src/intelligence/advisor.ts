@@ -140,7 +140,7 @@ export const ADVISOR_RULES: readonly AdvisorRule[] = [
     id: "tran.excessive-points",
     version: 1,
     evaluate(context) {
-      if (context.analysis !== "TRAN") return null;
+      if (context.analysis !== "TRAN" || context.transientDuration <= 0) return null;
       const points = Math.ceil(context.transientDuration / context.settings.dt);
       return points > 500_000 ? {
         title: "La simulación solicita demasiados pasos",

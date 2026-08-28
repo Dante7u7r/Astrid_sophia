@@ -95,6 +95,8 @@ pub fn solve_dc_circuit_with_guess_and_numerical_settings(
             || c.comp_type == "npn"
             || c.comp_type == "pnp"
             || c.comp_type == "opamp"
+            || c.comp_type == "opamp_ideal"
+            || c.comp_type == "comparator_ideal"
             || c.comp_type == "bsim3nmos"
             || c.comp_type == "bsim3pmos"
             || c.comp_type == "bsim4nmos"

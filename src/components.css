@@ -2576,6 +2576,11 @@ select.prop-input option,
 .meas-digital-card.ch2.active { border-color: rgba(56, 189, 248, 0.35); box-shadow: inset 0 0 8px rgba(56, 189, 248, 0.05); }
 .meas-digital-card.ch3.active { border-color: rgba(244, 63, 94, 0.35); box-shadow: inset 0 0 8px rgba(244, 63, 94, 0.05); }
 .meas-digital-card.ch4.active { border-color: rgba(74, 222, 128, 0.35); box-shadow: inset 0 0 8px rgba(74, 222, 128, 0.05); }
+.meas-digital-card.cursors.active {
+  border-color: rgba(250, 204, 21, 0.6);
+  box-shadow: inset 0 0 10px rgba(250, 204, 21, 0.08), 0 0 8px rgba(56, 189, 248, 0.12);
+  background: linear-gradient(135deg, rgba(20, 29, 50, 0.95) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
 
 .meas-card-header {
   display: flex;
@@ -2595,6 +2600,10 @@ select.prop-input option,
 .meas-digital-card.ch2 .meas-badge { background: rgba(56, 189, 248, 0.2); color: #38BDF8; }
 .meas-digital-card.ch3 .meas-badge { background: rgba(244, 63, 94, 0.2); color: #F43F5E; }
 .meas-digital-card.ch4 .meas-badge { background: rgba(74, 222, 128, 0.2); color: #4ADE80; }
+.meas-digital-card.cursors .meas-badge { background: rgba(250, 204, 21, 0.25); color: #FDE047; letter-spacing: 0.5px; }
+.meas-digital-card.cursors .cell-lbl { color: #93c5fd; }
+.meas-digital-card.cursors .cell-num { color: #fef08a; font-size: 0.52rem; }
+
 
 .meas-node-badge {
   font-size: 0.48rem;

@@ -185,7 +185,7 @@ describe("OscilloscopeRenderer — drawPvtTraces", () => {
 });
 
 describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
-  it("calcula y muestra deltas de tiempo, frecuencia y fase", () => {
+  it("calcula y muestra deltas de tiempo, frecuencia, fase y pestañas en bordes", () => {
     const ctx = createMockContext();
     drawOscilloscopeCursors(
       ctx,
@@ -203,10 +203,10 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
     );
 
     expect(ctx.beginPath).toHaveBeenCalled();
-    expect(ctx.fillText).toHaveBeenCalledWith("t1", expect.any(Number), expect.any(Number));
-    expect(ctx.fillText).toHaveBeenCalledWith("t2", expect.any(Number), expect.any(Number));
-    expect(ctx.fillText).toHaveBeenCalledWith("v1", expect.any(Number), expect.any(Number));
-    expect(ctx.fillText).toHaveBeenCalledWith("v2", expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("T1:"), expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("T2:"), expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("V1:"), expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("V2:"), expect.any(Number), expect.any(Number));
     expect(ctx.roundRect).toHaveBeenCalled();
   });
 
@@ -261,7 +261,68 @@ describe("OscilloscopeRenderer — drawOscilloscopeCursors", () => {
       expect.any(Number),
     );
   });
+
+  it("soporta modo track con marcadores circulares y etiquetas en curva", () => {
+    const ctx = createMockContext();
+    drawOscilloscopeCursors(
+      ctx,
+      800,
+      400,
+      50,
+      0.25,
+      0.75,
+      0,
+      0,
+      1.0,
+      0,
+      0.002,
+      {
+        mode: "track",
+        trackV1: 3.3,
+        trackV2: -1.2,
+        sourceLabel: "CH1",
+      },
+    );
+
+    expect(ctx.arc).toHaveBeenCalled();
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("T1: +3.30 V"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining("T2: -1.20 V"),
+      expect.any(Number),
+      expect.any(Number),
+    );
+  });
+
+  it("omite el badge superior en anchos compactos o minimizados para evitar solapamiento", () => {
+    const ctx = createMockContext();
+    drawOscilloscopeCursors(
+      ctx,
+      400, // width < 580 (compacto)
+      180, // height < 200
+      25,
+      0.2,
+      0.7,
+      1.0,
+      2.0,
+      1.0,
+      0,
+      0.001,
+      {
+        mode: "time",
+        suppressTopBadge: false,
+      },
+    );
+
+    // Solo debe dibujar las manijas T1 y T2, sin dibujar el badge superior centrado
+    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("T1:"), expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith(expect.stringContaining("T2:"), expect.any(Number), expect.any(Number));
+  });
 });
+
 
 describe("OscilloscopeRenderer — drawWaveformHistogram", () => {
   it("renderiza barras de distribucion y estadisticas de media y desviacion", () => {

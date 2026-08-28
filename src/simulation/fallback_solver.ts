@@ -46,6 +46,7 @@ const FALLBACK_COMPONENT_PINS: Readonly<Record<string, number | readonly number[
   potentiometer: 3,
   opamp: [3, 5],
   opamp_ideal: [3, 5],
+  comparator_ideal: [3, 5],
   vcvs: 4,
   vccs: 4,
   ccvs: [2, 4],
@@ -420,7 +421,7 @@ export function solveCircuitTS(netlist: CircuitNetlist): TSResult | string {
       const roff = comp.switchRoff ?? 1e9;
       const G = 1.0 / (isClosed ? ron : roff);
       stampConductance(A, nodeA, nodeB, G);
-    } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal') {
+    } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal' || comp.type === 'comparator_ideal') {
       const nodeInPos = parseInt(comp.pins[0]);
       const nodeInNeg = parseInt(comp.pins[1]);
       const nodeOut = parseInt(comp.pins.length >= 5 ? comp.pins[4] : comp.pins[2]);
@@ -825,7 +826,7 @@ export function solveTransientCircuitTS(
         const roff = comp.switchRoff ?? 1e9;
         const G = 1.0 / (isClosed ? ron : roff);
         stampConductance(A, nodeA, nodeB, G);
-      } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal') {
+      } else if (comp.type === 'opamp' || comp.type === 'opamp_ideal' || comp.type === 'comparator_ideal') {
         const nodeInPos = parseInt(comp.pins[0]);
         const nodeInNeg = parseInt(comp.pins[1]);
         const nodeOut = parseInt(comp.pins.length >= 5 ? comp.pins[4] : comp.pins[2]);

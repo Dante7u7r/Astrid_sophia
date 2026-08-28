@@ -54,6 +54,7 @@ export interface PersistedOscilloscopeState {
   mathVoltsPerDiv?: number;
   mathOffset?: number;
   cursorTargetChannel?: "ch1" | "ch2" | "ch3" | "ch4" | "math";
+  cursorMode?: "off" | "time" | "voltage" | "both" | "track";
   triggerChannel: "ch1" | "ch2" | "ch3" | "ch4";
   triggerEdge: "rising" | "falling";
   triggerLevel: number;
@@ -86,7 +87,7 @@ export type CircuitFileParseResult =
 
 const COMPONENT_TYPES = new Set<ComponentInstance["type"]>([
   "resistor", "capacitor", "inductor", "diode", "vsource", "ground",
-  "nmos", "opamp", "opamp_ideal", "pmos", "npn", "pnp", "lamp", "relay", "buzzer",
+  "nmos", "opamp", "opamp_ideal", "comparator_ideal", "pmos", "npn", "pnp", "lamp", "relay", "buzzer",
   "mcu_8051", "mcu_avr", "arduino_uno", "esp32", "raspberry_pi_pico",
   "isource", "led", "transformer", "switch", "x", "potentiometer",
   "ldr", "thermistor", "dmm", "fuse",
@@ -626,13 +627,13 @@ export function parseCircuitFile(json: string): CircuitFileParseResult {
     const dt = finiteNumber(settings.dt, "simSettings.dt", 0.0001);
     const tolerance = finiteNumber(settings.tolerance, "simSettings.tolerance", 0.00001);
     const maxIterations = finiteInteger(settings.maxIterations, "simSettings.maxIterations", 100);
-    const transientDuration = finiteNumber(settings.transientDuration, "simSettings.transientDuration", 10);
+    const transientDuration = finiteNumber(settings.transientDuration, "simSettings.transientDuration", 0);
     if (zoom < 0.3 || zoom > 3) {
       throw new CircuitFileValidationError("viewport.zoom debe estar entre 0.3 y 3.");
     }
     if (dt <= 0 || tolerance <= 0 || maxIterations <= 0
-      || transientDuration < 0.001 || transientDuration > 600) {
-      throw new CircuitFileValidationError("Los ajustes de simulacion deben ser positivos y la duración transitoria debe estar entre 0.001 y 600 segundos.");
+      || transientDuration < 0 || (transientDuration > 0 && transientDuration < 0.001) || transientDuration > 3600) {
+      throw new CircuitFileValidationError("Los ajustes de simulacion deben ser positivos y la duración transitoria debe ser 0 (infinito) o estar entre 0.001 y 3600 segundos.");
     }
     if (sparPorts.some(port => port.z0 <= 0)) {
       throw new CircuitFileValidationError("La impedancia de los puertos RF debe ser positiva.");

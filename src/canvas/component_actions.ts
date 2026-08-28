@@ -55,7 +55,7 @@ export function createComponent(
     newComp.switchVth = 0.5;
     newComp.switchVh = 0.05;
     newComp.switchState = false;
-  } else if (type === "opamp" || type === "opamp_ideal") {
+  } else if (type === "opamp" || type === "opamp_ideal" || type === "comparator_ideal") {
     newComp.offsetVoltage = 0.002;
     newComp.openLoopGain = 100_000;
   } else if (type === "mcu_8051" || type === "mcu_avr") {

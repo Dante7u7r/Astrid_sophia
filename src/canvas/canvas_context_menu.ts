@@ -570,6 +570,7 @@ function populateCanvasMenu(
   // Circuitos Integrados y MCUs
   const { wrapper: icWrapper, submenu: icSubmenu } = createSubmenu("Circuitos Integrados", "🎛️");
   icSubmenu.appendChild(createMenuItem("Op-Amp Ideal (3 pines)", "", () => addComp("opamp_ideal", 0)));
+  icSubmenu.appendChild(createMenuItem("Comparador Ideal (3 pines)", "", () => addComp("comparator_ideal", 0)));
   icSubmenu.appendChild(createMenuItem("Amplificador Op-Amp (LM741)", "", () => addComp("opamp", "LM741")));
   icSubmenu.appendChild(createMenuItem("Temporizador NE555", "", () => addComp("x", "NE555")));
   icSubmenu.appendChild(createMenuItem("Microcontrolador 8051", "", () => addComp("mcu_8051", 0)));
