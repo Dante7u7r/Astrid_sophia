@@ -9,12 +9,16 @@ pub(crate) fn update_switch_states(
     local_overrides: &ComponentOverrideMap,
     current_solution: &DVector<f64>,
     switch_states: &mut HashMap<String, bool>,
-) {
+) -> bool {
+    let mut any_changed = false;
     for comp in &netlist.components {
-        if comp.comp_type == "switch" {
-            update_switch_state(comp, local_overrides, current_solution, switch_states);
+        if comp.comp_type == "switch"
+            && update_switch_state(comp, local_overrides, current_solution, switch_states)
+        {
+            any_changed = true;
         }
     }
+    any_changed
 }
 
 fn update_switch_state(
@@ -22,17 +26,18 @@ fn update_switch_state(
     local_overrides: &ComponentOverrideMap,
     current_solution: &DVector<f64>,
     switch_states: &mut HashMap<String, bool>,
-) {
+) -> bool {
     let overrides = local_overrides.get(&comp.id);
 
     if let Some(&forced) = overrides.and_then(|fields| fields.get("switch_state")) {
-        switch_states.insert(comp.id.clone(), forced >= 0.5);
-        return;
+        let forced_bool = forced >= 0.5;
+        let old = switch_states.insert(comp.id.clone(), forced_bool).unwrap_or(false);
+        return old != forced_bool;
     }
 
     let (Ok(node_a), Ok(node_b)) = (comp.pins[0].parse::<usize>(), comp.pins[1].parse::<usize>())
     else {
-        return;
+        return false;
     };
 
     let v_a = if node_a > 0 {
@@ -61,4 +66,5 @@ fn update_switch_state(
         was_closed
     };
     switch_states.insert(comp.id.clone(), new_state);
+    new_state != was_closed
 }

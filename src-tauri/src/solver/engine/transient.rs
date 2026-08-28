@@ -382,12 +382,15 @@ where
             &mut ws.vector_z_step,
         );
 
-        update_switch_states(
+        let switches_changed = update_switch_states(
             netlist,
             &local_overrides,
             &current_solution,
             &mut switch_states,
         );
+        if switches_changed {
+            ws.invalidate_linear_factorization();
+        }
         let (gear_a, gear_b, gear_c) = if gear2_active_this_step {
             let dt1 = dt;
             let dt2 = prev_dt;
@@ -463,6 +466,10 @@ where
                         ast_cache_t: &mut ws.ast_cache_t,
                         matrix_a_iter: &mut ws.matrix_a_iter,
                         vector_z_iter: &mut ws.vector_z_iter,
+                        diode_bypass: &mut ws.diode_bypass,
+                        bjt_bypass: &mut ws.bjt_bypass,
+                        mos_bypass: &mut ws.mos_bypass,
+                        iter: _iter,
                     };
                     stamp_component(comp, &mut context);
                 }
@@ -485,6 +492,10 @@ where
                     ast_cache_t: &mut ws.ast_cache_t,
                     matrix_a_iter: &mut ws.matrix_a_iter,
                     vector_z_iter: &mut ws.vector_z_iter,
+                    diode_bypass: &mut ws.diode_bypass,
+                    bjt_bypass: &mut ws.bjt_bypass,
+                    mos_bypass: &mut ws.mos_bypass,
+                    iter: _iter,
                 };
                 stamp_behavioral_sources(&mut context);
 
@@ -542,8 +553,42 @@ where
                 }))
             }
         } else {
-            solve_sparse(&ws.matrix_a_step, &ws.vector_z_step)
-                .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())
+            // Factorization Caching para circuitos lineales con validación exacta de firma de integración:
+            let current_sig = crate::solver::engine::transient_workspace::LinearCompanionSignature {
+                dt_bits: dt.to_bits(),
+                trap_active: trap_active_this_step,
+                gear2_active: gear2_active_this_step,
+                bdf_order: if active_method.is_bdf() { bdf_order } else { 0 },
+                bdf_alpha0_bits: bdf_alphas.first().copied().unwrap_or(0.0).to_bits(),
+                gear_a_bits: gear_a.to_bits(),
+            };
+
+            let is_cache_valid = ws.cached_linear_factorization.is_some() && ws.cached_signature == current_sig;
+            let linear_sol_res = if is_cache_valid {
+                ws.cached_linear_factorization
+                    .as_ref()
+                    .unwrap()
+                    .solve(ws.vector_z_step.as_slice())
+                    .map(DVector::from_vec)
+            } else {
+                match crate::solver::linear_backend::factorize_dense_real(&ws.matrix_a_step) {
+                    Ok(new_fact) => {
+                        let sol = new_fact
+                            .solve(ws.vector_z_step.as_slice())
+                            .map(DVector::from_vec);
+                        ws.cached_linear_factorization = Some(new_fact);
+                        ws.cached_signature = current_sig;
+                        sol
+                    }
+                    Err(e) => Err(e),
+                }
+            };
+
+            match linear_sol_res {
+                Ok(sol) => Ok(sol),
+                Err(_) => solve_sparse(&ws.matrix_a_step, &ws.vector_z_step)
+                    .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string()),
+            }
         };
 
         // Si convergió, evaluamos el LTE y predecimos método y timestep

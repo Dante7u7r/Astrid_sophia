@@ -1,4 +1,4 @@
-﻿//! Transient Workspace & Memory Pooling — Buffers pre-asignados y reutilizables para el bucle transitorio.
+//! Transient Workspace & Memory Pooling — Buffers pre-asignados y reutilizables para el bucle transitorio.
 //!
 //! Elimina asignaciones en el heap (`malloc`/`free`) por paso y por iteración de Newton-Raphson:
 //! 1. Matrices MNA densas pre-dimensionadas (`matrix_a_step`, `matrix_a_iter`, `vector_z_step`, `vector_z_iter`).
@@ -100,6 +100,62 @@ impl TransientBackupState {
     }
 }
 
+use crate::solver::linear_backend::FaerFactorizedReal;
+
+/// Estructura de cache de bypass para diodos y uniones PN (explotación de latencia local).
+#[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
+pub struct DiodeBypassState {
+    pub last_vd: f64,
+    pub id: f64,
+    pub geq: f64,
+    pub ieq: f64,
+}
+
+/// Estructura de cache de bypass para transistores bipolares BJT.
+#[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
+pub struct BjtBypassState {
+    pub last_vbe: f64,
+    pub last_vbc: f64,
+    pub gbe: f64,
+    pub gbc: f64,
+    pub ieq_be: f64,
+    pub ieq_bc: f64,
+    pub ide: f64,
+    pub idc: f64,
+}
+
+/// Estructura de cache de bypass para transistores de efecto de campo (MOS/FET/IGBT).
+#[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
+pub struct MosBypassState {
+    pub last_vgs: f64,
+    pub last_vds: f64,
+    pub last_vbs: f64,
+    pub ids: f64,
+    pub gm: f64,
+    pub gds: f64,
+    pub igs: f64,
+    pub gg: f64,
+    pub ieq: f64,
+    pub ieq_g: f64,
+    pub c_gs: f64,
+    pub c_gd: f64,
+    pub c_ds: f64,
+}
+
+/// Firma de parámetros de paso e integración reactiva para validación exacta de cache LU.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct LinearCompanionSignature {
+    pub dt_bits: u64,
+    pub trap_active: bool,
+    pub gear2_active: bool,
+    pub bdf_order: usize,
+    pub bdf_alpha0_bits: u64,
+    pub gear_a_bits: u64,
+}
+
 /// Workspace de simulación transitoria que aloja todas las matrices y buffers de trabajo.
 pub(crate) struct TransientWorkspace {
     pub n: usize,
@@ -112,6 +168,12 @@ pub(crate) struct TransientWorkspace {
     pub prev_prev_v: Vec<f64>,
     pub ast_cache_t: HashMap<String, ExprAST>,
     pub backup: TransientBackupState,
+    // Optimizaciones de Alto Rendimiento Zero-Degradation:
+    pub cached_linear_factorization: Option<FaerFactorizedReal>,
+    pub cached_signature: LinearCompanionSignature,
+    pub diode_bypass: HashMap<String, DiodeBypassState>,
+    pub bjt_bypass: HashMap<String, BjtBypassState>,
+    pub mos_bypass: HashMap<String, MosBypassState>,
 }
 
 impl TransientWorkspace {
@@ -128,7 +190,19 @@ impl TransientWorkspace {
             prev_prev_v: vec![0.0; n + 1],
             ast_cache_t: HashMap::with_capacity(32),
             backup: TransientBackupState::new(),
+            cached_linear_factorization: None,
+            cached_signature: LinearCompanionSignature::default(),
+            diode_bypass: HashMap::with_capacity(16),
+            bjt_bypass: HashMap::with_capacity(16),
+            mos_bypass: HashMap::with_capacity(16),
         }
+    }
+
+    /// Invalida la factorización lineal en cache (forzando refactorización en el próximo paso).
+    #[inline(always)]
+    pub fn invalidate_linear_factorization(&mut self) {
+        self.cached_linear_factorization = None;
+        self.cached_signature = LinearCompanionSignature::default();
     }
 
     /// Prepara el paso copiando la matriz lineal base a la matriz de paso sin realocar memoria.

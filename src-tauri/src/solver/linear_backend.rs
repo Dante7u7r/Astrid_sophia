@@ -132,6 +132,28 @@ impl FaerLinearSolver {
         Ok(FaerFactorizedReal { size: n, mat_a })
     }
 
+    /// Pre-factoriza una matriz DMatrix<f64> de nalgebra en $O(N^3)$ para resolución rápida de múltiples RHS en $O(N^2)$.
+    pub fn factorize_dense_real(&self, matrix: &nalgebra::DMatrix<f64>) -> Result<FaerFactorizedReal, String> {
+        let n = matrix.nrows();
+        if n == 0 {
+            return Ok(FaerFactorizedReal { size: 0, mat_a: Mat::zeros(0, 0) });
+        }
+        if matrix.ncols() != n {
+            return Err(format!(
+                "Dimensión no cuadrada en factorize_dense_real: {}x{}",
+                n,
+                matrix.ncols()
+            ));
+        }
+        let mut mat_a = Mat::<f64>::zeros(n, n);
+        for r in 0..n {
+            for c in 0..n {
+                mat_a[(r, c)] = matrix[(r, c)];
+            }
+        }
+        Ok(FaerFactorizedReal { size: n, mat_a })
+    }
+
     /// Pre-factoriza una matriz compleja directamente en dimensión $N \times N$ nativa.
     pub fn factorize_complex(
         &self,
@@ -282,6 +304,11 @@ pub fn solve_dense_real_direct(matrix: &nalgebra::DMatrix<f64>, rhs: &[f64]) -> 
 /// Factoriza un sistema lineal real con faer.
 pub fn factorize_linear_real(matrix: &SparseMatrix) -> Result<FaerFactorizedReal, String> {
     FaerLinearSolver.factorize_real(matrix)
+}
+
+/// Factoriza un sistema lineal denso DMatrix<f64> con faer en $O(N^3)$.
+pub fn factorize_dense_real(matrix: &nalgebra::DMatrix<f64>) -> Result<FaerFactorizedReal, String> {
+    FaerLinearSolver.factorize_dense_real(matrix)
 }
 
 /// Factoriza un sistema lineal complejo con faer.

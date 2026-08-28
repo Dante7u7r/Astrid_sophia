@@ -556,7 +556,83 @@ describe("OscilloscopePanel", () => {
     expect(panel.cursorTargetChannel).toBe("math");
     expect(modeBadge?.textContent).toContain("[MATH ▾]");
   });
+
+  it("limpia columnas no aplicables con '--' en modo Voltaje (Y) y Tiempo (X)", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.voltsPerDivCh1 = 1.0;
+    panel.timeDivValue = 0.01;
+
+    // 1. Modo Voltaje (Y)
+    panel.setCursorMode("voltage");
+    const dtEl = document.querySelector("#meas-cursor-dt");
+    const freqEl = document.querySelector("#meas-cursor-freq");
+    const slewEl = document.querySelector("#meas-cursor-slew");
+    const dvEl = document.querySelector("#meas-cursor-dv");
+    const v1v2El = document.querySelector("#meas-cursor-v1v2");
+
+    expect(dtEl?.textContent).toBe("--");
+    expect(freqEl?.textContent).toBe("--");
+    expect(slewEl?.textContent).toBe("--");
+    expect(dvEl?.textContent).toBe("+2.00 V");
+    expect(v1v2El?.textContent).toContain("|");
+
+    // 2. Modo Tiempo (X)
+    panel.setCursorMode("time");
+    expect(dtEl?.textContent).toBe("50.00 ms");
+    expect(freqEl?.textContent).toBe("20.0 Hz");
+    expect(slewEl?.textContent).toBe("--");
+    expect(dvEl?.textContent).toBe("--");
+    expect(v1v2El?.textContent).toBe("--");
+  });
+
+  it("re-encuadra automáticamente los cursores de voltaje al cambiar a un canal con menor escala", () => {
+    const panel = new OscilloscopePanel();
+    panel.voltsPerDivCh1 = 10.0;
+    panel.cursorV1 = 20.0; // 2 div en CH1 (10V/div)
+    panel.cursorV2 = -20.0;
+
+    panel.voltsPerDivCh4 = 1.0; // En CH4 20V estaría a 20 divisiones (fuera de pantalla)
+    panel.setCursorTargetChannel("ch4");
+
+    // Debe re-encuadrarse a rango visible (+1.5 y -1.5 div de CH4 = +1.5V y -1.5V)
+    expect(panel.cursorV1).toBe(1.5);
+    expect(panel.cursorV2).toBe(-1.5);
+  });
+
+  it("reasigna automáticamente el cursorTargetChannel cuando se apaga el canal objetivo", () => {
+    const panel = new OscilloscopePanel();
+    panel.setChannelActive("ch1", true);
+    panel.setChannelActive("ch4", true);
+    panel.setCursorTargetChannel("ch4");
+    expect(panel.cursorTargetChannel).toBe("ch4");
+
+    // Desactivar CH4
+    panel.setChannelActive("ch4", false);
+    // Debe reasignarse al siguiente canal activo (CH1)
+    expect(panel.cursorTargetChannel).toBe("ch1");
+  });
+
+  it("renderiza el modo X-Y con combinaciones arbitrarias como CH1 y CH4", () => {
+    const panel = new OscilloscopePanel();
+    panel.ch1ProbeNode = "1";
+    panel.ch4ProbeNode = "6";
+    panel.setChannelActive("ch1", true);
+    panel.setChannelActive("ch2", false);
+    panel.setChannelActive("ch3", false);
+    panel.setChannelActive("ch4", true);
+
+    panel.transientResults = [
+      { time: 0, nodeVoltages: { "1": 0.0, "6": 0.0 }, branchCurrents: {} },
+      { time: 0.001, nodeVoltages: { "1": 5.0, "6": 3.3 }, branchCurrents: {} },
+      { time: 0.002, nodeVoltages: { "1": -5.0, "6": -3.3 }, branchCurrents: {} },
+    ];
+
+    panel.isXyMode = true;
+    expect(() => panel.draw()).not.toThrow();
+  });
 });
+
 
 
 

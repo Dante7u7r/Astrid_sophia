@@ -30,6 +30,7 @@ import {
   drawSplitTyReticle,
   drawTyReticle,
   drawXyTrace,
+  drawXyNotice,
   drawWaveformHistogram,
   drawMaskOverlay,
   renderSmoothTracePath,
@@ -40,6 +41,7 @@ import {
   dragOscilloscopeCursor,
   hitTestOscilloscopeCursor,
   sampleVoltageAtNormalizedTime,
+  sampleArrayAtNormalizedTime,
   type CursorMode,
   type OscilloscopeCursor,
 } from "./oscilloscope_cursor_model";
@@ -484,9 +486,29 @@ export class OscilloscopePanel {
     }
   }
 
+  public clampCursorVoltagesToVisibleRange(): void {
+    const ch = this.cursorTargetChannel;
+    const vPerDiv = this.getVoltsPerDiv(ch) || 1.0;
+    const offDivs = this.getOffsetDivs(ch) || 0.0;
+    const maxVolts = (3.6 - offDivs) * vPerDiv;
+    const minVolts = (-3.6 - offDivs) * vPerDiv;
+
+    if (this.cursorV1 > maxVolts || this.cursorV1 < minVolts) {
+      this.cursorV1 = (1.5 - offDivs) * vPerDiv;
+    }
+    if (this.cursorV2 > maxVolts || this.cursorV2 < minVolts) {
+      this.cursorV2 = (-1.5 - offDivs) * vPerDiv;
+    }
+    if (Math.abs(this.cursorV1 - this.cursorV2) < 0.1 * vPerDiv) {
+      this.cursorV1 = (1.5 - offDivs) * vPerDiv;
+      this.cursorV2 = (-1.5 - offDivs) * vPerDiv;
+    }
+  }
+
   public setFocusedChannel(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): void {
     this.focusedChannel = ch;
     this.cursorTargetChannel = ch;
+    this.clampCursorVoltagesToVisibleRange();
     this.syncFocusedChannelUI();
     this.updateMeasurementsIfNeeded(
       [
@@ -501,6 +523,7 @@ export class OscilloscopePanel {
 
   public setCursorTargetChannel(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): void {
     this.cursorTargetChannel = ch;
+    this.clampCursorVoltagesToVisibleRange();
     this.updateMeasurementsIfNeeded(
       [
         { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
@@ -517,6 +540,14 @@ export class OscilloscopePanel {
     else if (ch === "ch2") this.oscCh2Btn?.classList.toggle("active", active);
     else if (ch === "ch3") this.oscCh3Btn?.classList.toggle("active", active);
     else if (ch === "ch4") this.oscCh4Btn?.classList.toggle("active", active);
+
+    if (!active && this.cursorTargetChannel === ch) {
+      const channelKeys: ("ch1" | "ch2" | "ch3" | "ch4" | "math")[] = ["ch1", "ch2", "ch3", "ch4", "math"];
+      const nextActive = channelKeys.find((k) => this.isChannelActive(k)) ?? "ch1";
+      this.cursorTargetChannel = nextActive;
+      this.clampCursorVoltagesToVisibleRange();
+    }
+
     this.syncFocusedChannelUI();
     this.draw();
   }
@@ -1260,6 +1291,13 @@ export class OscilloscopePanel {
     const ch3Color = themeColors.traceColors.ch3;
     const ch4Color = themeColors.traceColors.ch4;
 
+    const activeChannelsList = [
+      { num: 1, node: this.ch1ProbeNode, color: ch1Color, voltsPerDiv: this.voltsPerDivCh1, offsetDivs: this.offsetCh1, active: isCh1Active, coupling: this.couplingCh1, invert: this.invertCh1 },
+      { num: 2, node: this.ch2ProbeNode, color: ch2Color, voltsPerDiv: this.voltsPerDivCh2, offsetDivs: this.offsetCh2, active: isCh2Active, coupling: this.couplingCh2, invert: this.invertCh2 },
+      { num: 3, node: this.ch3ProbeNode, color: ch3Color, voltsPerDiv: this.voltsPerDivCh3, offsetDivs: this.offsetCh3, active: isCh3Active, coupling: this.couplingCh3, invert: this.invertCh3 },
+      { num: 4, node: this.ch4ProbeNode, color: ch4Color, voltsPerDiv: this.voltsPerDivCh4, offsetDivs: this.offsetCh4, active: isCh4Active, coupling: this.couplingCh4, invert: this.invertCh4 },
+    ].filter((c): c is typeof c & { node: string } => Boolean(c.active && c.node));
+
     // --- MODO AC SWEEP: DIAGRAMA DE BODE LOGARÍTMICO ---
     if (this.activeAnalysisMode === "AC" && this.acSweepResults !== null && this.acSweepResults.frequencies.length > 0) {
       drawAcSweep(this.oscCtx, width, height, this.acSweepResults, [
@@ -1279,20 +1317,38 @@ export class OscilloscopePanel {
         this.offsetCh1 * (height / 8),
         this.timeDivValue,
       );
-    } else if (this.isXyMode && isCh1Active && isCh2Active && this.transientResults.length > 1) {
-      drawXyTrace(
-        this.oscCtx,
-        width,
-        height,
-        this.transientResults,
-        this.ch1ProbeNode || "1",
-        this.ch2ProbeNode || "2",
-        this.voltsPerDivCh1,
-        this.voltsPerDivCh2,
-        this.offsetCh1 * (height / 8),
-        this.offsetCh2 * (height / 8),
-      );
-
+    } else if (this.isXyMode) {
+      if (activeChannelsList.length >= 2 && this.transientResults.length > 1) {
+        const chX = activeChannelsList[0];
+        const chY = activeChannelsList[1];
+        drawXyTrace(
+          this.oscCtx,
+          width,
+          height,
+          this.transientResults,
+          chX.node,
+          chY.node,
+          chX.voltsPerDiv,
+          chY.voltsPerDiv,
+          chX.offsetDivs * (width / 10),
+          chY.offsetDivs * (height / 8),
+          {
+            xLabel: `CH${chX.num}`,
+            yLabel: `CH${chY.num}`,
+            traceColor: chY.color,
+          },
+        );
+      } else {
+        const singleCh = activeChannelsList.length === 1 ? `CH${activeChannelsList[0].num}` : null;
+        drawXyNotice(
+          this.oscCtx,
+          width,
+          height,
+          singleCh
+            ? `Canal activo: ${singleCh}. Activa otro canal (ej. CH2 o CH4) para graficar X vs Y.`
+            : "Se requieren al menos 2 canales activos (ej. CH1 y CH4) para graficar X vs Y",
+        );
+      }
     } else {
       const ctx = this.oscCtx;
       const divHeight = height / 8;
@@ -1304,13 +1360,6 @@ export class OscilloscopePanel {
         this.triggerLevel,
         this.timeDivValue,
       );
-
-      const activeChannelsList = [
-        { num: 1, node: this.ch1ProbeNode || "1", color: ch1Color, voltsPerDiv: this.voltsPerDivCh1, offsetDivs: this.offsetCh1, active: isCh1Active, coupling: this.couplingCh1, invert: this.invertCh1 },
-        { num: 2, node: this.ch2ProbeNode || "2", color: ch2Color, voltsPerDiv: this.voltsPerDivCh2, offsetDivs: this.offsetCh2, active: isCh2Active, coupling: this.couplingCh2, invert: this.invertCh2 },
-        { num: 3, node: this.ch3ProbeNode || "3", color: ch3Color, voltsPerDiv: this.voltsPerDivCh3, offsetDivs: this.offsetCh3, active: isCh3Active, coupling: this.couplingCh3, invert: this.invertCh3 },
-        { num: 4, node: this.ch4ProbeNode || "4", color: ch4Color, voltsPerDiv: this.voltsPerDivCh4, offsetDivs: this.offsetCh4, active: isCh4Active, coupling: this.couplingCh4, invert: this.invertCh4 },
-      ].filter(c => c.active && c.node);
 
       if (this.isSplitMode && activeChannelsList.length > 1) {
         const slotHeight = height / activeChannelsList.length;
@@ -1550,17 +1599,31 @@ export class OscilloscopePanel {
         const effectiveMode = this.cursorMode === "off" ? "both" : this.cursorMode;
         const targetVPerDiv = this.getVoltsPerDiv(this.cursorTargetChannel);
         const targetOffsetPx = this.getOffsetDivs(this.cursorTargetChannel) * divHeight;
-        const targetNode = this.getProbeNodeByChannel(this.cursorTargetChannel === "math" ? "ch1" : this.cursorTargetChannel);
+        const isTargetMath = this.cursorTargetChannel === "math";
+        const targetNode = this.cursorTargetChannel === "math"
+          ? null
+          : this.getProbeNodeByChannel(this.cursorTargetChannel);
         const metrics = targetNode && this.transientResults.length > 2
           ? calculateOscilloscopeMetrics(this.transientResults, targetNode)
           : null;
 
         let trackV1: number | null = null;
         let trackV2: number | null = null;
-        if (effectiveMode === "track" && targetNode && this.transientResults.length > 0) {
-          const trigStartIdx = findTriggerStartIndex(this.transientResults, this.triggerChannel, this.triggerEdge, this.triggerLevel);
-          trackV1 = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT1, this.timeDivValue, trigStartIdx);
-          trackV2 = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT2, this.timeDivValue, trigStartIdx);
+        if (effectiveMode === "track" && this.transientResults.length > 0) {
+          if (isTargetMath && this.isMathEnabled) {
+            const bindings = {
+              ch1Node: this.ch1ProbeNode,
+              ch2Node: this.ch2ProbeNode,
+              ch3Node: this.ch3ProbeNode,
+              ch4Node: this.ch4ProbeNode,
+            };
+            const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
+            trackV1 = sampleArrayAtNormalizedTime(this.transientResults, mathVals, this.cursorT1, this.timeDivValue, triggerStartIdx);
+            trackV2 = sampleArrayAtNormalizedTime(this.transientResults, mathVals, this.cursorT2, this.timeDivValue, triggerStartIdx);
+          } else if (targetNode) {
+            trackV1 = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT1, this.timeDivValue, triggerStartIdx);
+            trackV2 = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT2, this.timeDivValue, triggerStartIdx);
+          }
         }
 
         drawOscilloscopeCursors(
@@ -1694,14 +1757,37 @@ export class OscilloscopePanel {
         }
 
         const deltaTime = Math.abs(this.cursorT2 - this.cursorT1) * this.timeDivValue * 10;
-        const targetNode = this.getProbeNodeByChannel(this.cursorTargetChannel === "math" ? "ch1" : this.cursorTargetChannel);
+        const isTargetMath = this.cursorTargetChannel === "math";
+        const targetNode = this.cursorTargetChannel === "math"
+          ? null
+          : this.getProbeNodeByChannel(this.cursorTargetChannel);
 
         let v1Actual = this.cursorV1;
         let v2Actual = this.cursorV2;
-        if (this.cursorMode === "track" && targetNode && this.transientResults.length > 0) {
-          const trigStartIdx = findTriggerStartIndex(this.transientResults, this.triggerChannel, this.triggerEdge, this.triggerLevel);
-          v1Actual = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT1, this.timeDivValue, trigStartIdx);
-          v2Actual = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT2, this.timeDivValue, trigStartIdx);
+        if (this.cursorMode === "track" && this.transientResults.length > 0) {
+          const triggerNode = this.getProbeNodeByChannel(this.triggerChannel);
+          const trigStartIdx = findTriggerStartIndex(
+            this.transientResults,
+            triggerNode,
+            this.triggerEdge,
+            this.triggerLevel,
+            this.timeDivValue,
+          );
+
+          if (isTargetMath && this.isMathEnabled) {
+            const bindings = {
+              ch1Node: this.ch1ProbeNode,
+              ch2Node: this.ch2ProbeNode,
+              ch3Node: this.ch3ProbeNode,
+              ch4Node: this.ch4ProbeNode,
+            };
+            const mathVals = evaluateWaveformMath(this.mathExpression || "CH1 - CH2", this.transientResults, bindings);
+            v1Actual = sampleArrayAtNormalizedTime(this.transientResults, mathVals, this.cursorT1, this.timeDivValue, trigStartIdx);
+            v2Actual = sampleArrayAtNormalizedTime(this.transientResults, mathVals, this.cursorT2, this.timeDivValue, trigStartIdx);
+          } else if (targetNode) {
+            v1Actual = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT1, this.timeDivValue, trigStartIdx);
+            v2Actual = sampleVoltageAtNormalizedTime(this.transientResults, targetNode, this.cursorT2, this.timeDivValue, trigStartIdx);
+          }
         }
         const deltaVoltage = Math.abs(v2Actual - v1Actual);
         const freq = deltaTime > 0 ? 1 / deltaTime : 0;
@@ -1715,21 +1801,44 @@ export class OscilloscopePanel {
         const t2El = cursorsCard.querySelector<HTMLElement>("#meas-cursor-t2");
         const v1v2El = cursorsCard.querySelector<HTMLElement>("#meas-cursor-v1v2");
 
-        if (dtEl) dtEl.textContent = formatCursorTime(deltaTime);
-        if (freqEl) {
-          if (freq >= 1e6) freqEl.textContent = `${(freq / 1e6).toFixed(2)} MHz`;
-          else if (freq >= 1e3) freqEl.textContent = `${(freq / 1e3).toFixed(2)} kHz`;
-          else freqEl.textContent = `${freq.toFixed(1)} Hz`;
+        if (this.cursorMode === "voltage") {
+          if (dtEl) dtEl.textContent = "--";
+          if (freqEl) freqEl.textContent = "--";
+          if (slewEl) slewEl.textContent = "--";
+          if (t1El) t1El.textContent = "--";
+          if (t2El) t2El.textContent = "--";
+          if (dvEl) dvEl.textContent = formatCursorVoltage(deltaVoltage);
+          if (v1v2El) v1v2El.textContent = `${formatCursorVoltage(v1Actual)} | ${formatCursorVoltage(v2Actual)}`;
+        } else if (this.cursorMode === "time") {
+          if (dtEl) dtEl.textContent = formatCursorTime(deltaTime);
+          if (freqEl) {
+            if (freq >= 1e6) freqEl.textContent = `${(freq / 1e6).toFixed(2)} MHz`;
+            else if (freq >= 1e3) freqEl.textContent = `${(freq / 1e3).toFixed(2)} kHz`;
+            else freqEl.textContent = `${freq.toFixed(1)} Hz`;
+          }
+          if (slewEl) slewEl.textContent = "--";
+          if (t1El) t1El.textContent = formatCursorTime(this.cursorT1 * this.timeDivValue * 10);
+          if (t2El) t2El.textContent = formatCursorTime(this.cursorT2 * this.timeDivValue * 10);
+          if (dvEl) dvEl.textContent = "--";
+          if (v1v2El) v1v2El.textContent = "--";
+        } else {
+          // "both" or "track"
+          if (dtEl) dtEl.textContent = formatCursorTime(deltaTime);
+          if (freqEl) {
+            if (freq >= 1e6) freqEl.textContent = `${(freq / 1e6).toFixed(2)} MHz`;
+            else if (freq >= 1e3) freqEl.textContent = `${(freq / 1e3).toFixed(2)} kHz`;
+            else freqEl.textContent = `${freq.toFixed(1)} Hz`;
+          }
+          if (dvEl) dvEl.textContent = formatCursorVoltage(deltaVoltage);
+          if (slewEl) {
+            if (slewRate >= 1e6) slewEl.textContent = `${(slewRate / 1e6).toFixed(2)} V/µs`;
+            else if (slewRate >= 1e3) slewEl.textContent = `${(slewRate / 1e3).toFixed(2)} V/ms`;
+            else slewEl.textContent = `${slewRate.toFixed(2)} V/s`;
+          }
+          if (t1El) t1El.textContent = formatCursorTime(this.cursorT1 * this.timeDivValue * 10);
+          if (t2El) t2El.textContent = formatCursorTime(this.cursorT2 * this.timeDivValue * 10);
+          if (v1v2El) v1v2El.textContent = `${formatCursorVoltage(v1Actual)} | ${formatCursorVoltage(v2Actual)}`;
         }
-        if (dvEl) dvEl.textContent = formatCursorVoltage(deltaVoltage);
-        if (slewEl) {
-          if (slewRate >= 1e6) slewEl.textContent = `${(slewRate / 1e6).toFixed(2)} V/µs`;
-          else if (slewRate >= 1e3) slewEl.textContent = `${(slewRate / 1e3).toFixed(2)} V/ms`;
-          else slewEl.textContent = `${slewRate.toFixed(2)} V/s`;
-        }
-        if (t1El) t1El.textContent = formatCursorTime(this.cursorT1 * this.timeDivValue * 10);
-        if (t2El) t2El.textContent = formatCursorTime(this.cursorT2 * this.timeDivValue * 10);
-        if (v1v2El) v1v2El.textContent = `${formatCursorVoltage(v1Actual)} | ${formatCursorVoltage(v2Actual)}`;
       }
     }
   }

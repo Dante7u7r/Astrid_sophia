@@ -144,3 +144,48 @@ export function sampleVoltageAtNormalizedTime(
   return vA + frac * (vB - vA);
 }
 
+export function sampleArrayAtNormalizedTime(
+  results: readonly TimeStepResult[],
+  values: ArrayLike<number>,
+  normTime: number,
+  timeDivValue: number,
+  triggerStartIdx = 0,
+): number {
+  if (!results.length || !values.length) return 0.0;
+  const startIdx = Math.max(0, Math.min(results.length - 1, triggerStartIdx));
+  const t0 = results[startIdx]?.time ?? 0.0;
+  const windowDuration = timeDivValue * 10;
+  const targetTime = t0 + Math.max(0, Math.min(1, normTime)) * windowDuration;
+
+  let low = startIdx;
+  let high = results.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (results[mid].time < targetTime) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const idxAfter = Math.min(results.length - 1, Math.max(0, low));
+  const idxBefore = Math.max(0, idxAfter - 1);
+
+  const sampleA = results[idxBefore];
+  const sampleB = results[idxAfter];
+
+  if (!sampleA || !sampleB || idxBefore === idxAfter) {
+    return values[idxBefore] ?? 0.0;
+  }
+
+  const tA = sampleA.time;
+  const tB = sampleB.time;
+  const vA = values[idxBefore] ?? 0.0;
+  const vB = values[idxAfter] ?? 0.0;
+
+  if (Math.abs(tB - tA) <= 1e-18) return vA;
+  const frac = Math.max(0, Math.min(1, (targetTime - tA) / (tB - tA)));
+  return vA + frac * (vB - vA);
+}
+
+

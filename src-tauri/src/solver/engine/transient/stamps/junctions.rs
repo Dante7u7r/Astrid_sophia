@@ -46,8 +46,43 @@ pub(super) fn stamp_diode(comp: &ComponentData, ctx: &mut StampContext<'_>) {
 
     let vd = pnjlim(vd_new, vd_old, vt_d, 0.6);
 
-    let (_, id, geq) = solve_diode_junction_voltage(vd, Some(tj_d), comp);
-    let ieq = id - geq * vd;
+    // Latency Exploitation (SPICE Device Bypass):
+    // Si la variación de tensión entre iteraciones está dentro de la tolerancia estricta,
+    // reutilizamos geq e ieq calculados en lugar de re-evaluar funciones exponenciales.
+    let reltol = 1e-3;
+    let vntol = 1e-6;
+    let tol = reltol * vd.abs().max(vd_old.abs()) + vntol;
+    let (_id, geq, ieq) = if ctx.iter > 0 && (vd_new - vd_old).abs() < tol {
+        if let Some(bypass) = ctx.diode_bypass.get(&comp.id) {
+            (bypass.id, bypass.geq, bypass.ieq)
+        } else {
+            let (_, id_calc, geq_calc) = solve_diode_junction_voltage(vd, Some(tj_d), comp);
+            let ieq_calc = id_calc - geq_calc * vd;
+            ctx.diode_bypass.insert(
+                comp.id.clone(),
+                crate::solver::engine::transient_workspace::DiodeBypassState {
+                    last_vd: vd,
+                    id: id_calc,
+                    geq: geq_calc,
+                    ieq: ieq_calc,
+                },
+            );
+            (id_calc, geq_calc, ieq_calc)
+        }
+    } else {
+        let (_, id_calc, geq_calc) = solve_diode_junction_voltage(vd, Some(tj_d), comp);
+        let ieq_calc = id_calc - geq_calc * vd;
+        ctx.diode_bypass.insert(
+            comp.id.clone(),
+            crate::solver::engine::transient_workspace::DiodeBypassState {
+                last_vd: vd,
+                id: id_calc,
+                geq: geq_calc,
+                ieq: ieq_calc,
+            },
+        );
+        (id_calc, geq_calc, ieq_calc)
+    };
 
     // Estampar capacidad dinámica del diodo (difusión + deplexión) utilizando modelo cuasi-estático
     let v_anode_prev = if node_anode > 0 {

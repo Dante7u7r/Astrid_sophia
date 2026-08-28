@@ -1,5 +1,6 @@
 import {
   buildTyTracePoints,
+  extractSampleVoltage,
   selectTraceSampleIndices,
   type WaveformHistogram,
   type MaskToleranceDefinition,
@@ -88,39 +89,150 @@ export function drawXyTrace(
   yVoltsPerDiv: number,
   xOffset: number,
   yOffset: number,
+  options?: {
+    xLabel?: string;
+    yLabel?: string;
+    traceColor?: string;
+  },
 ): void {
   const theme = getInstrumentThemeColors();
+  const divWidth = width / 10;
+  const divHeight = height / 8;
+  const centerX = Math.floor(width / 2) + 0.5;
+  const centerY = Math.floor(height / 2) + 0.5;
+
+  ctx.save();
+
+  // 1. Grid
   ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
-  for (let x = 0; x < width; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < height; y += 40) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
+  ctx.setLineDash([1, 4]);
 
-  ctx.strokeStyle = theme.traceColors.ch2;
-  ctx.lineWidth = 2.2;
+  for (let x = divWidth; x < width - 1; x += divWidth) {
+    const rx = Math.floor(x) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(rx, 0);
+    ctx.lineTo(rx, height);
+    ctx.stroke();
+  }
+  for (let y = divHeight; y < height - 1; y += divHeight) {
+    const ry = Math.floor(y) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, ry);
+    ctx.lineTo(width, ry);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // 2. Axes
+  ctx.strokeStyle = theme.axisLine;
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
+  ctx.moveTo(0, centerY);
+  ctx.lineTo(width, centerY);
+  ctx.moveTo(centerX, 0);
+  ctx.lineTo(centerX, height);
+  ctx.stroke();
+
+  // 3. Header badge
+  const xLbl = options?.xLabel ?? "CH1";
+  const yLbl = options?.yLabel ?? "CH2";
+  const badgeText = `MODO X-Y: ${xLbl} (X) vs ${yLbl} (Y)`;
+  ctx.font = "bold 9px var(--font-mono)";
+  const badgeW = ctx.measureText(badgeText).width + 16;
+  ctx.fillStyle = "rgba(10, 15, 25, 0.85)";
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(width / 2 - badgeW / 2, 8, badgeW, 18, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#38bdf8";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(badgeText, width / 2, 17);
+
+  // 4. Trace
+  const traceColor = options?.traceColor ?? theme.traceColors.ch2 ?? "#38bdf8";
   const indices = selectTraceSampleIndices(
     results.length,
     Math.max(64, Math.min(4_000, Math.ceil(width * 2))),
   );
+
+  const points: { x: number; y: number }[] = [];
   for (let sampleIndex = 0; sampleIndex < indices.length; sampleIndex++) {
     const point = results[indices[sampleIndex]];
-    const x = width / 2 + ((point.nodeVoltages[xNode] ?? 0) / xVoltsPerDiv) * (width / 10) + xOffset;
-    const y = height / 2 - ((point.nodeVoltages[yNode] ?? 0) / yVoltsPerDiv) * (height / 8) - yOffset;
-    if (sampleIndex === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    const x = centerX + ((extractSampleVoltage(point.nodeVoltages, xNode)) / (xVoltsPerDiv || 1)) * divWidth + xOffset;
+    const y = centerY - ((extractSampleVoltage(point.nodeVoltages, yNode)) / (yVoltsPerDiv || 1)) * divHeight - yOffset;
+    points.push({ x, y });
   }
-  ctx.stroke();
+
+  if (points.length >= 2) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Glow pass
+    ctx.strokeStyle = traceColor;
+    ctx.globalAlpha = 0.25;
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    renderSmoothTracePath(ctx, points);
+    ctx.stroke();
+
+    // Crisp line
+    ctx.globalAlpha = 1.0;
+    ctx.lineWidth = 1.9;
+    ctx.beginPath();
+    renderSmoothTracePath(ctx, points);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
+
+export function drawXyNotice(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  message?: string,
+): void {
+  drawTyReticle(ctx, width, height);
+
+  ctx.save();
+  const title = "MODO X-Y (Lissajous)";
+  const desc = message ?? "Se requieren al menos 2 canales activos (ej. CH1 y CH4) para graficar X vs Y";
+
+  ctx.font = "bold 13px var(--font-sans, system-ui)";
+  const w1 = ctx.measureText(title).width;
+  ctx.font = "11px var(--font-sans, system-ui)";
+  const w2 = ctx.measureText(desc).width;
+  const boxW = Math.max(w1, w2) + 36;
+  const boxH = 64;
+  const boxX = Math.floor(width / 2 - boxW / 2);
+  const boxY = Math.floor(height / 2 - boxH / 2);
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = "bold 12px var(--font-sans, system-ui)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(title, width / 2, boxY + 12);
+
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "11px var(--font-sans, system-ui)";
+  ctx.fillText(desc, width / 2, boxY + 34);
+
+  ctx.restore();
+}
+
 
 export interface ReticleChannelMarker {
   num: number;
