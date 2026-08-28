@@ -231,3 +231,111 @@ fn test_arclength_continuation_bistable_latch() {
         "Voltajes válidos obtenidos"
     );
 }
+
+#[test]
+fn test_convergence_bandgap_reference_startup() {
+    use crate::parser::parse_spice_netlist_to_native;
+    // Referencia Bandgap Brokaw simplificada con bucle de realimentación BJT diferencial
+    let netlist_str = "
+    * Brokaw Bandgap Reference DC Operating Point
+    Vdd 1 0 5.0
+    R1 1 2 10k
+    R2 1 3 10k
+    Q1 2 4 5 npn
+    Q2 3 4 0 npn
+    R3 5 0 1k
+    R4 4 0 2k
+    R5 3 4 5k
+    .model npn npn(is=1e-15 bf=100)
+    ";
+    let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+    let res = solve_dc_circuit(&parsed);
+    assert!(
+        res.is_ok(),
+        "El circuito Bandgap debe converger a su punto de operación DC sin .nodeset: {:?}",
+        res.err()
+    );
+    let sol = res.unwrap();
+    let v2 = *sol.node_voltages.get("2").unwrap();
+    let v3 = *sol.node_voltages.get("3").unwrap();
+    let v4 = *sol.node_voltages.get("4").unwrap();
+    assert!(v2 > 0.0 && v2 < 5.0, "V(nodo 2) dentro de límites: {}", v2);
+    assert!(v3 > 0.0 && v3 < 5.0, "V(nodo 3) dentro de límites: {}", v3);
+    assert!(v4 > 0.0 && v4 < 5.0, "V(nodo 4) dentro de límites: {}", v4);
+}
+
+#[test]
+fn test_convergence_full_wave_bridge_rectifier_filter_transient() {
+    use crate::parser::parse_spice_netlist_to_native;
+    // Puente de diodos de onda completa con condensador de filtrado y carga resistiva
+    let netlist_str = "
+    * Full Wave Diode Bridge Rectifier with RC Filter
+    Vin 1 2 sin(0 10 1000)
+    Rref 2 0 10Meg
+    D1 1 3 diode
+    D2 0 1 diode
+    D3 2 3 diode
+    D4 0 2 diode
+    C1 3 0 10u
+    Rload 3 0 1k
+    .model diode d(is=1e-14 n=1.0)
+    ";
+    let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+    let settings = TransientSettings {
+        dt: 2e-5,
+        t_max: 2e-3,
+        fixed_step: Some(true),
+        integration_method: Some("trap".to_string()),
+    };
+    let res = solve_transient_circuit(&parsed, &settings);
+    assert!(
+        res.is_ok(),
+        "El puente rectificador con condensador debe integrarse en transitorio sin divergencia: {:?}",
+        res.err()
+    );
+    let steps = res.unwrap();
+    assert!(!steps.is_empty());
+    let last = steps.last().unwrap();
+    let v_out = *last.node_voltages.get("3").unwrap_or(&0.0);
+    assert!(
+        v_out > 5.0,
+        "La salida filtrada debe mantener un nivel rectificado positivo: {}V",
+        v_out
+    );
+}
+
+#[test]
+fn test_convergence_variable_load_zener_regulator() {
+    use crate::parser::parse_spice_netlist_to_native;
+    // Regulador Zener con pulso de carga en transitorio
+    let netlist_str = "
+    * Zener Regulator with Pulse Load
+    Vin 1 0 12.0
+    Rin 1 2 220
+    Dz 0 2 zener
+    Rload 2 0 1k
+    .model zener d(is=1e-14 bv=5.1 ibv=1m)
+    ";
+    let parsed = parse_spice_netlist_to_native(netlist_str).unwrap();
+    let settings = TransientSettings {
+        dt: 1e-6,
+        t_max: 5e-5,
+        fixed_step: Some(false),
+        integration_method: Some("trap".to_string()),
+    };
+    let res = solve_transient_circuit(&parsed, &settings);
+    assert!(
+        res.is_ok(),
+        "El regulador Zener debe converger en régimen transitorio: {:?}",
+        res.err()
+    );
+    let steps = res.unwrap();
+    let last = steps.last().unwrap();
+    let v2 = *last.node_voltages.get("2").unwrap_or(&0.0);
+    assert!(
+        (v2 - 5.1).abs() < 1.0,
+        "Tensión Zener esperada alrededor de 5.1V (obtenida: {}V)",
+        v2
+    );
+}
+

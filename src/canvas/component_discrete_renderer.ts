@@ -108,8 +108,8 @@ export function drawLed(
     ctx.lineWidth = 1.8;
     ctx.stroke();
     ctx.restore();
-  } else {
-    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
     ctx.fill();
     ctx.stroke();
   }
@@ -235,7 +235,8 @@ export function drawSwitchSpdt(
   // Etiquetas
   ctx.save();
   ctx.font = "bold 7px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(255, 255, 255, 0.7)";
   ctx.fillText("T1", 20, -18);
   ctx.fillText("COM", -32, -6);
   ctx.fillText("T2", 20, 22);
@@ -295,7 +296,8 @@ export function drawSwitchDpdt(
   // Barra de acoplamiento mecánico punteada
   ctx.save();
   ctx.setLineDash([2, 2]);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  const isClassroomDpdt = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.strokeStyle = isClassroomDpdt ? "rgba(100, 116, 139, 0.55)" : "rgba(255, 255, 255, 0.4)";
   ctx.beginPath();
   ctx.moveTo(0, pos === 0 ? -22 : -10);
   ctx.lineTo(0, pos === 0 ? 10 : 22);
@@ -370,7 +372,8 @@ export function drawTransformer(
 
   ctx.save();
   ctx.setLineDash([4, 3]);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+  const isClassroomTrafo = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.strokeStyle = isClassroomTrafo ? "rgba(100, 116, 139, 0.45)" : "rgba(255, 255, 255, 0.3)";
   ctx.beginPath();
   ctx.moveTo(-10, -20);
   ctx.lineTo(-10, 20);

@@ -3977,8 +3977,8 @@ select.btn-text-only.sim-locked {
 .canvas-context-menu {
   position: absolute;
   z-index: 10000;
-  background: rgba(8, 12, 22, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--context-menu-bg, rgba(8, 12, 22, 0.96));
+  border: 1px solid var(--context-menu-border, rgba(255, 255, 255, 0.08));
   border-radius: 12px;
   padding: 6px;
   min-width: 170px;
@@ -4079,8 +4079,8 @@ select.btn-text-only.sim-locked {
   left: 100%;
   margin-left: 4px;
   z-index: 10001;
-  background: rgba(10, 15, 28, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--context-menu-bg, rgba(10, 15, 28, 0.98));
+  border: 1px solid var(--context-menu-border, rgba(255, 255, 255, 0.1));
   border-radius: 12px;
   padding: 6px;
   min-width: 190px;

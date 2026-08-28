@@ -166,6 +166,7 @@ describe("wiring_model", () => {
     expect(wires).toHaveLength(1);
     expect(wires[0].from).toEqual({ componentId: "R1", pinIndex: 0 });
     expect(wires[0].to).toEqual({ componentId: "R2", pinIndex: 0 });
+    expect(wires[0].points).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
   });
 
   it("permite conectar cables iniciando desde una union hacia un pin fisico", () => {

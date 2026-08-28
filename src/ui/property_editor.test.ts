@@ -8,11 +8,16 @@ function installPropertyDom(): void {
   document.body.innerHTML = `
     <div id="properties-form">
     <div id="prop-batch-header"><span id="prop-batch-title"></span><span id="prop-batch-subtitle"></span></div>
-    <input id="prop-id-input" />
+    <div id="group-comp-id">
+      <input id="prop-id-input" />
+      <div id="prop-id-badge"></div>
+    </div>
     <div id="group-comp-val"><span class="property-label"></span>
       <input id="prop-val-input" />
-      <select id="prop-snap-series"><option value="E24">E24</option><option value="E12">E12</option><option value="E96">E96</option></select>
-      <button id="btn-snap-standard">Ajustar</button>
+      <div class="prop-snap-controls">
+        <select id="prop-snap-series"><option value="E24">E24</option><option value="E12">E12</option><option value="E96">E96</option></select>
+        <button id="btn-snap-standard">Ajustar</button>
+      </div>
       <button id="prop-val-dec"></button>
       <button id="prop-val-inc"></button>
       <div id="prop-val-badge"></div>
@@ -65,7 +70,7 @@ function installPropertyDom(): void {
     </div>
     <div id="resistor-properties-container">
       <select id="prop-resistor-tolerance"><option value="1">1%</option><option value="5">5%</option></select>
-      <select id="prop-resistor-power"><option value="0.25">0.25W</option><option value="1">1W</option></select>
+      <select id="prop-resistor-power"><option value="0.25">0.25W</option><option value="1">1W</option><option value="5">5W</option></select>
     </div>
     <div id="capacitor-properties-container">
       <select id="prop-capacitor-voltage"><option value="25">25V</option><option value="50">50V</option></select>
@@ -576,4 +581,198 @@ describe("PropertyEditor componentes especiales", () => {
     expect(onComponentPropertiesApplied).toHaveBeenCalledWith(comp);
     expect(comp.amplitude).toBe(10);
   });
+
+  test("auto-guarda en tiempo real al escribir en propValInput sin pulsar el botón de aplicar", () => {
+    const comp: ComponentInstance = { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 };
+    const markModified = vi.fn();
+    const updateCanvas = vi.fn();
+    const extractNetlist = vi.fn();
+    const orchestrator = {
+      selectedComponent: comp,
+      selectedComponents: [comp],
+      renameComponent: vi.fn(() => null),
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      addLog: vi.fn(),
+      updateCanvasRendering: updateCanvas,
+      markCurrentTabAsModified: markModified,
+      extractNetlist,
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(comp);
+
+    const valInput = document.querySelector<HTMLInputElement>("#prop-val-input");
+    expect(valInput).not.toBeNull();
+    valInput!.value = "4.7k";
+    valInput!.dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(comp.value).toBe(4700);
+    expect(markModified).toHaveBeenCalled();
+    expect(updateCanvas).toHaveBeenCalled();
+    expect(extractNetlist).toHaveBeenCalled();
+  });
+
+  test("oculta controles de series E24 y valida badge correctamente para net_label", () => {
+    const netComp: ComponentInstance = { id: "NET1", type: "net_label", value: "TP1", label: "TP1", x: 0, y: 0, rotation: 0 };
+    const orchestrator = {
+      selectedComponent: netComp,
+      selectedComponents: [netComp],
+      wires: [],
+      components: [netComp],
+      renameComponent: vi.fn(() => null),
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      extractNetlist: vi.fn(),
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(netComp);
+
+    const snapControls = document.querySelector<HTMLElement>(".prop-snap-controls");
+    expect(snapControls?.style.display).toBe("none");
+
+    const valBadge = document.querySelector<HTMLElement>("#prop-val-badge");
+    expect(valBadge?.style.display).toBe("inline-flex");
+    expect(valBadge?.textContent).toBe("Puerto / Red: TP1");
+    expect(valBadge?.className).not.toContain("invalid");
+  });
+
+  test("valida identificador en tiempo real y muestra advertencia al empezar con número", () => {
+    const comp: ComponentInstance = { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 };
+    const orchestrator = {
+      selectedComponent: comp,
+      selectedComponents: [comp],
+      components: [comp],
+      wires: [],
+      renameComponent: vi.fn((_c, newId) => {
+        if (/^\d/.test(newId)) return "El identificador debe comenzar con una letra";
+        return null;
+      }),
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      extractNetlist: vi.fn(),
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(comp);
+
+    const idInput = document.querySelector<HTMLInputElement>("#prop-id-input");
+    const idBadge = document.querySelector<HTMLElement>("#prop-id-badge");
+    expect(idInput).not.toBeNull();
+    expect(idBadge).not.toBeNull();
+
+    // Escribir "89" (número inválido como primer carácter)
+    idInput!.value = "89";
+    idInput!.dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(idBadge!.style.display).toBe("inline-flex");
+    expect(idBadge!.textContent).toContain("Debe iniciar con letra");
+    expect(idBadge!.className).toContain("invalid");
+  });
+
+  test("sincroniza selección de potencia máxima de resistor sin dejar el selector vacío", () => {
+    const comp: ComponentInstance = { id: "R1", type: "resistor", value: 1000, powerRating: 5, tolerance: 1, x: 0, y: 0, rotation: 0 };
+    const orchestrator = {
+      selectedComponent: comp,
+      selectedComponents: [comp],
+      components: [comp],
+      wires: [],
+    } as unknown as CanvasOrchestrator;
+
+    const editor = new PropertyEditor({
+      getOrchestrator: () => orchestrator,
+      getMcuDebugPanel: () => null,
+      getSimulationRunner: () => null,
+      addLog: vi.fn(),
+      updateCanvasRendering: vi.fn(),
+      markCurrentTabAsModified: vi.fn(),
+      invokeTauri: vi.fn(),
+    });
+    editor.init();
+    editor.updatePropertiesPanel(comp);
+
+    const powerSelect = document.querySelector<HTMLSelectElement>("#prop-resistor-power");
+    expect(powerSelect).not.toBeNull();
+    // Debe seleccionar "5" o "5.0" y no quedar con value "" o vacío
+    expect(powerSelect!.value).toBe("5");
+    expect(powerSelect!.selectedIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("aplica nombres de red alfanuméricos y renombra test_point correctamente sin sobrescribirlos con cero", () => {
+    const tp: ComponentInstance = {
+      id: "TP1",
+      type: "net_label",
+      terminalType: "test_point",
+      value: "TP1",
+      label: "TP1",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    createEditor(tp);
+
+    const idInput = document.querySelector<HTMLInputElement>("#prop-id-input");
+    const valInput = document.querySelector<HTMLInputElement>("#prop-val-input");
+    const applyBtn = document.querySelector<HTMLButtonElement>("#btn-apply-properties");
+
+    expect(idInput).not.toBeNull();
+    expect(valInput).not.toBeNull();
+    expect(applyBtn).not.toBeNull();
+
+    // Escribir nombre de red "a"
+    valInput!.value = "a";
+    valInput!.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // Escribir identificador "A"
+    idInput!.value = "A";
+
+    applyBtn!.click();
+
+    expect(tp.label).toBe("A");
+    expect(tp.value).toBe("A");
+  });
+
+  test("aplica contenido de notas de texto sin sobrescribirlas con cero", () => {
+    const note: ComponentInstance = {
+      id: "NOTE1",
+      type: "text_note",
+      value: "Texto previo",
+      label: "Texto previo",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    createEditor(note);
+
+    const valInput = document.querySelector<HTMLInputElement>("#prop-val-input");
+    const applyBtn = document.querySelector<HTMLButtonElement>("#btn-apply-properties");
+
+    valInput!.value = "Nueva nota de ingeniería";
+    valInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    applyBtn!.click();
+
+    expect(note.label).toBe("Nueva nota de ingeniería");
+    expect(note.value).toBe("Nueva nota de ingeniería");
+  });
 });
+
+

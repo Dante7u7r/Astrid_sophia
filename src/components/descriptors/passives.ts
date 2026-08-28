@@ -32,7 +32,7 @@ export const ResistorDefinition: ComponentDefinition = {
     const vDiff = Math.abs(v0 - v1);
     const rVal = Math.max(Number(comp.value) || 1000, 1e-6);
     const power = (vDiff * vDiff) / rVal;
-    const powerRating = 0.25; // 1/4W potencia nominal estándar
+    const powerRating = Number(comp.powerRating) > 0 ? Number(comp.powerRating) : 0.25;
     const stress = power / powerRating;
 
     // 1. Resplandor / cuerpo térmico si hay calentamiento perceptible
@@ -190,6 +190,26 @@ export const CapacitorDefinition: ComponentDefinition = {
         } else {
           ctx.fillText("+", 8, -7);
         }
+      }
+      ctx.restore();
+    }
+
+    // Alertas y efectos de Sobretensión / Ruptura de Dieléctrico / Polaridad Inversa
+    const voltageRating = Number(comp.voltageRating) > 0 ? Number(comp.voltageRating) : 25;
+    const isReversePolarity = isPolarized && vDiff < -0.3;
+    const isOvervoltage = absV > voltageRating;
+
+    if (isReversePolarity || isOvervoltage) {
+      ctx.save();
+      if (isReversePolarity) {
+        ctx.fillStyle = "#EF4444";
+        ctx.font = "bold 8px 'Inter', sans-serif";
+        ctx.fillText("💥 POLARIDAD INV", -38, -16);
+      } else {
+        const ratio = absV / voltageRating;
+        ctx.fillStyle = ratio > 1.5 ? "#EF4444" : "#F59E0B";
+        ctx.font = "bold 8px 'Inter', sans-serif";
+        ctx.fillText(ratio > 1.5 ? "⚡ RUPTURA DIELECTRICA" : "⚡ SOBRETENSIÓN", -42, -16);
       }
       ctx.restore();
     }
@@ -478,8 +498,9 @@ export const DmmDefinition: ComponentDefinition = {
     const rawMode = typeof comp.value === "string" ? comp.value : "V";
     const mode = normalizeDmmMode(rawMode);
     const displayText = comp.dmmValue || DMM_INITIAL_DISPLAY;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
-    ctx.fillStyle = "rgba(10, 14, 22, 0.95)";
+    ctx.fillStyle = isClassroom ? "#FFFFFF" : "rgba(10, 14, 22, 0.95)";
     ctx.strokeStyle = state.color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -487,20 +508,20 @@ export const DmmDefinition: ComponentDefinition = {
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillStyle = isClassroom ? "#F1F5F9" : "rgba(0, 0, 0, 0.85)";
     ctx.fillRect(-20, -25, 40, 20);
-    ctx.strokeStyle = "#334155";
+    ctx.strokeStyle = isClassroom ? "#CBD5E1" : "#334155";
     ctx.lineWidth = 0.8;
     ctx.strokeRect(-20, -25, 40, 20);
 
     ctx.font = "bold 9px monospace";
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(displayText, 0, -15);
 
     ctx.font = "bold 8px sans-serif";
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#475569" : "#94A3B8";
     ctx.fillText(`DMM [${mode}]`, 0, 5);
   },
 };
@@ -531,8 +552,10 @@ export const FuseDefinition: ComponentDefinition = {
       comp.isBlown = true;
     }
 
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+
     // 1. Cuerpo cilíndrico de vidrio
-    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.7)" : "rgba(15, 23, 42, 0.85)";
     ctx.strokeStyle = state.color;
     ctx.lineWidth = 1.4;
     ctx.beginPath();
@@ -541,7 +564,7 @@ export const FuseDefinition: ComponentDefinition = {
     ctx.stroke();
 
     // 2. Tapas metálicas de extremo
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#CBD5E1" : "#94A3B8";
     ctx.fillRect(-20, -9, 6, 18);
     ctx.fillRect(14, -9, 6, 18);
 
@@ -569,7 +592,7 @@ export const FuseDefinition: ComponentDefinition = {
       ctx.quadraticCurveTo(-4, -6, 0, 0);
       ctx.quadraticCurveTo(4, 6, 14, 0);
       const stress = iBranch / iRating;
-      ctx.strokeStyle = stress > 0.8 ? "#F59E0B" : "#E2E8F0";
+      ctx.strokeStyle = stress > 0.8 ? "#F59E0B" : (isClassroom ? "#475569" : "#E2E8F0");
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }

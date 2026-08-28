@@ -43,13 +43,19 @@ export function hitTestPin(
     ? spatialIndex.queryComponentCandidates({ x: worldX, y: worldY }, threshold + 30)
     : components;
 
+  let closestHit: { pin: PinInstance; comp: ComponentInstance; distSq: number } | null = null;
+  const maxDistSq = threshold * threshold;
+
   for (const comp of compsToTest) {
     const pins = getPins(comp);
     for (const pin of pins) {
       const dx = worldX - pin.x;
       const dy = worldY - pin.y;
-      if (dx * dx + dy * dy <= threshold * threshold) {
-        return { pin, comp };
+      const distSq = dx * dx + dy * dy;
+      if (distSq <= maxDistSq) {
+        if (!closestHit || distSq < closestHit.distSq) {
+          closestHit = { pin, comp, distSq };
+        }
       }
     }
   }
@@ -63,31 +69,34 @@ export function hitTestPin(
     for (const jPt of junctions) {
       const dx = worldX - jPt.x;
       const dy = worldY - jPt.y;
-      if (dx * dx + dy * dy <= threshold * threshold) {
-        const jX = Math.round(jPt.x);
-        const jY = Math.round(jPt.y);
-        const pin: PinInstance = {
-          componentId: `junction_${jX}_${jY}`,
-          pinIndex: 0,
-          x: jPt.x,
-          y: jPt.y,
-          isJunction: true,
-          junctionPos: { x: jPt.x, y: jPt.y },
-        };
-        const comp: ComponentInstance = {
-          id: `junction_${jX}_${jY}`,
-          type: "ground",
-          x: jPt.x,
-          y: jPt.y,
-          rotation: 0,
-          value: 0,
-        };
-        return { pin, comp };
+      const distSq = dx * dx + dy * dy;
+      if (distSq <= maxDistSq) {
+        if (!closestHit || distSq < closestHit.distSq) {
+          const jX = Math.round(jPt.x);
+          const jY = Math.round(jPt.y);
+          const pin: PinInstance = {
+            componentId: `junction_${jX}_${jY}`,
+            pinIndex: 0,
+            x: jPt.x,
+            y: jPt.y,
+            isJunction: true,
+            junctionPos: { x: jPt.x, y: jPt.y },
+          };
+          const comp: ComponentInstance = {
+            id: `junction_${jX}_${jY}`,
+            type: "ground",
+            x: jPt.x,
+            y: jPt.y,
+            rotation: 0,
+            value: 0,
+          };
+          closestHit = { pin, comp, distSq };
+        }
       }
     }
   }
 
-  return null;
+  return closestHit ? { pin: closestHit.pin, comp: closestHit.comp } : null;
 }
 
 export function resolveHoverState(

@@ -235,6 +235,50 @@ pub fn solve_linear_real(matrix: &SparseMatrix, rhs: &[f64]) -> Result<Vec<f64>,
     }
 }
 
+/// Resuelve un sistema lineal denso directamente con `faer` (evitando construir BTreeMaps en SparseMatrix).
+pub fn solve_dense_real_direct(matrix: &nalgebra::DMatrix<f64>, rhs: &[f64]) -> Result<Vec<f64>, String> {
+    let n = matrix.nrows();
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    if matrix.ncols() != n || rhs.len() != n {
+        return Err(format!(
+            "Dimensión incompatible en solve_dense_real_direct: matriz {}x{}, rhs {}",
+            n,
+            matrix.ncols(),
+            rhs.len()
+        ));
+    }
+
+    let mut mat_a = Mat::<f64>::zeros(n, n);
+    for r in 0..n {
+        for c in 0..n {
+            mat_a[(r, c)] = matrix[(r, c)];
+        }
+    }
+
+    let mut vec_b = Col::<f64>::zeros(n);
+    for i in 0..n {
+        vec_b[i] = rhs[i];
+    }
+
+    let lu = mat_a.full_piv_lu();
+    let sol_col = lu.solve(&vec_b);
+    let mut solution = vec![0.0; n];
+    for i in 0..n {
+        let val = sol_col[i];
+        if !val.is_finite() {
+            return Err(
+                "Error numérico: Solución contiene valores no finitos (matriz singular o mal condicionada)"
+                    .to_string(),
+            );
+        }
+        solution[i] = val;
+    }
+
+    Ok(solution)
+}
+
 /// Factoriza un sistema lineal real con faer.
 pub fn factorize_linear_real(matrix: &SparseMatrix) -> Result<FaerFactorizedReal, String> {
     FaerLinearSolver.factorize_real(matrix)

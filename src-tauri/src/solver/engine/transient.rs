@@ -39,6 +39,7 @@ use super::transient_step_control::{
 };
 use super::transient_switches::update_switch_states;
 use super::transient_thermal::{initialize_transient_thermal_models, update_device_junction_temperatures};
+use super::transient_workspace::TransientWorkspace;
 use stamps::{stamp_behavioral_sources, stamp_component, StampContext};
 
 pub fn solve_transient_circuit(
@@ -295,6 +296,7 @@ where
 
     let mut results = Vec::new();
     let mut local_overrides = ComponentOverrideMap::new();
+    let mut ws = TransientWorkspace::new(size, n);
 
     // `t` representa siempre el último tiempo aceptado. No se publica un falso
     // estado inicial: la primera solución integrada corresponde a t=dt.
@@ -327,20 +329,22 @@ where
         dts_for_bdf.extend_from_slice(&recent_dts);
         let bdf_alphas = compute_bdf_coefficients(bdf_order, &dts_for_bdf);
 
-        // Respaldar estados antes de intentar resolver el paso
-        let cap_states_backup = cap_states.clone();
-        let ind_states_backup = ind_states.clone();
-        let cap_states_prev_backup = cap_states_prev.clone();
-        let ind_states_prev_backup = ind_states_prev.clone();
-        let cap_history_backup = cap_history.clone();
-        let ind_history_backup = ind_history.clone();
-        let switch_states_backup = switch_states.clone();
-        let mcu_tchip_backup = mcu_tchip.clone();
-        let mcu_vsample_backup = mcu_vsample.clone();
-        let mcu_vdaceff_backup = mcu_vdaceff.clone();
-        let device_tjunc_backup = device_tjunc.clone();
-        let thermal_models_backup = thermal_models.clone();
-        let ms_scheduler_backup = ms_scheduler.clone();
+        // Respaldar estados antes de intentar resolver el paso reutilizando la memoria del workspace
+        ws.backup.save(
+            &cap_states,
+            &ind_states,
+            &cap_states_prev,
+            &ind_states_prev,
+            &cap_history,
+            &ind_history,
+            &switch_states,
+            &mcu_tchip,
+            &mcu_vsample,
+            &mcu_vdaceff,
+            &device_tjunc,
+            &thermal_models,
+            &ms_scheduler,
+        );
 
         // Acotar timestep si se intercepta un evento digital intermedio
         let mut event_intercepted = false;
@@ -353,17 +357,16 @@ where
         }
         let step_time = t + dt;
 
-        // Clonar matrices base que no cambian
-        let mut matrix_a = matrix_a_linear.clone();
-        let mut vector_z = vector_z_linear.clone();
+        // Preparar matrices del paso en buffers de trabajo preasignados
+        ws.prepare_step_matrix(&matrix_a_linear, &vector_z_linear);
 
         apply_static_live_overrides(
             netlist,
             n,
             &vsource_map,
             &local_overrides,
-            &mut matrix_a,
-            &mut vector_z,
+            &mut ws.matrix_a_step,
+            &mut ws.vector_z_step,
         );
 
         stamp_dynamic_transient_sources(
@@ -372,7 +375,7 @@ where
             step_time,
             &vsource_map,
             &local_overrides,
-            &mut vector_z,
+            &mut ws.vector_z_step,
         );
 
         update_switch_states(
@@ -404,8 +407,8 @@ where
         };
         stamp_transient_companions(
             netlist,
-            &mut matrix_a,
-            &mut vector_z,
+            &mut ws.matrix_a_step,
+            &mut ws.vector_z_step,
             &CompanionStampState {
                 cap_states: &cap_states,
                 cap_states_prev: &cap_states_prev,
@@ -426,23 +429,16 @@ where
             let max_iter = numerical_settings.max_iterations;
             let tolerance = numerical_settings.tolerance;
             let mut converged = false;
-            let mut solution_iter = current_solution.clone();
 
-            let mut prev_v = vec![0.0; n + 1];
-            for i in 1..=n {
-                prev_v[i] = solution_iter[i - 1];
-            }
-            let mut prev_prev_v = prev_v.clone();
-
-            let mut ast_cache_t = HashMap::new();
+            ws.init_prev_voltages(&current_solution);
+            ws.ast_cache_t.clear();
 
             let mut solve_err = None;
             let mut lambda_backtrack = 1.0;
             let mut prev_max_diff = f64::MAX;
 
             for _iter in 0..max_iter {
-                let mut matrix_a_iter = matrix_a.clone();
-                let mut vector_z_iter = vector_z.clone();
+                ws.prepare_iter_matrix();
 
                 for comp in &netlist.components {
                     let mut context = StampContext {
@@ -453,16 +449,16 @@ where
                         t: step_time,
                         dt,
                         t_amb,
-                        prev_v: &prev_v,
-                        prev_prev_v: &prev_prev_v,
+                        prev_v: &ws.prev_v,
+                        prev_prev_v: &ws.prev_prev_v,
                         current_solution: &current_solution,
-                        solution_iter: &solution_iter,
+                        solution_iter: &ws.solution_iter,
                         device_tjunc: &device_tjunc,
                         mcu_vdaceff: &mcu_vdaceff,
                         ms_scheduler: &ms_scheduler,
-                        ast_cache_t: &mut ast_cache_t,
-                        matrix_a_iter: &mut matrix_a_iter,
-                        vector_z_iter: &mut vector_z_iter,
+                        ast_cache_t: &mut ws.ast_cache_t,
+                        matrix_a_iter: &mut ws.matrix_a_iter,
+                        vector_z_iter: &mut ws.vector_z_iter,
                     };
                     stamp_component(comp, &mut context);
                 }
@@ -475,23 +471,23 @@ where
                     t: step_time,
                     dt,
                     t_amb,
-                    prev_v: &prev_v,
-                    prev_prev_v: &prev_prev_v,
+                    prev_v: &ws.prev_v,
+                    prev_prev_v: &ws.prev_prev_v,
                     current_solution: &current_solution,
-                    solution_iter: &solution_iter,
+                    solution_iter: &ws.solution_iter,
                     device_tjunc: &device_tjunc,
                     mcu_vdaceff: &mcu_vdaceff,
                     ms_scheduler: &ms_scheduler,
-                    ast_cache_t: &mut ast_cache_t,
-                    matrix_a_iter: &mut matrix_a_iter,
-                    vector_z_iter: &mut vector_z_iter,
+                    ast_cache_t: &mut ws.ast_cache_t,
+                    matrix_a_iter: &mut ws.matrix_a_iter,
+                    vector_z_iter: &mut ws.vector_z_iter,
                 };
                 stamp_behavioral_sources(&mut context);
 
-                if let Some(new_sol) = solve_sparse(&matrix_a_iter, &vector_z_iter) {
+                if let Some(new_sol) = solve_sparse(&ws.matrix_a_iter, &ws.vector_z_iter) {
                     let mut max_diff = 0.0;
                     for i in 1..=n {
-                        let diff = (new_sol[i - 1] - prev_v[i]).abs();
+                        let diff = (new_sol[i - 1] - ws.prev_v[i]).abs();
                         if diff > max_diff {
                             max_diff = diff;
                         }
@@ -509,18 +505,18 @@ where
                     let lambda = base_lambda * lambda_backtrack;
                     prev_max_diff = max_diff;
 
-                    prev_prev_v = prev_v.clone();
+                    ws.prev_prev_v.copy_from_slice(&ws.prev_v);
                     for i in 1..=n {
-                        prev_v[i] = prev_v[i] + lambda * (new_sol[i - 1] - prev_v[i]);
+                        ws.prev_v[i] = ws.prev_v[i] + lambda * (new_sol[i - 1] - ws.prev_v[i]);
                     }
 
                     // Actualizar variables de corriente y voltajes en solution_iter
                     let size = n + m;
                     for i in 0..n {
-                        solution_iter[i] = prev_v[i + 1];
+                        ws.solution_iter[i] = ws.prev_v[i + 1];
                     }
                     for i in n..size {
-                        solution_iter[i] = new_sol[i];
+                        ws.solution_iter[i] = new_sol[i];
                     }
 
                     if max_diff < tolerance {
@@ -535,14 +531,14 @@ where
             }
 
             if converged {
-                Ok(solution_iter)
+                Ok(ws.solution_iter.clone())
             } else {
                 Err(solve_err.unwrap_or_else(|| {
                     "Error de convergencia o circuito mal condicionado".to_string()
                 }))
             }
         } else {
-            solve_sparse(&matrix_a, &vector_z)
+            solve_sparse(&ws.matrix_a_step, &ws.vector_z_step)
                 .ok_or_else(|| "Error de convergencia o circuito mal condicionado".to_string())
         };
 
@@ -570,19 +566,21 @@ where
             // Decidir si aceptamos o rechazamos el paso temporal
             if !is_fixed && !decision.step_accepted {
                 // RECHAZAR PASO: Restaurar estados del backup y reducir dt
-                cap_states = cap_states_backup;
-                ind_states = ind_states_backup;
-                cap_states_prev = cap_states_prev_backup;
-                ind_states_prev = ind_states_prev_backup;
-                cap_history = cap_history_backup;
-                ind_history = ind_history_backup;
-                switch_states = switch_states_backup;
-                mcu_tchip = mcu_tchip_backup;
-                mcu_vsample = mcu_vsample_backup;
-                mcu_vdaceff = mcu_vdaceff_backup;
-                device_tjunc = device_tjunc_backup;
-                thermal_models = thermal_models_backup;
-                ms_scheduler = ms_scheduler_backup;
+                ws.backup.restore(
+                    &mut cap_states,
+                    &mut ind_states,
+                    &mut cap_states_prev,
+                    &mut ind_states_prev,
+                    &mut cap_history,
+                    &mut ind_history,
+                    &mut switch_states,
+                    &mut mcu_tchip,
+                    &mut mcu_vsample,
+                    &mut mcu_vdaceff,
+                    &mut device_tjunc,
+                    &mut thermal_models,
+                    &mut ms_scheduler,
+                );
 
                 order_controller.active_method = decision.next_method;
                 dt = decision.next_dt;
@@ -635,7 +633,7 @@ where
 
                 update_device_junction_temperatures(
                     netlist,
-                    &step_solution,
+                    step_solution,
                     &mut device_tjunc,
                     &mut thermal_models,
                     t_amb,
@@ -656,14 +654,14 @@ where
                 detect_mixed_signal_crossings(
                     netlist,
                     &mut ms_scheduler,
-                    &step_solution,
+                    step_solution,
                     t,
                     accepted_dt,
                 );
                 process_mixed_signal_events(netlist, &mut ms_scheduler, accepted_time);
                 mcu_manager.step_native_mcus(
                     netlist,
-                    &step_solution,
+                    step_solution,
                     t,
                     accepted_dt,
                     &mut ms_scheduler,
@@ -683,7 +681,7 @@ where
 
                 update_passive_storage_states(
                     netlist,
-                    &step_solution,
+                    step_solution,
                     &mut cap_states,
                     &mut cap_states_prev,
                     &mut cap_history,
@@ -694,7 +692,7 @@ where
                 );
                 update_mcu_accepted_states(
                     netlist,
-                    &step_solution,
+                    step_solution,
                     &mut McuAcceptedStateMaps {
                         tchip: &mut mcu_tchip,
                         vsample: &mut mcu_vsample,
@@ -707,7 +705,7 @@ where
 
                 update_coupled_inductor_states(
                     netlist,
-                    &step_solution,
+                    step_solution,
                     &mut ind_states,
                     &mut ind_states_prev,
                     &ind_history,
@@ -740,17 +738,21 @@ where
         } else {
             // Si la iteración física en sí misma divergió matemáticamente y dt > dt_min, reducimos dt e intentamos nuevamente
             if dt > dt_min {
-                cap_states = cap_states_backup;
-                ind_states = ind_states_backup;
-                cap_states_prev = cap_states_prev_backup;
-                ind_states_prev = ind_states_prev_backup;
-                switch_states = switch_states_backup;
-                mcu_tchip = mcu_tchip_backup;
-                mcu_vsample = mcu_vsample_backup;
-                mcu_vdaceff = mcu_vdaceff_backup;
-                device_tjunc = device_tjunc_backup;
-                thermal_models = thermal_models_backup;
-                ms_scheduler = ms_scheduler_backup;
+                ws.backup.restore(
+                    &mut cap_states,
+                    &mut ind_states,
+                    &mut cap_states_prev,
+                    &mut ind_states_prev,
+                    &mut cap_history,
+                    &mut ind_history,
+                    &mut switch_states,
+                    &mut mcu_tchip,
+                    &mut mcu_vsample,
+                    &mut mcu_vdaceff,
+                    &mut device_tjunc,
+                    &mut thermal_models,
+                    &mut ms_scheduler,
+                );
                 if order_controller.is_auto() {
                     order_controller.active_method = IntegrationMethodType::Euler;
                 }

@@ -1346,9 +1346,10 @@
 }
 
 /* Menú Contextual y Dropdowns en Modo Aula */
-[data-theme="classroom"] .canvas-context-menu {
-  background: var(--context-menu-bg) !important;
-  border: 1px solid var(--context-menu-border) !important;
+[data-theme="classroom"] .canvas-context-menu,
+[data-theme="classroom"] .context-menu-submenu {
+  background: var(--context-menu-bg, #FFFFFF) !important;
+  border: 1px solid var(--context-menu-border, #CBD5E1) !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
 }
 
@@ -1367,6 +1368,65 @@
 
 [data-theme="classroom"] .context-menu-shortcut {
   color: var(--text-muted) !important;
+}
+
+/* Notificaciones Toast en Modo Aula */
+[data-theme="classroom"] .toast-card {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #1E293B !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="classroom"] .toast-card.toast-error {
+  border-left: 4px solid #EF4444 !important;
+  background: #FFF5F5 !important;
+  border-color: #FECACA !important;
+}
+
+[data-theme="classroom"] .toast-card.toast-warning {
+  border-left: 4px solid #F59E0B !important;
+  background: #FFFBEB !important;
+  border-color: #FDE68A !important;
+}
+
+[data-theme="classroom"] .toast-card.toast-success {
+  border-left: 4px solid #10B981 !important;
+  background: #F0FDF4 !important;
+  border-color: #BBF7D0 !important;
+}
+
+[data-theme="classroom"] .toast-card.toast-info {
+  border-left: 4px solid #0EA5E9 !important;
+  background: #F0F9FF !important;
+  border-color: #BAE6FD !important;
+}
+
+[data-theme="classroom"] .toast-card .toast-title {
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .toast-card .toast-message {
+  color: #334155 !important;
+}
+
+[data-theme="classroom"] .toast-close-btn {
+  color: #64748B !important;
+}
+
+[data-theme="classroom"] .toast-close-btn:hover {
+  color: #0F172A !important;
+}
+
+[data-theme="classroom"] .btn-toast-action {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #1E293B !important;
+}
+
+[data-theme="classroom"] .btn-toast-action:hover {
+  background: #E2E8F0 !important;
+  border-color: #94A3B8 !important;
 }
 
 [data-theme="classroom"] .dropdown-menu-box {

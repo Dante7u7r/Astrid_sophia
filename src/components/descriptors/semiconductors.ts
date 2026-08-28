@@ -43,13 +43,27 @@ export const DiodeDefinition: ComponentDefinition = {
     const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
     const vDiff = v0 - v1;
     const isConduction = vDiff >= 0.55;
+    const iBranch = Math.abs(
+      options.branchCurrents?.[`${comp.id}:I`] ??
+      options.branchCurrents?.[`${comp.id}:0`] ??
+      options.branchCurrents?.[comp.id] ??
+      0,
+    );
+
+    const isOverCurrent = iBranch > 1.5;
+    const isReverseBreakdown = vDiff < -100;
+
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     ctx.save();
-    if (isConduction) {
-      ctx.fillStyle = "rgba(16, 185, 129, 0.85)"; // Verde de conducción directa activa
-      ctx.strokeStyle = "#34D399";
+    if (isOverCurrent || isReverseBreakdown) {
+      ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
+      ctx.strokeStyle = "#EF4444";
+    } else if (isConduction) {
+      ctx.fillStyle = isClassroom ? "rgba(5, 150, 105, 0.85)" : "rgba(16, 185, 129, 0.85)"; // Verde de conducción directa activa
+      ctx.strokeStyle = isClassroom ? "#059669" : "#34D399";
     } else {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+      ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
       ctx.strokeStyle = state.color;
     }
 
@@ -65,6 +79,12 @@ export const DiodeDefinition: ComponentDefinition = {
     ctx.moveTo(8, -10);
     ctx.lineTo(8, 10);
     ctx.stroke();
+
+    if (isOverCurrent || isReverseBreakdown) {
+      ctx.fillStyle = "#EF4444";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      ctx.fillText(isReverseBreakdown ? "⚡ RUPTURA VRRM" : "🔥 SOBRECORRIENTE", -36, -14);
+    }
     ctx.restore();
   },
   evaluateLiveBehavior: (pinVoltages) => {
@@ -89,7 +109,28 @@ export const LedDefinition: ComponentDefinition = {
       drawCompactComponent(ctx, comp, state.color);
       return;
     }
+    const v0 = options.voltageMap?.[`${comp.id}:0`] ?? 0;
+    const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
+    const vDiff = v0 - v1;
+    const iBranch = Math.abs(
+      options.branchCurrents?.[`${comp.id}:I`] ??
+      options.branchCurrents?.[`${comp.id}:0`] ??
+      options.branchCurrents?.[comp.id] ??
+      0,
+    );
+
+    const isOverCurrent = iBranch > 0.04 || (vDiff > 4.5 && comp.ledColor !== "uv");
+    const isReverseOvervoltage = vDiff < -6.0;
+
     drawLed(ctx, comp, state.color);
+
+    if (isOverCurrent || isReverseOvervoltage) {
+      ctx.save();
+      ctx.fillStyle = "#EF4444";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      ctx.fillText(isReverseOvervoltage ? "💥 VRRM EXCEDIDO" : "🔥 SOBRECORRIENTE", -36, -14);
+      ctx.restore();
+    }
   },
   evaluateLiveBehavior: (pinVoltages, comp) => {
     const v0 = pinVoltages[0] ?? 0;
@@ -599,15 +640,17 @@ export const ZenerDiodeDefinition: ComponentDefinition = {
     const isForward = vDiff >= 0.55;
     const isZenerBreakdown = (v1 - v0) >= vz * 0.95;
 
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+
     ctx.save();
     if (isForward) {
-      ctx.fillStyle = "rgba(16, 185, 129, 0.85)"; // Verde de conducción directa
-      ctx.strokeStyle = "#34D399";
+      ctx.fillStyle = isClassroom ? "rgba(5, 150, 105, 0.85)" : "rgba(16, 185, 129, 0.85)"; // Verde de conducción directa
+      ctx.strokeStyle = isClassroom ? "#059669" : "#34D399";
     } else if (isZenerBreakdown) {
-      ctx.fillStyle = "rgba(168, 85, 247, 0.85)"; // Violeta de regulación Zener
-      ctx.strokeStyle = "#C084FC";
+      ctx.fillStyle = isClassroom ? "rgba(124, 58, 237, 0.85)" : "rgba(168, 85, 247, 0.85)"; // Violeta de regulación Zener
+      ctx.strokeStyle = isClassroom ? "#7C3AED" : "#C084FC";
     } else {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+      ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
       ctx.strokeStyle = state.color;
     }
 
@@ -662,13 +705,14 @@ export const SchottkyDiodeDefinition: ComponentDefinition = {
     const v1 = options.voltageMap?.[`${comp.id}:1`] ?? 0;
     const vDiff = v0 - v1;
     const isForward = vDiff >= 0.25; // Conducción rápida de baja caída
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     ctx.save();
     if (isForward) {
-      ctx.fillStyle = "rgba(14, 165, 233, 0.85)"; // Azul cyan de conmutación rápida
-      ctx.strokeStyle = "#38BDF8";
+      ctx.fillStyle = isClassroom ? "rgba(2, 132, 199, 0.85)" : "rgba(14, 165, 233, 0.85)"; // Azul cyan de conmutación rápida
+      ctx.strokeStyle = isClassroom ? "#0284C7" : "#38BDF8";
     } else {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+      ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
       ctx.strokeStyle = state.color;
     }
 

@@ -5,10 +5,10 @@ fn test_bsim4_nmos_gate_leakage() {
     let w = Some(10e-6);
     let l = Some(0.045e-6); // canal corto de 45nm
 
-    let (_ids_low, _gm_low, _gds_low, igs_low, _gg_low) =
-        evaluate_bsim4_nmos(0.2, 0.5, 0.0, 0.35, w, l);
-    let (_ids_high, _gm_high, _gds_high, igs_high, gg_high) =
-        evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, w, l);
+    let (_ids_low, _gm_low, _gds_low, _gmb_low, igs_low, _gg_low) =
+        evaluate_bsim4_nmos(0.2, 0.5, 0.0, 0.35, w, l, None, None);
+    let (_ids_high, _gm_high, _gds_high, _gmb_high, igs_high, gg_high) =
+        evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, w, l, None, None);
 
     // A Vgs = 0.2V, Ig es extremadamente bajo o cero:
     assert!(
@@ -30,8 +30,8 @@ fn test_bsim4_nmos_gate_leakage() {
     );
 
     // Verificamos escalado geométrico: duplicar W debe duplicar exactamente Ig y gg
-    let (_, _, _, igs_high_double, gg_high_double) =
-        evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, Some(20e-6), l);
+    let (_, _, _, _, igs_high_double, gg_high_double) =
+        evaluate_bsim4_nmos(1.0, 0.5, 0.0, 0.35, Some(20e-6), l, None, None);
     assert!(
         (igs_high_double - 2.0 * igs_high).abs() < 1e-15,
         "Duplicar W debería duplicar Ig"
@@ -48,8 +48,8 @@ fn test_bsim4_pmos_short_channel_saturation() {
     let l = Some(0.045e-6);
 
     // Con Vsg = 1.0V (Encendido), evaluamos a vsd = 0.2V (Región lineal) y vsd = 1.0V (Saturación con CLM)
-    let (isd_lin, _, _gds_lin, _, _) = evaluate_bsim4_pmos(1.0, 0.2, 0.0, 0.35, w, l);
-    let (isd_sat, _, gds_sat, _, _) = evaluate_bsim4_pmos(1.0, 1.0, 0.0, 0.35, w, l);
+    let (isd_lin, _, _gds_lin, _, _, _) = evaluate_bsim4_pmos(1.0, 0.2, 0.0, 0.35, w, l, None, None);
+    let (isd_sat, _, gds_sat, _, _, _) = evaluate_bsim4_pmos(1.0, 1.0, 0.0, 0.35, w, l, None, None);
 
     // La corriente de saturación debe ser mayor que la corriente lineal:
     assert!(
@@ -59,12 +59,60 @@ fn test_bsim4_pmos_short_channel_saturation() {
         isd_lin
     );
 
-    // Gracias a CLM (lambda_clm = 0.08), la conductancia de salida gds en saturación no es cero:
+    // Gracias a CLM (pclm = 0.8), la conductancia de salida gds en saturación no es cero:
     assert!(
         gds_sat > 1e-9,
         "Gds en saturación debe ser mayor a 1 nS debido a CLM, obtenido: {}",
         gds_sat
     );
+}
+
+#[test]
+fn test_bsim4_capacitances_and_model_extraction() {
+    use crate::parser::parse_spice_netlist_to_native;
+
+    let spice = r#"
+* Inversor CMOS BSIM4 45nm con parámetros Level=54
+.model NMOS_45 NMOS (LEVEL=54 TOXE=1.2e-9 VTH0=0.32 U0=0.035 VMAX=1.1e5 RDSW=80.0 CGSO=2.5e-10 CGDO=2.5e-10)
+.model PMOS_45 PMOS (LEVEL=54 TOXE=1.2e-9 VTH0=-0.32 U0=0.012 VMAX=7.5e4 RDSW=120.0 CGSO=2.5e-10 CGDO=2.5e-10)
+
+Vdd 1 0 1.0
+Vin 2 0 1.0
+
+M1 3 2 0 0 NMOS_45 W=2u L=45n
+M2 3 2 1 1 PMOS_45 W=4u L=45n
+"#;
+
+    let netlist = parse_spice_netlist_to_native(spice).expect("Netlist parse falló");
+
+    // Verificar clasificación automática por level=54
+    let m1 = netlist.components.iter().find(|c| c.id == "M1").expect("M1 no encontrado");
+    let m2 = netlist.components.iter().find(|c| c.id == "M2").expect("M2 no encontrado");
+
+    assert_eq!(m1.comp_type, "bsim4nmos");
+    assert_eq!(m2.comp_type, "bsim4pmos");
+    assert!((m1.w.unwrap() - 2e-6).abs() < 1e-12);
+    assert!((m1.l.unwrap() - 45e-9).abs() < 1e-15);
+    assert!((m1.bsim_toxe.unwrap() - 1.2e-9).abs() < 1e-15);
+    assert!((m1.bsim_vth0.unwrap() - 0.32).abs() < 1e-12);
+    assert!((m1.bsim_u0.unwrap() - 0.035).abs() < 1e-12);
+    assert!((m1.bsim_rdsw.unwrap() - 80.0).abs() < 1e-12);
+
+    // Verificar cálculo de capacitancias dinámicas
+    let (cgs, cgd, cgb) = evaluate_bsim4_capacitances(
+        1.0,
+        0.1,
+        0.0,
+        m1.bsim_vth0.unwrap(),
+        m1.w.unwrap(),
+        m1.l.unwrap(),
+        m1.bsim_toxe.unwrap(),
+        Some(m1),
+    );
+
+    assert!(cgs > 0.0, "Cgs debe ser positiva");
+    assert!(cgd > 0.0, "Cgd debe ser positiva");
+    assert!(cgb > 0.0, "Cgb debe ser positiva");
 }
 
 #[test]

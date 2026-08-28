@@ -35,6 +35,7 @@ export interface CanvasOverlayHost {
   selectionStart: Point2D | null;
   selectionEnd: Point2D | null;
   activeAlignmentGuides?: CanvasOrchestrator["activeAlignmentGuides"];
+  simulationActive?: boolean;
   simulationPaused?: boolean;
   showCurrentAnimation?: boolean;
   currentFlowMode?: "conventional" | "electron";
@@ -78,10 +79,11 @@ export class CanvasOverlayRenderer {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     // 2. Comprobar si hay elementos dinámicos que renderizar
-    const hasCurrentAnimation = this.host.showCurrentAnimation !== false && (
+    const isSimActive = this.host.simulationActive !== false;
+    const hasCurrentAnimation = this.host.showCurrentAnimation !== false && isSimActive && (
       Object.keys(branchCurrents).length > 0 || Object.keys(voltageMap).length > 0
     );
-    const hasThermalHeatmap = this.host.showThermalHeatmap !== false;
+    const hasThermalHeatmap = this.host.showThermalHeatmap !== false && isSimActive;
     const hasTempWire = Boolean(this.host.activePinForWire && this.host.tempWireEnd);
     const hasSelectionBox = Boolean(this.host.selectionStart && this.host.selectionEnd);
     const hasGuides = Boolean(this.host.activeAlignmentGuides && this.host.activeAlignmentGuides.length > 0);

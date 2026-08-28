@@ -6,6 +6,10 @@ import {
   isValidComponentId,
 } from "../canvas_orchestrator";
 import {
+  isJunctionEndpoint,
+  wireEndpointKey,
+} from "../canvas/wire_identity";
+import {
   parseLampActuatorModel,
   parseBuzzerActuatorModel,
   parseRelayActuatorModel,
@@ -179,8 +183,8 @@ export function validateSchematicIntegrity(
 
   const componentIds = new Set(components.map(component => component.id));
   const danglingWires = wires.filter(wire =>
-    (!wire.from.isJunction && !componentIds.has(wire.from.componentId))
-    || (!wire.to.isJunction && !componentIds.has(wire.to.componentId)),
+    (!isJunctionEndpoint(wire.from) && !componentIds.has(wire.from.componentId))
+    || (!isJunctionEndpoint(wire.to) && !componentIds.has(wire.to.componentId)),
   );
   if (danglingWires.length > 0) {
     return `Cables con referencias a componentes inexistentes: ${danglingWires.map(wire => `[${wire.id}]`).join(", ")}.`;
@@ -188,13 +192,13 @@ export function validateSchematicIntegrity(
 
   const componentById = new Map(components.map(component => [component.id, component]));
   const wiresWithInvalidPins = wires.filter(wire => {
-    if (!wire.from.isJunction) {
+    if (!isJunctionEndpoint(wire.from)) {
       const fromComponent = componentById.get(wire.from.componentId);
       if (!fromComponent) return false;
       const fromPinExists = getPins(fromComponent).some(pin => pin.pinIndex === wire.from.pinIndex);
       if (!fromPinExists) return true;
     }
-    if (!wire.to.isJunction) {
+    if (!isJunctionEndpoint(wire.to)) {
       const toComponent = componentById.get(wire.to.componentId);
       if (!toComponent) return false;
       const toPinExists = getPins(toComponent).some(pin => pin.pinIndex === wire.to.pinIndex);
@@ -287,12 +291,8 @@ export function computeTopologySignature(
 
   const wiresSig = wires
     .map(w => {
-      const fromKey = w.from.isJunction && w.from.junctionPos
-        ? `j_${Math.round(w.from.junctionPos.x)}_${Math.round(w.from.junctionPos.y)}`
-        : `${w.from.componentId}:${w.from.pinIndex}`;
-      const toKey = w.to.isJunction && w.to.junctionPos
-        ? `j_${Math.round(w.to.junctionPos.x)}_${Math.round(w.to.junctionPos.y)}`
-        : `${w.to.componentId}:${w.to.pinIndex}`;
+      const fromKey = wireEndpointKey(w.from);
+      const toKey = wireEndpointKey(w.to);
       const labelExtra = w.label ? `:${w.label.trim().toUpperCase()}` : "";
       return `${w.id}:${fromKey}->${toKey}${labelExtra}`;
     })
@@ -365,12 +365,8 @@ export function extractElectricalNetlist(
 
     // 2. Unir los pins y uniones que están conectados por cables (wires)
     for (const wire of wires) {
-      const keyFrom = wire.from.isJunction && wire.from.junctionPos
-        ? `junction:${Math.round(wire.from.junctionPos.x)}_${Math.round(wire.from.junctionPos.y)}`
-        : pinKey(wire.from.componentId, wire.from.pinIndex);
-      const keyTo = wire.to.isJunction && wire.to.junctionPos
-        ? `junction:${Math.round(wire.to.junctionPos.x)}_${Math.round(wire.to.junctionPos.y)}`
-        : pinKey(wire.to.componentId, wire.to.pinIndex);
+      const keyFrom = wireEndpointKey(wire.from);
+      const keyTo = wireEndpointKey(wire.to);
       dsu!.union(keyFrom, keyTo);
 
       // Unión virtual por etiqueta de red en cable (Named Net Tie / Bus)

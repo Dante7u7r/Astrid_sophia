@@ -64,18 +64,21 @@ describe("property_model", () => {
       showValueGroup: true,
       showUnitGroup: true,
       showSliderControls: false,
+      showSnapSeries: true,
     });
     expect(getValueEditorPresentation("net_label")).toMatchObject({
       showValueGroup: true,
       showUnitGroup: false,
       valueLabel: "Nombre de Red",
       showSliderControls: false,
+      showSnapSeries: false,
     });
     expect(getValueEditorPresentation("text_note")).toMatchObject({
       showValueGroup: true,
       showUnitGroup: false,
       valueLabel: "Contenido de la Nota",
       showSliderControls: false,
+      showSnapSeries: false,
     });
   });
 
@@ -148,8 +151,27 @@ describe("property_model", () => {
     expect(exprBadge.isExpression).toBe(true);
     expect(exprBadge.badgeText).toBe("Expresión: R_LOAD / 2");
 
+    const netBadge = formatEngineeringBadge("TP1", "net_label");
+    expect(netBadge.valid).toBe(true);
+    expect(netBadge.badgeText).toBe("Puerto / Red: TP1");
+
+    const noteBadge = formatEngineeringBadge("Anotacion de prueba", "text_note");
+    expect(noteBadge.valid).toBe(true);
+    expect(noteBadge.badgeText).toContain("Nota");
+
+    const gndBadge = formatEngineeringBadge("0", "ground");
+    expect(gndBadge.valid).toBe(true);
+    expect(gndBadge.badgeText).toBe("Referencia Global (0 V)");
+
     const invalidBadge = formatEngineeringBadge("4.7xyz", "resistor");
     expect(invalidBadge.valid).toBe(false);
+  });
+
+  it("omite telemetría de caída de tensión para componentes puramente topológicos", () => {
+    const net = component("NET1", "net_label");
+    const pinNodes = [{ pinIndex: 0, pinName: "Pin 1", nodeId: "1" }];
+    const op = calculateComponentOperatingPoint(net, pinNodes, { "1": 5.0 }, {});
+    expect(op).toBeNull();
   });
 
   it("calcula telemetría de punto de operación y pequeña señal para transistores", () => {

@@ -19,6 +19,7 @@ export interface ComponentRenderOptions {
   readonly branchCurrents?: Record<string, number>;
   readonly showReactiveFields?: boolean;
   readonly symbolStandard?: "IEEE" | "IEC";
+  readonly isClassroom?: boolean;
 }
 
 export function drawComponentSymbol(
@@ -37,12 +38,17 @@ export function drawComponentSymbol(
     ctx.scale(scaleX, scaleY);
   }
 
-  const visualState = getComponentVisualState(isSelected, isHovered);
+  const isClassroomTheme = options.isClassroom ?? (
+    typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme") === "classroom"
+  );
+
+  const visualState = getComponentVisualState(isSelected, isHovered, isClassroomTheme);
   const { color } = visualState;
 
   ctx.strokeStyle = color;
   ctx.lineWidth = visualState.lineWidth;
-  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
+  ctx.fillStyle = isClassroomTheme ? "rgba(248, 250, 252, 0.95)" : "rgba(10, 15, 29, 0.90)";
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
@@ -83,18 +89,22 @@ export function drawComponentSymbol(
   }
   ctx.rotate(-(comp.rotation * Math.PI) / 180); // Des-rotar el texto para mantenerlo horizontal
 
-  const { idY, valueY } = getComponentLabelLayout(comp);
+  const labelLayout = getComponentLabelLayout(comp);
 
-  ctx.fillStyle = isSelected ? "#38BDF8" : "#F1F5F9";
+  ctx.fillStyle = isSelected
+    ? (isClassroomTheme ? "#0284C7" : "#38BDF8")
+    : (isClassroomTheme ? "#0F172A" : "#F1F5F9");
   ctx.font = "bold 11px 'Inter', sans-serif";
-  ctx.textAlign = "center";
+  ctx.textAlign = labelLayout.align ?? "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(comp.id, 0, idY);
+  ctx.fillText(comp.id, labelLayout.idX ?? 0, labelLayout.idY);
 
   if (shouldDrawValueLabel(comp.type)) {
-    ctx.fillStyle = isSelected ? "#7DD3FC" : "#94A3B8";
+    ctx.fillStyle = isSelected
+      ? (isClassroomTheme ? "#0369A1" : "#7DD3FC")
+      : (isClassroomTheme ? "#475569" : "#94A3B8");
     ctx.font = "9px 'JetBrains Mono', monospace";
-    ctx.fillText(formatComponentValue(comp), 0, valueY);
+    ctx.fillText(formatComponentValue(comp), labelLayout.valueX ?? 0, labelLayout.valueY);
   }
   ctx.restore();
 }

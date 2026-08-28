@@ -523,6 +523,9 @@ pub fn solve_sparse(matrix: &DMatrix<f64>, b: &DVector<f64>) -> Option<DVector<f
     if matrix.nrows() > MAX_DENSE_NODES_FALLBACK {
         return None;
     }
+    if let Ok(sol) = crate::solver::linear_backend::solve_dense_real_direct(matrix, b.as_slice()) {
+        return Some(DVector::from_vec(sol));
+    }
     let sparse = SparseMatrix::from_dense(matrix);
     match crate::solver::linear_backend::solve_linear_real(&sparse, b.as_slice()) {
         Ok(sol) => Some(DVector::from_vec(sol)),

@@ -7,15 +7,9 @@
 #![allow(
     clippy::needless_range_loop,
     clippy::too_many_arguments,
-    clippy::for_kv_map,
-    clippy::unnecessary_lazy_evaluations,
-    clippy::doc_lazy_continuation,
     clippy::approx_constant,
     clippy::float_cmp,
-    clippy::type_complexity,
-    clippy::needless_borrow,
-    clippy::single_match,
-    clippy::collapsible_match
+    clippy::type_complexity
 )]
 pub mod ad_value;
 mod advanced_ipc;

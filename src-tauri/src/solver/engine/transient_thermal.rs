@@ -106,8 +106,8 @@ pub(crate) fn update_device_junction_temperatures(
                 let kn = 0.02 * (tj / PHYS_T).powf(MOS_MOBILITY_EXPO);
 
                 let (ids, igs) = if comp.comp_type == "bsim4nmos" {
-                    let (ids_val, _, _, igs_val, _) =
-                        evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l);
+                    let (ids_val, _, _, _, igs_val, _) =
+                        evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, Some(tj), Some(comp));
                     (ids_val, igs_val)
                 } else if comp.comp_type == "bsim3nmos" {
                     let (ids_val, _, _) = evaluate_bsim3_nmos(
@@ -117,7 +117,7 @@ pub(crate) fn update_device_junction_temperatures(
                         comp.value,
                         comp.w,
                         comp.l,
-                        None,
+                        Some(tj),
                         Some(comp),
                     );
                     (ids_val, 0.0)
@@ -154,8 +154,8 @@ pub(crate) fn update_device_junction_temperatures(
                 let kp = 0.01 * (tj / PHYS_T).powf(MOS_MOBILITY_EXPO);
 
                 let (isd, igs) = if comp.comp_type == "bsim4pmos" {
-                    let (isd_val, _, _, igs_val, _) =
-                        evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l);
+                    let (isd_val, _, _, _, igs_val, _) =
+                        evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, Some(tj), Some(comp));
                     (isd_val, igs_val)
                 } else if comp.comp_type == "bsim3pmos" {
                     let (isd_val, _, _) = evaluate_bsim3_pmos(
@@ -165,7 +165,7 @@ pub(crate) fn update_device_junction_temperatures(
                         comp.value,
                         comp.w,
                         comp.l,
-                        None,
+                        Some(tj),
                         Some(comp),
                     );
                     (isd_val, 0.0)

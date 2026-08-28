@@ -187,4 +187,36 @@ describe("SimulationController", () => {
     expect(oscilloscopePanel.resume).toHaveBeenCalledOnce();
     expect(setSimulationPaused).toHaveBeenCalledWith(false);
   });
+
+  it("inicia simulación transitoria interactiva en modo continuo indefinido por defecto", async () => {
+    const startInteractiveTransient = vi.fn(async () => undefined);
+    const netlist: CircuitNetlist = {
+      components: [
+        { id: "V1", type: "vsource", value: 5, pins: ["1", "0"] },
+        { id: "R1", type: "resistor", value: 1000, pins: ["1", "0"] },
+        { id: "GND1", type: "ground", value: 0, pins: ["0"] },
+      ],
+      wires: [],
+    };
+    const { controller, deps } = createHarness({
+      netlist,
+      orchestrator: {
+        components: [
+          { id: "V1", type: "vsource", value: "5", x: 0, y: 0, rotation: 0 },
+          { id: "R1", type: "resistor", value: "1k", x: 80, y: 0, rotation: 0 },
+          { id: "GND1", type: "ground", value: "0", x: 0, y: 80, rotation: 0 },
+        ],
+        wires: [],
+        getComponentPins: vi.fn(() => [{ x: 0, y: 0, pinIndex: 0 }]),
+      },
+    });
+    deps.getSimulationRunner = () => ({ startInteractiveTransient }) as never;
+
+    await controller.runSimulation("TRAN");
+
+    expect(startInteractiveTransient).toHaveBeenCalledOnce();
+    const [, settings] = startInteractiveTransient.mock.calls[0];
+    // Modo continuo: tMax = 0
+    expect(settings.tMax).toBe(0);
+  });
 });

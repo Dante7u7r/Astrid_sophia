@@ -26,10 +26,11 @@ export function getGateInputYOffsets(count: number): number[] {
 }
 
 function getLogicColor(level?: "1" | "0" | "X"): string {
-  if (level === "1") return "#10B981"; // Verde Esmeralda (Nivel Alto)
-  if (level === "0") return "#64748B"; // Pizarra / Gris Oscuro (Nivel Bajo)
-  if (level === "X") return "#F59E0B"; // Ámbar (Indeterminado)
-  return "#475569";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  if (level === "1") return isClassroom ? "#059669" : "#10B981"; // Verde Esmeralda (Nivel Alto)
+  if (level === "0") return isClassroom ? "#475569" : "#64748B"; // Pizarra / Gris Oscuro (Nivel Bajo)
+  if (level === "X") return isClassroom ? "#D97706" : "#F59E0B"; // Ámbar (Indeterminado)
+  return isClassroom ? "#334155" : "#475569";
 }
 
 function drawLogicTerminalNode(ctx: CanvasRenderingContext2D, x: number, y: number, level?: "1" | "0" | "X"): void {
@@ -98,8 +99,9 @@ function drawIecGateBox(
   ctx.stroke();
 
   // 3. Símbolo calificador IEC (&, ≥1, 1, =1)
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.save();
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(255, 255, 255, 0.9)";
   ctx.font = "bold 11px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
@@ -490,7 +492,10 @@ export function drawFlipFlopD(
   drawLogicTerminalNode(ctx, 38, 20, opts?.levelQNot);
 
   // 2. Cuerpo del CI
-  ctx.fillStyle = opts?.levelQ === "1" ? "rgba(16, 185, 129, 0.08)" : "rgba(30, 41, 59, 0.6)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom
+    ? (opts?.levelQ === "1" ? "rgba(5, 150, 105, 0.12)" : "rgba(241, 245, 249, 0.95)")
+    : (opts?.levelQ === "1" ? "rgba(16, 185, 129, 0.08)" : "rgba(30, 41, 59, 0.6)");
   ctx.beginPath();
   ctx.rect(-24, -30, 48, 60);
   ctx.fill();
@@ -520,7 +525,7 @@ export function drawFlipFlopD(
   ctx.fillText("CLR", 0, 23);
 
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC74", 0, 0);
 
   ctx.restore();
@@ -576,7 +581,10 @@ export function drawFlipFlopJK(
   drawLogicTerminalNode(ctx, 38, 20, opts?.levelQNot);
 
   // 2. Cuerpo del CI
-  ctx.fillStyle = opts?.levelQ === "1" ? "rgba(16, 185, 129, 0.08)" : "rgba(30, 41, 59, 0.6)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom
+    ? (opts?.levelQ === "1" ? "rgba(5, 150, 105, 0.12)" : "rgba(241, 245, 249, 0.95)")
+    : (opts?.levelQ === "1" ? "rgba(16, 185, 129, 0.08)" : "rgba(30, 41, 59, 0.6)");
   ctx.beginPath();
   ctx.rect(-24, -30, 48, 60);
   ctx.fill();
@@ -606,7 +614,7 @@ export function drawFlipFlopJK(
   ctx.fillText("CLR", 0, 23);
 
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC73", 0, 0);
 
   ctx.restore();
@@ -651,7 +659,8 @@ export function drawBcdTo7Seg(
   ctx.stroke();
 
   // 2. Encapsulado principal
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -70, 48, 140);
   ctx.fill();
@@ -674,15 +683,16 @@ export function drawBcdTo7Seg(
   // Título e indicador central
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC47", 0, -52);
   ctx.font = "7px sans-serif";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("BCD→7SEG", 0, -42);
 
   // Preview digital si hay dígito decodificado
   if (opts?.decodedDigit !== undefined) {
     ctx.font = "bold 16px monospace";
-    ctx.fillStyle = "#10B981";
+    ctx.fillStyle = isClassroom ? "#059669" : "#10B981";
     ctx.fillText(String(opts.decodedDigit), 0, 0);
   }
 
@@ -734,7 +744,8 @@ export function drawShiftRegister595(
   ctx.stroke();
 
   // 2. Encapsulado
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -90, 48, 180);
   ctx.fill();
@@ -757,14 +768,15 @@ export function drawShiftRegister595(
   // Título e indicador de valor hex
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC595", 0, -75);
   ctx.font = "7px sans-serif";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("8-BIT SIPO", 0, -65);
 
   if (opts?.latchValue !== undefined) {
     ctx.font = "bold 10px monospace";
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     const hex = `0x${(opts.latchValue & 0xff).toString(16).toUpperCase().padStart(2, "0")}`;
     ctx.fillText(hex, 0, 0);
   }
@@ -813,7 +825,8 @@ export function drawJohnsonCounter4017(
   ctx.stroke();
 
   // Encapsulado
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -110, 48, 220);
   ctx.fill();
@@ -831,14 +844,15 @@ export function drawJohnsonCounter4017(
 
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("CD4017", 0, -95);
   ctx.font = "6px sans-serif";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("DECADE", 0, -85);
 
   if (opts?.activeIndex !== undefined) {
     ctx.font = "bold 12px monospace";
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.fillText(`[Q${opts.activeIndex}]`, 0, -50);
   }
 
@@ -874,7 +888,8 @@ export function drawBcdCounter90(
   });
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -60, 48, 120);
   ctx.fill();
@@ -891,12 +906,12 @@ export function drawBcdCounter90(
 
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC90", 0, -45);
 
   if (opts?.displayValue !== undefined) {
     ctx.font = "bold 11px monospace";
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.fillText(`${opts.displayValue}`, 0, 0);
   }
 
@@ -932,7 +947,8 @@ export function drawUpDownCounter193(
   });
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -80, 48, 160);
   ctx.fill();
@@ -949,14 +965,15 @@ export function drawUpDownCounter193(
 
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC193", 0, -65);
   ctx.font = "6px sans-serif";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("UP/DOWN", 0, -55);
 
   if (opts?.displayValue !== undefined) {
     ctx.font = "bold 11px monospace";
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.fillText(`${opts.displayValue}`, 0, 0);
   }
 
@@ -999,7 +1016,8 @@ export function drawDecoder138(
   outY.forEach((y) => ctx.arc(26, y, 2.5, 0, Math.PI * 2));
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -80, 48, 160);
   ctx.fill();
@@ -1016,9 +1034,10 @@ export function drawDecoder138(
 
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC138", 0, -65);
   ctx.font = "6px sans-serif";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("DEMUX 3:8", 0, -55);
 
   ctx.restore();
@@ -1059,7 +1078,8 @@ export function drawMultiplexer151(
   ctx.arc(26, 20, 2.5, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.65)";
   ctx.beginPath();
   ctx.rect(-24, -100, 48, 225);
   ctx.fill();
@@ -1076,9 +1096,10 @@ export function drawMultiplexer151(
 
   ctx.textAlign = "center";
   ctx.font = "bold 8px sans-serif";
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("74HC151", 0, -85);
   ctx.font = "6px sans-serif";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.fillText("MUX 8:1", 0, -75);
 
   ctx.restore();

@@ -216,16 +216,12 @@ export class RenderController {
 
   private shouldContinueCanvasAnimation(
     orchestrator: CanvasOrchestrator,
-    branchCurrents: Readonly<Record<string, number>>,
+    _branchCurrents: Readonly<Record<string, number>>,
   ): boolean {
+    if (orchestrator.simulationPaused) return false;
     if (orchestrator.simulationActive) return true;
-    if (this.dependencies.getOscilloscopePanel()?.isSimulating) return true;
-
-    if (orchestrator.showCurrentAnimation !== false) {
-      for (const key in branchCurrents) {
-        if (Math.abs(branchCurrents[key]) > 1e-9) return true;
-      }
-    }
+    const osc = this.dependencies.getOscilloscopePanel();
+    if (osc && osc.isSimulating && !osc.isOscPaused) return true;
 
     return false;
   }

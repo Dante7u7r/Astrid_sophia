@@ -248,12 +248,25 @@ pub fn flatten_subcircuit(
         };
 
         let (num_pins, is_gate, is_subckt) = match first_char {
-            'r' | 'c' | 'l' => (2, false, false),
-            'd' => (2, false, false),
-            'q' => (3, false, false), // BJT
+            'r' | 'c' | 'l' | 'd' | 'v' | 'i' => (2, false, false),
+            'q' => {
+                if tokens.len() >= 6 && models.contains_key(&tokens[5]) {
+                    (4, false, false)
+                } else {
+                    (3, false, false)
+                }
+            }
             'j' => (3, false, false), // JFET (Drain, Gate, Source)
-            'm' => (3, false, false), // MOSFET (simplificado a 3 pines en este simulador: G D S)
-            'v' | 'i' => (2, false, false),
+            'm' => {
+                if tokens.len() >= 6
+                    && (models.contains_key(&tokens[5])
+                        || (!tokens[5].contains('=') && !models.contains_key(&tokens[4])))
+                {
+                    (4, false, false)
+                } else {
+                    (3, false, false)
+                }
+            }
             'b' => (2, false, false),       // B-source
             'e' | 'g' => (4, false, false), // VCVS, VCCS
             'f' | 'h' => (2, false, false), // CCCS, CCVS
@@ -520,7 +533,27 @@ pub fn flatten_subcircuit(
                     }
                     'm' => {
                         if let Some(m) = models.get(value_or_model) {
-                            m.model_type.clone()
+                            let level = m.params.get("level").copied().unwrap_or(1.0) as i64;
+                            let is_pmos = m.model_type.eq_ignore_ascii_case("pmos")
+                                || m.model_type.eq_ignore_ascii_case("bsim3pmos")
+                                || m.model_type.eq_ignore_ascii_case("bsim4pmos");
+                            match level {
+                                54 | 14 => {
+                                    if is_pmos {
+                                        "bsim4pmos".to_string()
+                                    } else {
+                                        "bsim4nmos".to_string()
+                                    }
+                                }
+                                49 | 8 => {
+                                    if is_pmos {
+                                        "bsim3pmos".to_string()
+                                    } else {
+                                        "bsim3nmos".to_string()
+                                    }
+                                }
+                                _ => m.model_type.clone(),
+                            }
                         } else {
                             "nmos".to_string()
                         }
@@ -743,8 +776,16 @@ pub fn flatten_subcircuit(
                             comp.bsim_vmax = get_evaluated_model_param(m, "vmax", &param_env);
                             comp.bsim_u0 = get_evaluated_model_param(m, "u0", &param_env);
                             comp.bsim_tox = get_evaluated_model_param(m, "tox", &param_env);
+                            comp.bsim_toxe = get_evaluated_model_param(m, "toxe", &param_env);
+                            comp.bsim_vth0 = get_evaluated_model_param(m, "vth0", &param_env);
                             comp.bsim_eta0 = get_evaluated_model_param(m, "eta0", &param_env);
                             comp.bsim_theta = get_evaluated_model_param(m, "theta", &param_env);
+                            comp.bsim_rdsw = get_evaluated_model_param(m, "rdsw", &param_env);
+                            comp.bsim_pclm = get_evaluated_model_param(m, "pclm", &param_env);
+                            comp.bsim_dvt0 = get_evaluated_model_param(m, "dvt0", &param_env);
+                            comp.bsim_cgso = get_evaluated_model_param(m, "cgso", &param_env);
+                            comp.bsim_cgdo = get_evaluated_model_param(m, "cgdo", &param_env);
+                            comp.bsim_cgbo = get_evaluated_model_param(m, "cgbo", &param_env);
                         } else if comp.comp_type == "verilog_a" {
                             comp.va_model_name = Some(m.name.clone());
                             comp.va_ports = m.va_ports.clone();
@@ -766,7 +807,7 @@ pub fn flatten_subcircuit(
                 }
             }
 
-            // Parsear tolerancia opcional (ej: tol=1%) y parámetros térmicos (rth=, cth=)
+            // Parsear parámetros de instancia (tol=, w=, l=, rth=, cth=)
             if comp.comp_type == "vsource" || comp.comp_type == "isource" {
                 if let Some(value) =
                     parse_independent_source_dc_value(&tokens, actual_pins_count + 1)
@@ -775,12 +816,20 @@ pub fn flatten_subcircuit(
                 }
             }
 
-            for tok in &tokens[actual_pins_count + 2..] {
+            for tok in &tokens[actual_pins_count + 1..] {
                 let tok_lower = tok.to_lowercase();
                 if tok_lower.starts_with("tol=") {
-                    let tol_str = &tok[4..].replace("%", "");
+                    let tol_str = &tok[4..].replace('%', "");
                     if let Ok(tol_val) = tol_str.parse::<f64>() {
                         comp.tolerance = Some(tol_val / 100.0);
+                    }
+                } else if tok_lower.starts_with("w=") {
+                    if let Ok(val) = parse_spice_value(&tok[2..]) {
+                        comp.w = Some(val);
+                    }
+                } else if tok_lower.starts_with("l=") {
+                    if let Ok(val) = parse_spice_value(&tok[2..]) {
+                        comp.l = Some(val);
                     }
                 } else if tok_lower.starts_with("rth=") {
                     if let Ok(val) = parse_spice_value(&tok[4..]) {

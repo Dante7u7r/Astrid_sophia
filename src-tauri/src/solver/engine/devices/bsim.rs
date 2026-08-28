@@ -339,6 +339,11 @@ pub fn evaluate_bsim3_substrate_current(ids: f64, vds: f64, vdsat: f64, l: f64) 
     (alpha0 / l) * vds_diff * exp_term * ids
 }
 
+/// Evaluador físico completo BSIM4 para transistores NMOS de canal corto (45nm - 14nm)
+/// con diferenciación automática continua Dual3.
+/// Soporta degradación de movilidad por campo vertical, velocidad de saturación,
+/// DIBL, modulación de longitud de canal (CLM), resistencia de contacto Rdsw
+/// y corriente de fuga cuántica de compuerta Ig (Direct Gate Tunneling).
 pub fn evaluate_bsim4_nmos(
     vgs: f64,
     vds: f64,
@@ -346,89 +351,135 @@ pub fn evaluate_bsim4_nmos(
     vth_netlist: f64,
     w_opt: Option<f64>,
     l_opt: Option<f64>,
-) -> (f64, f64, f64, f64, f64) {
-    let tox = 1.4e-9;
-    let eps_ox = 3.9 * 8.85418e-12;
-    let cox = eps_ox / tox;
-    let w = w_opt.unwrap_or(1.0e-6);
-    let l = l_opt.unwrap_or(0.045e-6);
-    let u0 = 0.032;
-    let vsat = 1.2e5;
-    let abulk = 1.1;
-    let ua = 5.0e-10;
+    temp_k: Option<f64>,
+    comp: Option<&ComponentData>,
+) -> (f64, f64, f64, f64, f64, f64) {
+    let tnom = 300.15; // Temperatura nominal (27°C)
+    let t_actual = temp_k.unwrap_or(tnom);
+    let toxe = comp
+        .and_then(|c| c.bsim_toxe.or(c.bsim_tox))
+        .unwrap_or(1.4e-9);
+    let eps_ox = 3.9 * 8.854187817e-12;
+    let cox = eps_ox / toxe;
+    let w = w_opt.or_else(|| comp.and_then(|c| c.w)).unwrap_or(1.0e-6);
+    let l = l_opt.or_else(|| comp.and_then(|c| c.l)).unwrap_or(0.045e-6);
+    let u0_nom = comp.and_then(|c| c.bsim_u0).unwrap_or(0.032);
+    let vsat = comp.and_then(|c| c.bsim_vmax).unwrap_or(1.2e5);
+
+    let theta_override = comp.and_then(|c| c.bsim_theta).unwrap_or(0.0);
+    let ua = 5.0e-10 + theta_override;
     let ub = 2.5e-18;
     let uc = -0.02;
-    let theta_dibl = 0.12;
-    let vt_therm = 0.025852;
+    let theta_dibl = comp.and_then(|c| c.bsim_eta0).unwrap_or(0.12);
+    let dvt0 = comp.and_then(|c| c.bsim_dvt0).unwrap_or(2.2);
+    let rdsw_val = comp.and_then(|c| c.bsim_rdsw).unwrap_or(100.0);
+    let pclm_val = comp.and_then(|c| c.bsim_pclm).unwrap_or(0.8);
+
+    // Coeficientes térmicos BSIM4 NMOS
+    let kt1 = -0.11;
+    let ute = -1.5;
+    let delta_t = t_actual - tnom;
+    let vth0 = comp
+        .and_then(|c| c.bsim_vth0)
+        .unwrap_or(if vth_netlist != 0.0 { vth_netlist } else { 0.35 });
+    let vth_thermal = vth0 + kt1 * (delta_t / tnom);
+
+    let phi_s: f64 = 0.7;
+    let k1 = 0.45;
+    let k2 = -0.015;
+    let sqrt_phi = phi_s.sqrt();
+
+    let vt_therm = 1.380649e-23 * t_actual / 1.602176634e-19;
     let n_factor = 1.3;
-    let lambda_clm = 0.08;
 
-    let vth0 = if vth_netlist != 0.0 {
-        vth_netlist
+    let u0 = u0_nom * (tnom / t_actual).powf(ute);
+
+    let v_gs = Dual3::new(vgs, 0);
+    let v_ds = Dual3::new(vds, 1);
+    let v_bs = Dual3::new(vbs, 2);
+
+    let v_ds_pos = v_ds.max_val(0.0);
+    let v_bs_eff = v_bs.min_val(0.0);
+
+    let sqrt_phi_vbs = (Dual3::constant(phi_s) - v_bs_eff).max_val(0.01).sqrt();
+    let body_shift = (sqrt_phi_vbs - sqrt_phi) * k1 - v_bs_eff * k2;
+    let lpe0 = 1.2e-7;
+    let pocket_shift = k1 * ((1.0 + lpe0 / l).sqrt() - 1.0) * sqrt_phi;
+    let sce_shift = -dvt0 * (1.4e-8 / l) * sqrt_phi;
+    let v_th_local = body_shift + (vth_thermal + pocket_shift + sce_shift) - v_ds_pos * theta_dibl;
+
+    let v_gst = v_gs - v_th_local;
+
+    let n_vt = n_factor * vt_therm;
+    let voff = -0.08;
+    let v_gsteff = if v_gst.val > 30.0 * n_vt {
+        v_gst
+    } else if v_gst.val < -30.0 * n_vt {
+        (v_gst / (2.0 * n_vt)).exp() * (2.0 * n_vt)
     } else {
-        0.35
+        let exp_term = (v_gst / (2.0 * n_vt)).exp();
+        let num = (Dual3::constant(1.0) + exp_term).ln() * (2.0 * n_vt);
+        let exp_denom = (-(v_gst - 2.0 * voff) / (2.0 * n_vt)).exp();
+        let denom = Dual3::constant(1.0) + exp_denom * 0.08;
+        num / denom
     };
-    let vth = vth0 - theta_dibl * vds;
 
-    let e_vert = (vgs + vth).abs() / tox;
-    let mu_eff = u0 / (1.0 + (ua * e_vert + ub * e_vert * e_vert) * (1.0 + uc * vbs));
-    let esat = 2.0 * vsat / mu_eff;
-
-    // Direct Gate oxide tunneling current Ig (Direct tunneling through ultra-thin oxide)
+    // Corriente cuántica de compuerta Ig (Direct Tunneling)
+    let tox_ratio = toxe / 1.4e-9;
     let (igs, gg) = if vgs > 0.0 {
-        let tunneling_exponent = -11.9 / vgs;
+        let tunneling_exponent = -11.9 * tox_ratio / vgs;
         let igs_val = 1.5e-6 * (w / l) * vgs * vgs * tunneling_exponent.exp();
-        let gg_val = 1.5e-6 * (w / l) * (2.0 * vgs + 11.9) * tunneling_exponent.exp();
+        let gg_val = 1.5e-6 * (w / l) * (2.0 * vgs + 11.9 * tox_ratio) * tunneling_exponent.exp();
         (igs_val, gg_val)
     } else {
         (0.0, 1e-12)
     };
 
-    let (ids, gm, gds) = if vgs <= vth {
-        // Subthreshold Region
-        let i_off = 1.5e-7 * (w / l);
-        let exp_sub = ((vgs - vth) / (n_factor * vt_therm)).exp();
-        let exp_vds = (-vds.max(0.0) / vt_therm).exp();
-        let ids_val = i_off * exp_sub * (1.0 - exp_vds) * (1.0 + lambda_clm * vds);
+    if v_gsteff.val <= 1e-12 {
+        return (0.0, 1e-12, 1e-12, 0.0, igs, gg);
+    }
 
-        let gm_val = ids_val / (n_factor * vt_therm);
-        let gds_val = i_off * exp_sub * (exp_vds / vt_therm) * (1.0 + lambda_clm * vds)
-            + ids_val * lambda_clm / (1.0 + lambda_clm * vds);
+    let e_eff = (v_gsteff + 2.0 * v_th_local.abs().val) / (6.0 * toxe);
+    let denom_mu =
+        Dual3::constant(1.0) + (Dual3::constant(ua) + v_bs_eff * uc) * e_eff + (e_eff * e_eff) * ub;
+    let mu_eff = Dual3::constant(u0) / denom_mu.max_val(0.05);
 
-        (ids_val, gm_val, gds_val.max(1e-9))
-    } else {
-        let vds_sat = (esat * l * (vgs - vth)) / (esat * l + abulk * (vgs - vth));
+    let abulk = (Dual3::constant(k1)
+        / ((Dual3::constant(phi_s) - v_bs_eff).max_val(0.01).sqrt() * 2.0))
+        * (0.5 * l / (l + 0.05e-6))
+        + 1.0;
 
-        if vds < vds_sat {
-            // Triode Region
-            let denom = 1.0 + vds / (esat * l);
-            let num = w * mu_eff * cox * (vgs - vth - abulk * vds / 2.0) * vds;
-            let ids_base = num / (denom * l);
-            let ids_val = ids_base * (1.0 + lambda_clm * vds);
+    let esat = mu_eff.powf(-1.0) * (2.0 * vsat);
+    let esat_l = esat * l;
 
-            let gm_val = ((w * mu_eff * cox * vds) / (denom * l)) * (1.0 + lambda_clm * vds);
-            let gds_val = ((w * mu_eff * cox * (vgs - vth - abulk * vds)) / (denom * l))
-                * (1.0 + lambda_clm * vds)
-                + ids_base * lambda_clm;
+    let vdsat = (esat_l * v_gsteff) / (abulk * esat_l + v_gsteff);
 
-            (ids_val, gm_val, gds_val.max(1e-9))
-        } else {
-            // Saturation Region
-            let denom = 1.0 + vds_sat / (esat * l);
-            let num = w * mu_eff * cox * (vgs - vth - abulk * vds_sat / 2.0) * vds_sat;
-            let ids_base = num / (denom * l);
-            let ids_val = ids_base * (1.0 + lambda_clm * vds);
+    let delta = 0.015;
+    let diff = vdsat - v_ds_pos - delta;
+    let vdseff = vdsat - (diff + (diff * diff + vdsat * (4.0 * delta)).sqrt()) * 0.5;
 
-            let gm_val = ((w * mu_eff * cox * vds_sat) / (denom * l)) * (1.0 + lambda_clm * vds);
-            let gds_val = ids_base * lambda_clm;
+    let factor_lin = Dual3::constant(1.0) - (abulk * vdseff) / ((v_gsteff + 2.0 * vt_therm) * 2.0);
+    let num_ids = (mu_eff * (w * cox)) * v_gsteff * factor_lin.max_val(0.05) * vdseff;
+    let denom_ids = (vdseff / esat_l + 1.0) * l;
+    let ids0 = num_ids / denom_ids;
 
-            (ids_val, gm_val, gds_val.max(1e-9))
-        }
-    };
+    let v_asclm = esat_l / pclm_val;
+    let clm_factor = (v_ds_pos - vdseff).max_val(0.0) / (v_asclm + v_ds_pos) + 1.0;
 
-    (ids, gm, gds, igs, gg)
+    let rdsw_scaled = rdsw_val * (1.0e-6 / w);
+    let ids_clm = ids0 * clm_factor;
+    let ids_total = ids_clm / (ids_clm * rdsw_scaled / (v_ds_pos + 0.1) + 1.0);
+
+    let ids = ids_total.val;
+    let gm = ids_total.deriv[0].max(1e-12);
+    let gds = ids_total.deriv[1].max(1e-12);
+    let gmb = ids_total.deriv[2].max(0.0);
+
+    (ids, gm, gds, gmb, igs, gg)
 }
 
+/// Evaluador físico completo BSIM4 para transistores PMOS de canal corto (45nm - 14nm)
+/// con diferenciación automática continua Dual3.
 pub fn evaluate_bsim4_pmos(
     vsg: f64,
     vsd: f64,
@@ -436,85 +487,175 @@ pub fn evaluate_bsim4_pmos(
     vth_netlist: f64,
     w_opt: Option<f64>,
     l_opt: Option<f64>,
-) -> (f64, f64, f64, f64, f64) {
-    let tox = 1.4e-9;
-    let eps_ox = 3.9 * 8.85418e-12;
-    let cox = eps_ox / tox;
-    let w = w_opt.unwrap_or(1.0e-6);
-    let l = l_opt.unwrap_or(0.045e-6);
-    let u0 = 0.011;
-    let vsat = 8.0e4;
-    let abulk = 1.1;
-    let ua = 5.0e-10;
+    temp_k: Option<f64>,
+    comp: Option<&ComponentData>,
+) -> (f64, f64, f64, f64, f64, f64) {
+    let tnom = 300.15;
+    let t_actual = temp_k.unwrap_or(tnom);
+    let toxe = comp
+        .and_then(|c| c.bsim_toxe.or(c.bsim_tox))
+        .unwrap_or(1.4e-9);
+    let eps_ox = 3.9 * 8.854187817e-12;
+    let cox = eps_ox / toxe;
+    let w = w_opt.or_else(|| comp.and_then(|c| c.w)).unwrap_or(1.0e-6);
+    let l = l_opt.or_else(|| comp.and_then(|c| c.l)).unwrap_or(0.045e-6);
+    let u0_nom = comp.and_then(|c| c.bsim_u0).unwrap_or(0.011);
+    let vsat = comp.and_then(|c| c.bsim_vmax).unwrap_or(8.0e4);
+
+    let theta_override = comp.and_then(|c| c.bsim_theta).unwrap_or(0.0);
+    let ua = 5.0e-10 + theta_override;
     let ub = 2.5e-18;
     let uc = -0.02;
-    let theta_dibl = 0.12;
-    let vt_therm = 0.025852;
+    let theta_dibl = comp.and_then(|c| c.bsim_eta0).unwrap_or(0.12);
+    let dvt0 = comp.and_then(|c| c.bsim_dvt0).unwrap_or(2.2);
+    let rdsw_val = comp.and_then(|c| c.bsim_rdsw).unwrap_or(100.0);
+    let pclm_val = comp.and_then(|c| c.bsim_pclm).unwrap_or(0.8);
+
+    let kt1 = -0.11;
+    let ute = -1.5;
+    let delta_t = t_actual - tnom;
+    let vth0 = comp
+        .and_then(|c| c.bsim_vth0)
+        .unwrap_or(if vth_netlist != 0.0 { vth_netlist.abs() } else { 0.35 });
+    let vth_thermal = vth0 + kt1 * (delta_t / tnom);
+
+    let phi_s: f64 = 0.7;
+    let k1 = 0.45;
+    let k2 = -0.015;
+    let sqrt_phi = phi_s.sqrt();
+
+    let vt_therm = 1.380649e-23 * t_actual / 1.602176634e-19;
     let n_factor = 1.3;
-    let lambda_clm = 0.08;
 
-    let vth0 = if vth_netlist != 0.0 {
-        vth_netlist.abs()
+    let u0 = u0_nom * (tnom / t_actual).powf(ute);
+
+    let v_sg = Dual3::new(vsg, 0);
+    let v_sd = Dual3::new(vsd, 1);
+    let v_sb = Dual3::new(vsb, 2);
+
+    let v_sd_pos = v_sd.max_val(0.0);
+    let v_sb_eff = v_sb.min_val(0.0);
+
+    let sqrt_phi_vsb = (Dual3::constant(phi_s) - v_sb_eff).max_val(0.01).sqrt();
+    let body_shift = (sqrt_phi_vsb - sqrt_phi) * k1 - v_sb_eff * k2;
+    let lpe0 = 1.2e-7;
+    let pocket_shift = k1 * ((1.0 + lpe0 / l).sqrt() - 1.0) * sqrt_phi;
+    let sce_shift = -dvt0 * (1.4e-8 / l) * sqrt_phi;
+    let v_th_local = body_shift + (vth_thermal + pocket_shift + sce_shift) - v_sd_pos * theta_dibl;
+
+    let v_sgt = v_sg - v_th_local;
+
+    let n_vt = n_factor * vt_therm;
+    let voff = -0.08;
+    let v_sgteff = if v_sgt.val > 30.0 * n_vt {
+        v_sgt
+    } else if v_sgt.val < -30.0 * n_vt {
+        (v_sgt / (2.0 * n_vt)).exp() * (2.0 * n_vt)
     } else {
-        0.35
+        let exp_term = (v_sgt / (2.0 * n_vt)).exp();
+        let num = (Dual3::constant(1.0) + exp_term).ln() * (2.0 * n_vt);
+        let exp_denom = (-(v_sgt - 2.0 * voff) / (2.0 * n_vt)).exp();
+        let denom = Dual3::constant(1.0) + exp_denom * 0.08;
+        num / denom
     };
-    let vth = vth0 - theta_dibl * vsd;
 
-    let e_vert = (vsg + vth).abs() / tox;
-    let mu_eff = u0 / (1.0 + (ua * e_vert + ub * e_vert * e_vert) * (1.0 + uc * vsb));
-    let esat = 2.0 * vsat / mu_eff;
-
-    // Gate leakage direct tunneling for PMOS
+    let tox_ratio = toxe / 1.4e-9;
     let (igs, gg) = if vsg > 0.0 {
-        let tunneling_exponent = -11.9 / vsg;
+        let tunneling_exponent = -11.9 * tox_ratio / vsg;
         let igs_val = 8.0e-7 * (w / l) * vsg * vsg * tunneling_exponent.exp();
-        let gg_val = 8.0e-7 * (w / l) * (2.0 * vsg + 11.9) * tunneling_exponent.exp();
+        let gg_val = 8.0e-7 * (w / l) * (2.0 * vsg + 11.9 * tox_ratio) * tunneling_exponent.exp();
         (igs_val, gg_val)
     } else {
         (0.0, 1e-12)
     };
 
-    let (isd, gm, gds) = if vsg <= vth {
-        // Subthreshold Region
-        let i_off = 1.5e-7 * (w / l);
-        let exp_sub = ((vsg - vth) / (n_factor * vt_therm)).exp();
-        let exp_vsd = (-vsd.max(0.0) / vt_therm).exp();
-        let ids_val = i_off * exp_sub * (1.0 - exp_vsd) * (1.0 + lambda_clm * vsd);
+    if v_sgteff.val <= 1e-12 {
+        return (0.0, 1e-12, 1e-12, 0.0, igs, gg);
+    }
 
-        let gm_val = ids_val / (n_factor * vt_therm);
-        let gds_val = i_off * exp_sub * (exp_vsd / vt_therm) * (1.0 + lambda_clm * vsd)
-            + ids_val * lambda_clm / (1.0 + lambda_clm * vsd);
+    let e_eff = (v_sgteff + 2.0 * v_th_local.abs().val) / (6.0 * toxe);
+    let denom_mu =
+        Dual3::constant(1.0) + (Dual3::constant(ua) + v_sb_eff * uc) * e_eff + (e_eff * e_eff) * ub;
+    let mu_eff = Dual3::constant(u0) / denom_mu.max_val(0.05);
 
-        (ids_val, gm_val, gds_val.max(1e-9))
+    let abulk = (Dual3::constant(k1)
+        / ((Dual3::constant(phi_s) - v_sb_eff).max_val(0.01).sqrt() * 2.0))
+        * (0.5 * l / (l + 0.05e-6))
+        + 1.0;
+
+    let esat = mu_eff.powf(-1.0) * (2.0 * vsat);
+    let esat_l = esat * l;
+
+    let vsdsat = (esat_l * v_sgteff) / (abulk * esat_l + v_sgteff);
+
+    let delta = 0.015;
+    let diff = vsdsat - v_sd_pos - delta;
+    let vsdeff = vsdsat - (diff + (diff * diff + vsdsat * (4.0 * delta)).sqrt()) * 0.5;
+
+    let factor_lin = Dual3::constant(1.0) - (abulk * vsdeff) / ((v_sgteff + 2.0 * vt_therm) * 2.0);
+    let num_isd = (mu_eff * (w * cox)) * v_sgteff * factor_lin.max_val(0.05) * vsdeff;
+    let denom_isd = (vsdeff / esat_l + 1.0) * l;
+    let isd0 = num_isd / denom_isd;
+
+    let v_asclm = esat_l / pclm_val;
+    let clm_factor = (v_sd_pos - vsdeff).max_val(0.0) / (v_asclm + v_sd_pos) + 1.0;
+
+    let rdsw_scaled = rdsw_val * (1.0e-6 / w);
+    let isd_clm = isd0 * clm_factor;
+    let isd_total = isd_clm / (isd_clm * rdsw_scaled / (v_sd_pos + 0.1) + 1.0);
+
+    let isd = isd_total.val;
+    let gm = isd_total.deriv[0].max(1e-12);
+    let gds = isd_total.deriv[1].max(1e-12);
+    let gmb = isd_total.deriv[2].max(0.0);
+
+    (isd, gm, gds, gmb, igs, gg)
+}
+
+/// Calcula capacitancias intrínsecas y de solape BSIM4 (Cgs, Cgd, Cgb).
+pub fn evaluate_bsim4_capacitances(
+    vgs: f64,
+    vds: f64,
+    _vbs: f64,
+    vth: f64,
+    w: f64,
+    l: f64,
+    toxe: f64,
+    comp: Option<&ComponentData>,
+) -> (f64, f64, f64) {
+    let eps_ox = 3.9 * 8.854187817e-12;
+    let tox_eff = if toxe > 0.0 { toxe } else { 1.4e-9 };
+    let cox = eps_ox / tox_eff;
+    let cgg0 = w * l * cox;
+
+    // Capacitancias de solape (overlap)
+    let cgso_unit = comp.and_then(|c| c.bsim_cgso).unwrap_or(2.0e-10);
+    let cgdo_unit = comp.and_then(|c| c.bsim_cgdo).unwrap_or(2.0e-10);
+    let cgbo_unit = comp.and_then(|c| c.bsim_cgbo).unwrap_or(1.0e-10);
+
+    let cgso = cgso_unit * w;
+    let cgdo = cgdo_unit * w;
+    let cgbo = cgbo_unit * l;
+
+    let vgst = vgs - vth;
+    let vdsat = (0.5 * vgst).max(0.02);
+
+    if vgst <= 0.0 {
+        // Subumbral / Acumulación
+        let cgb_intrinsic = cgg0 * 0.5;
+        (cgso, cgdo, cgb_intrinsic + cgbo)
+    } else if vds < vdsat {
+        // Zona lineal (Triodo)
+        let ratio = vds / vdsat;
+        let cgs = cgg0 * (0.5 - 0.1 * ratio) + cgso;
+        let cgd = cgg0 * (0.5 - 0.2 * ratio) + cgdo;
+        let cgb = cgbo;
+        (cgs, cgd, cgb)
     } else {
-        let vds_sat = (esat * l * (vsg - vth)) / (esat * l + abulk * (vsg - vth));
-
-        if vsd < vds_sat {
-            // Triode Region
-            let denom = 1.0 + vsd / (esat * l);
-            let num = w * mu_eff * cox * (vsg - vth - abulk * vsd / 2.0) * vsd;
-            let ids_base = num / (denom * l);
-            let ids_val = ids_base * (1.0 + lambda_clm * vsd);
-
-            let gm_val = ((w * mu_eff * cox * vsd) / (denom * l)) * (1.0 + lambda_clm * vsd);
-            let gds_val = ((w * mu_eff * cox * (vsg - vth - abulk * vsd)) / (denom * l))
-                * (1.0 + lambda_clm * vsd)
-                + ids_base * lambda_clm;
-
-            (ids_val, gm_val, gds_val.max(1e-9))
-        } else {
-            // Saturation Region
-            let denom = 1.0 + vds_sat / (esat * l);
-            let num = w * mu_eff * cox * (vsg - vth - abulk * vds_sat / 2.0) * vds_sat;
-            let ids_base = num / (denom * l);
-            let ids_val = ids_base * (1.0 + lambda_clm * vsd);
-
-            let gm_val = ((w * mu_eff * cox * vds_sat) / (denom * l)) * (1.0 + lambda_clm * vsd);
-            let gds_val = ids_base * lambda_clm;
-
-            (ids_val, gm_val, gds_val.max(1e-9))
-        }
-    };
-
-    (isd, gm, gds, igs, gg)
+        // Saturación
+        let cgs = (2.0 / 3.0) * cgg0 + cgso;
+        let cgd = cgdo;
+        let cgb = cgbo;
+        (cgs, cgd, cgb)
+    }
 }

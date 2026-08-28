@@ -100,7 +100,7 @@ export function evaluateComponentStress(
       const v2 = getNodeVoltage(nodeVoltages, pins[1]);
       const vDrop = Math.abs(v1 - v2);
       const power = (vDrop * vDrop) / r;
-      const limit = ratings.maxResistorPowerWatts;
+      const limit = comp.powerRating ?? ratings.maxResistorPowerWatts;
       const pct = (power / limit) * 100;
 
       const status: ComponentStressStatus = pct > 100 ? "overload" : pct >= 80 ? "warning" : "safe";
@@ -122,7 +122,7 @@ export function evaluateComponentStress(
       const v1 = getNodeVoltage(nodeVoltages, pins[0]);
       const v2 = getNodeVoltage(nodeVoltages, pins[1]);
       const vDrop = Math.abs(v1 - v2);
-      const limit = ratings.maxCapacitorVoltageVolts;
+      const limit = comp.voltageRating ?? ratings.maxCapacitorVoltageVolts;
       const pct = (vDrop / limit) * 100;
 
       const status: ComponentStressStatus = pct > 100 ? "overload" : pct >= 80 ? "warning" : "safe";

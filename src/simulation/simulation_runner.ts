@@ -241,6 +241,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       };
       nextRunId += 1;
       activeContext = context;
+      isPaused = false;
 
       // Actualizar latch dt para el closure asíncrono
       currentDt = settings.dt;

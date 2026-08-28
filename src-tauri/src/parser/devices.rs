@@ -494,6 +494,10 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                         || comp.comp_type == "pnp"
                         || comp.comp_type == "nmos"
                         || comp.comp_type == "pmos"
+                        || comp.comp_type == "bsim3nmos"
+                        || comp.comp_type == "bsim3pmos"
+                        || comp.comp_type == "bsim4nmos"
+                        || comp.comp_type == "bsim4pmos"
                         || comp.comp_type == "njf"
                         || comp.comp_type == "pjf"
                         || comp.comp_type == "verilog_a"
@@ -546,6 +550,38 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                     get_evaluated_model_param(m, "lambda", &global_params);
                                 comp.jfet_cgs = get_evaluated_model_param(m, "cgs", &global_params);
                                 comp.jfet_cgd = get_evaluated_model_param(m, "cgd", &global_params);
+                            } else if comp.comp_type == "nmos"
+                                || comp.comp_type == "pmos"
+                                || comp.comp_type == "bsim3nmos"
+                                || comp.comp_type == "bsim3pmos"
+                                || comp.comp_type == "bsim4nmos"
+                                || comp.comp_type == "bsim4pmos"
+                            {
+                                comp.bsim_vmax =
+                                    get_evaluated_model_param(m, "vmax", &global_params);
+                                comp.bsim_u0 = get_evaluated_model_param(m, "u0", &global_params);
+                                comp.bsim_tox =
+                                    get_evaluated_model_param(m, "tox", &global_params);
+                                comp.bsim_toxe =
+                                    get_evaluated_model_param(m, "toxe", &global_params);
+                                comp.bsim_vth0 =
+                                    get_evaluated_model_param(m, "vth0", &global_params);
+                                comp.bsim_eta0 =
+                                    get_evaluated_model_param(m, "eta0", &global_params);
+                                comp.bsim_theta =
+                                    get_evaluated_model_param(m, "theta", &global_params);
+                                comp.bsim_rdsw =
+                                    get_evaluated_model_param(m, "rdsw", &global_params);
+                                comp.bsim_pclm =
+                                    get_evaluated_model_param(m, "pclm", &global_params);
+                                comp.bsim_dvt0 =
+                                    get_evaluated_model_param(m, "dvt0", &global_params);
+                                comp.bsim_cgso =
+                                    get_evaluated_model_param(m, "cgso", &global_params);
+                                comp.bsim_cgdo =
+                                    get_evaluated_model_param(m, "cgdo", &global_params);
+                                comp.bsim_cgbo =
+                                    get_evaluated_model_param(m, "cgbo", &global_params);
                             } else if comp.comp_type == "verilog_a" {
                                 comp.va_model_name = Some(m.name.clone());
                                 comp.va_ports = m.va_ports.clone();
@@ -574,12 +610,29 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                 }
             }
 
-            // Tol=
-            for tok in &tokens[pins_count + 2..] {
-                if tok.to_lowercase().starts_with("tol=") {
-                    let tol_str = &tok[4..].replace("%", "");
+            // Parsear parámetros de instancia (tol=, w=, l=, rth=, cth=)
+            for tok in &tokens[pins_count + 1..] {
+                let tok_lower = tok.to_lowercase();
+                if tok_lower.starts_with("tol=") {
+                    let tol_str = &tok[4..].replace('%', "");
                     if let Ok(tol_val) = tol_str.parse::<f64>() {
                         comp.tolerance = Some(tol_val / 100.0);
+                    }
+                } else if tok_lower.starts_with("w=") {
+                    if let Ok(val) = parse_spice_value(&tok[2..]) {
+                        comp.w = Some(val);
+                    }
+                } else if tok_lower.starts_with("l=") {
+                    if let Ok(val) = parse_spice_value(&tok[2..]) {
+                        comp.l = Some(val);
+                    }
+                } else if tok_lower.starts_with("rth=") {
+                    if let Ok(val) = parse_spice_value(&tok[4..]) {
+                        comp.rth = Some(val);
+                    }
+                } else if tok_lower.starts_with("cth=") {
+                    if let Ok(val) = parse_spice_value(&tok[4..]) {
+                        comp.cth = Some(val);
                     }
                 }
             }
@@ -587,7 +640,12 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
             // Waveform
             if (comp.comp_type == "vsource" || comp.comp_type == "isource") && tokens.len() > 3 {
                 let remaining = tokens[3..].join(" ");
-                if let Some((wave_type, params)) = parse_waveform(&remaining) {
+                if let Some((raw_wave_type, params)) = parse_waveform(&remaining) {
+                    let wave_type = if raw_wave_type == "sin" || raw_wave_type == "sine" {
+                        "sine".to_string()
+                    } else {
+                        raw_wave_type
+                    };
                     comp.wave_type = Some(wave_type.clone());
                     if wave_type == "sine" && params.len() >= 3 {
                         comp.offset = Some(params[0]);

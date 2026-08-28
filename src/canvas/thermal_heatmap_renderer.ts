@@ -138,7 +138,9 @@ export class ThermalHeatmapRenderer {
         }
       }
 
-      const ratedPower = this.getRatedPower(comp.type);
+      const ratedPower = typeof comp.powerRating === "number" && comp.powerRating > 0
+        ? comp.powerRating
+        : this.getRatedPower(comp.type);
       const isOverloaded = power > ratedPower;
 
       // Escala de intensidad térmica perceptual (referencia nominal 0.25 W = 250 mW)

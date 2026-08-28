@@ -36,6 +36,7 @@ export interface ValueEditorPresentation {
   showUnitGroup: boolean;
   valueLabel: string;
   showSliderControls: boolean;
+  showSnapSeries: boolean;
 }
 
 export interface EngineeringBadgeResult {
@@ -84,6 +85,7 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Modelo electrico",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
   if (type === "mcu_8051" || type === "mcu_avr") {
@@ -92,6 +94,7 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Valor Nominal",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
   if (type === "arduino_uno" || type === "esp32" || type === "raspberry_pi_pico") {
@@ -100,6 +103,7 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Modo de Simulacion (0-3)",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
   if (type === "ground") {
@@ -108,6 +112,7 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Referencia 0 V",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
   if (type === "net_label") {
@@ -116,6 +121,7 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Nombre de Red",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
   if (type === "text_note") {
@@ -124,6 +130,7 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Contenido de la Nota",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
   if (DEDICATED_VALUE_EDITORS.has(type)) {
@@ -132,13 +139,16 @@ export function getValueEditorPresentation(type: ComponentInstance["type"]): Val
       showUnitGroup: false,
       valueLabel: "Valor Nominal",
       showSliderControls: false,
+      showSnapSeries: false,
     };
   }
+  const isPassiveWithSeries = type === "resistor" || type === "capacitor" || type === "inductor" || type === "potentiometer";
   return {
     showValueGroup: true,
     showUnitGroup: true,
     valueLabel: "Valor Nominal",
     showSliderControls: false,
+    showSnapSeries: isPassiveWithSeries,
   };
 }
 
@@ -208,6 +218,25 @@ export function formatEngineeringBadge(
   const trimmed = rawInput.trim();
   if (!trimmed) {
     return { valid: false, badgeText: "Introduce un valor", error: "Campo vacío" };
+  }
+
+  if (type === "net_label") {
+    return {
+      valid: true,
+      badgeText: `Puerto / Red: ${trimmed.toUpperCase()}`,
+    };
+  }
+  if (type === "text_note") {
+    return {
+      valid: true,
+      badgeText: `Nota (${trimmed.length} caracteres)`,
+    };
+  }
+  if (type === "ground") {
+    return {
+      valid: true,
+      badgeText: "Referencia Global (0 V)",
+    };
   }
 
   // Detectar expresiones paramétricas entre llaves {expr}
@@ -374,6 +403,9 @@ export function calculateComponentOperatingPoint(
   branchCurrents: Record<string, number>
 ): ComponentOperatingPoint | null {
   if (pinNodes.length === 0) return null;
+  if (comp.type === "net_label" || comp.type === "text_note" || comp.type === "ground") {
+    return null;
+  }
 
   const pins: PinTelemetry[] = pinNodes.map(p => ({
     pinIndex: p.pinIndex,

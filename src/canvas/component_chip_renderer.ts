@@ -15,11 +15,12 @@ function drawPinStateDot(
   x: number,
   y: number,
 ): void {
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.fillStyle = pinValue === 1 || pinValue === "1"
     ? "hsl(355, 80%, 55%)"
     : pinValue === 0 || pinValue === "0"
-      ? "hsl(174, 97%, 69%)"
-      : "rgba(255,255,255,0.25)";
+      ? (isClassroom ? "hsl(174, 90%, 35%)" : "hsl(174, 97%, 69%)")
+      : (isClassroom ? "rgba(148, 163, 184, 0.5)" : "rgba(255,255,255,0.25)");
   ctx.beginPath();
   ctx.arc(x, y, 3, 0, Math.PI * 2);
   ctx.fill();
@@ -30,7 +31,8 @@ export function drawMcu8051(
   comp: ComponentInstance,
   color: string,
 ): void {
-  ctx.fillStyle = "rgba(10, 15, 30, 0.88)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(10, 15, 30, 0.88)";
   ctx.fillRect(-50, -210, 100, 420);
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
@@ -42,12 +44,12 @@ export function drawMcu8051(
   ctx.stroke();
 
   // Serigrafía del chip
-  ctx.fillStyle = color;
+  ctx.fillStyle = isClassroom ? "#0F172A" : color;
   ctx.font = "bold 13px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("Intel 8051", 0, -40);
   ctx.font = "8px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#94A3B8";
+  ctx.fillStyle = isClassroom ? "#475569" : "#94A3B8";
   ctx.fillText("MCS-51 ARCH", 0, -25);
   ctx.fillText("DIP-40", 0, -12);
 
@@ -67,7 +69,7 @@ export function drawMcu8051(
     drawPinStateDot(ctx, states[i], xTip, y);
 
     ctx.font = "7px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
     if (isLeft) {
       ctx.textAlign = "left";
       ctx.fillText(label, -44, y + 2.5);
@@ -87,7 +89,8 @@ export function drawMcuAvr(
   comp: ComponentInstance,
   color: string,
 ): void {
-  ctx.fillStyle = "rgba(10, 15, 30, 0.88)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(10, 15, 30, 0.88)";
   ctx.fillRect(-50, -160, 100, 320);
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
@@ -98,12 +101,12 @@ export function drawMcuAvr(
   ctx.arc(0, -160, 10, 0, Math.PI, false);
   ctx.stroke();
 
-  ctx.fillStyle = color;
+  ctx.fillStyle = isClassroom ? "#0F172A" : color;
   ctx.font = "bold 12px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("ATmega328P", 0, -30);
   ctx.font = "8px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#94A3B8";
+  ctx.fillStyle = isClassroom ? "#475569" : "#94A3B8";
   ctx.fillText("AVR 8-BIT MCU", 0, -15);
   ctx.fillText("DIP-28", 0, -2);
 
@@ -123,7 +126,7 @@ export function drawMcuAvr(
     drawPinStateDot(ctx, states[i], xTip, y);
 
     ctx.font = "7px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
     if (isLeft) {
       ctx.textAlign = "left";
       ctx.fillText(label, -44, y + 2.5);
@@ -143,7 +146,8 @@ export function drawMcuPic16(
   comp: ComponentInstance,
   color: string,
 ): void {
-  ctx.fillStyle = "rgba(10, 15, 30, 0.88)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(10, 15, 30, 0.88)";
   ctx.fillRect(-50, -110, 100, 220);
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
@@ -154,12 +158,12 @@ export function drawMcuPic16(
   ctx.arc(0, -110, 10, 0, Math.PI, false);
   ctx.stroke();
 
-  ctx.fillStyle = color;
+  ctx.fillStyle = isClassroom ? "#0F172A" : color;
   ctx.font = "bold 12px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("PIC16F84A", 0, -25);
   ctx.font = "8px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#94A3B8";
+  ctx.fillStyle = isClassroom ? "#475569" : "#94A3B8";
   ctx.fillText("MICROCHIP RISC", 0, -10);
   ctx.fillText("DIP-18", 0, 3);
 
@@ -178,7 +182,7 @@ export function drawMcuPic16(
 
     drawPinStateDot(ctx, states[i], xTip + (isLeft ? -5 : 5), y);
 
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
     ctx.font = "8px 'JetBrains Mono', monospace";
     if (isLeft) {
       ctx.textAlign = "left";

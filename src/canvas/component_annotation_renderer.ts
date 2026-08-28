@@ -204,7 +204,14 @@ export function drawNetLabel(
     const displayLabel = comp.label || (comp.voltage !== undefined ? `${comp.voltage >= 0 ? "+" : ""}${comp.voltage}V` : netName);
     const isNegative = voltageVal < 0;
     const powerStyle = getPowerStyle(comp);
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#FBBF24" : isNegative ? "#38BDF8" : "#F59E0B";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#D97706" : "#FBBF24")
+        : isNegative
+          ? (isClassroom ? "#0284C7" : "#38BDF8")
+          : (isClassroom ? "#D97706" : "#F59E0B");
     const dir = isNegative ? 1 : -1;
 
     ctx.strokeStyle = strokeCol;
@@ -225,15 +232,15 @@ export function drawNetLabel(
       ctx.beginPath();
       ctx.arc(0, cy, 9, 0, Math.PI * 2);
       ctx.fillStyle = isSelected
-        ? "rgba(56, 189, 248, 0.35)"
+        ? (isClassroom ? "rgba(2, 132, 199, 0.25)" : "rgba(56, 189, 248, 0.35)")
         : isNegative
-          ? "rgba(56, 189, 248, 0.18)"
-          : "rgba(245, 158, 11, 0.22)";
+          ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.18)")
+          : (isClassroom ? "rgba(217, 119, 6, 0.15)" : "rgba(245, 158, 11, 0.22)");
       ctx.fill();
       ctx.stroke();
 
       drawUprightText(ctx, displayLabel, 0, cy, comp, {
-        color: isSelected ? "#F0F9FF" : "#FDE68A",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? (isNegative ? "#0369A1" : "#92400E") : "#FDE68A"),
         font: "bold 8px 'JetBrains Mono', monospace",
       });
     } else if (powerStyle === "bar") {
@@ -245,7 +252,7 @@ export function drawNetLabel(
       ctx.stroke();
 
       drawUprightText(ctx, displayLabel, 0, dir * 22, comp, {
-        color: isSelected ? "#F0F9FF" : "#FDE68A",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? (isNegative ? "#0369A1" : "#92400E") : "#FDE68A"),
         font: "bold 9px 'JetBrains Mono', monospace",
       });
     } else if (powerStyle === "triangle") {
@@ -256,15 +263,15 @@ export function drawNetLabel(
       ctx.lineTo(7, dir * 12);
       ctx.closePath();
       ctx.fillStyle = isSelected
-        ? "rgba(56, 189, 248, 0.35)"
+        ? (isClassroom ? "rgba(2, 132, 199, 0.25)" : "rgba(56, 189, 248, 0.35)")
         : isNegative
-          ? "rgba(56, 189, 248, 0.20)"
-          : "rgba(245, 158, 11, 0.25)";
+          ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.20)")
+          : (isClassroom ? "rgba(217, 119, 6, 0.15)" : "rgba(245, 158, 11, 0.25)");
       ctx.fill();
       ctx.stroke();
 
       drawUprightText(ctx, displayLabel, 0, dir * 28, comp, {
-        color: isSelected ? "#F0F9FF" : "#FDE68A",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? (isNegative ? "#0369A1" : "#92400E") : "#FDE68A"),
         font: "bold 9px 'JetBrains Mono', monospace",
       });
     } else {
@@ -282,15 +289,15 @@ export function drawNetLabel(
       ctx.lineTo(6, dir * 12);
       ctx.closePath();
       ctx.fillStyle = isSelected
-        ? "rgba(56, 189, 248, 0.35)"
+        ? (isClassroom ? "rgba(2, 132, 199, 0.25)" : "rgba(56, 189, 248, 0.35)")
         : isNegative
-          ? "rgba(56, 189, 248, 0.20)"
-          : "rgba(245, 158, 11, 0.25)";
+          ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.20)")
+          : (isClassroom ? "rgba(217, 119, 6, 0.15)" : "rgba(245, 158, 11, 0.25)");
       ctx.fill();
       ctx.stroke();
 
       drawUprightText(ctx, displayLabel, 0, dir * 27, comp, {
-        color: isSelected ? "#F0F9FF" : "#FDE68A",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? (isNegative ? "#0369A1" : "#92400E") : "#FDE68A"),
         font: "bold 10px 'JetBrains Mono', monospace",
       });
     }
@@ -303,7 +310,7 @@ export function drawNetLabel(
 
     if (isSelected || isHovered) {
       drawUprightText(ctx, "⚡ V-SRC VIRTUAL", 0, dir * 38, comp, {
-        color: isSelected ? "#38BDF8" : "rgba(245, 158, 11, 0.95)",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#D97706" : "rgba(245, 158, 11, 0.95)"),
         font: "600 7px 'Inter', sans-serif",
       });
     }
@@ -313,7 +320,12 @@ export function drawNetLabel(
     // TERMINAL DE TIERRA / GND (Standard, Earth PE, Chassis, AGND, DGND)
     // =========================================================================
     const gStyle = getGroundStyle(comp);
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#34D399" : color || "#10B981";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#059669" : "#34D399")
+        : (isClassroom ? "#059669" : color || "#10B981");
 
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.2 : 1.8;
@@ -344,7 +356,7 @@ export function drawNetLabel(
       ctx.stroke();
 
       drawUprightText(ctx, netName || "PE", 0, 31, comp, {
-        color: isSelected ? "#F0F9FF" : "#A7F3D0",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#065F46" : "#A7F3D0"),
         font: "bold 8px 'JetBrains Mono', monospace",
       });
     } else if (gStyle === "chassis") {
@@ -362,7 +374,7 @@ export function drawNetLabel(
       ctx.stroke();
 
       drawUprightText(ctx, netName || "CHASSIS", 0, 23, comp, {
-        color: isSelected ? "#F0F9FF" : "#A7F3D0",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#065F46" : "#A7F3D0"),
         font: "bold 8px 'JetBrains Mono', monospace",
       });
     } else if (gStyle === "digital") {
@@ -372,12 +384,14 @@ export function drawNetLabel(
       ctx.lineTo(9, 10);
       ctx.lineTo(0, 20);
       ctx.closePath();
-      ctx.fillStyle = isSelected ? "rgba(56, 189, 248, 0.25)" : "rgba(16, 185, 129, 0.12)";
+      ctx.fillStyle = isSelected
+        ? (isClassroom ? "rgba(2, 132, 199, 0.20)" : "rgba(56, 189, 248, 0.25)")
+        : (isClassroom ? "rgba(5, 150, 105, 0.15)" : "rgba(16, 185, 129, 0.12)");
       ctx.fill();
       ctx.stroke();
 
       drawUprightText(ctx, netName || "DGND", 0, 27, comp, {
-        color: isSelected ? "#F0F9FF" : "#A7F3D0",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#065F46" : "#A7F3D0"),
         font: "bold 8px 'JetBrains Mono', monospace",
       });
     } else if (gStyle === "analog") {
@@ -387,12 +401,12 @@ export function drawNetLabel(
       ctx.lineTo(9, 10);
       ctx.lineTo(0, 20);
       ctx.closePath();
-      ctx.fillStyle = isSelected ? "#38BDF8" : "#10B981";
+      ctx.fillStyle = isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#059669" : "#10B981");
       ctx.fill();
       ctx.stroke();
 
       drawUprightText(ctx, netName || "AGND", 0, 27, comp, {
-        color: isSelected ? "#F0F9FF" : "#A7F3D0",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#065F46" : "#A7F3D0"),
         font: "bold 8px 'JetBrains Mono', monospace",
       });
     } else {
@@ -407,7 +421,7 @@ export function drawNetLabel(
       ctx.stroke();
 
       drawUprightText(ctx, netName || "GND", 0, 24, comp, {
-        color: isSelected ? "#F0F9FF" : "#A7F3D0",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#065F46" : "#A7F3D0"),
         font: "bold 9px 'JetBrains Mono', monospace",
       });
     }
@@ -428,7 +442,12 @@ export function drawNetLabel(
     const arrowW = 8;
     const totalLength = textWidth + arrowW * 2 + 10;
     const halfH = 11;
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#D8B4FE" : "#A855F7";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#7C3AED" : "#D8B4FE")
+        : (isClassroom ? "#7C3AED" : "#A855F7");
 
     // Hexágono / Diamante bidireccional apuntando a ambos lados: Pin en (0,0)
     ctx.beginPath();
@@ -441,10 +460,10 @@ export function drawNetLabel(
     ctx.closePath();
 
     ctx.fillStyle = isSelected
-      ? "rgba(56, 189, 248, 0.35)"
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.35)")
       : isHovered
-        ? "rgba(88, 28, 135, 0.90)"
-        : "rgba(59, 7, 100, 0.88)";
+        ? (isClassroom ? "rgba(243, 232, 255, 0.98)" : "rgba(88, 28, 135, 0.90)")
+        : (isClassroom ? "rgba(243, 232, 255, 0.95)" : "rgba(59, 7, 100, 0.88)");
     ctx.fill();
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.0 : 1.5;
@@ -457,7 +476,7 @@ export function drawNetLabel(
 
     const textCenterX = totalLength / 2;
     drawUprightText(ctx, `< ${netName} >`, textCenterX, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#F3E8FF",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#581C87" : "#F3E8FF"),
       font: "bold 9px 'JetBrains Mono', monospace",
     });
 
@@ -471,7 +490,12 @@ export function drawNetLabel(
     const totalLength = textWidth + 22;
     const halfH = 12;
     const arrowW = 9;
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#FDE047" : "#F59E0B";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#D97706" : "#FDE047")
+        : (isClassroom ? "#D97706" : "#F59E0B");
 
     // Doble contorno reforzado para bus
     ctx.beginPath();
@@ -483,10 +507,10 @@ export function drawNetLabel(
     ctx.closePath();
 
     ctx.fillStyle = isSelected
-      ? "rgba(56, 189, 248, 0.35)"
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.35)")
       : isHovered
-        ? "rgba(120, 53, 15, 0.92)"
-        : "rgba(69, 26, 3, 0.90)";
+        ? (isClassroom ? "rgba(254, 243, 199, 0.98)" : "rgba(120, 53, 15, 0.92)")
+        : (isClassroom ? "rgba(254, 243, 199, 0.95)" : "rgba(69, 26, 3, 0.90)");
     ctx.fill();
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.4 : 1.8;
@@ -496,7 +520,7 @@ export function drawNetLabel(
     ctx.beginPath();
     ctx.moveTo(arrowW + 2, -halfH + 2);
     ctx.lineTo(totalLength - 2, -halfH + 2);
-    ctx.strokeStyle = "rgba(251, 191, 36, 0.45)";
+    ctx.strokeStyle = isClassroom ? "rgba(217, 119, 6, 0.45)" : "rgba(251, 191, 36, 0.45)";
     ctx.lineWidth = 1.0;
     ctx.stroke();
 
@@ -508,56 +532,76 @@ export function drawNetLabel(
 
     const textCenterX = arrowW + (totalLength - arrowW) / 2;
     drawUprightText(ctx, netName, textCenterX, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#FEF3C7",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#78350F" : "#FEF3C7"),
       font: "bold 9px 'JetBrains Mono', monospace",
     });
 
   } else if (terminalType === "test_point") {
     // =========================================================================
-    // PUNTO DE PRUEBA (Test Point TP)
+    // PUNTO DE PRUEBA (Test Point TP - Estándar EDA con Tallo y Pad de Prueba)
     // =========================================================================
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#FDE047" : "#FBBF24";
-    const padRadius = 7.0;
-
-    // 1. Pad circular exterior
-    ctx.beginPath();
-    ctx.arc(0, 0, padRadius, 0, Math.PI * 2);
-    ctx.fillStyle = isSelected
-      ? "rgba(56, 189, 248, 0.40)"
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
       : isHovered
-        ? "rgba(251, 191, 36, 0.35)"
-        : "rgba(245, 158, 11, 0.20)";
+        ? (isClassroom ? "#D97706" : "#FDE047")
+        : (isClassroom ? "#D97706" : "#FBBF24");
+    const padRadius = 7.0;
+    const padY = -18;
+
+    // 1. Tallo vertical desde el terminal de anclaje (0,0) hasta el pad
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, padY + padRadius);
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = isSelected ? 2.0 : 1.5;
+    ctx.stroke();
+
+    // 2. Pad circular exterior
+    ctx.beginPath();
+    ctx.arc(0, padY, padRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isSelected
+      ? (isClassroom ? "rgba(2, 132, 199, 0.25)" : "rgba(56, 189, 248, 0.40)")
+      : isHovered
+        ? (isClassroom ? "rgba(217, 119, 6, 0.25)" : "rgba(251, 191, 36, 0.35)")
+        : (isClassroom ? "rgba(217, 119, 6, 0.15)" : "rgba(245, 158, 11, 0.20)");
     ctx.fill();
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.2 : 1.6;
     ctx.stroke();
 
-    // 2. Retícula central / Crosshair para sonda
+    // 3. Retícula central / Crosshair para sonda
     ctx.beginPath();
-    ctx.moveTo(-padRadius - 2, 0);
-    ctx.lineTo(padRadius + 2, 0);
-    ctx.moveTo(0, -padRadius - 2);
-    ctx.lineTo(0, padRadius + 2);
+    ctx.moveTo(-padRadius - 2, padY);
+    ctx.lineTo(padRadius + 2, padY);
+    ctx.moveTo(0, padY - padRadius - 2);
+    ctx.lineTo(0, padY + padRadius + 2);
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = 1.2;
     ctx.stroke();
 
-    // 3. Punto central
+    // 4. Punto central del pad
     ctx.beginPath();
-    ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
+    ctx.arc(0, padY, 2.0, 0, Math.PI * 2);
     ctx.fillStyle = strokeCol;
     ctx.fill();
 
-    // 4. Etiqueta TP
+    // 5. Punto de anclaje terminal en (0,0)
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = strokeCol;
+    ctx.fill();
+
+    // 6. Etiqueta TP
     const displayTxt = netName && netName !== "NET" ? netName : "TP";
-    drawUprightText(ctx, displayTxt, 0, -padRadius - 8, comp, {
-      color: isSelected ? "#F0F9FF" : "#FDE68A",
+    drawUprightText(ctx, displayTxt, 0, padY - padRadius - 6, comp, {
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#B45309" : "#FDE68A"),
       font: "bold 9px 'JetBrains Mono', monospace",
     });
 
     if (isSelected || isHovered) {
-      drawUprightText(ctx, "⦿ TEST POINT", 0, padRadius + 8, comp, {
-        color: isSelected ? "#38BDF8" : "rgba(251, 191, 36, 0.90)",
+      drawUprightText(ctx, "⦿ TEST POINT", 0, padY + padRadius + 8, comp, {
+        color: isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#D97706" : "rgba(251, 191, 36, 0.90)"),
         font: "600 7px 'Inter', sans-serif",
       });
     }
@@ -572,7 +616,12 @@ export function drawNetLabel(
     const totalLength = textWidth + 18;
     const halfH = 10;
     const arrowW = 8;
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#6EE7B7" : "#34D399";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#059669" : "#6EE7B7")
+        : (isClassroom ? "#059669" : "#34D399");
 
     ctx.beginPath();
     ctx.moveTo(0, -halfH);
@@ -583,10 +632,10 @@ export function drawNetLabel(
     ctx.closePath();
 
     ctx.fillStyle = isSelected
-      ? "rgba(56, 189, 248, 0.35)"
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.35)")
       : isHovered
-        ? "rgba(6, 78, 59, 0.85)"
-        : "rgba(6, 44, 34, 0.90)";
+        ? (isClassroom ? "rgba(209, 250, 229, 0.98)" : "rgba(6, 78, 59, 0.85)")
+        : (isClassroom ? "rgba(209, 250, 229, 0.95)" : "rgba(6, 44, 34, 0.90)");
     ctx.fill();
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.0 : 1.4;
@@ -599,7 +648,7 @@ export function drawNetLabel(
 
     const textCenterX = (totalLength - arrowW) / 2;
     drawUprightText(ctx, netName, textCenterX, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#E2E8F0",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#065F46" : "#E2E8F0"),
       font: "bold 10px 'JetBrains Mono', monospace",
     });
 
@@ -618,7 +667,12 @@ export function drawNetLabel(
     const totalLength = textWidth + 24;
     const halfH = 11;
     const arrowW = 8;
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#FDE047" : "#FBBF24";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#D97706" : "#FDE047")
+        : (isClassroom ? "#D97706" : "#FBBF24");
 
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -629,10 +683,10 @@ export function drawNetLabel(
     ctx.closePath();
 
     ctx.fillStyle = isSelected
-      ? "rgba(56, 189, 248, 0.35)"
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.35)")
       : isHovered
-        ? "rgba(113, 63, 18, 0.85)"
-        : "rgba(69, 39, 10, 0.90)";
+        ? (isClassroom ? "rgba(254, 243, 199, 0.98)" : "rgba(113, 63, 18, 0.85)")
+        : (isClassroom ? "rgba(254, 243, 199, 0.95)" : "rgba(69, 39, 10, 0.90)");
     ctx.fill();
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.0 : 1.4;
@@ -668,7 +722,7 @@ export function drawNetLabel(
 
     const textCenterX = arrowW + 12 + (totalLength - arrowW - 12) / 2;
     drawUprightText(ctx, labelText, textCenterX, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#FEF08A",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#78350F" : "#FEF08A"),
       font: "bold 9px 'JetBrains Mono', monospace",
     });
 
@@ -676,7 +730,12 @@ export function drawNetLabel(
     // =========================================================================
     // DIRECTIVA SIN CONEXIÓN / NO CONNECT (NC / ✕)
     // =========================================================================
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#F87171" : "#EF4444";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#DC2626" : "#F87171")
+        : (isClassroom ? "#DC2626" : "#EF4444");
     const size = 6.0;
 
     ctx.strokeStyle = strokeCol;
@@ -700,14 +759,14 @@ export function drawNetLabel(
     // 3. Etiqueta "NC"
     const displayTxt = comp.label && comp.label !== "NET" && comp.label !== "NC" ? comp.label : "NC";
     drawUprightText(ctx, displayTxt, size + 8, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#FCA5A5",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#DC2626" : "#FCA5A5"),
       font: "bold 8px 'JetBrains Mono', monospace",
       align: "center",
     });
 
     if (isSelected || isHovered) {
       drawUprightText(ctx, "✕ NO CONNECT", size + 16, 10, comp, {
-        color: isSelected ? "#38BDF8" : "rgba(239, 68, 68, 0.90)",
+        color: isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#DC2626" : "rgba(239, 68, 68, 0.90)"),
         font: "600 7px 'Inter', sans-serif",
       });
     }
@@ -722,7 +781,12 @@ export function drawNetLabel(
     const totalLength = textWidth + 18;
     const halfH = 10;
     const arrowW = 8;
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#A5B4FC" : "#818CF8";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#4F46E5" : "#A5B4FC")
+        : (isClassroom ? "#4F46E5" : "#818CF8");
 
     // Banderola apuntando hacia el pin de anclaje (0,0)
     ctx.beginPath();
@@ -734,10 +798,10 @@ export function drawNetLabel(
     ctx.closePath();
 
     ctx.fillStyle = isSelected
-      ? "rgba(56, 189, 248, 0.35)"
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.35)")
       : isHovered
-        ? "rgba(49, 46, 129, 0.95)"
-        : "rgba(30, 27, 75, 0.90)";
+        ? (isClassroom ? "rgba(224, 231, 255, 0.98)" : "rgba(49, 46, 129, 0.95)")
+        : (isClassroom ? "rgba(224, 231, 255, 0.95)" : "rgba(30, 27, 75, 0.90)");
     ctx.fill();
     ctx.strokeStyle = strokeCol;
     ctx.lineWidth = isSelected ? 2.0 : 1.4;
@@ -750,7 +814,7 @@ export function drawNetLabel(
 
     const textCenterX = arrowW + (totalLength - arrowW) / 2;
     drawUprightText(ctx, netName, textCenterX, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#E0E7FF",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#3730A3" : "#E0E7FF"),
       font: "bold 10px 'JetBrains Mono', monospace",
     });
 
@@ -764,7 +828,12 @@ export function drawNetLabel(
     const totalLength = textWidth + 18;
     const halfH = 10;
     const arrowW = 8;
-    const strokeCol = isSelected ? "#38BDF8" : isHovered ? "#78C8F0" : color || "#38BDF8";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const strokeCol = isSelected
+      ? (isClassroom ? "#0284C7" : "#38BDF8")
+      : isHovered
+        ? (isClassroom ? "#0284C7" : "#78C8F0")
+        : (isClassroom ? "#0284C7" : color || "#38BDF8");
 
     // 1. Trazar Banderola / Pentágono direccional EDA (Pin en 0,0 apuntando hacia +X)
     ctx.beginPath();
@@ -777,10 +846,10 @@ export function drawNetLabel(
 
     // 2. Relleno traslúcido
     ctx.fillStyle = isSelected
-      ? "rgba(14, 116, 144, 0.45)"
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(14, 116, 144, 0.45)")
       : isHovered
-        ? "rgba(15, 23, 42, 0.95)"
-        : "rgba(10, 16, 28, 0.90)";
+        ? (isClassroom ? "rgba(224, 242, 254, 0.98)" : "rgba(15, 23, 42, 0.95)")
+        : (isClassroom ? "rgba(224, 242, 254, 0.95)" : "rgba(10, 16, 28, 0.90)");
     ctx.fill();
 
     // 3. Contorno y Borde de Acento
@@ -797,7 +866,7 @@ export function drawNetLabel(
     // 5. Nombre de la Red
     const textCenterX = arrowW + (totalLength - arrowW) / 2;
     drawUprightText(ctx, netName, textCenterX, 0, comp, {
-      color: isSelected ? "#F0F9FF" : "#E2E8F0",
+      color: isSelected ? (isClassroom ? "#0284C7" : "#F0F9FF") : (isClassroom ? "#0369A1" : "#E2E8F0"),
       font: "bold 10px 'JetBrains Mono', monospace",
     });
   }
@@ -819,6 +888,7 @@ export function drawTextNote(
   const fontSize = Math.max(10, Math.min(comp.fontSize || 12, 32));
   const lineHeight = fontSize * 1.38;
   const theme = (comp.noteTheme as NoteTheme) || "card";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   ctx.save();
   ctx.font = `${fontSize >= 16 ? "bold " : ""}${fontSize}px 'Inter', -apple-system, BlinkMacSystemFont, sans-serif`;
@@ -846,69 +916,78 @@ export function drawTextNote(
     drawRoundedRect(ctx, startX, startY, boxWidth, boxHeight, 6);
 
     if (theme === "card") {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+      ctx.fillStyle = isClassroom ? "rgba(248, 250, 252, 0.95)" : "rgba(15, 23, 42, 0.90)";
       ctx.fill();
-      ctx.strokeStyle = isSelected ? "#38BDF8" : isHovered ? "#64748B" : "rgba(51, 65, 85, 0.65)";
+      ctx.strokeStyle = isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : isHovered ? (isClassroom ? "#94A3B8" : "#64748B") : (isClassroom ? "#CBD5E1" : "rgba(51, 65, 85, 0.65)");
       ctx.lineWidth = isSelected ? 2.0 : 1.0;
       ctx.stroke();
 
       // Franja superior de acento
-      ctx.fillStyle = isSelected ? "#38BDF8" : "#3B82F6";
+      ctx.fillStyle = isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#0284C7" : "#3B82F6");
       ctx.beginPath();
       drawRoundedRect(ctx, startX, startY, boxWidth, 3.5, [6, 6, 0, 0]);
       ctx.fill();
     } else if (theme === "warning") {
-      ctx.fillStyle = "rgba(45, 26, 14, 0.92)";
+      ctx.fillStyle = isClassroom ? "rgba(254, 243, 199, 0.95)" : "rgba(45, 26, 14, 0.92)";
       ctx.fill();
-      ctx.strokeStyle = isSelected ? "#F59E0B" : "rgba(245, 158, 11, 0.65)";
+      ctx.strokeStyle = isClassroom ? "#F59E0B" : (isSelected ? "#F59E0B" : "rgba(245, 158, 11, 0.65)");
       ctx.lineWidth = isSelected ? 2.0 : 1.2;
       ctx.stroke();
 
-      ctx.fillStyle = "#F59E0B";
+      ctx.fillStyle = isClassroom ? "#D97706" : "#F59E0B";
       ctx.beginPath();
       drawRoundedRect(ctx, startX, startY, boxWidth, 3.5, [6, 6, 0, 0]);
       ctx.fill();
     } else if (theme === "info") {
-      ctx.fillStyle = "rgba(12, 35, 64, 0.92)";
+      ctx.fillStyle = isClassroom ? "rgba(224, 242, 254, 0.95)" : "rgba(12, 35, 64, 0.92)";
       ctx.fill();
-      ctx.strokeStyle = isSelected ? "#38BDF8" : "rgba(56, 189, 248, 0.65)";
+      ctx.strokeStyle = isClassroom ? "#0284C7" : (isSelected ? "#38BDF8" : "rgba(56, 189, 248, 0.65)");
       ctx.lineWidth = isSelected ? 2.0 : 1.2;
       ctx.stroke();
 
-      ctx.fillStyle = "#38BDF8";
+      ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
       ctx.beginPath();
       drawRoundedRect(ctx, startX, startY, boxWidth, 3.5, [6, 6, 0, 0]);
       ctx.fill();
     } else if (theme === "success") {
-      ctx.fillStyle = "rgba(6, 44, 34, 0.92)";
+      ctx.fillStyle = isClassroom ? "rgba(209, 250, 229, 0.95)" : "rgba(6, 44, 34, 0.92)";
       ctx.fill();
-      ctx.strokeStyle = isSelected ? "#34D399" : "rgba(16, 185, 129, 0.65)";
+      ctx.strokeStyle = isClassroom ? "#059669" : (isSelected ? "#34D399" : "rgba(16, 185, 129, 0.65)");
       ctx.lineWidth = isSelected ? 2.0 : 1.2;
       ctx.stroke();
 
-      ctx.fillStyle = "#10B981";
+      ctx.fillStyle = isClassroom ? "#059669" : "#10B981";
       ctx.beginPath();
       drawRoundedRect(ctx, startX, startY, boxWidth, 3.5, [6, 6, 0, 0]);
       ctx.fill();
     } else if (theme === "outline") {
-      ctx.fillStyle = "rgba(10, 15, 26, 0.45)";
+      ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.45)" : "rgba(10, 15, 26, 0.45)";
       ctx.fill();
       ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = isSelected ? "#38BDF8" : "rgba(148, 163, 184, 0.55)";
+      ctx.strokeStyle = isSelected ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#94A3B8" : "rgba(148, 163, 184, 0.55)");
       ctx.lineWidth = 1.2;
       ctx.stroke();
       ctx.setLineDash([]);
     }
   } else if (isSelected || isHovered) {
-    ctx.strokeStyle = isSelected ? "rgba(56, 189, 248, 0.5)" : "rgba(148, 163, 184, 0.25)";
+    ctx.strokeStyle = isSelected ? (isClassroom ? "rgba(2, 132, 199, 0.5)" : "rgba(56, 189, 248, 0.5)") : (isClassroom ? "rgba(148, 163, 184, 0.45)" : "rgba(148, 163, 184, 0.25)");
     ctx.lineWidth = 1;
     ctx.strokeRect(startX - 2, startY - 2, boxWidth + 4, boxHeight + 4);
   }
 
   // 2. Renderizar Líneas de Texto
+  const defaultPlainColor = isClassroom ? "#0F172A" : "#E2E8F0";
   const textColor =
     comp.textColor ||
-    (theme === "warning" ? "#FDE68A" : theme === "info" ? "#BAE6FD" : theme === "success" ? "#A7F3D0" : isSelected ? "#FFFFFF" : "#E2E8F0");
+    (theme === "warning"
+      ? (isClassroom ? "#78350F" : "#FDE68A")
+      : theme === "info"
+        ? (isClassroom ? "#0369A1" : "#BAE6FD")
+        : theme === "success"
+          ? (isClassroom ? "#065F46" : "#A7F3D0")
+          : isSelected
+            ? (isClassroom ? "#0284C7" : "#FFFFFF")
+            : defaultPlainColor);
   ctx.fillStyle = textColor;
 
   for (let i = 0; i < lines.length; i++) {
@@ -936,7 +1015,7 @@ export function getNetLabelDynamicExtents(comp: ComponentInstance): { halfW: num
     return { halfW: 20, halfH: 24 };
   }
   if (tType === "test_point") {
-    return { halfW: 22, halfH: 20 };
+    return { halfW: 24, halfH: 34 };
   }
   if (tType === "no_connect") {
     return { halfW: 18, halfH: 14 };

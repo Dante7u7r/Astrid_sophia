@@ -10,7 +10,7 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let prev_prev_v = ctx.prev_prev_v;
     let current_solution = ctx.current_solution;
     let device_tjunc = ctx.device_tjunc;
-    let mut matrix_a_iter = &mut *ctx.matrix_a_iter;
+    let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let is_npn = comp.comp_type == "npn";
     let node_base = comp.pins[0].parse::<usize>().unwrap();
@@ -163,9 +163,9 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let i_eq_bc = g_eq_bc * vbc_prev;
 
     if is_npn {
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_base, g_be_b + g_bc_b);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_emitter, -g_be_b);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_collector, -g_bc_b);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_base, g_be_b + g_bc_b);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_emitter, -g_be_b);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_collector, -g_bc_b);
         if node_base > 0 {
             vector_z_iter[node_base - 1] -= ieq_b;
         }
@@ -193,13 +193,13 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         }
 
         // Estampado reactivo parásito BE y BC NPN
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_base, g_eq_be + g_eq_bc);
-        stamp_companion_conductance(&mut matrix_a_iter, node_emitter, node_emitter, g_eq_be);
-        stamp_companion_conductance(&mut matrix_a_iter, node_collector, node_collector, g_eq_bc);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_emitter, -g_eq_be);
-        stamp_companion_conductance(&mut matrix_a_iter, node_emitter, node_base, -g_eq_be);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_collector, -g_eq_bc);
-        stamp_companion_conductance(&mut matrix_a_iter, node_collector, node_base, -g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_base, g_eq_be + g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_emitter, node_emitter, g_eq_be);
+        stamp_companion_conductance(matrix_a_iter, node_collector, node_collector, g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_emitter, -g_eq_be);
+        stamp_companion_conductance(matrix_a_iter, node_emitter, node_base, -g_eq_be);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_collector, -g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_collector, node_base, -g_eq_bc);
 
         if node_base > 0 {
             vector_z_iter[node_base - 1] += i_eq_be + i_eq_bc;
@@ -211,9 +211,9 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
             vector_z_iter[node_collector - 1] -= i_eq_bc;
         }
     } else {
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_base, g_be_b + g_bc_b);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_emitter, -g_be_b);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_collector, -g_bc_b);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_base, g_be_b + g_bc_b);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_emitter, -g_be_b);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_collector, -g_bc_b);
         if node_base > 0 {
             vector_z_iter[node_base - 1] += ieq_b;
         }
@@ -241,13 +241,13 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         }
 
         // Estampado reactivo parásito BE y BC PNP
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_base, g_eq_be + g_eq_bc);
-        stamp_companion_conductance(&mut matrix_a_iter, node_emitter, node_emitter, g_eq_be);
-        stamp_companion_conductance(&mut matrix_a_iter, node_collector, node_collector, g_eq_bc);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_emitter, -g_eq_be);
-        stamp_companion_conductance(&mut matrix_a_iter, node_emitter, node_base, -g_eq_be);
-        stamp_companion_conductance(&mut matrix_a_iter, node_base, node_collector, -g_eq_bc);
-        stamp_companion_conductance(&mut matrix_a_iter, node_collector, node_base, -g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_base, g_eq_be + g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_emitter, node_emitter, g_eq_be);
+        stamp_companion_conductance(matrix_a_iter, node_collector, node_collector, g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_emitter, -g_eq_be);
+        stamp_companion_conductance(matrix_a_iter, node_emitter, node_base, -g_eq_be);
+        stamp_companion_conductance(matrix_a_iter, node_base, node_collector, -g_eq_bc);
+        stamp_companion_conductance(matrix_a_iter, node_collector, node_base, -g_eq_bc);
 
         if node_base > 0 {
             vector_z_iter[node_base - 1] -= i_eq_be + i_eq_bc;

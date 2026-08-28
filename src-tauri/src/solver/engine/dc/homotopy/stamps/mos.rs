@@ -76,8 +76,8 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         let res = evaluate_gan_hemt(vgs, vds, netlist.temperature.unwrap_or(300.0), &params);
         (res.ids, res.gm, res.gds)
     } else if comp.comp_type == "bsim4nmos" {
-        let (ids_val, gm_val, gds_val, _, _) =
-            evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l);
+        let (ids_val, gm_val, gds_val, _, _, _) =
+            evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, netlist.temperature, Some(comp));
         (ids_val, gm_val, gds_val)
     } else if comp.comp_type == "bsim3nmos" {
         evaluate_bsim3_nmos(
@@ -184,8 +184,8 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vsb = v_source - v_bulk;
 
     let (isd, gm, gds) = if comp.comp_type == "bsim4pmos" {
-        let (isd_val, gm_val, gds_val, _, _) =
-            evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l);
+        let (isd_val, gm_val, gds_val, _, _, _) =
+            evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, netlist.temperature, Some(comp));
         (isd_val, gm_val, gds_val)
     } else if comp.comp_type == "bsim3pmos" {
         evaluate_bsim3_pmos(

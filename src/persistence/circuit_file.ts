@@ -3,7 +3,12 @@ import {
   isValidComponentId,
   type ComponentInstance,
   type WireInstance,
+  type WireEndpoint,
 } from "../canvas_orchestrator";
+import {
+  isJunctionEndpoint,
+  extractJunctionPosFromId,
+} from "../canvas/wire_identity";
 import type { AnalysisMode } from "../ui/simulation_controls";
 import { normalizeDmmMode } from "../simulation/dmm";
 import {
@@ -402,11 +407,21 @@ function parseWire(value: unknown, index: number): WireInstance {
     throw new CircuitFileValidationError(`${path} contiene un indice de terminal negativo.`);
   }
 
-  const fromIsJunction = typeof value.from.isJunction === "boolean" ? value.from.isJunction : undefined;
-  const fromJunctionPos = value.from.junctionPos ? parsePoint(value.from.junctionPos, `${path}.from.junctionPos`) : undefined;
+  const fromIsJunction = typeof value.from.isJunction === "boolean"
+    ? value.from.isJunction
+    : isJunctionEndpoint(value.from as unknown as WireEndpoint);
+  let fromJunctionPos = value.from.junctionPos ? parsePoint(value.from.junctionPos, `${path}.from.junctionPos`) : undefined;
+  if (!fromJunctionPos && fromIsJunction && typeof value.from.componentId === "string") {
+    fromJunctionPos = extractJunctionPosFromId(value.from.componentId);
+  }
 
-  const toIsJunction = typeof value.to.isJunction === "boolean" ? value.to.isJunction : undefined;
-  const toJunctionPos = value.to.junctionPos ? parsePoint(value.to.junctionPos, `${path}.to.junctionPos`) : undefined;
+  const toIsJunction = typeof value.to.isJunction === "boolean"
+    ? value.to.isJunction
+    : isJunctionEndpoint(value.to as unknown as WireEndpoint);
+  let toJunctionPos = value.to.junctionPos ? parsePoint(value.to.junctionPos, `${path}.to.junctionPos`) : undefined;
+  if (!toJunctionPos && toIsJunction && typeof value.to.componentId === "string") {
+    toJunctionPos = extractJunctionPosFromId(value.to.componentId);
+  }
 
   const label = typeof value.label === "string" && value.label.trim().length > 0
     ? value.label.trim()
@@ -488,9 +503,11 @@ function validateReferences(components: readonly ComponentInstance[], wires: rea
   }
 
   const componentIds = new Set(components.map(component => component.id));
-  const missingReference = wires.find(wire =>
-    !componentIds.has(wire.from.componentId) || !componentIds.has(wire.to.componentId),
-  );
+  const missingReference = wires.find(wire => {
+    const fromValid = isJunctionEndpoint(wire.from) || componentIds.has(wire.from.componentId);
+    const toValid = isJunctionEndpoint(wire.to) || componentIds.has(wire.to.componentId);
+    return !fromValid || !toValid;
+  });
   if (missingReference) {
     throw new CircuitFileValidationError(`El cable [${missingReference.id}] referencia un componente inexistente.`);
   }

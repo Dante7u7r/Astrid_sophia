@@ -104,12 +104,11 @@ pub fn parse_intel_hex(hex_data: &[u8], memory_size: usize) -> Result<Vec<u8>, M
                     upper_address = (((payload[0] as u32) << 8) | (payload[1] as u32)) << 4;
                 }
             }
-            0x04 => {
+            0x04
                 // Extended Linear Address
-                if byte_count == 2 {
+                if byte_count == 2 => {
                     upper_address = (((payload[0] as u32) << 8) | (payload[1] as u32)) << 16;
                 }
-            }
             _ => {
                 // Ignore other record types (e.g. start address 0x03, 0x05)
             }

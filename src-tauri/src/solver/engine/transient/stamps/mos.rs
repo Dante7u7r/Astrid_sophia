@@ -9,7 +9,7 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let prev_v = ctx.prev_v;
     let current_solution = ctx.current_solution;
     let device_tjunc = ctx.device_tjunc;
-    let mut matrix_a_iter = &mut *ctx.matrix_a_iter;
+    let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let node_gate = comp.pins[0].parse::<usize>().unwrap();
     let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -88,13 +88,32 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         let res = evaluate_gan_hemt(vgs, raw_vds, tj_m, &params);
         (res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds)
     } else if comp.comp_type == "bsim4nmos" {
-        let (i, g_m, g_ds, i_g, g_g) = evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l);
-        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        let (i, g_m, g_ds, _gmb, i_g, g_g) =
+            evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, Some(tj_m), Some(comp));
+        let toxe = comp.bsim_toxe.or(comp.bsim_tox).unwrap_or(1.4e-9);
+        let (cgs, cgd, cds) = evaluate_bsim4_capacitances(
+            vgs,
+            vds,
+            vbs,
+            comp.bsim_vth0.unwrap_or(if comp.value != 0.0 { comp.value } else { 0.35 }),
+            comp.w.unwrap_or(1.0e-6),
+            comp.l.unwrap_or(0.045e-6),
+            toxe,
+            Some(comp),
+        );
         (i, g_m, g_ds, i_g, g_g, cgs, cgd, cds)
     } else if comp.comp_type == "bsim3nmos" {
         let (ids_v, gm_v, gds_v) =
-            evaluate_bsim3_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, None, Some(comp));
-        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+            evaluate_bsim3_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, Some(tj_m), Some(comp));
+        let (cgs, cgd, cds) = evaluate_bsim3_capacitances(
+            vgs,
+            vds,
+            vbs,
+            comp.value,
+            comp.w.unwrap_or(10.0e-6),
+            comp.l.unwrap_or(0.18e-6),
+            comp.bsim_tox.unwrap_or(4.0e-9),
+        );
         (ids_v, gm_v, gds_v, 0.0, 1e-12, cgs, cgd, cds)
     } else if vgs <= vth {
         let i_sub0 = 1e-7;
@@ -163,30 +182,30 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let i_eq_ds = g_eq_ds * vds_prev;
 
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_drain,
         node_drain,
         gds + g_eq_gd + g_eq_ds,
     );
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_source,
         node_source,
         gds + g_eq_gs + g_eq_ds + gg,
     );
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_source, -gds - g_eq_ds);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_drain, -gds - g_eq_ds);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_source, -gds - g_eq_ds);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_drain, -gds - g_eq_ds);
 
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_gate,
         node_gate,
         g_eq_gs + g_eq_gd + gg,
     );
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_source, -g_eq_gs - gg);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_gate, -g_eq_gs - gg);
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_drain, -g_eq_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_gate, -g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_source, -g_eq_gs - gg);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_gate, -g_eq_gs - gg);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_drain, -g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_gate, -g_eq_gd);
 
     if node_drain > 0 {
         if node_gate > 0 {
@@ -222,7 +241,7 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let prev_v = ctx.prev_v;
     let current_solution = ctx.current_solution;
     let device_tjunc = ctx.device_tjunc;
-    let mut matrix_a_iter = &mut *ctx.matrix_a_iter;
+    let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let node_gate = comp.pins[0].parse::<usize>().unwrap();
     let node_drain = comp.pins[1].parse::<usize>().unwrap();
@@ -271,10 +290,12 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vt = (PHYS_KB * tj_p) / PHYS_Q;
 
     let (isd, gm_sd, gds_cond, igs, gg) = if comp.comp_type == "bsim4pmos" {
-        evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l)
+        let (isd_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) =
+            evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, Some(tj_p), Some(comp));
+        (isd_v, gm_v, gds_v, igs_v, gg_v)
     } else if comp.comp_type == "bsim3pmos" {
         let (isd_v, gm_v, gds_v) =
-            evaluate_bsim3_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, None, Some(comp));
+            evaluate_bsim3_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, Some(tj_p), Some(comp));
         (isd_v, gm_v, gds_v, 0.0, 1e-12)
     } else if vsg <= vth_abs {
         // Conducción débil subumbral (weak inversion) PMOS
@@ -316,15 +337,39 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let ieq_g = igs - gg * vsg;
 
     // Estampar capacidades parásitas (Fase 13)
-    let (c_sg, c_sd, c_gd) = get_pmos_capacitances(
-        vsg,
-        vsd,
-        vth_abs,
-        comp.w,
-        comp.l,
-        comp.mos_cgs,
-        comp.mos_cgd,
-    );
+    let (c_sg, c_sd, c_gd) = if comp.comp_type == "bsim4pmos" {
+        let toxe = comp.bsim_toxe.or(comp.bsim_tox).unwrap_or(1.4e-9);
+        evaluate_bsim4_capacitances(
+            vsg,
+            vsd,
+            vsb,
+            comp.bsim_vth0.unwrap_or(if comp.value != 0.0 { comp.value.abs() } else { 0.35 }),
+            comp.w.unwrap_or(1.0e-6),
+            comp.l.unwrap_or(0.045e-6),
+            toxe,
+            Some(comp),
+        )
+    } else if comp.comp_type == "bsim3pmos" {
+        evaluate_bsim3_capacitances(
+            vsg,
+            vsd,
+            vsb,
+            comp.value.abs(),
+            comp.w.unwrap_or(10.0e-6),
+            comp.l.unwrap_or(0.18e-6),
+            comp.bsim_tox.unwrap_or(4.0e-9),
+        )
+    } else {
+        get_pmos_capacitances(
+            vsg,
+            vsd,
+            vth_abs,
+            comp.w,
+            comp.l,
+            comp.mos_cgs,
+            comp.mos_cgd,
+        )
+    };
     let g_eq_sg = c_sg / dt;
     let g_eq_sd = c_sd / dt;
     let g_eq_gd = c_gd / dt;
@@ -353,40 +398,40 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let i_eq_gd = g_eq_gd * vgd_prev;
 
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_source,
         node_source,
         gds_cond + g_eq_sg + g_eq_sd + gg,
     );
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_drain,
         node_drain,
         gds_cond + g_eq_sd + g_eq_gd,
     );
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_source,
         node_drain,
         -gds_cond - g_eq_sd,
     );
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_drain,
         node_source,
         -gds_cond - g_eq_sd,
     );
 
     stamp_companion_conductance(
-        &mut matrix_a_iter,
+        matrix_a_iter,
         node_gate,
         node_gate,
         g_eq_sg + g_eq_gd + gg,
     );
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_source, -g_eq_sg - gg);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_gate, -g_eq_sg - gg);
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_drain, -g_eq_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_gate, -g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_source, -g_eq_sg - gg);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_gate, -g_eq_sg - gg);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_drain, -g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_gate, -g_eq_gd);
 
     if node_drain > 0 {
         if node_source > 0 {

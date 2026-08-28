@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
     createControlHandlers: vi.fn(() => ({ onRunSimulation: vi.fn() })),
   },
   simulationControllerDeps: null as Record<string, unknown> | null,
-  simulationControls: { setSimulationRunning: vi.fn() },
+  simulationControls: {
+    setSimulationRunning: vi.fn(),
+    setSimulationPaused: vi.fn(),
+  },
   updateQaState: vi.fn(),
 }));
 
@@ -119,7 +122,14 @@ describe("createDesktopSimulationControllers", () => {
     expect(mocks.pvtController.run).toHaveBeenCalledOnce();
     expect(mocks.sparameterController.run).toHaveBeenCalledOnce();
 
-    (mocks.sparameterDeps!.clearProbePlacementMode as () => void)();
-    expect(deps.probePlacementController.clearMode).toHaveBeenCalledOnce();
+    const mockOsc = { finish: vi.fn() };
+    const depsWithOsc = {
+      ...deps,
+      getOscilloscopePanel: () => mockOsc,
+    };
+    createDesktopSimulationControllers(depsWithOsc as never);
+
+    (mocks.interactiveCallbacks!.setSimulationRunning as (running: boolean) => void)(false);
+    expect(mockOsc.finish).toHaveBeenCalledOnce();
   });
 });

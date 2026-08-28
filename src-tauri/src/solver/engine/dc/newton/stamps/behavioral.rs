@@ -106,7 +106,7 @@ pub(super) fn stamp_bvoltage(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                 bc.insert(vs_comp.id.clone(), solution[n + idx]);
             }
         }
-        if let Ok(ad) = evaluate_expression_ad(&expr_str, &nv, &bc, 0.0, ast_cache) {
+        if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, 0.0, ast_cache) {
             let vs_idx = *vsource_map.get(&comp.id).unwrap();
             let col = n + vs_idx;
             let mut ieq = ad.value;
@@ -153,7 +153,7 @@ pub(super) fn stamp_bcurrent(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                 bc.insert(vs_comp.id.clone(), solution[n + idx]);
             }
         }
-        if let Ok(ad) = evaluate_expression_ad(&expr_str, &nv, &bc, 0.0, ast_cache) {
+        if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, 0.0, ast_cache) {
             let mut ieq = ad.value;
             for (&node_idx, &di_dv) in &ad.grad {
                 let v_k = if node_idx > 0 {

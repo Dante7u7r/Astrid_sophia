@@ -84,6 +84,7 @@ export function drawRelay(
   comp: ComponentInstance,
 ): void {
   const closed = comp.relayClosed ?? false;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   // 1. Terminales de bobina (COIL1, COIL2 en el lado izquierdo)
   ctx.beginPath();
@@ -115,7 +116,7 @@ export function drawRelay(
   // Acoplamiento electromagnético punteado
   ctx.save();
   ctx.setLineDash([3, 2]);
-  ctx.strokeStyle = closed ? "rgba(56, 189, 248, 0.75)" : "rgba(255, 255, 255, 0.25)";
+  ctx.strokeStyle = closed ? "rgba(56, 189, 248, 0.75)" : (isClassroom ? "rgba(100, 116, 139, 0.45)" : "rgba(255, 255, 255, 0.25)");
   ctx.beginPath();
   ctx.moveTo(-10, 0);
   ctx.lineTo(10, 0);
@@ -136,7 +137,7 @@ export function drawRelay(
     // Conmuta hacia NO (20, 20)
     ctx.lineTo(20, 18);
     ctx.save();
-    ctx.strokeStyle = "#38BDF8";
+    ctx.strokeStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.lineWidth = 2.2;
     ctx.stroke();
     ctx.restore();
@@ -144,7 +145,7 @@ export function drawRelay(
     // En reposo conecta con NC (20, -20)
     ctx.lineTo(20, -18);
     ctx.save();
-    ctx.strokeStyle = "#10B981";
+    ctx.strokeStyle = isClassroom ? "#059669" : "#10B981";
     ctx.lineWidth = 2.2;
     ctx.stroke();
     ctx.restore();
@@ -153,7 +154,7 @@ export function drawRelay(
   // Etiquetas de terminales de contacto
   ctx.save();
   ctx.font = "bold 7px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(255, 255, 255, 0.7)";
   ctx.fillText("NC", 24, -22);
   ctx.fillText("COM", 24, -2);
   ctx.fillText("NO", 24, 22);
@@ -166,6 +167,7 @@ export function drawBuzzer(
   nowMs: number = Date.now(),
 ): void {
   const level = comp.buzzerLevel ?? 0;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.beginPath();
   ctx.moveTo(-12, -16);
   ctx.lineTo(-12, 16);
@@ -181,7 +183,7 @@ export function drawBuzzer(
 
   // Signo '+' indicativo en el terminal positivo del buzzer
   ctx.save();
-  ctx.fillStyle = "#38BDF8";
+  ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
   ctx.font = "bold 9px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -190,7 +192,7 @@ export function drawBuzzer(
 
   if (level > 0.05) {
     ctx.save();
-    ctx.strokeStyle = `rgba(56, 189, 248, ${level * 0.85})`;
+    ctx.strokeStyle = isClassroom ? `rgba(2, 132, 199, ${level * 0.85})` : `rgba(56, 189, 248, ${level * 0.85})`;
     ctx.lineWidth = 1.6;
     const wavePhase = (nowMs / 150) % 3;
     for (let i = 0; i < 3; i++) {
@@ -212,6 +214,7 @@ export function drawDcMotor(
 ): void {
   const rpm = comp.motorRpm ?? 0;
   const angle = comp.motorAngle ?? 0;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   // 1. Terminales de entrada
   ctx.beginPath();
@@ -230,7 +233,7 @@ export function drawDcMotor(
   if (Math.abs(rpm) < 1.0) {
     ctx.save();
     ctx.font = "bold 16px 'Inter', sans-serif";
-    ctx.fillStyle = "white";
+    ctx.fillStyle = isClassroom ? "#0F172A" : "white";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("M", 0, 0);
@@ -239,7 +242,7 @@ export function drawDcMotor(
     // 3. Rotor giratorio animado (Cruz angular)
     ctx.save();
     ctx.rotate(angle);
-    ctx.strokeStyle = "#38BDF8";
+    ctx.strokeStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.lineWidth = 2.0;
     ctx.beginPath();
     ctx.moveTo(-12, 0);
@@ -249,7 +252,7 @@ export function drawDcMotor(
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.fill();
     ctx.restore();
   }
@@ -257,7 +260,7 @@ export function drawDcMotor(
   // 4. Tacómetro en RPM
   ctx.save();
   ctx.font = "bold 8px 'JetBrains Mono', monospace";
-  ctx.fillStyle = Math.abs(rpm) > 1 ? "#10B981" : "rgba(255, 255, 255, 0.6)";
+  ctx.fillStyle = Math.abs(rpm) > 1 ? (isClassroom ? "#059669" : "#10B981") : (isClassroom ? "#475569" : "rgba(255, 255, 255, 0.6)");
   ctx.textAlign = "center";
   ctx.fillText(`${Math.round(rpm)} RPM`, 0, 30);
   ctx.restore();
@@ -271,11 +274,12 @@ export function drawSevenSegment(
   comp: ComponentInstance,
 ): void {
   const states = comp.segmentStates || {};
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   // 1. Cuerpo del encapsulado DIP
-  ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.94)";
   ctx.fillRect(-22, -32, 44, 64);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeStyle = isClassroom ? "#334155" : "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(-22, -32, 44, 64);
 
   // 2. Terminales (5 arriba, 5 abajo)
@@ -292,11 +296,11 @@ export function drawSevenSegment(
   // 3. Segmentos LED individuales (A, B, C, D, E, F, G, DP)
   const drawSegment = (name: string, x: number, y: number, w: number, h: number) => {
     const isOn = states[name] ?? false;
-    ctx.fillStyle = isOn ? "#EF4444" : "rgba(239, 68, 68, 0.12)";
+    ctx.fillStyle = isOn ? "#EF4444" : (isClassroom ? "rgba(239, 68, 68, 0.08)" : "rgba(239, 68, 68, 0.12)");
     ctx.fillRect(x, y, w, h);
     if (isOn) {
       ctx.save();
-      ctx.strokeStyle = "rgba(254, 202, 202, 0.8)";
+      ctx.strokeStyle = isClassroom ? "#DC2626" : "rgba(254, 202, 202, 0.8)";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, w, h);
       ctx.restore();
@@ -409,16 +413,17 @@ export function drawStepperMotor(
   ctx.stroke();
 
   // 2. Chasis cilíndrico metálico
-  ctx.fillStyle = "rgba(30, 41, 59, 0.95)";
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.95)";
   ctx.beginPath();
   ctx.arc(0, 0, 24, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "rgba(148, 163, 184, 0.8)";
+  ctx.strokeStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.8)";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
   // Polos del estator (Marcadores en 0, 90, 180, 270)
-  ctx.strokeStyle = "rgba(245, 158, 11, 0.6)";
+  ctx.strokeStyle = isClassroom ? "rgba(217, 119, 6, 0.7)" : "rgba(245, 158, 11, 0.6)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(0, -24);
@@ -436,9 +441,9 @@ export function drawStepperMotor(
   ctx.rotate(angle);
   ctx.beginPath();
   ctx.arc(0, 0, 12, 0, Math.PI * 2);
-  ctx.fillStyle = "#475569";
+  ctx.fillStyle = isClassroom ? "#CBD5E1" : "#475569";
   ctx.fill();
-  ctx.strokeStyle = "#38BDF8";
+  ctx.strokeStyle = isClassroom ? "#0284C7" : "#38BDF8";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
@@ -454,7 +459,7 @@ export function drawStepperMotor(
   // 4. Indicador de pasos
   ctx.save();
   ctx.font = "bold 7.5px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#A78BFA";
+  ctx.fillStyle = isClassroom ? "#7C3AED" : "#A78BFA";
   ctx.textAlign = "center";
   ctx.fillText(`PASO ${steps}`, 0, 32);
   ctx.restore();
@@ -469,6 +474,7 @@ export function drawSpeaker(
 ): void {
   const pwr = comp.speakerPower ?? 0;
   const isVibrating = pwr > 0.005;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   // 1. Terminales (izq -40,0; der 40,0)
   ctx.beginPath();
@@ -479,7 +485,7 @@ export function drawSpeaker(
   ctx.stroke();
 
   // 2. Chasis del altavoz (Imán trasero y cono acampanado)
-  ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+  ctx.fillStyle = isClassroom ? "#CBD5E1" : "rgba(15, 23, 42, 0.95)";
   // Imán posterior
   ctx.fillRect(-18, -8, 8, 16);
   ctx.strokeRect(-18, -8, 8, 16);
@@ -491,21 +497,21 @@ export function drawSpeaker(
   ctx.lineTo(10, 22);
   ctx.lineTo(-10, 8);
   ctx.closePath();
-  ctx.fillStyle = "rgba(30, 41, 59, 0.9)";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(30, 41, 59, 0.9)";
   ctx.fill();
   ctx.stroke();
 
   // Cúpula central
   ctx.beginPath();
   ctx.arc(10, 0, 8, -Math.PI / 2, Math.PI / 2);
-  ctx.fillStyle = "#64748B";
+  ctx.fillStyle = isClassroom ? "#94A3B8" : "#64748B";
   ctx.fill();
   ctx.stroke();
 
   // 3. Ondas sonoras animadas si hay potencia
   if (isVibrating) {
     ctx.save();
-    ctx.strokeStyle = `rgba(56, 189, 248, ${Math.min(1, pwr * 1.5 + 0.3)})`;
+    ctx.strokeStyle = isClassroom ? `rgba(2, 132, 199, ${Math.min(1, pwr * 1.5 + 0.3)})` : `rgba(56, 189, 248, ${Math.min(1, pwr * 1.5 + 0.3)})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(12, 0, 14, -Math.PI / 3, Math.PI / 3);
@@ -519,7 +525,7 @@ export function drawSpeaker(
   // 4. Etiqueta de impedancia
   ctx.save();
   ctx.font = "bold 7.5px 'JetBrains Mono', monospace";
-  ctx.fillStyle = isVibrating ? "#38BDF8" : "rgba(255, 255, 255, 0.6)";
+  ctx.fillStyle = isVibrating ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#475569" : "rgba(255, 255, 255, 0.6)");
   ctx.textAlign = "center";
   ctx.fillText("8Ω", 0, -26);
   ctx.restore();
@@ -534,6 +540,7 @@ export function drawSolenoid(
 ): void {
   const pos = comp.solenoidPosition ?? 0; // 0 = extendido, 1 = retraído
   const offset = pos * 10;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   // 1. Terminales (izq -40,0; der 40,0)
   ctx.beginPath();
@@ -544,12 +551,12 @@ export function drawSolenoid(
   ctx.stroke();
 
   // 2. Chasis cilíndrico de la bobina
-  ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.94)";
   ctx.fillRect(-24, -14, 48, 28);
   ctx.strokeRect(-24, -14, 48, 28);
 
   // Bobinado helicoidal de cobre
-  ctx.strokeStyle = "#F59E0B";
+  ctx.strokeStyle = isClassroom ? "#D97706" : "#F59E0B";
   ctx.lineWidth = 1.5;
   for (let i = -18; i <= 14; i += 6) {
     ctx.beginPath();
@@ -575,7 +582,7 @@ export function drawSolenoid(
   // 4. Etiqueta de estado
   ctx.save();
   ctx.font = "bold 7.5px 'JetBrains Mono', monospace";
-  ctx.fillStyle = pos > 0.5 ? "#10B981" : "rgba(255, 255, 255, 0.5)";
+  ctx.fillStyle = pos > 0.5 ? (isClassroom ? "#059669" : "#10B981") : (isClassroom ? "#475569" : "rgba(255, 255, 255, 0.5)");
   ctx.textAlign = "center";
   ctx.fillText(pos > 0.5 ? "RETRAÍDO" : "EXTENDIDO", 0, 22);
   ctx.restore();
@@ -589,6 +596,7 @@ export function drawSsr(
   comp: ComponentInstance,
 ): void {
   const active = comp.ssrActive ?? false;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   // 1. Terminales (Control izq: -40,-20 y -40,20; Carga der: 40,-20 y 40,20)
   ctx.beginPath();
@@ -603,23 +611,23 @@ export function drawSsr(
   ctx.stroke();
 
   // 2. Encapsulado tipo bloque "Puck" industrial
-  ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.95)";
   ctx.fillRect(-24, -30, 48, 60);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.strokeStyle = isClassroom ? "#334155" : "rgba(255, 255, 255, 0.3)";
   ctx.lineWidth = 1.5;
   ctx.strokeRect(-24, -30, 48, 60);
 
   // 3. LED indicador de control
   ctx.beginPath();
   ctx.arc(0, -16, 4, 0, Math.PI * 2);
-  ctx.fillStyle = active ? "#10B981" : "#334155";
+  ctx.fillStyle = active ? (isClassroom ? "#059669" : "#10B981") : (isClassroom ? "#94A3B8" : "#334155");
   ctx.fill();
-  ctx.strokeStyle = active ? "#6EE7B7" : "rgba(255, 255, 255, 0.2)";
+  ctx.strokeStyle = active ? (isClassroom ? "#047857" : "#6EE7B7") : (isClassroom ? "rgba(0, 0, 0, 0.2)" : "rgba(255, 255, 255, 0.2)");
   ctx.stroke();
 
   if (active) {
     ctx.save();
-    ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
+    ctx.fillStyle = isClassroom ? "rgba(5, 150, 105, 0.3)" : "rgba(16, 185, 129, 0.4)";
     ctx.beginPath();
     ctx.arc(0, -16, 8, 0, Math.PI * 2);
     ctx.fill();
@@ -628,7 +636,7 @@ export function drawSsr(
 
   // 4. Símbolo optoacoplado interno
   ctx.save();
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
+  ctx.strokeStyle = isClassroom ? "rgba(2, 132, 199, 0.8)" : "rgba(56, 189, 248, 0.7)";
   ctx.lineWidth = 1.2;
   // Diodo emisor
   ctx.beginPath();
@@ -650,7 +658,7 @@ export function drawSsr(
   // 5. Serigrafía SSR
   ctx.save();
   ctx.font = "bold 8px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#38BDF8";
+  ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
   ctx.textAlign = "center";
   ctx.fillText("SSR", 0, 20);
   ctx.restore();

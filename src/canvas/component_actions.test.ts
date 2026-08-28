@@ -123,4 +123,39 @@ describe("component_actions", () => {
     expect(result.selectedComponent).toBeNull();
     expect(result.selectedComponents).toEqual([]);
   });
+
+  it("sana empalme en T y preserva puntos geométricos al borrar el cable derivado", () => {
+    const r1 = component("R1");
+    const r2 = component("R2");
+    const tp = component("NET1");
+    tp.type = "net_label";
+    tp.terminalType = "test_point";
+
+    const junctionEp = { componentId: "junction_50_0", pinIndex: 0, isJunction: true, junctionPos: { x: 50, y: 0 } };
+    const wTrunkA: WireInstance = {
+      id: "W_A",
+      from: { componentId: "R1", pinIndex: 0 },
+      to: { ...junctionEp },
+      points: [{ x: 0, y: 0 }, { x: 50, y: 0 }],
+    };
+    const wTrunkB: WireInstance = {
+      id: "W_B",
+      from: { ...junctionEp },
+      to: { componentId: "R2", pinIndex: 0 },
+      points: [{ x: 50, y: 0 }, { x: 100, y: 0 }],
+    };
+    const wBranch: WireInstance = {
+      id: "W_Branch",
+      from: { componentId: "NET1", pinIndex: 0 },
+      to: { ...junctionEp },
+      points: [{ x: 50, y: 50 }, { x: 50, y: 0 }],
+    };
+
+    const initialWires = [wTrunkA, wTrunkB, wBranch];
+    const result = removeSelection([r1, r2, tp], initialWires, wBranch, [], null);
+
+    expect(result.wires).toHaveLength(1);
+    expect(result.wires[0].points.length).toBeGreaterThanOrEqual(2);
+    expect(result.wires[0].points).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+  });
 });

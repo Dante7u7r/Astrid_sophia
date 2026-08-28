@@ -8,7 +8,7 @@ pub(super) fn stamp_jfet(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let t_amb = ctx.t_amb;
     let prev_v = ctx.prev_v;
     let current_solution = ctx.current_solution;
-    let mut matrix_a_iter = &mut *ctx.matrix_a_iter;
+    let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let is_njf = comp.comp_type == "njf";
     let node_drain = comp.pins[0].parse::<usize>().unwrap();
@@ -82,10 +82,10 @@ pub(super) fn stamp_jfet(comp: &ComponentData, ctx: &mut StampContext<'_>) {
 
     let ieq = ids_final - gm_final * vgs_raw - gds_final * vds_raw;
 
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_drain, gds_final);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_source, gds_final);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_source, -gds_final);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_drain, -gds_final);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_drain, gds_final);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_source, gds_final);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_source, -gds_final);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_drain, -gds_final);
 
     if node_drain > 0 {
         if node_gate > 0 {
@@ -139,14 +139,14 @@ pub(super) fn stamp_jfet(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let i_eq_gs = g_eq_gs * vgs_prev;
     let i_eq_gd = g_eq_gd * vgd_prev;
 
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_gate, g_eq_gs + g_eq_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_source, -g_eq_gs);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_gate, -g_eq_gs);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_source, g_eq_gs);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_gate, g_eq_gs + g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_source, -g_eq_gs);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_gate, -g_eq_gs);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_source, g_eq_gs);
 
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_drain, -g_eq_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_gate, -g_eq_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_drain, g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_drain, -g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_gate, -g_eq_gd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_drain, g_eq_gd);
 
     if node_gate > 0 {
         vector_z_iter[node_gate - 1] += i_eq_gs + i_eq_gd;
@@ -165,10 +165,10 @@ pub(super) fn stamp_jfet(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let gg_gs = (gate_is / vt_local) * exp_gs;
     let ieq_gs_d = gate_is * (exp_gs - 1.0) - gg_gs * (v_gate - v_source);
 
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_gate, gg_gs);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_source, gg_gs);
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_source, -gg_gs);
-    stamp_companion_conductance(&mut matrix_a_iter, node_source, node_gate, -gg_gs);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_gate, gg_gs);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_source, gg_gs);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_source, -gg_gs);
+    stamp_companion_conductance(matrix_a_iter, node_source, node_gate, -gg_gs);
     if node_gate > 0 {
         vector_z_iter[node_gate - 1] -= ieq_gs_d;
     }
@@ -180,10 +180,10 @@ pub(super) fn stamp_jfet(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let gg_gd = (gate_is / vt_local) * exp_gd;
     let ieq_gd_d = gate_is * (exp_gd - 1.0) - gg_gd * (v_gate - v_drain);
 
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_gate, gg_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_drain, gg_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_gate, node_drain, -gg_gd);
-    stamp_companion_conductance(&mut matrix_a_iter, node_drain, node_gate, -gg_gd);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_gate, gg_gd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_drain, gg_gd);
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_drain, -gg_gd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_gate, -gg_gd);
     if node_gate > 0 {
         vector_z_iter[node_gate - 1] -= ieq_gd_d;
     }

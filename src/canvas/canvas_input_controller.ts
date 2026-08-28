@@ -264,7 +264,9 @@ export function attachCanvasInput(
     }
 
     if (orchestrator.activePinForWire) {
-      if (orchestrator.hoveredWireSnapPoint) {
+      if (orchestrator.hoveredPin) {
+        orchestrator.tempWireEnd = { x: orchestrator.hoveredPin.x, y: orchestrator.hoveredPin.y };
+      } else if (orchestrator.hoveredWireSnapPoint) {
         orchestrator.tempWireEnd = orchestrator.hoveredWireSnapPoint.snapPoint;
       } else {
         orchestrator.tempWireEnd = orchestrator.snapPointToGrid(worldPt);
@@ -310,9 +312,18 @@ export function attachCanvasInput(
     }
 
     if (orchestrator.activePinForWire) {
-      if (orchestrator.hoveredPin) {
+      let targetPin = orchestrator.hoveredPin;
+      if (!targetPin) {
+        const threshold = orchestrator.getPinHitThreshold();
+        const hit = orchestrator.hitTestPin(worldPt.x, worldPt.y, threshold);
+        if (hit && (hit.pin.componentId !== orchestrator.activePinForWire.componentId || hit.pin.pinIndex !== orchestrator.activePinForWire.pinIndex)) {
+          targetPin = hit.pin;
+        }
+      }
+
+      if (targetPin) {
         const from = orchestrator.activePinForWire;
-        const to = orchestrator.hoveredPin;
+        const to = targetPin;
         orchestrator.connectPins(from, to);
         callbacks.log(
           `Cable conectado: [${from.componentId}] terminal ${from.pinIndex} a [${to.componentId}] terminal ${to.pinIndex}`,
@@ -743,6 +754,7 @@ export function attachCanvasInput(
         callbacks.log(`Componente [${orchestrator.selectedComponent.id}] eliminado del lienzo.`, "system");
       }
       orchestrator.removeSelected();
+      callbacks.onSelectionChanged(null);
       callbacks.onNetlistSync();
       callbacks.requestRender(true);
       callbacks.onCanvasModified();

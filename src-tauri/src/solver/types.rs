@@ -170,9 +170,25 @@ pub struct ComponentData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bsim_tox: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_toxe: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_vth0: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bsim_eta0: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bsim_theta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_rdsw: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_pclm: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_dvt0: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_cgso: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_cgdo: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bsim_cgbo: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub va_equations: Option<Vec<(String, String, String)>>, // (from_port, to_port, expr_string)
     // Parámetros de IGBT (Hefner)

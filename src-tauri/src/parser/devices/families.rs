@@ -70,6 +70,34 @@ pub(super) fn resolve_pin_count(
         return layout.pin_count;
     }
 
+    if first_char == 'm' {
+        if tokens.len() >= 6 {
+            if models.contains_key(&tokens[5]) {
+                return 4;
+            }
+            if models.contains_key(&tokens[4]) {
+                return 3;
+            }
+            if tokens[5].contains('=') {
+                return 3;
+            }
+            return 4;
+        }
+        return 3;
+    }
+
+    if first_char == 'q' {
+        if tokens.len() >= 6 {
+            if models.contains_key(&tokens[5]) {
+                return 4;
+            }
+            if models.contains_key(&tokens[4]) {
+                return 3;
+            }
+        }
+        return 3;
+    }
+
     if first_char == 'o' {
         return match models.get(tokens.last().expect("device line has an identifier")) {
             Some(model) if model.model_type == "opto" => 4,
@@ -111,9 +139,32 @@ pub(super) fn classify_component(
         'j' => models
             .get(value_or_model)
             .map_or_else(|| "njf".to_string(), |model| model.model_type.clone()),
-        'm' => models
-            .get(value_or_model)
-            .map_or_else(|| "nmos".to_string(), |model| model.model_type.clone()),
+        'm' => models.get(value_or_model).map_or_else(
+            || "nmos".to_string(),
+            |model| {
+                let level = model.params.get("level").copied().unwrap_or(1.0) as i64;
+                let is_pmos = model.model_type.eq_ignore_ascii_case("pmos")
+                    || model.model_type.eq_ignore_ascii_case("bsim3pmos")
+                    || model.model_type.eq_ignore_ascii_case("bsim4pmos");
+                match level {
+                    54 | 14 => {
+                        if is_pmos {
+                            "bsim4pmos".to_string()
+                        } else {
+                            "bsim4nmos".to_string()
+                        }
+                    }
+                    49 | 8 => {
+                        if is_pmos {
+                            "bsim3pmos".to_string()
+                        } else {
+                            "bsim3nmos".to_string()
+                        }
+                    }
+                    _ => model.model_type.clone(),
+                }
+            },
+        ),
         'y' => "verilog_a".to_string(),
         'v' => "vsource".to_string(),
         'i' => "isource".to_string(),

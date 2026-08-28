@@ -21,9 +21,10 @@ export function drawOptocoupler(ctx: CanvasRenderingContext2D, _comp: ComponentI
   ctx.stroke();
 
   // 2. Encapsulado DIP-4 / Contorno
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.save();
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.35)";
-  ctx.fillStyle = "rgba(10, 15, 26, 0.85)";
+  ctx.strokeStyle = isClassroom ? "rgba(2, 132, 199, 0.45)" : "rgba(102, 252, 241, 0.35)";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(10, 15, 26, 0.85)";
   ctx.lineWidth = 1.2;
   ctx.fillRect(-24, -30, 48, 60);
   ctx.strokeRect(-24, -30, 48, 60);
@@ -180,6 +181,7 @@ export function drawScr(
   ctx.stroke();
 
   // 2. Triángulo del diodo / ánodo
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.beginPath();
   ctx.moveTo(-12, -10);
   ctx.lineTo(12, -10);
@@ -187,11 +189,11 @@ export function drawScr(
   ctx.closePath();
 
   if (isConducting) {
-    ctx.fillStyle = "rgba(16, 185, 129, 0.85)";
+    ctx.fillStyle = isClassroom ? "rgba(5, 150, 105, 0.85)" : "rgba(16, 185, 129, 0.85)";
     ctx.fill();
-    ctx.strokeStyle = "#34D399";
+    ctx.strokeStyle = isClassroom ? "#059669" : "#34D399";
   } else {
-    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
     ctx.fill();
   }
   ctx.stroke();
@@ -212,6 +214,7 @@ export function drawTriac(
   color: string,
   isConducting?: boolean,
 ): void {
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.6;
@@ -249,11 +252,11 @@ export function drawTriac(
   ctx.closePath();
 
   if (isConducting) {
-    ctx.fillStyle = "rgba(16, 185, 129, 0.85)";
+    ctx.fillStyle = isClassroom ? "rgba(5, 150, 105, 0.85)" : "rgba(16, 185, 129, 0.85)";
     ctx.fill();
-    ctx.strokeStyle = "#34D399";
+    ctx.strokeStyle = isClassroom ? "#059669" : "#34D399";
   } else {
-    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
     ctx.fill();
   }
   ctx.stroke();
@@ -276,6 +279,7 @@ export function drawDiac(
   color: string,
   isConducting?: boolean,
 ): void {
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.6;
@@ -306,11 +310,11 @@ export function drawDiac(
   ctx.closePath();
 
   if (isConducting) {
-    ctx.fillStyle = "rgba(56, 189, 248, 0.85)";
+    ctx.fillStyle = isClassroom ? "rgba(2, 132, 199, 0.85)" : "rgba(56, 189, 248, 0.85)";
     ctx.fill();
-    ctx.strokeStyle = "#38BDF8";
+    ctx.strokeStyle = isClassroom ? "#0284C7" : "#38BDF8";
   } else {
-    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
     ctx.fill();
   }
   ctx.stroke();
@@ -333,6 +337,7 @@ export function drawTl431(
   color: string,
   isRegulating?: boolean,
 ): void {
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.6;
@@ -362,11 +367,11 @@ export function drawTl431(
   ctx.closePath();
 
   if (isRegulating) {
-    ctx.fillStyle = "rgba(16, 185, 129, 0.85)";
+    ctx.fillStyle = isClassroom ? "rgba(5, 150, 105, 0.85)" : "rgba(16, 185, 129, 0.85)";
     ctx.fill();
-    ctx.strokeStyle = "#34D399";
+    ctx.strokeStyle = isClassroom ? "#059669" : "#34D399";
   } else {
-    ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
+    ctx.fillStyle = isClassroom ? "rgba(226, 232, 240, 0.6)" : "rgba(15, 23, 42, 0.8)";
     ctx.fill();
   }
   ctx.stroke();
@@ -380,7 +385,7 @@ export function drawTl431(
   ctx.stroke();
 
   // Rótulo REF
-  ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+  ctx.fillStyle = isClassroom ? "#475569" : "rgba(148, 163, 184, 0.9)";
   ctx.font = "bold 7px monospace";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
@@ -402,9 +407,10 @@ export function drawIgbt(
   const vCE = vC - vE;
   const vth = Number(comp.value) || 5.0;
   const isConducting = vGE >= vth && vCE > 0.5;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
   ctx.save();
-  ctx.strokeStyle = isConducting ? "#10B981" : color;
+  ctx.strokeStyle = isConducting ? (isClassroom ? "#059669" : "#10B981") : color;
   ctx.lineWidth = isConducting ? 2.4 : 1.8;
 
   // 1. Terminales externos
@@ -443,12 +449,12 @@ export function drawIgbt(
   ctx.lineTo(18, 24);
   ctx.lineTo(13, 27);
   ctx.closePath();
-  ctx.fillStyle = isConducting ? "#10B981" : color;
+  ctx.fillStyle = isConducting ? (isClassroom ? "#059669" : "#10B981") : color;
   ctx.fill();
   ctx.stroke();
 
   // 5. Insignia "IGBT"
-  ctx.fillStyle = isConducting ? "#34D399" : "rgba(148, 163, 184, 0.85)";
+  ctx.fillStyle = isConducting ? (isClassroom ? "#059669" : "#34D399") : (isClassroom ? "#334155" : "rgba(148, 163, 184, 0.85)");
   ctx.font = "bold 8px monospace";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";

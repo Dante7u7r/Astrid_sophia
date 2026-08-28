@@ -324,9 +324,12 @@ function initOscilloscopeInterface() {
 
   if (oscPauseBtn) {
     oscPauseBtn.addEventListener("click", async () => {
-      if (simulationRunner?.isSimulationPaused()) {
+      const isPaused = Boolean(simulationRunner?.isSimulationPaused() || orchestrator?.simulationPaused || oscilloscopePanel?.isOscPaused || simulationControls?.isSimulationPaused());
+      const isRunning = Boolean(simulationControls?.isSimulationRunning() || orchestrator?.simulationActive || simulationRunner?.isSimulationActive() || oscilloscopePanel?.isSimulating);
+
+      if (isPaused) {
         await simulationController?.resumeSimulation();
-      } else if (simulationControls?.isSimulationRunning()) {
+      } else if (isRunning) {
         await simulationController?.pauseSimulation();
       } else if (oscilloscopePanel) {
         if (!oscilloscopePanel.isOscPaused) {

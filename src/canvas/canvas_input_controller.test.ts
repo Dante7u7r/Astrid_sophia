@@ -496,5 +496,110 @@ describe("canvas_input_controller", () => {
       "system",
     );
   });
+
+  it("bloquea magnéticamente tempWireEnd en las coordenadas del pin objetivo durante el trazado", () => {
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+      right: 800,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }));
+    document.body.appendChild(canvas);
+
+    const activePin = { componentId: "V1", pinIndex: 0, x: 100, y: 100 };
+    const targetPin = { componentId: "R1", pinIndex: 0, x: 250, y: 100 };
+    const orchestrator = {
+      activePinForWire: activePin,
+      hoveredPin: targetPin,
+      tempWireEnd: null,
+      screenToWorld: (x: number, y: number) => ({ x, y }),
+      checkHover: vi.fn(),
+      updateRealtimeErc: vi.fn(),
+      selectedComponents: [],
+      selectedComponent: null,
+      selectedWire: null,
+    } as unknown as CanvasOrchestrator;
+
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    const moveEv = new MouseEvent("mousemove", { clientX: 248, clientY: 102, bubbles: true });
+    canvas.dispatchEvent(moveEv);
+
+    expect(orchestrator.tempWireEnd).toEqual({ x: 250, y: 100 });
+  });
+
+  it("conecta automáticamente con imán de proximidad en completeConnection si el ratón se suelta cerca de un pin", () => {
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+      right: 800,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }));
+    document.body.appendChild(canvas);
+
+    const activePin = { componentId: "V1", pinIndex: 0, x: 100, y: 100 };
+    const targetPin = { componentId: "R1", pinIndex: 0, x: 250, y: 100 };
+    const connectPins = vi.fn();
+    const orchestrator = {
+      activePinForWire: activePin,
+      hoveredPin: null, // Puntero no sobre el pin exacto al soltar
+      tempWireEnd: { x: 245, y: 105 },
+      screenToWorld: (x: number, y: number) => ({ x, y }),
+      getPinHitThreshold: () => 28,
+      hitTestPin: vi.fn(() => ({ pin: targetPin, comp: { id: "R1", type: "resistor" } as any })),
+      connectPins,
+      stopDragging: vi.fn(),
+      selectedComponents: [],
+      selectedComponent: null,
+      selectedWire: null,
+    } as unknown as CanvasOrchestrator;
+
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    const upEv = new MouseEvent("mouseup", { clientX: 245, clientY: 105, bubbles: true });
+    canvas.dispatchEvent(upEv);
+
+    expect(connectPins).toHaveBeenCalledWith(activePin, targetPin);
+    expect(inputCallbacks.onWireConnected).toHaveBeenCalled();
+    expect(inputCallbacks.onCanvasModified).toHaveBeenCalled();
+  });
+
+  it("elimina la selección y notifica onSelectionChanged(null) al presionar tecla Delete", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+
+    const removeSelected = vi.fn();
+    const orchestrator = {
+      selectedWire: { id: "W1" },
+      selectedComponents: [],
+      selectedComponent: null,
+      removeSelected,
+    } as unknown as CanvasOrchestrator;
+
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    const deleteEv = new KeyboardEvent("keydown", { key: "Delete", bubbles: true });
+    window.dispatchEvent(deleteEv);
+
+    expect(removeSelected).toHaveBeenCalled();
+    expect(inputCallbacks.onSelectionChanged).toHaveBeenCalledWith(null);
+    expect(inputCallbacks.onCanvasModified).toHaveBeenCalled();
+  });
 });
+
 

@@ -18,19 +18,36 @@ function component(
 }
 
 describe("component_render_model", () => {
-  it("resuelve color, grosor y brillo por estado visual", () => {
-    expect(getComponentVisualState(false, false)).toEqual({
+  it("resuelve color, grosor y brillo por estado visual en modo oscuro y claro", () => {
+    expect(getComponentVisualState(false, false, false)).toEqual({
       color: "#E6EAF0",
       lineWidth: 2,
       shadowBlur: 0,
     });
-    expect(getComponentVisualState(true, false)).toMatchObject({
+    expect(getComponentVisualState(true, false, false)).toMatchObject({
       color: "#38BDF8",
       lineWidth: 2.8,
       shadowBlur: 0,
     });
-    expect(getComponentVisualState(false, true)).toMatchObject({
+    expect(getComponentVisualState(false, true, false)).toMatchObject({
       color: "#5B9FD6",
+      lineWidth: 2.4,
+      shadowBlur: 0,
+    });
+
+    // Modo Classroom (Tema Claro)
+    expect(getComponentVisualState(false, false, true)).toEqual({
+      color: "#1E293B",
+      lineWidth: 2,
+      shadowBlur: 0,
+    });
+    expect(getComponentVisualState(true, false, true)).toMatchObject({
+      color: "#0284C7",
+      lineWidth: 2.8,
+      shadowBlur: 0,
+    });
+    expect(getComponentVisualState(false, true, true)).toMatchObject({
+      color: "#0369A1",
       lineWidth: 2.4,
       shadowBlur: 0,
     });
@@ -45,8 +62,8 @@ describe("component_render_model", () => {
   });
 
   it("calcula layout de labels para componentes altos", () => {
-    expect(getComponentLabelLayout(component("mcu_8051"))).toEqual({ idY: -230, valueY: 215 });
-    expect(getComponentLabelLayout({ ...component("x"), pinCount: 8 })).toEqual({ idY: -90, valueY: 94 });
+    expect(getComponentLabelLayout(component("mcu_8051"))).toMatchObject({ idY: -230, valueY: 215 });
+    expect(getComponentLabelLayout({ ...component("x"), pinCount: 8 })).toMatchObject({ idY: -90, valueY: 94 });
   });
 
   it("formatea etiquetas de onda y frecuencias", () => {
@@ -64,16 +81,26 @@ describe("component_render_model", () => {
     expect(formatFreq(440)).toBe("440 Hz");
   });
 
-  it("calcula layout de labels para componentes diversos", () => {
-    expect(getComponentLabelLayout(component("ground"))).toEqual({ idY: 24, valueY: 32 });
-    expect(getComponentLabelLayout(component("dmm"))).toEqual({ idY: -44, valueY: 32 });
-    expect(getComponentLabelLayout(component("mcu_8051"))).toEqual({ idY: -230, valueY: 215 });
-    expect(getComponentLabelLayout(component("mcu_avr"))).toEqual({ idY: -170, valueY: 155 });
-    expect(getComponentLabelLayout(component("esp32"))).toEqual({ idY: -70, valueY: 75 });
-    expect(getComponentLabelLayout(component("arduino_uno"))).toEqual({ idY: -70, valueY: 75 });
-    expect(getComponentLabelLayout(component("raspberry_pi_pico"))).toEqual({ idY: -70, valueY: 75 });
-    expect(getComponentLabelLayout({ ...component("x"), pinCount: 8 })).toEqual({ idY: -90, valueY: 94 });
-    expect(getComponentLabelLayout(component("resistor"))).toEqual({ idY: -24, valueY: 32 });
+  it("calcula layout de labels para componentes diversos y rotaciones", () => {
+    expect(getComponentLabelLayout(component("ground"))).toMatchObject({ idY: 24, valueY: 32 });
+    expect(getComponentLabelLayout(component("dmm"))).toMatchObject({ idY: -44, valueY: 32 });
+    expect(getComponentLabelLayout(component("mcu_8051"))).toMatchObject({ idY: -230, valueY: 215 });
+    expect(getComponentLabelLayout(component("mcu_avr"))).toMatchObject({ idY: -170, valueY: 155 });
+    expect(getComponentLabelLayout(component("esp32"))).toMatchObject({ idY: -70, valueY: 75 });
+    expect(getComponentLabelLayout(component("arduino_uno"))).toMatchObject({ idY: -70, valueY: 75 });
+    expect(getComponentLabelLayout(component("raspberry_pi_pico"))).toMatchObject({ idY: -70, valueY: 75 });
+    expect(getComponentLabelLayout({ ...component("x"), pinCount: 8 })).toMatchObject({ idY: -90, valueY: 94 });
+    expect(getComponentLabelLayout(component("resistor"))).toMatchObject({ idX: 0, idY: -24, valueX: 0, valueY: 32, align: "center" });
+
+    // Rotación vertical (90 grados) - evita colisión con leads
+    const verticalResistor = { ...component("resistor"), rotation: 90 };
+    expect(getComponentLabelLayout(verticalResistor)).toMatchObject({
+      idX: 24,
+      idY: -7,
+      valueX: 24,
+      valueY: 9,
+      align: "left",
+    });
   });
 
   it("formatea valores visibles sin mojibake", () => {

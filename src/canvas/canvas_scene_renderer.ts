@@ -74,6 +74,8 @@ export interface CanvasRenderHost {
   showReactiveFields?: boolean;
   showTelemetryHud?: boolean;
   symbolStandard?: "IEEE" | "IEC";
+  simulationActive?: boolean;
+  simulationPaused?: boolean;
   transientResults?: readonly { time?: number; nodeVoltages?: Record<string, number>; branchCurrents?: Record<string, number> }[];
   clampCameraOffsets(): void;
   generateOrthogonalPath(start: Point2D, end: Point2D): Point2D[];
@@ -149,8 +151,8 @@ export class CanvasSceneRenderer {
 
     const now = performance.now();
 
-    // 3b. Draw Current Flow Animation (solo si no hay capa overlay separada)
-    if (!this.hasOverlayRenderer && this.host.showCurrentAnimation !== false) {
+    // 3b. Draw Current Flow Animation (solo si no hay capa overlay separada y la simulación está activa)
+    if (!this.hasOverlayRenderer && this.host.showCurrentAnimation !== false && this.host.simulationActive !== false) {
       this.currentAnimationRenderer.flowMode = this.host.currentFlowMode ?? "conventional";
       this.currentAnimationRenderer.speedMultiplier = this.host.currentAnimationSpeed ?? 1.0;
       this.currentAnimationRenderer.renderCurrentFlow(
@@ -161,11 +163,12 @@ export class CanvasSceneRenderer {
         visibleWorldBounds,
         now,
         this.host.zoom,
+        Boolean(this.host.simulationPaused),
       );
     }
 
-    // 3c. Draw Electro-Thermal Live Heatmap (solo si no hay capa overlay separada)
-    if (!this.hasOverlayRenderer && this.host.showThermalHeatmap !== false) {
+    // 3c. Draw Electro-Thermal Live Heatmap (solo si no hay capa overlay separada y la simulación está activa)
+    if (!this.hasOverlayRenderer && this.host.showThermalHeatmap !== false && this.host.simulationActive !== false) {
       this.thermalHeatmapRenderer.renderThermalHeatmap(
         this.ctx,
         visibleComponents,
@@ -178,6 +181,7 @@ export class CanvasSceneRenderer {
     }
 
     const renderDetail = resolveRenderDetail(this.host.zoom, visibleComponents.length);
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     // 4. Draw Components
     for (const comp of visibleComponents) {
@@ -191,6 +195,7 @@ export class CanvasSceneRenderer {
         branchCurrents,
         showReactiveFields: this.host.showReactiveFields !== false,
         symbolStandard: comp.symbolStandard ?? this.host.symbolStandard ?? "IEEE",
+        isClassroom,
       });
     }
 
@@ -453,8 +458,9 @@ export class CanvasSceneRenderer {
       // Dibujar arcos de cruce (Jumper Arcs) sobre la ruta si existen
       const jumperPoints = crossingsByWire.get(wire.id);
       if (jumperPoints && jumperPoints.length > 0) {
+        const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
         for (const jPt of jumperPoints) {
-          this.ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+          this.ctx.fillStyle = isClassroom ? "#FFFFFF" : "rgba(15, 23, 42, 0.95)";
           this.ctx.beginPath();
           this.ctx.arc(jPt.x, jPt.y, 5, 0, Math.PI * 2);
           this.ctx.fill();
@@ -524,9 +530,10 @@ export class CanvasSceneRenderer {
     }
 
     // Dibujar Nodos de Unión en T (T-Junction Dots) con diseño profesional EDA
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
     for (const jPt of topology.junctions) {
-      this.ctx.fillStyle = "#64748B";
-      this.ctx.strokeStyle = "#0F172A";
+      this.ctx.fillStyle = isClassroom ? "#334155" : "#64748B";
+      this.ctx.strokeStyle = isClassroom ? "#FFFFFF" : "#0F172A";
       this.ctx.lineWidth = 1.5;
       this.ctx.beginPath();
       this.ctx.arc(jPt.x, jPt.y, 3.5, 0, Math.PI * 2);
@@ -559,17 +566,18 @@ export class CanvasSceneRenderer {
 
     const x = center.x - badgeWidth / 2;
     const y = center.y - badgeHeight / 2;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
-    ctx.fillStyle = "rgba(8, 12, 22, 0.92)";
+    ctx.fillStyle = isClassroom ? "rgba(248, 250, 252, 0.95)" : "rgba(8, 12, 22, 0.92)";
     ctx.beginPath();
     ctx.roundRect(x, y, badgeWidth, badgeHeight, 3);
     ctx.fill();
 
-    ctx.strokeStyle = accentColor ?? "rgba(102, 252, 241, 0.7)";
+    ctx.strokeStyle = accentColor ?? (isClassroom ? "#0284C7" : "rgba(102, 252, 241, 0.7)");
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = isClassroom ? "#0F172A" : "#ffffff";
     ctx.fillText(label, center.x, center.y + 0.5);
     ctx.restore();
   }
@@ -587,6 +595,12 @@ export class CanvasSceneRenderer {
 
     const netPinKeys = netHighlight ? netHighlight.netPinKeys : new Set<string>();
 
+    const connectedPinKeys = new Set<string>();
+    for (const w of this.host.wires) {
+      connectedPinKeys.add(`${w.from.componentId}:${w.from.pinIndex}`);
+      connectedPinKeys.add(`${w.to.componentId}:${w.to.pinIndex}`);
+    }
+
     for (const comp of componentsToDraw) {
       const pins = this.getPinsCached(comp, pinCache);
       for (const pin of pins) {
@@ -601,7 +615,22 @@ export class CanvasSceneRenderer {
 
         if (renderDetail === "compact" && !isHovered && !isActive && !isNetHighlighted) continue;
 
-        if (isHovered || isActive) {
+        if (isHovered && this.host.activePinForWire) {
+          // Anillo magnético de captura (Magnetic Snap Halo)
+          this.ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+          this.ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
+          this.ctx.lineWidth = 1.8;
+          this.ctx.beginPath();
+          this.ctx.arc(pin.x, pin.y, 8.5, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+
+          // Punto central de anclaje magnético
+          this.ctx.fillStyle = "#38BDF8";
+          this.ctx.beginPath();
+          this.ctx.arc(pin.x, pin.y, 4.5, 0, Math.PI * 2);
+          this.ctx.fill();
+        } else if (isHovered || isActive) {
           this.ctx.fillStyle = "#38BDF8";
           this.ctx.beginPath();
           this.ctx.arc(pin.x, pin.y, 5.5, 0, Math.PI * 2);
@@ -614,8 +643,20 @@ export class CanvasSceneRenderer {
             const current = branchCurrents[pinKey] ?? branchCurrents[`${pin.componentId}:I`];
             renderPinTelemetryHud(this.ctx, pin, nodeId, volt, current, this.host.transientResults);
           }
+        } else if (connectedPinKeys.has(pinKey)) {
+          // Terminal conectado físicamente (Punto de contacto EDA consolidado)
+          const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+          this.ctx.fillStyle = isClassroom ? "#475569" : "#64748B";
+          this.ctx.strokeStyle = "#0F172A";
+          this.ctx.lineWidth = 1.2;
+          this.ctx.beginPath();
+          this.ctx.arc(pin.x, pin.y, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
         } else {
-          this.ctx.fillStyle = "rgba(242, 201, 76, 0.75)";
+          // Pin no conectado / abierto (indicador estándar ambar/dorado de alto contraste)
+          const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+          this.ctx.fillStyle = isClassroom ? "#D97706" : "rgba(242, 201, 76, 0.75)";
           this.ctx.beginPath();
           this.ctx.arc(pin.x, pin.y, 3, 0, Math.PI * 2);
           this.ctx.fill();

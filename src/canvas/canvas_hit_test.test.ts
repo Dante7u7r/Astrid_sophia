@@ -47,6 +47,14 @@ describe("hitTestComponentAt", () => {
     expect(bounds.width).toBeCloseTo(ext.halfH * 2, 0);
     expect(bounds.height).toBeCloseTo(ext.halfW * 2, 0);
   });
+
+  test("punto de test (test_point) es seleccionable en su pad de prueba", () => {
+    const tp = makeComp({ id: "NET1", type: "net_label", terminalType: "test_point", x: 100, y: 200 });
+    expect(hitTestComponentAt(tp, 100, 182)).toBe(true);
+    expect(hitTestComponentAt(tp, 100, 200)).toBe(true);
+    expect(hitTestComponentAt(tp, 100, 170)).toBe(true);
+    expect(hitTestComponentAt(tp, 200, 200)).toBe(false);
+  });
 });
 
 describe("pin hit threshold (via CanvasOrchestrator)", () => {

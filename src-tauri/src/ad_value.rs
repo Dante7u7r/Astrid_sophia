@@ -93,7 +93,7 @@ impl AdValue {
         } else {
             // Si b = 0, el término b * da/dv_i se anula
             // pero aún necesitamos propagar las claves para suma posterior
-            for (&k, _) in &a.grad {
+            for &k in a.grad.keys() {
                 grad.insert(k, 0.0);
             }
         }

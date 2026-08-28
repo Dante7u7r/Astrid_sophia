@@ -994,4 +994,49 @@ describe("extractElectricalNetlist", () => {
     expect(res.error).toBeUndefined();
     expect(res.pinToNodeMap["NET1:0"]).toBe(res.pinToNodeMap["U3:4"]);
   });
+
+  test("extrae correctamente netlist con cables empalmados usando endpoints j_ sin lanzar error de componente inexistente", () => {
+    const components: ComponentInstance[] = [
+      { id: "V1", type: "vsource", value: 5, x: 0, y: 0, rotation: 0 },
+      { id: "R1", type: "resistor", value: 1000, x: 100, y: 0, rotation: 0 },
+      { id: "R2", type: "resistor", value: 2000, x: 100, y: 100, rotation: 0 },
+      { id: "GND", type: "ground", value: 0, x: 0, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y, name: "GND" }];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x - 20, y: c.y, name: "Terminal 1" },
+        { componentId: c.id, pinIndex: 1, x: c.x + 20, y: c.y, name: "Terminal 2" },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      {
+        id: "wire_V1_p0_to_j_580_397",
+        from: { componentId: "V1", pinIndex: 0 },
+        to: { componentId: "j_580_397", pinIndex: 0 },
+      },
+      {
+        id: "wire_j_580_397_to_R1_p0",
+        from: { componentId: "j_580_397", pinIndex: 0 },
+        to: { componentId: "R1", pinIndex: 0 },
+      },
+      {
+        id: "wire_j_580_397_to_R2_p0",
+        from: { componentId: "j_580_397", pinIndex: 0 },
+        to: { componentId: "R2", pinIndex: 0 },
+      },
+      { id: "w_v_gnd", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+      { id: "w_r1_gnd", from: { componentId: "R1", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+      { id: "w_r2_gnd", from: { componentId: "R2", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+    expect(res.pinToNodeMap["V1:0"]).toBe(res.pinToNodeMap["R1:0"]);
+    expect(res.pinToNodeMap["V1:0"]).toBe(res.pinToNodeMap["R2:0"]);
+  });
 });

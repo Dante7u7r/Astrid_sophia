@@ -639,14 +639,15 @@ export function drawTranspiledSubcircuit(
     }
 
     // 1. Cuerpo plástico TO-220
-    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.94)";
     ctx.fillRect(-24, -20, 48, 36);
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.strokeRect(-24, -20, 48, 36);
 
     // Pestaña metálica superior con orificio de fijación
-    ctx.fillStyle = glow > 0.1 ? `rgba(245, 158, 11, ${0.2 + glow * 0.4})` : "rgba(148, 163, 184, 0.25)";
+    ctx.fillStyle = glow > 0.1 ? `rgba(245, 158, 11, ${0.2 + glow * 0.4})` : (isClassroom ? "rgba(203, 213, 225, 0.6)" : "rgba(148, 163, 184, 0.25)");
     ctx.fillRect(-20, -32, 40, 12);
     ctx.strokeStyle = glow > 0.1 ? "#EF4444" : color;
     ctx.strokeRect(-20, -32, 40, 12);
@@ -656,7 +657,7 @@ export function drawTranspiledSubcircuit(
 
     // Nombre del regulador
     const modelName = String(comp.modelName || comp.value || "REG");
-    ctx.fillStyle = "#F59E0B";
+    ctx.fillStyle = isClassroom ? "#D97706" : "#F59E0B";
     ctx.font = "bold 9px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -666,7 +667,7 @@ export function drawTranspiledSubcircuit(
     if (tempC > 30) {
       ctx.save();
       ctx.font = "bold 7px 'JetBrains Mono', monospace";
-      ctx.fillStyle = tempC > 70 ? "#EF4444" : "#F59E0B";
+      ctx.fillStyle = tempC > 70 ? "#EF4444" : (isClassroom ? "#D97706" : "#F59E0B");
       ctx.fillText(`${Math.round(tempC)}°C`, 0, 6);
       ctx.restore();
     }
@@ -683,7 +684,7 @@ export function drawTranspiledSubcircuit(
     ctx.stroke();
 
     ctx.font = "7px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
     ctx.textAlign = "left";
     ctx.fillText(comp.pinLabels?.[0] ?? "IN", -20, 0);
     ctx.textAlign = "right";
@@ -695,6 +696,7 @@ export function drawTranspiledSubcircuit(
 
   if (layoutStyle === "opamp_5p") {
     const isClipping = comp.buzzerActive ?? false;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     // 1. Cuerpo triangular de Op-Amp
     ctx.beginPath();
@@ -702,7 +704,7 @@ export function drawTranspiledSubcircuit(
     ctx.lineTo(-25, 30);
     ctx.lineTo(25, 0);
     ctx.closePath();
-    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+    ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.94)";
     ctx.fill();
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
@@ -746,18 +748,19 @@ export function drawTranspiledSubcircuit(
 
     const modelName = String(comp.modelName || comp.value || "OPAMP");
     ctx.font = "bold 8px 'Inter', sans-serif";
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.fillText(modelName, -2, 0);
     return;
   }
 
   if (layoutStyle === "transformer_ct") {
     const isTransmitting = (comp.speakerPower ?? 0) > 0.05;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     // Cuerpo gráfico de transformador con toma central
     const halfW = 28;
     const halfH = 30;
-    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+    ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.94)";
     ctx.fillRect(-halfW, -halfH, halfW * 2, halfH * 2);
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
@@ -769,7 +772,7 @@ export function drawTranspiledSubcircuit(
     ctx.lineTo(-3, 22);
     ctx.moveTo(3, -22);
     ctx.lineTo(3, 22);
-    ctx.strokeStyle = isTransmitting ? "#38BDF8" : "#A78BFA";
+    ctx.strokeStyle = isTransmitting ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#7C3AED" : "#A78BFA");
     ctx.lineWidth = isTransmitting ? 2.0 : 1.5;
     ctx.stroke();
 
@@ -794,7 +797,7 @@ export function drawTranspiledSubcircuit(
     // Serigrafía / Etiquetas
     const modelName = String(comp.modelName || comp.value || "TRAFO-CT");
     ctx.save();
-    ctx.fillStyle = isTransmitting ? "#38BDF8" : "#A78BFA";
+    ctx.fillStyle = isTransmitting ? (isClassroom ? "#0284C7" : "#38BDF8") : (isClassroom ? "#7C3AED" : "#A78BFA");
     ctx.font = "bold 7px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -802,7 +805,7 @@ export function drawTranspiledSubcircuit(
     ctx.restore();
 
     ctx.font = "6.5px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
     ctx.textAlign = "left";
     ctx.fillText(comp.pinLabels?.[0] ?? "P1", -halfW + 3, -20);
     ctx.fillText(comp.pinLabels?.[1] ?? "P2", -halfW + 3, 20);
@@ -818,11 +821,12 @@ export function drawTranspiledSubcircuit(
   const bodyHeight = Math.max(pinsPerSide * 20 + 20, 60);
   const halfH = Math.ceil(bodyHeight / 40) * 20;
   const halfW = 28;
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
-  // Cuerpo negro mate del CI
-  ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
+  // Cuerpo del CI
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.96)";
   ctx.fillRect(-halfW, -halfH, halfW * 2, halfH * 2);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.strokeStyle = isClassroom ? color : "rgba(255, 255, 255, 0.3)";
   ctx.lineWidth = lineWidth;
   ctx.strokeRect(-halfW, -halfH, halfW * 2, halfH * 2);
 
@@ -835,7 +839,7 @@ export function drawTranspiledSubcircuit(
   // Serigrafía central del modelo
   const modelName = String(comp.modelName || comp.value || "DIP-IC");
   ctx.save();
-  ctx.fillStyle = "#38BDF8";
+  ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
   ctx.font = "bold 9px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -858,7 +862,7 @@ export function drawTranspiledSubcircuit(
 
     const label = comp.pinLabels?.[i] ?? `P${i + 1}`;
     ctx.font = "7px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "#94A3B8";
+    ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
     if (isLeft) {
       ctx.textAlign = "left";
       ctx.fillText(label, -halfW + 4, y + 2.5);

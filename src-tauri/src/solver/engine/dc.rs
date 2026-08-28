@@ -269,7 +269,7 @@ pub fn solve_newton_raphson(
     // Bucle externo: reintentar con estados de switch actualizados hasta estabilizar
     for _outer_iter in 0..4 {
         // Intento 1: Newton-Raphson básico amortiguado
-        match solve_newton_raphson_core(
+        if let Ok(solution) = solve_newton_raphson_core(
             netlist,
             n,
             m,
@@ -281,24 +281,21 @@ pub fn solve_newton_raphson(
             &switch_frozen_states,
             numerical_settings,
         ) {
-            Ok(solution) => {
-                let (sw_changed, new_sw) =
-                    check_switch_convergence(&solution, &switch_frozen_states);
-                if !sw_changed {
-                    let res = build_simulation_result(netlist, n, m, vsource_map, &solution, 1)?;
-                    let mut final_voltages = vec![0.0; n + 1];
-                    for i in 1..=n {
-                        final_voltages[i] = solution[i - 1];
-                    }
-                    return Ok((res, final_voltages));
-                }
-                switch_frozen_states = new_sw;
+            let (sw_changed, new_sw) =
+                check_switch_convergence(&solution, &switch_frozen_states);
+            if !sw_changed {
+                let res = build_simulation_result(netlist, n, m, vsource_map, &solution, 1)?;
+                let mut final_voltages = vec![0.0; n + 1];
                 for i in 1..=n {
-                    initial_guess[i] = solution[i - 1];
+                    final_voltages[i] = solution[i - 1];
                 }
-                continue;
+                return Ok((res, final_voltages));
             }
-            Err(_) => {}
+            switch_frozen_states = new_sw;
+            for i in 1..=n {
+                initial_guess[i] = solution[i - 1];
+            }
+            continue;
         }
 
         // Intento 2: Gmin Stepping logarítmico (Fase 14)

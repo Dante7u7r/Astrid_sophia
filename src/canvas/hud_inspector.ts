@@ -258,15 +258,21 @@ function renderHudBox(
   const boxX = anchorX - boxW / 2;
   const boxY = placement === "bottom" ? anchorY - boxH : anchorY;
 
-  // Fondo adaptativo de alto contraste
-  ctx.fillStyle = theme.isClassroom ? "rgba(255, 255, 255, 0.96)" : "rgba(15, 23, 42, 0.96)";
-  ctx.strokeStyle = theme.isClassroom ? "#CBD5E1" : "#334155";
+  // Fondo adaptativo de alto contraste y elevación
+  ctx.save();
+  ctx.shadowColor = theme.isClassroom ? "rgba(15, 23, 42, 0.18)" : "rgba(0, 0, 0, 0.65)";
+  ctx.shadowBlur = theme.isClassroom ? 8 : 12;
+  ctx.shadowOffsetY = 3;
+
+  ctx.fillStyle = theme.isClassroom ? "#FFFFFF" : "rgba(15, 23, 42, 0.96)";
+  ctx.strokeStyle = theme.isClassroom ? "#94A3B8" : "#334155";
   ctx.lineWidth = 1;
 
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxW, boxH, 6);
   ctx.fill();
   ctx.stroke();
+  ctx.restore(); // Limpiar sombra para trazo nítido de texto y gráficos
 
   ctx.textAlign = "left";
 

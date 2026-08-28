@@ -10,7 +10,7 @@ pub(super) fn stamp_behavioral_sources(ctx: &mut StampContext<'_>) {
     let t = ctx.t;
     let prev_v = ctx.prev_v;
     let solution_iter = ctx.solution_iter;
-    let mut ast_cache_t = &mut *ctx.ast_cache_t;
+    let ast_cache_t = &mut *ctx.ast_cache_t;
     let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     // B-Sources dinámicas en transitorio
@@ -29,7 +29,7 @@ pub(super) fn stamp_behavioral_sources(ctx: &mut StampContext<'_>) {
                 for (sid, &sidx) in vsource_map.iter() {
                     bc.insert(sid.clone(), solution_iter[n + sidx]);
                 }
-                if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, t, &mut ast_cache_t) {
+                if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, t, ast_cache_t) {
                     let vs_idx = *vsource_map.get(&comp_bs.id).unwrap();
                     let col = n + vs_idx;
                     let mut ieq = ad.value;
@@ -56,7 +56,7 @@ pub(super) fn stamp_behavioral_sources(ctx: &mut StampContext<'_>) {
                 for (sid, &sidx) in vsource_map.iter() {
                     bc.insert(sid.clone(), solution_iter[n + sidx]);
                 }
-                if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, t, &mut ast_cache_t) {
+                if let Ok(ad) = evaluate_expression_ad(expr_str, &nv, &bc, t, ast_cache_t) {
                     let mut ieq = ad.value;
                     for (&node_idx, &di_dv) in &ad.grad {
                         let v_k = if node_idx > 0 { prev_v[node_idx] } else { 0.0 };

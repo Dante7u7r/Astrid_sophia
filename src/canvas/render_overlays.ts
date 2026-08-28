@@ -33,8 +33,9 @@ export function drawTemporaryWire(
 ): void {
   if (!activePinForWire || !tempWireEnd) return;
 
-  ctx.strokeStyle = "rgba(102, 252, 241, 0.6)";
-  ctx.lineWidth = 2.5;
+  ctx.save();
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+  ctx.lineWidth = 2.0;
   ctx.setLineDash([6, 4]);
   ctx.beginPath();
 
@@ -46,6 +47,17 @@ export function drawTemporaryWire(
 
   ctx.stroke();
   ctx.setLineDash([]);
+
+  // Indicador de punto de enganche temporal en el extremo
+  ctx.fillStyle = "#38BDF8";
+  ctx.strokeStyle = "#0F172A";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(tempWireEnd.x, tempWireEnd.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 export function drawProbeBadges(

@@ -78,7 +78,8 @@ export function createDesktopSimulationControllers(
   const setSimulationRunning = (running: boolean): void => {
     simulationControls?.setSimulationRunning(running);
     if (!running) {
-      simulationControls?.setSimulationPaused(false);
+      simulationControls?.setSimulationPaused?.(false);
+      deps.getOscilloscopePanel()?.finish();
     }
     const orch = deps.getOrchestrator();
     if (orch) {

@@ -99,9 +99,10 @@ export class SimulationController {
   async runSimulation(mode: AnalysisMode): Promise<void> {
     const orchestrator = this.dependencies.getOrchestrator();
     const simulationSettings = this.dependencies.getSimulationSettings();
-    const oscPanel = this.dependencies.getOscilloscopePanel();
-    const desiredDuration = oscPanel ? oscPanel.timeDivValue * 10 : DEFAULT_TRANSIENT_DURATION_SECONDS;
-    const transientDuration = simulationSettings.transientDuration ?? Math.max(DEFAULT_TRANSIENT_DURATION_SECONDS, desiredDuration);
+    const isContinuousTransient = mode === "TRAN" && (!simulationSettings.transientDuration || simulationSettings.transientDuration <= 0);
+    const transientDuration = isContinuousTransient
+      ? 0
+      : (simulationSettings.transientDuration ?? DEFAULT_TRANSIENT_DURATION_SECONDS);
     this.dependencies.addLog(
       `Iniciando simulación física de análisis [${ANALYSIS_LABELS[mode]}]...`,
       "system",
@@ -136,7 +137,7 @@ export class SimulationController {
       workspaceId: this.dependencies.getActiveTabId(),
       netlist,
       settings: simulationSettings,
-      ...(mode === "TRAN"
+      ...(mode === "TRAN" && transientDuration > 0
         ? { requestedPointCount: Math.ceil(transientDuration / simulationSettings.dt) + 1 }
         : {}),
     });

@@ -476,6 +476,11 @@ export class CanvasOrchestrator {
     if (overlayCanvas) {
       this.attachOverlayCanvas(overlayCanvas);
     }
+    if (typeof window !== "undefined") {
+      window.addEventListener("astryd-theme-changed", () => {
+        this.render();
+      });
+    }
   }
 
   public attachOverlayCanvas(overlayCanvas: HTMLCanvasElement): void {
@@ -682,8 +687,11 @@ export class CanvasOrchestrator {
     return null;
   }
 
-  /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel. */
+  /** Pin pick radius in world units; scales inversely with zoom for consistent screen feel and expands during wiring for magnetic snap. */
   public getPinHitThreshold(): number {
+    if (this.activePinForWire) {
+      return Math.max(16, 28 / this.zoom);
+    }
     return Math.max(6, 12 / this.zoom);
   }
 
@@ -735,6 +743,7 @@ export class CanvasOrchestrator {
     this.components = result.components;
     this.wires = result.wires;
     this.selectedComponents = result.selectedComponents;
+    this.syncWireConnections();
   }
 
   public checkHover(worldX: number, worldY: number): void {
@@ -1032,6 +1041,7 @@ export class CanvasOrchestrator {
     this.selectedWires = result.selectedWires;
     this.selectedComponent = result.selectedComponent;
     this.selectedComponents = result.selectedComponents;
+    this.syncWireConnections();
   }
 
   public fitAll(): void {

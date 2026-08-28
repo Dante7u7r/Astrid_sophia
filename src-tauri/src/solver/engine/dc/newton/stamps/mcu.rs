@@ -5,7 +5,7 @@ use super::StampContext;
 
 pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let prev_voltages = ctx.prev_voltages;
-    let mut matrix_a = &mut *ctx.matrix_a;
+    let matrix_a = &mut *ctx.matrix_a;
     let vector_z = &mut *ctx.vector_z;
     if comp.pins.len() >= 6 {
         let pin_in = comp.pins[0].parse::<usize>().unwrap_or(0);
@@ -34,16 +34,16 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         };
 
         // Pin_In a GND
-        stamp_g(&mut matrix_a, pin_in, pin_in, g_in);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_in);
-        stamp_g(&mut matrix_a, pin_in, pin_gnd, -g_in);
-        stamp_g(&mut matrix_a, pin_gnd, pin_in, -g_in);
+        stamp_g(matrix_a, pin_in, pin_in, g_in);
+        stamp_g(matrix_a, pin_gnd, pin_gnd, g_in);
+        stamp_g(matrix_a, pin_in, pin_gnd, -g_in);
+        stamp_g(matrix_a, pin_gnd, pin_in, -g_in);
 
         // Pin_ADC a GND
-        stamp_g(&mut matrix_a, pin_adc, pin_adc, g_adc);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_adc);
-        stamp_g(&mut matrix_a, pin_adc, pin_gnd, -g_adc);
-        stamp_g(&mut matrix_a, pin_gnd, pin_adc, -g_adc);
+        stamp_g(matrix_a, pin_adc, pin_adc, g_adc);
+        stamp_g(matrix_a, pin_gnd, pin_gnd, g_adc);
+        stamp_g(matrix_a, pin_adc, pin_gnd, -g_adc);
+        stamp_g(matrix_a, pin_gnd, pin_adc, -g_adc);
 
         // 2. Alimentación Pin_VCC con consumo dinámico linealizado
         let i_baseline = match comp.comp_type.as_str() {
@@ -74,10 +74,10 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
 
         // Estampar conductancia de carril y conductancia de carga dinámica
         let g_vcc_total = g_vcc + g_vcc_draw;
-        stamp_g(&mut matrix_a, pin_vcc, pin_vcc, g_vcc_total);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_vcc_total);
-        stamp_g(&mut matrix_a, pin_vcc, pin_gnd, -g_vcc_total);
-        stamp_g(&mut matrix_a, pin_gnd, pin_vcc, -g_vcc_total);
+        stamp_g(matrix_a, pin_vcc, pin_vcc, g_vcc_total);
+        stamp_g(matrix_a, pin_gnd, pin_gnd, g_vcc_total);
+        stamp_g(matrix_a, pin_vcc, pin_gnd, -g_vcc_total);
+        stamp_g(matrix_a, pin_gnd, pin_vcc, -g_vcc_total);
 
         if pin_vcc > 0 {
             vector_z[pin_vcc - 1] += i_vcc_eq;
@@ -132,10 +132,10 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         let i_stamp_out = i_out + g_out_eff * v_out_diff;
 
         // Stamp Pin_Out
-        stamp_g(&mut matrix_a, pin_out, pin_out, g_out_eff);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_out_eff);
-        stamp_g(&mut matrix_a, pin_out, pin_gnd, -g_out_eff);
-        stamp_g(&mut matrix_a, pin_gnd, pin_out, -g_out_eff);
+        stamp_g(matrix_a, pin_out, pin_out, g_out_eff);
+        stamp_g(matrix_a, pin_gnd, pin_gnd, g_out_eff);
+        stamp_g(matrix_a, pin_out, pin_gnd, -g_out_eff);
+        stamp_g(matrix_a, pin_gnd, pin_out, -g_out_eff);
 
         if pin_out > 0 {
             vector_z[pin_out - 1] += i_stamp_out;
@@ -168,10 +168,10 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
             0.0
         };
 
-        stamp_g(&mut matrix_a, pin_dac, pin_dac, g_dac_eff);
-        stamp_g(&mut matrix_a, pin_gnd, pin_gnd, g_dac_eff);
-        stamp_g(&mut matrix_a, pin_dac, pin_gnd, -g_dac_eff);
-        stamp_g(&mut matrix_a, pin_gnd, pin_dac, -g_dac_eff);
+        stamp_g(matrix_a, pin_dac, pin_dac, g_dac_eff);
+        stamp_g(matrix_a, pin_gnd, pin_gnd, g_dac_eff);
+        stamp_g(matrix_a, pin_dac, pin_gnd, -g_dac_eff);
+        stamp_g(matrix_a, pin_gnd, pin_dac, -g_dac_eff);
 
         let i_eq_dac_residue = i_dac + g_dac_eff * v_dac_diff - g_transfer * v_adc_diff;
 

@@ -5,7 +5,7 @@ use nalgebra::DMatrix;
 pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let mcu_vdaceff = ctx.mcu_vdaceff;
     let ms_scheduler = ctx.ms_scheduler;
-    let mut matrix_a_iter = &mut *ctx.matrix_a_iter;
+    let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let pin_in = comp.pins[0].parse::<usize>().unwrap_or(0);
     let pin_out = comp.pins[1].parse::<usize>().unwrap_or(0);
@@ -27,15 +27,15 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         }
     };
 
-    stamp_g(&mut matrix_a_iter, pin_in, pin_in, g_in);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_gnd, g_in);
-    stamp_g(&mut matrix_a_iter, pin_in, pin_gnd, -g_in);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_in, -g_in);
+    stamp_g(matrix_a_iter, pin_in, pin_in, g_in);
+    stamp_g(matrix_a_iter, pin_gnd, pin_gnd, g_in);
+    stamp_g(matrix_a_iter, pin_in, pin_gnd, -g_in);
+    stamp_g(matrix_a_iter, pin_gnd, pin_in, -g_in);
 
-    stamp_g(&mut matrix_a_iter, pin_adc, pin_adc, g_in);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_gnd, g_in);
-    stamp_g(&mut matrix_a_iter, pin_adc, pin_gnd, -g_in);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_adc, -g_in);
+    stamp_g(matrix_a_iter, pin_adc, pin_adc, g_in);
+    stamp_g(matrix_a_iter, pin_gnd, pin_gnd, g_in);
+    stamp_g(matrix_a_iter, pin_adc, pin_gnd, -g_in);
+    stamp_g(matrix_a_iter, pin_gnd, pin_adc, -g_in);
 
     let i_baseline = match comp.comp_type.as_str() {
         "arduino_uno" => 0.015,
@@ -46,10 +46,10 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let g_vcc = 10.0;
     let i_vcc_eq = g_vcc * v_cc - i_baseline;
 
-    stamp_g(&mut matrix_a_iter, pin_vcc, pin_vcc, g_vcc);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_gnd, g_vcc);
-    stamp_g(&mut matrix_a_iter, pin_vcc, pin_gnd, -g_vcc);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_vcc, -g_vcc);
+    stamp_g(matrix_a_iter, pin_vcc, pin_vcc, g_vcc);
+    stamp_g(matrix_a_iter, pin_gnd, pin_gnd, g_vcc);
+    stamp_g(matrix_a_iter, pin_vcc, pin_gnd, -g_vcc);
+    stamp_g(matrix_a_iter, pin_gnd, pin_vcc, -g_vcc);
 
     if pin_vcc > 0 {
         vector_z_iter[pin_vcc - 1] += i_vcc_eq;
@@ -62,10 +62,10 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let g_dac = 0.01;
     let i_dac_eq = v_dac_eff * g_dac;
 
-    stamp_g(&mut matrix_a_iter, pin_dac, pin_dac, g_dac);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_gnd, g_dac);
-    stamp_g(&mut matrix_a_iter, pin_dac, pin_gnd, -g_dac);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_dac, -g_dac);
+    stamp_g(matrix_a_iter, pin_dac, pin_dac, g_dac);
+    stamp_g(matrix_a_iter, pin_gnd, pin_gnd, g_dac);
+    stamp_g(matrix_a_iter, pin_dac, pin_gnd, -g_dac);
+    stamp_g(matrix_a_iter, pin_gnd, pin_dac, -g_dac);
 
     if pin_dac > 0 {
         vector_z_iter[pin_dac - 1] += i_dac_eq;
@@ -79,10 +79,10 @@ pub(super) fn stamp_mcu(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let g_out = 0.05;
     let i_stamp_out = v_target_out * g_out;
 
-    stamp_g(&mut matrix_a_iter, pin_out, pin_out, g_out);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_gnd, g_out);
-    stamp_g(&mut matrix_a_iter, pin_out, pin_gnd, -g_out);
-    stamp_g(&mut matrix_a_iter, pin_gnd, pin_out, -g_out);
+    stamp_g(matrix_a_iter, pin_out, pin_out, g_out);
+    stamp_g(matrix_a_iter, pin_gnd, pin_gnd, g_out);
+    stamp_g(matrix_a_iter, pin_out, pin_gnd, -g_out);
+    stamp_g(matrix_a_iter, pin_gnd, pin_out, -g_out);
 
     if pin_out > 0 {
         vector_z_iter[pin_out - 1] += i_stamp_out;

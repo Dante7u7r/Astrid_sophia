@@ -301,4 +301,38 @@ describe("archivo .astryd 3.0", () => {
       expect(result.migratedFrom).toContain("paquete de diagnóstico");
     }
   });
+
+  test("serializa y valida correctamente cables conectados a empalmes (junctions)", () => {
+    const circuit: CircuitFileSnapshot = {
+      components: [
+        { id: "R1", type: "resistor", value: 1000, x: 0, y: 0, rotation: 0 },
+        { id: "R2", type: "resistor", value: 2000, x: 100, y: 100, rotation: 0 },
+      ],
+      wires: [
+        {
+          id: "wire_R1_p1_to_j_580_397",
+          from: { componentId: "R1", pinIndex: 1 },
+          to: { componentId: "j_580_397", pinIndex: 0, isJunction: true, junctionPos: { x: 580, y: 397 } },
+          points: [{ x: 50, y: 0 }, { x: 580, y: 397 }],
+        },
+        {
+          id: "wire_j_580_397_to_R2_p0",
+          from: { componentId: "j_580_397", pinIndex: 0 },
+          to: { componentId: "R2", pinIndex: 0 },
+          points: [{ x: 580, y: 397 }, { x: 100, y: 50 }],
+        },
+      ],
+    };
+
+    const serialized = serializeCircuitFile(circuit);
+    expect(serialized).toContain("wire_R1_p1_to_j_580_397");
+
+    const parsed = parseCircuitFile(serialized);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.data.wires).toHaveLength(2);
+      expect(parsed.data.wires[0].to.isJunction).toBe(true);
+      expect(parsed.data.wires[1].from.isJunction).toBe(true);
+    }
+  });
 });

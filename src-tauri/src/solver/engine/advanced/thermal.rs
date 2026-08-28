@@ -3,8 +3,9 @@ use std::collections::HashMap;
 
 use super::super::dc::solve_dc_circuit;
 use super::super::devices::{
-    evaluate_bsim3_nmos, evaluate_bsim3_pmos, solve_diode_junction_voltage, BJT_RTH_JA,
-    DIODE_RTH_JA, MOS_RTH_JA, OPTO_RTH_JA, PHYS_KB, PHYS_Q, PHYS_T,
+    evaluate_bsim3_nmos, evaluate_bsim3_pmos, evaluate_bsim4_nmos, evaluate_bsim4_pmos,
+    solve_diode_junction_voltage, BJT_RTH_JA, DIODE_RTH_JA, MOS_RTH_JA, OPTO_RTH_JA, PHYS_KB,
+    PHYS_Q, PHYS_T,
 };
 
 // ==================================================================================
@@ -161,6 +162,7 @@ pub fn solve_dc_circuit_thermal(
 /// Alterna entre:
 ///   1. Resolver el circuito eléctrico con temperaturas fijas → obtener corrientes/voltajes
 ///   2. Calcular potencia disipada por dispositivo → resolver red térmica → actualizar T_j
+///
 /// Converge cuando max(|ΔT_j|) < thermal_tol.
 pub fn solve_dc_electrothermal(
     netlist: &CircuitNetlist,
@@ -250,16 +252,31 @@ pub fn solve_dc_electrothermal(
                         } else {
                             0.0
                         };
-                        let (ids, _, _) = evaluate_bsim3_nmos(
-                            vgs,
-                            vds,
-                            vbs,
-                            comp.value,
-                            comp.w,
-                            comp.l,
-                            Some(avg_temp),
-                            Some(comp),
-                        );
+                        let ids = if comp.comp_type == "bsim4nmos" {
+                            let (ids_v, _, _, _, _, _) = evaluate_bsim4_nmos(
+                                vgs,
+                                vds,
+                                vbs,
+                                comp.value,
+                                comp.w,
+                                comp.l,
+                                Some(avg_temp),
+                                Some(comp),
+                            );
+                            ids_v
+                        } else {
+                            let (ids_v, _, _) = evaluate_bsim3_nmos(
+                                vgs,
+                                vds,
+                                vbs,
+                                comp.value,
+                                comp.w,
+                                comp.l,
+                                Some(avg_temp),
+                                Some(comp),
+                            );
+                            ids_v
+                        };
                         (vds * ids).abs()
                     }
                 }
@@ -282,16 +299,31 @@ pub fn solve_dc_electrothermal(
                         } else {
                             0.0
                         };
-                        let (isd, _, _) = evaluate_bsim3_pmos(
-                            vsg,
-                            vsd,
-                            vsb,
-                            comp.value,
-                            comp.w,
-                            comp.l,
-                            Some(avg_temp),
-                            Some(comp),
-                        );
+                        let isd = if comp.comp_type == "bsim4pmos" {
+                            let (isd_v, _, _, _, _, _) = evaluate_bsim4_pmos(
+                                vsg,
+                                vsd,
+                                vsb,
+                                comp.value,
+                                comp.w,
+                                comp.l,
+                                Some(avg_temp),
+                                Some(comp),
+                            );
+                            isd_v
+                        } else {
+                            let (isd_v, _, _) = evaluate_bsim3_pmos(
+                                vsg,
+                                vsd,
+                                vsb,
+                                comp.value,
+                                comp.w,
+                                comp.l,
+                                Some(avg_temp),
+                                Some(comp),
+                            );
+                            isd_v
+                        };
                         (vsd * isd).abs()
                     }
                 }
@@ -328,7 +360,7 @@ pub fn solve_dc_electrothermal(
             let comp = &netlist.components[*comp_idx];
 
             // Rth propio: desde comp.rth > constante por defecto
-            let rth_self = comp.rth.unwrap_or_else(|| match comp.comp_type.as_str() {
+            let rth_self = comp.rth.unwrap_or(match comp.comp_type.as_str() {
                 "diode" | "led" => DIODE_RTH_JA,
                 "opto" => OPTO_RTH_JA,
                 "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" => {

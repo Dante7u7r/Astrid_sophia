@@ -14,6 +14,7 @@ mod transient_state_updates;
 mod transient_step_control;
 mod transient_switches;
 mod transient_thermal;
+pub(crate) mod transient_workspace;
 
 #[cfg(test)]
 mod tests;

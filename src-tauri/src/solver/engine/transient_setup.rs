@@ -62,8 +62,8 @@ pub(crate) fn apply_static_live_overrides(
                             }
                         }
                     }
-                    "isource" => {
-                        if comp.wave_type.is_none() {
+                    "isource"
+                        if comp.wave_type.is_none() => {
                             let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
                             let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                             let diff = new_val - comp.value;
@@ -74,7 +74,6 @@ pub(crate) fn apply_static_live_overrides(
                                 vector_z[node_neg - 1] += diff;
                             }
                         }
-                    }
                     _ => {}
                 }
             }

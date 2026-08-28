@@ -54,7 +54,23 @@ describe("CanvasOverlayRenderer", () => {
     expect(canvas.width).toBe(800);
   });
 
-  it("renderiza flujo dinámico en cables cuando hay corrientes de rama", () => {
+  it("no renderiza flujo dinámico ni calor cuando simulationActive es false", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const host = createMockHost({
+      simulationActive: false,
+    });
+    const renderer = new CanvasOverlayRenderer(canvas, host);
+    const renderSpy = vi.spyOn(renderer.currentAnimationRenderer, "renderCurrentFlow");
+
+    renderer.renderOverlay({ "V1:0": 5 }, { "W1:I": 0.05 }, 1016);
+
+    expect(renderSpy).not.toHaveBeenCalled();
+  });
+
+  it("renderiza flujo dinámico en cables cuando hay corrientes de rama y simulationActive es true", () => {
     const canvas = document.createElement("canvas");
     canvas.width = 800;
     canvas.height = 600;

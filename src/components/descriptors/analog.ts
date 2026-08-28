@@ -43,6 +43,8 @@ export const OpampDefinition: ComponentDefinition = {
     const isSaturatedNeg = vOut <= vEE + 0.5;
     const isVirtualGround = diff <= 0.05 && !isSaturatedPos && !isSaturatedNeg;
 
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+
     ctx.save();
     // 1. Relleno pedagógico del cuerpo triangular
     ctx.beginPath();
@@ -54,12 +56,12 @@ export const OpampDefinition: ComponentDefinition = {
     if (isSaturatedPos || isSaturatedNeg) {
       ctx.fillStyle = "rgba(239, 68, 68, 0.25)"; // Rojo/Ámbar de saturación en riel
     } else if (isVirtualGround) {
-      ctx.fillStyle = "rgba(56, 189, 248, 0.2)"; // Azul cyan de equilibrio de lazo lineal
+      ctx.fillStyle = isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.2)"; // Azul cyan de equilibrio de lazo lineal
     } else {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.85)";
     }
     ctx.fill();
-    ctx.strokeStyle = isSaturatedPos || isSaturatedNeg ? "#EF4444" : (isVirtualGround ? "#38BDF8" : state.color);
+    ctx.strokeStyle = isSaturatedPos || isSaturatedNeg ? "#EF4444" : (isVirtualGround ? (isClassroom ? "#0284C7" : "#38BDF8") : state.color);
     ctx.lineWidth = state.lineWidth;
     ctx.stroke();
 
@@ -96,10 +98,10 @@ export const OpampDefinition: ComponentDefinition = {
     ctx.font = "bold 8px 'JetBrains Mono', monospace";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#F59E0B"; // Ámbar para positivo
+    ctx.fillStyle = isClassroom ? "#D97706" : "#F59E0B"; // Ámbar para positivo
     ctx.fillText("V+", 4, -28);
 
-    ctx.fillStyle = "#38BDF8"; // Celeste para negativo
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8"; // Celeste/Azul para negativo
     ctx.fillText("V-", 4, 28);
 
     // 6. Indicador de estado de saturación / linealidad
@@ -109,7 +111,7 @@ export const OpampDefinition: ComponentDefinition = {
       ctx.textAlign = "center";
       ctx.fillText(isSaturatedPos ? "SAT+" : "SAT-", -5, 4);
     } else if (isVirtualGround) {
-      ctx.fillStyle = "#38BDF8";
+      ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
       ctx.font = "bold 7px 'Inter', sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("LIN", -5, 3);
@@ -142,6 +144,7 @@ export const OpampIdealDefinition: ComponentDefinition = {
     const vInMinus = options.voltageMap?.[`${comp.id}:1`] ?? 0;
     const diff = Math.abs(vInPlus - vInMinus);
     const isVirtualGround = diff <= 0.05;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     ctx.save();
     // Main triangle
@@ -150,9 +153,11 @@ export const OpampIdealDefinition: ComponentDefinition = {
     ctx.lineTo(-25, 30);
     ctx.lineTo(25, 0);
     ctx.closePath();
-    ctx.fillStyle = isVirtualGround ? "rgba(56, 189, 248, 0.2)" : "rgba(15, 23, 42, 0.85)";
+    ctx.fillStyle = isVirtualGround
+      ? (isClassroom ? "rgba(2, 132, 199, 0.15)" : "rgba(56, 189, 248, 0.2)")
+      : (isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.85)");
     ctx.fill();
-    ctx.strokeStyle = isVirtualGround ? "#38BDF8" : state.color;
+    ctx.strokeStyle = isVirtualGround ? (isClassroom ? "#0284C7" : "#38BDF8") : state.color;
     ctx.lineWidth = state.lineWidth;
     ctx.stroke();
 
@@ -356,6 +361,7 @@ function drawControlledDiamond(
   type: "vcvs" | "vccs" | "ccvs" | "cccs",
   gainText: string,
 ): void {
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   ctx.save();
   // 1. Rombo exterior
   ctx.beginPath();
@@ -364,7 +370,7 @@ function drawControlledDiamond(
   ctx.lineTo(8, 24);
   ctx.lineTo(-16, 0);
   ctx.closePath();
-  ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(15, 23, 42, 0.92)";
   ctx.fill();
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
@@ -396,7 +402,7 @@ function drawControlledDiamond(
     ctx.beginPath();
     ctx.moveTo(-24, -20);
     ctx.lineTo(-24, 20);
-    ctx.strokeStyle = "#38BDF8";
+    ctx.strokeStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.stroke();
 
     ctx.beginPath();
@@ -404,7 +410,7 @@ function drawControlledDiamond(
     ctx.lineTo(-21, -2);
     ctx.lineTo(-27, -2);
     ctx.closePath();
-    ctx.fillStyle = "#38BDF8";
+    ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
     ctx.fill();
   }
 
@@ -430,14 +436,14 @@ function drawControlledDiamond(
 
   // 6. Texto de ganancia
   ctx.font = "bold 8px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#94A3B8";
+  ctx.fillStyle = isClassroom ? "#0F172A" : "#94A3B8";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(gainText, 8, 0);
 
   // 7. Rótulos de terminales
   ctx.font = "7px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#64748B";
+  ctx.fillStyle = isClassroom ? "#334155" : "#64748B";
   ctx.textAlign = "left";
   ctx.fillText("In+", -38, -24);
   ctx.fillText("In-", -38, 28);

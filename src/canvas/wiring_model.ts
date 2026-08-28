@@ -278,11 +278,23 @@ export function mergeCollinearWiresAtJunction(
   const otherEnd1 = (w1.from.isJunction && wireEndpointKey(w1.from) === junctionKey) ? w1.to : w1.from;
   const otherEnd2 = (w2.from.isJunction && wireEndpointKey(w2.from) === junctionKey) ? w2.to : w2.from;
 
+  // Reconstruir los puntos de la trayectoria continua desde otherEnd1 hasta otherEnd2
+  const p1 = (w1.to.isJunction && wireEndpointKey(w1.to) === junctionKey)
+    ? (w1.points || [])
+    : [...(w1.points || [])].reverse();
+  const p2 = (w2.from.isJunction && wireEndpointKey(w2.from) === junctionKey)
+    ? (w2.points || [])
+    : [...(w2.points || [])].reverse();
+  const combinedPoints = simplifyOrthogonalWirePath([...p1, ...p2]);
+
   const mergedWire: WireInstance = {
     id: createWireId(otherEnd1, otherEnd2),
     from: { ...otherEnd1 },
     to: { ...otherEnd2 },
-    points: [],
+    points: combinedPoints.length >= 2 ? combinedPoints : [],
+    ...(w1.label || w2.label ? { label: w1.label || w2.label } : {}),
+    ...(w1.color || w2.color ? { color: w1.color || w2.color } : {}),
+    ...(w1.customPath || w2.customPath ? { customPath: true } : {}),
   };
 
   const idx1 = wires.findIndex((w) => w.id === w1.id);

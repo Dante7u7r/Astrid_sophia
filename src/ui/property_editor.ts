@@ -7,6 +7,10 @@ import {
   normalizeDmmMode,
 } from "../simulation/dmm";
 import {
+  isValidComponentId,
+  normalizeComponentId,
+} from "../canvas/component_identity";
+import {
   ACTUATOR_MODEL_EDITORS,
   DEDICATED_VALUE_EDITORS,
   analyzeBatchSelection,
@@ -61,6 +65,30 @@ export interface PropertyEditorCallbacks {
   invokeTauri: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 }
 
+export function syncNumericSelect(
+  select: HTMLSelectElement | null,
+  val: number | string | undefined,
+  defaultVal: number | string,
+): void {
+  if (!select) return;
+  const numTarget = typeof val === "number" ? val : parseFloat(String(val ?? ""));
+  if (isNaN(numTarget)) {
+    select.value = String(defaultVal);
+    return;
+  }
+  select.value = numTarget.toString();
+  if (select.selectedIndex !== -1 && select.value !== "") return;
+
+  for (let i = 0; i < select.options.length; i++) {
+    const optVal = parseFloat(select.options[i].value);
+    if (!isNaN(optVal) && Math.abs(optVal - numTarget) <= Math.max(1e-9, Math.abs(numTarget) * 0.01)) {
+      select.selectedIndex = i;
+      return;
+    }
+  }
+  select.value = String(defaultVal);
+}
+
 export class PropertyEditor {
   private propIdInput: HTMLInputElement | null = null;
   private propValInput: HTMLInputElement | null = null;
@@ -92,6 +120,54 @@ export class PropertyEditor {
     valBadge.style.display = "inline-flex";
     valBadge.textContent = res.badgeText;
     valBadge.className = `prop-badge ${res.valid ? (res.isExpression ? "expression" : "") : "invalid"}`;
+  }
+
+  public updateIdBadge(): void {
+    const idBadge = document.querySelector("#prop-id-badge") as HTMLElement | null;
+    if (!idBadge || !this.propIdInput) return;
+    const val = this.propIdInput.value.trim();
+    const orchestrator = this.callbacks.getOrchestrator();
+    const selectedList = (orchestrator?.selectedComponents && orchestrator.selectedComponents.length > 0)
+      ? orchestrator.selectedComponents
+      : (orchestrator?.selectedComponent ? [orchestrator.selectedComponent] : []);
+    const selected = selectedList[0];
+
+    if (!val) {
+      idBadge.style.display = "inline-flex";
+      idBadge.textContent = "El identificador no puede estar vacío";
+      idBadge.className = "prop-badge invalid";
+      return;
+    }
+
+    if (!isValidComponentId(val)) {
+      idBadge.style.display = "inline-flex";
+      idBadge.textContent = "Debe iniciar con letra (ej. R1, C1, V_IN)";
+      idBadge.className = "prop-badge invalid";
+      return;
+    }
+
+    if (orchestrator && selected) {
+      const normalizedVal = normalizeComponentId(val);
+      const components = orchestrator.components ?? [];
+      const isDuplicate = components.some(
+        c => c !== selected && normalizeComponentId(c.id) === normalizedVal
+      );
+      if (isDuplicate) {
+        idBadge.style.display = "inline-flex";
+        idBadge.textContent = `El identificador [${val}] ya existe`;
+        idBadge.className = "prop-badge invalid";
+        return;
+      }
+    }
+
+    if (selected && val === selected.id) {
+      idBadge.style.display = "none";
+      return;
+    }
+
+    idBadge.style.display = "inline-flex";
+    idBadge.textContent = `Renombrar a ${val.toUpperCase()}`;
+    idBadge.className = "prop-badge";
   }
 
   public updateSpiceDirective(comp: ComponentInstance, pinNodes: { pinName: string; nodeId: string }[]): void {
@@ -244,6 +320,12 @@ export class PropertyEditor {
 
     const valBadge = document.querySelector("#prop-val-badge") as HTMLElement | null;
     if (valBadge) valBadge.style.display = "none";
+
+    const idBadge = document.querySelector("#prop-id-badge") as HTMLElement | null;
+    if (idBadge) idBadge.style.display = "none";
+
+    const snapControls = document.querySelector(".prop-snap-controls") as HTMLElement | null;
+    if (snapControls) snapControls.style.display = "none";
 
     const opContainer = document.querySelector("#prop-op-telemetry-container") as HTMLElement | null;
     if (opContainer) opContainer.style.display = "none";
@@ -414,6 +496,7 @@ export class PropertyEditor {
     const usesActuator = ACTUATOR_MODEL_EDITORS.has(comp.type);
     this.propValSlider.value = usesActuator || comp.type === "net_label" || comp.type === "text_note" ? "0" : comp.value.toString();
 
+    this.updateIdBadge();
     this.updateValueBadge(comp.type);
     this.updateOperatingPointTelemetry(comp);
 
@@ -433,6 +516,10 @@ export class PropertyEditor {
       valGroup.style.display = valuePresentation.showValueGroup ? "flex" : "none";
       unitGroup.style.display = valuePresentation.showUnitGroup ? "flex" : "none";
       if (valLabel) valLabel.textContent = valuePresentation.valueLabel;
+    }
+    const snapControls = document.querySelector(".prop-snap-controls") as HTMLElement | null;
+    if (snapControls) {
+      snapControls.style.display = valuePresentation.showSnapSeries ? "flex" : "none";
     }
     this.propValSlider.style.display = valuePresentation.showSliderControls ? "" : "none";
     if (this.propValInc) this.propValInc.style.display = valuePresentation.showSliderControls ? "" : "none";
@@ -462,8 +549,8 @@ export class PropertyEditor {
     if (resistorContainer) {
       if (comp.type === "resistor") {
         resistorContainer.style.display = "flex";
-        if (resistorTolSelect) resistorTolSelect.value = (comp.tolerance ?? 1).toString();
-        if (resistorPowerSelect) resistorPowerSelect.value = (comp.powerRating ?? 0.25).toString();
+        if (resistorTolSelect) syncNumericSelect(resistorTolSelect, comp.tolerance, 1);
+        if (resistorPowerSelect) syncNumericSelect(resistorPowerSelect, comp.powerRating, 0.25);
       } else {
         resistorContainer.style.display = "none";
       }
@@ -477,7 +564,7 @@ export class PropertyEditor {
     if (capacitorContainer) {
       if (comp.type === "capacitor") {
         capacitorContainer.style.display = "flex";
-        if (capVoltSelect) capVoltSelect.value = (comp.voltageRating ?? 25).toString();
+        if (capVoltSelect) syncNumericSelect(capVoltSelect, comp.voltageRating, 25);
         if (capEsrInput) capEsrInput.value = (comp.esr ?? 0).toString();
         if (capDielectricSelect) capDielectricSelect.value = comp.dielectricType || "ceramic";
       } else {
@@ -693,6 +780,280 @@ export class PropertyEditor {
     this.propValSlider.min = unitConfig.min;
     this.propValSlider.max = unitConfig.max;
   }
+  public applyCurrentProperties(options?: { isLiveInput?: boolean; skipLogging?: boolean }): boolean {
+    const isLive = options?.isLiveInput ?? false;
+    const skipLogging = options?.skipLogging ?? isLive;
+    const activeOrchestrator = this.callbacks.getOrchestrator();
+    if (!activeOrchestrator) return false;
+    const selectedList = (activeOrchestrator.selectedComponents && activeOrchestrator.selectedComponents.length > 0)
+      ? activeOrchestrator.selectedComponents
+      : (activeOrchestrator.selectedComponent ? [activeOrchestrator.selectedComponent] : []);
+    if (selectedList.length === 0) return false;
+
+    const isBatch = selectedList.length > 1;
+    const selected = selectedList[0];
+    const oldId = selected.id;
+    const newId = this.propIdInput ? this.propIdInput.value.trim() : oldId;
+    const rawInput = this.propValInput ? this.propValInput.value.trim() : "";
+    const parsed = parseSpiceValue(rawInput);
+
+    const isParametricExpr = rawInput.startsWith("{") && rawInput.endsWith("}");
+    const hasNewVal = rawInput !== "" && rawInput !== "<Valores Mixtos>";
+
+    if (hasNewVal && !isParametricExpr && (!parsed.valid || parsed.value === undefined || !Number.isFinite(parsed.value))) {
+      if (!ACTUATOR_MODEL_EDITORS.has(selected.type) && selected.type !== "net_label" && selected.type !== "text_note" && selected.type !== "dmm") {
+        if (!isLive) {
+          this.callbacks.addLog(`Valor inválido: ${parsed.error || (this.propValInput?.value ?? "")}`, "error");
+        }
+        return false;
+      }
+    }
+
+    const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput?.value || "0") || 0);
+
+    for (const targetComp of selectedList) {
+      if (!isBatch && newId.length > 0 && newId !== oldId && !isLive) {
+        const renameError = activeOrchestrator.renameComponent(targetComp, newId);
+        if (renameError) {
+          if (this.propIdInput) this.propIdInput.value = oldId;
+          const idBadge = document.querySelector("#prop-id-badge") as HTMLElement | null;
+          if (idBadge) {
+            idBadge.style.display = "inline-flex";
+            idBadge.textContent = renameError;
+            idBadge.className = "prop-badge invalid";
+          }
+          if (!skipLogging) this.callbacks.addLog(`Error: ${renameError}`, "error");
+        } else {
+          this.updateIdBadge();
+        }
+      }
+
+      if (hasNewVal) {
+        if (isParametricExpr) {
+          targetComp.expression = rawInput;
+        } else {
+          targetComp.expression = undefined;
+          if (targetComp.type === "net_label" || targetComp.type === "text_note") {
+            // Se gestiona en sus bloques especializados para preservar cadenas de texto alfanuméricas
+          } else if (!DEDICATED_VALUE_EDITORS.has(targetComp.type)) {
+            targetComp.value = newVal;
+          }
+        }
+      }
+
+      if (targetComp.type === "dmm") {
+        const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
+        targetComp.value = normalizeDmmMode(dmmModeSelect?.value);
+        targetComp.dmmValue = DMM_INITIAL_DISPLAY;
+      } else if (ACTUATOR_MODEL_EDITORS.has(targetComp.type) && hasNewVal) {
+        targetComp.value = this.propValInput?.value.trim() || targetComp.value;
+      }
+
+      applyWaveSubform(targetComp, newVal, this.propValInput, this.propValSlider);
+
+      if (targetComp.type === "resistor") {
+        const resistorTolSelect = document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement;
+        const resistorPowerSelect = document.querySelector("#prop-resistor-power") as HTMLSelectElement;
+        if (resistorTolSelect) targetComp.tolerance = parseFloat(resistorTolSelect.value) || 1;
+        if (resistorPowerSelect) targetComp.powerRating = parseFloat(resistorPowerSelect.value) || 0.25;
+      }
+
+      if (targetComp.type === "capacitor") {
+        const capVoltSelect = document.querySelector("#prop-capacitor-voltage") as HTMLSelectElement;
+        const capEsrInput = document.querySelector("#prop-capacitor-esr") as HTMLInputElement;
+        const capDielectricSelect = document.querySelector("#prop-capacitor-dielectric") as HTMLSelectElement;
+        if (capVoltSelect) targetComp.voltageRating = parseFloat(capVoltSelect.value) || 25;
+        if (capEsrInput) targetComp.esr = Math.max(0, parseFloat(capEsrInput.value) || 0);
+        if (capDielectricSelect) targetComp.dielectricType = capDielectricSelect.value as any;
+      }
+
+      if (targetComp.type === "inductor") {
+        const indDcrInput = document.querySelector("#prop-inductor-dcr") as HTMLInputElement;
+        const indIsatInput = document.querySelector("#prop-inductor-isat") as HTMLInputElement;
+        if (indDcrInput) targetComp.dcResistance = Math.max(0, parseFloat(indDcrInput.value) || 0);
+        if (indIsatInput) {
+          const val = parseFloat(indIsatInput.value);
+          targetComp.isat = val > 0 ? val : undefined;
+          targetComp.currentRating = targetComp.isat ?? 1.0;
+        }
+      }
+
+      if (targetComp.type === "led") {
+        const ledColorSelect = document.querySelector("#prop-led-color") as HTMLSelectElement;
+        const ledImaxInput = document.querySelector("#prop-led-imax") as HTMLInputElement;
+        if (ledColorSelect) targetComp.ledColor = ledColorSelect.value as any;
+        if (ledImaxInput) targetComp.maxCurrent = Math.max(1, parseFloat(ledImaxInput.value) || 20);
+      }
+
+      // Parásitos físicos y condiciones iniciales
+      const inputEsl = document.querySelector("#prop-comp-esl") as HTMLInputElement | null;
+      const inputCpar = document.querySelector("#prop-comp-cpar") as HTMLInputElement | null;
+      const inputTc1 = document.querySelector("#prop-comp-tc1") as HTMLInputElement | null;
+      const inputRleak = document.querySelector("#prop-comp-rleak") as HTMLInputElement | null;
+      const inputIc = document.querySelector("#prop-comp-ic") as HTMLInputElement | null;
+
+      if (inputEsl && inputEsl.value.trim()) {
+        const p = parseSpiceValue(inputEsl.value);
+        targetComp.esr = p.valid && p.value !== undefined ? p.value : (parseFloat(inputEsl.value) || undefined);
+      }
+      if (inputCpar && inputCpar.value.trim()) {
+        const p = parseSpiceValue(inputCpar.value);
+        targetComp.cpar = p.valid && p.value !== undefined ? p.value : (parseFloat(inputCpar.value) || undefined);
+      }
+      if (inputTc1 && inputTc1.value.trim()) {
+        targetComp.tc1 = parseFloat(inputTc1.value) || undefined;
+      }
+      if (inputRleak && inputRleak.value.trim()) {
+        const p = parseSpiceValue(inputRleak.value);
+        targetComp.rleak = p.valid && p.value !== undefined ? p.value : (parseFloat(inputRleak.value) || undefined);
+      }
+      if (inputIc && inputIc.value.trim()) {
+        const p = parseSpiceValue(inputIc.value);
+        targetComp.initialCondition = p.valid && p.value !== undefined ? p.value : (parseFloat(inputIc.value) || undefined);
+      }
+
+      applyActuatorsSubform(targetComp);
+      applySemiconductorsSubform(targetComp);
+
+      if (targetComp.type === 'x') {
+        const macroTextarea = document.querySelector("#prop-spice-macro") as HTMLTextAreaElement;
+        if (macroTextarea) {
+          targetComp.spiceMacro = macroTextarea.value.trim() || undefined;
+        }
+        const pinCountInput = document.querySelector("#prop-pin-count") as HTMLInputElement;
+        if (pinCountInput) {
+          const newPinCount = parseInt(pinCountInput.value) || 4;
+          targetComp.pinCount = Math.max(2, Math.min(64, newPinCount));
+        }
+      }
+
+      if (targetComp.type === "text_note") {
+        const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement | null;
+        const noteFontInput = document.querySelector("#prop-note-fontsize") as HTMLInputElement | null;
+        const noteThemeSelect = document.querySelector("#prop-note-theme") as HTMLSelectElement | null;
+        const noteContent = noteTextInput ? noteTextInput.value : rawInput;
+        targetComp.label = noteContent;
+        targetComp.value = noteContent;
+        if (noteFontInput) {
+          targetComp.fontSize = Number(noteFontInput.value) || 12;
+        }
+        if (noteThemeSelect) {
+          targetComp.noteTheme = (noteThemeSelect.value as any) || "card";
+        }
+      }
+
+      if (targetComp.type === "net_label") {
+        const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
+        const terminalGroundStyleSelect = document.querySelector("#prop-terminal-ground-style") as HTMLSelectElement;
+        const terminalPowerStyleSelect = document.querySelector("#prop-terminal-power-style") as HTMLSelectElement;
+        const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
+        const tType = (terminalTypeSelect?.value as TerminalType) || targetComp.terminalType || "signal";
+        targetComp.terminalType = tType;
+
+        const typedText = rawInput.trim();
+
+        if (tType === "power") {
+          if (terminalPowerStyleSelect) targetComp.terminalStyle = terminalPowerStyleSelect.value as any || "arrow";
+          const volt = parseFloat(terminalVoltageInput?.value || "5") || 5;
+          targetComp.voltage = volt;
+          const defaultLabel = volt >= 0 ? `+${volt}V` : `${volt}V`;
+          const rawVal = (typedText || targetComp.label || defaultLabel).toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "ground") {
+          if (terminalGroundStyleSelect) targetComp.terminalStyle = terminalGroundStyleSelect.value as any || "standard";
+          const rawVal = (typedText || targetComp.label || "GND").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "generator") {
+          const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
+          const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
+          const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
+          const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement;
+          const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
+          targetComp.waveType = waveTypeSelect ? waveTypeSelect.value : "square";
+          targetComp.amplitude = waveAmpInput ? (parseFloat(waveAmpInput.value) || 5) : 5;
+          targetComp.frequency = waveFreqInput ? (parseFloat(waveFreqInput.value) || 1000) : 1000;
+          targetComp.offset = waveOffsetInput ? (parseFloat(waveOffsetInput.value) || 0) : 0;
+          targetComp.dutyCycle = waveDutyInput ? (parseFloat(waveDutyInput.value) || 0.5) : 0.5;
+          const rawVal = (typedText || targetComp.label || "CLK").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "no_connect") {
+          const rawVal = (typedText || targetComp.label || "NC").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "output") {
+          const rawVal = (typedText || targetComp.label || "OUT").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "input") {
+          const rawVal = (typedText || targetComp.label || "IN").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "bidirectional") {
+          const rawVal = (typedText || targetComp.label || "DATA").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "bus_tap") {
+          const rawVal = (typedText || targetComp.label || "BUS[7:0]").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else if (tType === "test_point") {
+          const rawVal = (typedText || targetComp.label || targetComp.id || "TP1").toUpperCase();
+          targetComp.value = rawVal;
+          targetComp.label = rawVal;
+        } else {
+          const rawVal = (typedText || targetComp.label || targetComp.id || "NET").toUpperCase();
+          targetComp.value = rawVal || "NET";
+          targetComp.label = targetComp.value as string;
+        }
+      }
+    }
+
+    const simulationRunner = this.callbacks.getSimulationRunner();
+    if (simulationRunner && simulationRunner.isSimulationActive() && supportsLiveMutation(selected.type)) {
+      const runner = simulationRunner;
+      for (const targetComp of selectedList) {
+        const mutations = buildLiveMutations(targetComp, newVal);
+        for (const m of mutations) {
+          void runner.mutateComponent(
+            m.componentId,
+            m.field as unknown as import("../simulation/simulation_runner").InteractiveMutationField,
+            m.value,
+          );
+        }
+      }
+      if (!skipLogging) {
+        this.callbacks.addLog(
+          `Mutación en caliente emitida para [${selectedList.map(c => c.id).join(", ")}]`,
+          "send",
+        );
+      }
+    } else if ((simulationRunner?.isSimulationActive() ?? false) && !skipLogging) {
+      this.callbacks.addLog(
+        `Los cambios de [${selectedList.map(c => c.id).join(", ")}] se aplicarán en la próxima simulación.`,
+        "system",
+      );
+    }
+
+    this.callbacks.updateCanvasRendering();
+    this.callbacks.markCurrentTabAsModified();
+    this.callbacks.extractNetlist?.();
+    for (const targetComp of selectedList) {
+      this.callbacks.onComponentPropertiesApplied?.(targetComp);
+    }
+    if (!skipLogging) {
+      this.callbacks.addLog(
+        isBatch
+          ? `Propiedades aplicadas por lote a ${selectedList.length} componente(s)`
+          : `Propiedades aplicadas a [${selected.id}]: Valor = [${selected.value}]`,
+        "system",
+      );
+    }
+    return true;
+  }
+
   public init() {
     this.propValInput = document.querySelector("#prop-val-input");
     this.propValSlider = document.querySelector("#prop-val-slider");
@@ -745,6 +1106,7 @@ export class PropertyEditor {
           if (terminalVoltageGroup) terminalVoltageGroup.style.display = "none";
           if (waveContainer) waveContainer.style.display = "none";
         }
+        this.applyCurrentProperties({ isLiveInput: true, skipLogging: true });
       });
     }
 
@@ -778,6 +1140,7 @@ export class PropertyEditor {
           if (!isNaN(v)) {
             terminalVoltageInput.value = v.toString();
             if (this.propValInput) this.propValInput.value = preset;
+            this.applyCurrentProperties({ isLiveInput: true, skipLogging: true });
           }
         }
       });
@@ -845,6 +1208,7 @@ export class PropertyEditor {
         if (orchestrator?.selectedComponent) {
           this.updateValueBadge(orchestrator.selectedComponent.type);
         }
+        this.applyCurrentProperties({ isLiveInput: true, skipLogging: true });
       });
 
       this.propValInput.addEventListener("input", (e) => {
@@ -854,6 +1218,37 @@ export class PropertyEditor {
         if (orchestrator?.selectedComponent) {
           this.updateValueBadge(orchestrator.selectedComponent.type);
         }
+        this.applyCurrentProperties({ isLiveInput: true, skipLogging: true });
+      });
+    }
+
+    // Auto-guardado reactivo en todos los inputs y selects del formulario
+    const propertiesForm = document.querySelector("#properties-form");
+    if (propertiesForm) {
+      propertiesForm.addEventListener("input", (e) => {
+        const target = e.target as HTMLElement;
+        if (target && target.id === "prop-id-input") {
+          return;
+        }
+        this.applyCurrentProperties({ isLiveInput: true, skipLogging: true });
+      });
+
+      propertiesForm.addEventListener("change", (e) => {
+        const target = e.target as HTMLElement;
+        if (target && target.id === "prop-id-input") {
+          this.applyCurrentProperties({ isLiveInput: false });
+          return;
+        }
+        this.applyCurrentProperties({ isLiveInput: true, skipLogging: true });
+      });
+    }
+
+    if (this.propIdInput) {
+      this.propIdInput.addEventListener("input", () => {
+        this.updateIdBadge();
+      });
+      this.propIdInput.addEventListener("blur", () => {
+        this.applyCurrentProperties({ isLiveInput: false });
       });
     }
 
@@ -952,10 +1347,12 @@ export class PropertyEditor {
     const applyFromKeyboard = (event: KeyboardEvent): void => {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      this.btnApplyProperties?.click();
+      this.applyCurrentProperties({ isLiveInput: false });
     };
     this.propIdInput?.addEventListener("keydown", applyFromKeyboard);
-    this.propValInput?.addEventListener("keydown", applyFromKeyboard);    const btnCopySpice = document.querySelector("#btn-copy-spice-card") as HTMLButtonElement | null;
+    this.propValInput?.addEventListener("keydown", applyFromKeyboard);
+
+    const btnCopySpice = document.querySelector("#btn-copy-spice-card") as HTMLButtonElement | null;
     if (btnCopySpice) {
       btnCopySpice.addEventListener("click", async () => {
         const text = document.querySelector("#prop-spice-card-text")?.textContent;
@@ -970,258 +1367,9 @@ export class PropertyEditor {
       });
     }
 
-    if (this.btnApplyProperties && this.propIdInput && this.propValInput) {
+    if (this.btnApplyProperties) {
       this.btnApplyProperties.addEventListener("click", () => {
-        const activeOrchestrator = this.callbacks.getOrchestrator();
-        if (!activeOrchestrator) return;
-        const selectedList = (activeOrchestrator.selectedComponents && activeOrchestrator.selectedComponents.length > 0)
-          ? activeOrchestrator.selectedComponents
-          : (activeOrchestrator.selectedComponent ? [activeOrchestrator.selectedComponent] : []);
-        if (selectedList.length === 0) return;
-
-        const isBatch = selectedList.length > 1;
-        const selected = selectedList[0];
-        const oldId = selected.id;
-        const newId = this.propIdInput!.value.trim();
-        const rawInput = this.propValInput!.value.trim();
-        const parsed = parseSpiceValue(rawInput);
-
-        const isParametricExpr = rawInput.startsWith("{") && rawInput.endsWith("}");
-        const hasNewVal = rawInput !== "" && rawInput !== "<Valores Mixtos>";
-
-        if (hasNewVal && !isParametricExpr && (!parsed.valid || parsed.value === undefined || !Number.isFinite(parsed.value))) {
-          if (!ACTUATOR_MODEL_EDITORS.has(selected.type) && selected.type !== "net_label" && selected.type !== "text_note" && selected.type !== "dmm") {
-            this.callbacks.addLog(`Valor inválido: ${parsed.error || this.propValInput!.value}`, "error");
-            return;
-          }
-        }
-
-        const newVal = parsed.valid && parsed.value !== undefined ? parsed.value : (parseFloat(this.propValInput!.value) || 0);
-
-        for (const targetComp of selectedList) {
-          if (!isBatch && newId.length > 0 && newId !== oldId) {
-            const renameError = activeOrchestrator.renameComponent(targetComp, newId);
-            if (renameError) {
-              this.propIdInput!.value = oldId;
-              this.callbacks.addLog(`Error: ${renameError}`, "error");
-            }
-          }
-
-          if (hasNewVal) {
-            if (isParametricExpr) {
-              targetComp.expression = rawInput;
-            } else {
-              targetComp.expression = undefined;
-              if (!DEDICATED_VALUE_EDITORS.has(targetComp.type)) {
-                targetComp.value = newVal;
-              }
-            }
-          }
-
-          if (targetComp.type === "dmm") {
-            const dmmModeSelect = document.querySelector("#prop-dmm-mode") as HTMLSelectElement;
-            targetComp.value = normalizeDmmMode(dmmModeSelect?.value);
-            targetComp.dmmValue = DMM_INITIAL_DISPLAY;
-          } else if (ACTUATOR_MODEL_EDITORS.has(targetComp.type) && hasNewVal) {
-            targetComp.value = this.propValInput!.value.trim() || targetComp.value;
-          }
-
-          applyWaveSubform(targetComp, newVal, this.propValInput, this.propValSlider);
-
-          if (targetComp.type === "resistor") {
-            const resistorTolSelect = document.querySelector("#prop-resistor-tolerance") as HTMLSelectElement;
-            const resistorPowerSelect = document.querySelector("#prop-resistor-power") as HTMLSelectElement;
-            if (resistorTolSelect) targetComp.tolerance = parseFloat(resistorTolSelect.value) || 1;
-            if (resistorPowerSelect) targetComp.powerRating = parseFloat(resistorPowerSelect.value) || 0.25;
-          }
-
-          if (targetComp.type === "capacitor") {
-            const capVoltSelect = document.querySelector("#prop-capacitor-voltage") as HTMLSelectElement;
-            const capEsrInput = document.querySelector("#prop-capacitor-esr") as HTMLInputElement;
-            const capDielectricSelect = document.querySelector("#prop-capacitor-dielectric") as HTMLSelectElement;
-            if (capVoltSelect) targetComp.voltageRating = parseFloat(capVoltSelect.value) || 25;
-            if (capEsrInput) targetComp.esr = Math.max(0, parseFloat(capEsrInput.value) || 0);
-            if (capDielectricSelect) targetComp.dielectricType = capDielectricSelect.value as any;
-          }
-
-          if (targetComp.type === "inductor") {
-            const indDcrInput = document.querySelector("#prop-inductor-dcr") as HTMLInputElement;
-            const indIsatInput = document.querySelector("#prop-inductor-isat") as HTMLInputElement;
-            if (indDcrInput) targetComp.dcResistance = Math.max(0, parseFloat(indDcrInput.value) || 0);
-            if (indIsatInput) {
-              const val = parseFloat(indIsatInput.value);
-              targetComp.isat = val > 0 ? val : undefined;
-              targetComp.currentRating = targetComp.isat ?? 1.0;
-            }
-          }
-
-          if (targetComp.type === "led") {
-            const ledColorSelect = document.querySelector("#prop-led-color") as HTMLSelectElement;
-            const ledImaxInput = document.querySelector("#prop-led-imax") as HTMLInputElement;
-            if (ledColorSelect) targetComp.ledColor = ledColorSelect.value as any;
-            if (ledImaxInput) targetComp.maxCurrent = Math.max(1, parseFloat(ledImaxInput.value) || 20);
-          }
-
-          // Parásitos físicos y condiciones iniciales
-          const inputEsl = document.querySelector("#prop-comp-esl") as HTMLInputElement | null;
-          const inputCpar = document.querySelector("#prop-comp-cpar") as HTMLInputElement | null;
-          const inputTc1 = document.querySelector("#prop-comp-tc1") as HTMLInputElement | null;
-          const inputRleak = document.querySelector("#prop-comp-rleak") as HTMLInputElement | null;
-          const inputIc = document.querySelector("#prop-comp-ic") as HTMLInputElement | null;
-
-          if (inputEsl && inputEsl.value.trim()) {
-            const p = parseSpiceValue(inputEsl.value);
-            targetComp.esr = p.valid && p.value !== undefined ? p.value : (parseFloat(inputEsl.value) || undefined);
-          }
-          if (inputCpar && inputCpar.value.trim()) {
-            const p = parseSpiceValue(inputCpar.value);
-            targetComp.cpar = p.valid && p.value !== undefined ? p.value : (parseFloat(inputCpar.value) || undefined);
-          }
-          if (inputTc1 && inputTc1.value.trim()) {
-            targetComp.tc1 = parseFloat(inputTc1.value) || undefined;
-          }
-          if (inputRleak && inputRleak.value.trim()) {
-            const p = parseSpiceValue(inputRleak.value);
-            targetComp.rleak = p.valid && p.value !== undefined ? p.value : (parseFloat(inputRleak.value) || undefined);
-          }
-          if (inputIc && inputIc.value.trim()) {
-            const p = parseSpiceValue(inputIc.value);
-            targetComp.initialCondition = p.valid && p.value !== undefined ? p.value : (parseFloat(inputIc.value) || undefined);
-          }
-
-          applyActuatorsSubform(targetComp);
-          applySemiconductorsSubform(targetComp);
-
-          if (targetComp.type === 'x') {
-            const macroTextarea = document.querySelector("#prop-spice-macro") as HTMLTextAreaElement;
-            if (macroTextarea) {
-              targetComp.spiceMacro = macroTextarea.value.trim() || undefined;
-            }
-            const pinCountInput = document.querySelector("#prop-pin-count") as HTMLInputElement;
-            if (pinCountInput) {
-              const newPinCount = parseInt(pinCountInput.value) || 4;
-              targetComp.pinCount = Math.max(2, Math.min(64, newPinCount));
-            }
-          }
-
-          if (targetComp.type === "text_note") {
-            const noteTextInput = document.querySelector("#prop-note-text") as HTMLTextAreaElement;
-            const noteFontInput = document.querySelector("#prop-note-fontsize") as HTMLInputElement;
-            const noteThemeSelect = document.querySelector("#prop-note-theme") as HTMLSelectElement;
-            if (noteTextInput) {
-              targetComp.label = noteTextInput.value;
-              targetComp.value = noteTextInput.value;
-            }
-            if (noteFontInput) {
-              targetComp.fontSize = Number(noteFontInput.value) || 12;
-            }
-            if (noteThemeSelect) {
-              targetComp.noteTheme = (noteThemeSelect.value as any) || "card";
-            }
-          }
-
-          if (targetComp.type === "net_label") {
-            const terminalTypeSelect = document.querySelector("#prop-terminal-type") as HTMLSelectElement;
-            const terminalGroundStyleSelect = document.querySelector("#prop-terminal-ground-style") as HTMLSelectElement;
-            const terminalPowerStyleSelect = document.querySelector("#prop-terminal-power-style") as HTMLSelectElement;
-            const terminalVoltageInput = document.querySelector("#prop-terminal-voltage") as HTMLInputElement;
-            const tType = (terminalTypeSelect?.value as TerminalType) || "signal";
-            targetComp.terminalType = tType;
-
-            if (tType === "power") {
-              if (terminalPowerStyleSelect) targetComp.terminalStyle = terminalPowerStyleSelect.value as any || "arrow";
-              const volt = parseFloat(terminalVoltageInput?.value || "5") || 5;
-              targetComp.voltage = volt;
-              const rawVal = String(newVal || targetComp.label || (volt >= 0 ? `+${volt}V` : `${volt}V`)).trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "ground") {
-              if (terminalGroundStyleSelect) targetComp.terminalStyle = terminalGroundStyleSelect.value as any || "standard";
-              const rawVal = String(newVal || targetComp.label || "GND").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "generator") {
-              const waveTypeSelect = document.querySelector("#prop-wave-type") as HTMLSelectElement;
-              const waveAmpInput = document.querySelector("#prop-wave-amp") as HTMLInputElement;
-              const waveFreqInput = document.querySelector("#prop-wave-freq") as HTMLInputElement;
-              const waveOffsetInput = document.querySelector("#prop-wave-offset") as HTMLInputElement;
-              const waveDutyInput = document.querySelector("#prop-wave-duty") as HTMLInputElement;
-              targetComp.waveType = waveTypeSelect ? waveTypeSelect.value : "square";
-              targetComp.amplitude = waveAmpInput ? (parseFloat(waveAmpInput.value) || 5) : 5;
-              targetComp.frequency = waveFreqInput ? (parseFloat(waveFreqInput.value) || 1000) : 1000;
-              targetComp.offset = waveOffsetInput ? (parseFloat(waveOffsetInput.value) || 0) : 0;
-              targetComp.dutyCycle = waveDutyInput ? (parseFloat(waveDutyInput.value) || 0.5) : 0.5;
-              const rawVal = String(newVal || targetComp.label || "CLK").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "no_connect") {
-              const rawVal = String(newVal || targetComp.label || "NC").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "output") {
-              const rawVal = String(newVal || targetComp.label || "OUT").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "input") {
-              const rawVal = String(newVal || targetComp.label || "IN").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "bidirectional") {
-              const rawVal = String(newVal || targetComp.label || "DATA").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "bus_tap") {
-              const rawVal = String(newVal || targetComp.label || "BUS[7:0]").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else if (tType === "test_point") {
-              const rawVal = String(newVal || targetComp.label || "TP1").trim().toUpperCase();
-              targetComp.value = rawVal;
-              targetComp.label = rawVal;
-            } else {
-              const rawVal = String(newVal || targetComp.label || targetComp.id).trim().toUpperCase();
-              targetComp.value = rawVal || "NET";
-              targetComp.label = targetComp.value as string;
-            }
-          }
-        }
-
-        const simulationRunner = this.callbacks.getSimulationRunner();
-        if (simulationRunner && simulationRunner.isSimulationActive() && supportsLiveMutation(selected.type)) {
-          const runner = simulationRunner;
-          for (const targetComp of selectedList) {
-            const mutations = buildLiveMutations(targetComp, newVal);
-            for (const m of mutations) {
-              void runner.mutateComponent(
-                m.componentId,
-                m.field as unknown as import("../simulation/simulation_runner").InteractiveMutationField,
-                m.value,
-              );
-            }
-          }
-          this.callbacks.addLog(
-            `Mutación en caliente emitida para [${selectedList.map(c => c.id).join(", ")}]`,
-            "send",
-          );
-        } else if (simulationRunner?.isSimulationActive() ?? false) {
-          this.callbacks.addLog(
-            `Los cambios de [${selectedList.map(c => c.id).join(", ")}] se aplicarán en la próxima simulación.`,
-            "system",
-          );
-        }
-
-        this.callbacks.updateCanvasRendering();
-        this.callbacks.markCurrentTabAsModified();
-        this.callbacks.extractNetlist?.();
-        for (const targetComp of selectedList) {
-          this.callbacks.onComponentPropertiesApplied?.(targetComp);
-        }
-        this.callbacks.addLog(
-          isBatch
-            ? `Propiedades aplicadas por lote a ${selectedList.length} componente(s)`
-            : `Propiedades aplicadas a [${selected.id}]: Valor = [${selected.value}]`,
-          "system",
-        );
+        this.applyCurrentProperties({ isLiveInput: false });
       });
     }
 

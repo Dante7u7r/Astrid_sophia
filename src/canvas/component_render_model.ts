@@ -34,22 +34,31 @@ export interface ComponentVisualState {
 export interface ComponentLabelLayout {
   idY: number;
   valueY: number;
+  idX?: number;
+  valueX?: number;
+  align?: CanvasTextAlign;
 }
 
 export function getComponentVisualState(
   isSelected: boolean,
   isHovered: boolean,
+  isClassroom?: boolean,
 ): ComponentVisualState {
-  let color = "#E6EAF0";
+  const isClassroomTheme = isClassroom ?? (
+    typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme") === "classroom"
+  );
+
+  let color = isClassroomTheme ? "#1E293B" : "#E6EAF0";
   let lineWidth = 2;
   let shadowBlur = 0;
 
   if (isSelected) {
-    color = "#38BDF8";
+    color = isClassroomTheme ? "#0284C7" : "#38BDF8";
     lineWidth = 2.8;
     shadowBlur = 0;
   } else if (isHovered) {
-    color = "#5B9FD6";
+    color = isClassroomTheme ? "#0369A1" : "#5B9FD6";
     lineWidth = 2.4;
     shadowBlur = 0;
   }
@@ -68,22 +77,45 @@ export function shouldDrawStandardLeads(type: ComponentInstance["type"]): boolea
 }
 
 export function getComponentLabelLayout(comp: ComponentInstance): ComponentLabelLayout {
-  if (comp.type === "ground") return { idY: 24, valueY: 32 };
-  if (comp.type === "dmm") return { idY: -44, valueY: 32 };
-  if (comp.type === "mcu_8051") return { idY: -230, valueY: 215 };
-  if (comp.type === "mcu_avr") return { idY: -170, valueY: 155 };
+  const rot = Math.abs(Math.round(comp.rotation || 0)) % 360;
+  const isVertical = rot === 90 || rot === 270;
+
+  if (comp.type === "ground") {
+    if (rot === 90) return { idX: 24, idY: 0, valueX: 24, valueY: 0, align: "left" };
+    if (rot === 270) return { idX: -24, idY: 0, valueX: -24, valueY: 0, align: "right" };
+    if (rot === 180) return { idX: 0, idY: -24, valueX: 0, valueY: -32, align: "center" };
+    return { idX: 0, idY: 24, valueX: 0, valueY: 32, align: "center" };
+  }
+  if (comp.type === "dmm") return { idX: 0, idY: -44, valueX: 0, valueY: 32, align: "center" };
+  if (comp.type === "mcu_8051") return { idX: 0, idY: -230, valueX: 0, valueY: 215, align: "center" };
+  if (comp.type === "mcu_avr") return { idX: 0, idY: -170, valueX: 0, valueY: 155, align: "center" };
   if (comp.type === "arduino_uno" || comp.type === "esp32" || comp.type === "raspberry_pi_pico") {
-    return { idY: -70, valueY: 75 };
+    return { idX: 0, idY: -70, valueX: 0, valueY: 75, align: "center" };
   }
   if (comp.type === "x") {
     const pinsLeft = Math.ceil((comp.pinCount ?? 4) / 2);
     const totalHeight = Math.max(pinsLeft * 40, 60);
     return {
+      idX: 0,
       idY: -totalHeight / 2 - 10,
+      valueX: 0,
       valueY: totalHeight / 2 + 14,
+      align: "center",
     };
   }
-  return { idY: -24, valueY: 32 };
+
+  // Componentes pasivos, discretos y fuentes de 2 terminales
+  if (isVertical) {
+    return {
+      idX: 24,
+      idY: -7,
+      valueX: 24,
+      valueY: 9,
+      align: "left",
+    };
+  }
+
+  return { idX: 0, idY: -24, valueX: 0, valueY: 32, align: "center" };
 }
 
 export function shouldDrawValueLabel(type: ComponentInstance["type"]): boolean {

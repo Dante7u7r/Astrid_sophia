@@ -6,7 +6,7 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let prev_v = ctx.prev_v;
     let current_solution = ctx.current_solution;
     let dt = ctx.dt;
-    let mut matrix_a_iter = &mut *ctx.matrix_a_iter;
+    let matrix_a_iter = &mut *ctx.matrix_a_iter;
     let vector_z_iter = &mut *ctx.vector_z_iter;
     let pin_in_pos = comp.pins[0].parse::<usize>().unwrap();
     let pin_in_neg = comp.pins[1].parse::<usize>().unwrap();
@@ -61,10 +61,10 @@ pub(super) fn stamp_opamp(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let g_in = 1.0 / r_in.max(1.0);
 
     // 1. Estampar conductancia de entrada diferencial R_in y corrientes de bias asimétricas (I_b, I_os)
-    stamp_companion_conductance(&mut matrix_a_iter, pin_in_pos, pin_in_pos, g_in);
-    stamp_companion_conductance(&mut matrix_a_iter, pin_in_neg, pin_in_neg, g_in);
-    stamp_companion_conductance(&mut matrix_a_iter, pin_in_pos, pin_in_neg, -g_in);
-    stamp_companion_conductance(&mut matrix_a_iter, pin_in_neg, pin_in_pos, -g_in);
+    stamp_companion_conductance(matrix_a_iter, pin_in_pos, pin_in_pos, g_in);
+    stamp_companion_conductance(matrix_a_iter, pin_in_neg, pin_in_neg, g_in);
+    stamp_companion_conductance(matrix_a_iter, pin_in_pos, pin_in_neg, -g_in);
+    stamp_companion_conductance(matrix_a_iter, pin_in_neg, pin_in_pos, -g_in);
 
     let i_b_pos = i_b + 0.5 * i_os;
     let i_b_neg = i_b - 0.5 * i_os;

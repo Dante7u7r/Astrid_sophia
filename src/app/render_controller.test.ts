@@ -109,4 +109,31 @@ describe("RenderController", () => {
     expect(renderBase).toHaveBeenCalledOnce();
     expect(renderOverlay).toHaveBeenCalledOnce();
   });
+
+  it("no programa frames continuos si la simulacion esta inactiva o en pausa", () => {
+    const requestAnimationFrame = vi.fn();
+    const { controller, orchestrator, circuitState } = createHarness({ requestAnimationFrame });
+    circuitState.setVoltagesFromSnapshot({ "0": 0, "1": 5 }, { "W1:I": 0.05 });
+
+    // Simulacion inactiva: renderiza inmediatamente y no programa el siguiente frame
+    (orchestrator as any).simulationActive = false;
+    (orchestrator as any).simulationPaused = false;
+    controller.updateCanvasRendering(true);
+
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+
+    // Simulacion en pausa: tampoco programa el siguiente frame
+    (orchestrator as any).simulationActive = true;
+    (orchestrator as any).simulationPaused = true;
+    controller.updateCanvasRendering(true);
+
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+
+    // Simulacion activa y no pausada: programa el siguiente frame continuo
+    (orchestrator as any).simulationActive = true;
+    (orchestrator as any).simulationPaused = false;
+    controller.updateCanvasRendering(true);
+
+    expect(requestAnimationFrame).toHaveBeenCalledOnce();
+  });
 });
