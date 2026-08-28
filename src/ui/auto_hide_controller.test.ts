@@ -341,4 +341,73 @@ describe("AutoHideController Clean", () => {
     controller.triggerPanelCollapse("left", true);
     expect(mockLayoutManager.setPanelCollapsed).toHaveBeenCalledWith("left", true);
   });
+
+  it("ignora zonas sensibles si el cursor está sobre una ventana flotante o si se está interactuando con ella", () => {
+    const controller = createAutoHideController({
+      getPanelLayoutManager: () => mockLayoutManager,
+      isTypingInFormField: () => isTyping,
+      storage: storageAdapter,
+      hotzoneThresholdPx: 36,
+      dwellDelayMs: 50,
+    });
+    controller.init();
+
+    const workspace = document.querySelector<HTMLElement>("#workspace-center")!;
+    vi.spyOn(workspace, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 800,
+      right: 1000,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    // Caso 1: Evento originado dentro de una ventana flotante
+    const floatingWin = document.createElement("div");
+    floatingWin.className = "floating-instrument-window";
+    floatingWin.style.width = "400px";
+    floatingWin.style.height = "300px";
+    const header = document.createElement("div");
+    header.className = "floating-window-header";
+    floatingWin.appendChild(header);
+    workspace.appendChild(floatingWin);
+
+    header.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: 20, // Zona izquierda pero dentro del header flotante
+        clientY: 300,
+        bubbles: true,
+      }),
+    );
+
+    vi.advanceTimersByTime(100);
+    expect(mockLayoutManager.setPanelCollapsed).not.toHaveBeenCalledWith("left", false);
+
+    // Caso 2: Interacción activa / arrastre / redimensionamiento activo
+    document.body.classList.add("is-interacting-floating-window");
+    workspace.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: 980, // Zona derecha
+        clientY: 300,
+      }),
+    );
+    vi.advanceTimersByTime(100);
+    expect(mockLayoutManager.setPanelCollapsed).not.toHaveBeenCalledWith("right", false);
+
+    // Caso 3: Ventana flotante maximizada
+    document.body.classList.remove("is-interacting-floating-window");
+    floatingWin.classList.add("is-maximized");
+    workspace.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: 500,
+        clientY: 790, // Zona inferior (dock)
+      }),
+    );
+    vi.advanceTimersByTime(100);
+    expect(mockLayoutManager.setPanelCollapsed).not.toHaveBeenCalledWith("dock", false);
+  });
 });
+

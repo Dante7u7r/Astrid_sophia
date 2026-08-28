@@ -303,10 +303,57 @@ export class AutoHideController {
     if (!workspace) return;
 
     workspace.addEventListener("pointermove", (e: PointerEvent) => {
-      // En modo Zen / Inmersivo se suspende la apertura por hotzone para no obstruir el lienzo
+      // 1. En modo Zen / Inmersivo se suspende la apertura por hotzone para no obstruir el lienzo
       if (this.zenModeActive) {
         this.cancelDwellTimer();
         return;
+      }
+
+      // 2. Si el usuario está interactuando, arrastrando o redimensionando una ventana flotante
+      if (
+        document.body.classList.contains("is-interacting-floating-window") ||
+        document.body.classList.contains("is-dragging-floating-window") ||
+        document.body.classList.contains("is-resizing-floating-window")
+      ) {
+        this.cancelDwellTimer();
+        return;
+      }
+
+      // 3. Si hay una ventana flotante maximizada activa
+      if (document.querySelector(".floating-instrument-window.is-maximized") !== null) {
+        this.cancelDwellTimer();
+        return;
+      }
+
+      // 4. Si el evento se originó dentro de una ventana flotante o modal
+      const targetEl = e.target as HTMLElement | null;
+      if (
+        targetEl &&
+        targetEl.closest(
+          ".floating-instrument-window, .modal-backdrop, .modal, .custom-context-menu, .dialog"
+        )
+      ) {
+        this.cancelDwellTimer();
+        return;
+      }
+
+      // 5. Verificación de colisión física (Hit-Box Guard):
+      // Si el cursor cae dentro del rectángulo o margen de influencia de cualquier ventana flotante visible
+      const floatingWins = document.querySelectorAll<HTMLElement>(".floating-instrument-window");
+      for (const win of Array.from(floatingWins)) {
+        if (win.offsetWidth > 0 && win.offsetHeight > 0) {
+          const wRect = win.getBoundingClientRect();
+          // Margen de resguardo de 16px para tiradores de esquina y bordes de resize
+          if (
+            e.clientX >= wRect.left - 16 &&
+            e.clientX <= wRect.right + 16 &&
+            e.clientY >= wRect.top - 16 &&
+            e.clientY <= wRect.bottom + 16
+          ) {
+            this.cancelDwellTimer();
+            return;
+          }
+        }
       }
 
       const rect = workspace.getBoundingClientRect();
@@ -340,6 +387,10 @@ export class AutoHideController {
     });
 
     workspace.addEventListener("pointerleave", () => {
+      this.cancelDwellTimer();
+    });
+
+    workspace.addEventListener("pointerdown", () => {
       this.cancelDwellTimer();
     });
   }

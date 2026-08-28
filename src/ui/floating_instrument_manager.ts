@@ -227,6 +227,22 @@ export class FloatingInstrumentManager {
     this.makeDraggable(win, header, windowRecord);
     win.addEventListener("mousedown", () => this.bringToFront(win));
 
+    // Bloqueo de auto-ocultación de paneles durante redimensión o interacción
+    const onWindowInteraction = () => {
+      document.body.classList.add("is-interacting-floating-window");
+      const onRelease = () => {
+        document.body.classList.remove("is-interacting-floating-window", "is-resizing-floating-window");
+        window.removeEventListener("mouseup", onRelease);
+        window.removeEventListener("pointerup", onRelease);
+        this.saveWindowState(tabId, windowRecord);
+      };
+      window.addEventListener("mouseup", onRelease);
+      window.addEventListener("pointerup", onRelease);
+    };
+
+    win.addEventListener("mousedown", onWindowInteraction);
+    win.addEventListener("pointerdown", onWindowInteraction);
+
     this.floatingWindows.set(tabId, windowRecord);
     this.applyWindowPlacement(windowRecord);
 
@@ -247,6 +263,7 @@ export class FloatingInstrumentManager {
   }
 
   public popIn(tabId: string): void {
+    document.body.classList.remove("is-interacting-floating-window", "is-dragging-floating-window", "is-resizing-floating-window");
     const info = this.floatingWindows.get(tabId);
     if (!info) return;
 
@@ -367,6 +384,7 @@ export class FloatingInstrumentManager {
     const onMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest(".floating-window-actions")) return;
       isDragging = true;
+      document.body.classList.add("is-interacting-floating-window", "is-dragging-floating-window");
       startX = e.clientX;
       startY = e.clientY;
       initialLeft = windowEl.offsetLeft;
@@ -403,6 +421,7 @@ export class FloatingInstrumentManager {
     const onMouseUp = () => {
       if (isDragging) {
         isDragging = false;
+        document.body.classList.remove("is-interacting-floating-window", "is-dragging-floating-window");
         this.saveWindowState(info.tabId, info);
       }
       document.removeEventListener("mousemove", onMouseMove);
