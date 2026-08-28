@@ -486,7 +486,30 @@ export class OscilloscopePanel {
 
   public setFocusedChannel(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): void {
     this.focusedChannel = ch;
+    this.cursorTargetChannel = ch;
     this.syncFocusedChannelUI();
+    this.updateMeasurementsIfNeeded(
+      [
+        { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
+        { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: "#38BDF8" },
+        { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: "#F43F5E" },
+        { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: "#4ADE80" },
+      ],
+    );
+    this.draw();
+  }
+
+  public setCursorTargetChannel(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): void {
+    this.cursorTargetChannel = ch;
+    this.updateMeasurementsIfNeeded(
+      [
+        { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
+        { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: "#38BDF8" },
+        { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: "#F43F5E" },
+        { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: "#4ADE80" },
+      ],
+    );
+    this.draw();
   }
 
   public setChannelActive(ch: "ch1" | "ch2" | "ch3" | "ch4", active = true): void {
@@ -1108,6 +1131,16 @@ export class OscilloscopePanel {
       this.setCursorMode(nextMode);
     });
 
+    // Cursor target channel cycling via telemetry badge
+    const cursorModeBadge = document.getElementById("osc-meas-cursor-mode-badge");
+    cursorModeBadge?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const channels: ("ch1" | "ch2" | "ch3" | "ch4" | "math")[] = ["ch1", "ch2", "ch3", "ch4", "math"];
+      const currentIdx = channels.indexOf(this.cursorTargetChannel);
+      const nextCh = channels[(currentIdx + 1) % channels.length];
+      this.setCursorTargetChannel(nextCh);
+    });
+
     // Split Mode Toggle in top bar
     this.modeSplitBtn?.addEventListener("click", () => {
       this.isSplitMode = !this.isSplitMode;
@@ -1650,12 +1683,14 @@ export class OscilloscopePanel {
         if (modeBadge) {
           const modeLabels: Record<CursorMode, string> = {
             off: "OFF",
-            time: `Tiempo (X) [${this.cursorTargetChannel.toUpperCase()}]`,
-            voltage: `Voltaje (Y) [${this.cursorTargetChannel.toUpperCase()}]`,
-            both: `Ambos (XY) [${this.cursorTargetChannel.toUpperCase()}]`,
-            track: `Rastreo [${this.cursorTargetChannel.toUpperCase()}]`,
+            time: `Tiempo (X) [${this.cursorTargetChannel.toUpperCase()} ▾]`,
+            voltage: `Voltaje (Y) [${this.cursorTargetChannel.toUpperCase()} ▾]`,
+            both: `Ambos (XY) [${this.cursorTargetChannel.toUpperCase()} ▾]`,
+            track: `Rastreo [${this.cursorTargetChannel.toUpperCase()} ▾]`,
           };
-          modeBadge.textContent = modeLabels[this.cursorMode] ?? `Ambos [${this.cursorTargetChannel.toUpperCase()}]`;
+          modeBadge.textContent = modeLabels[this.cursorMode] ?? `Ambos [${this.cursorTargetChannel.toUpperCase()} ▾]`;
+          modeBadge.title = `Canal medido: ${this.cursorTargetChannel.toUpperCase()} (Clic para alternar a otro canal)`;
+          modeBadge.dataset.channel = this.cursorTargetChannel;
         }
 
         const deltaTime = Math.abs(this.cursorT2 - this.cursorT1) * this.timeDivValue * 10;

@@ -528,7 +528,36 @@ describe("OscilloscopePanel", () => {
     const cursorsBtn = document.querySelector<HTMLButtonElement>("#osc-cursors-btn");
     expect(cursorsBtn?.textContent).toBe("📏 Rastreo (Track)");
   });
+
+  it("permite alternar el canal objetivo del cursor haciendo clic en el badge o al enfocar canales", () => {
+    const panel = new OscilloscopePanel();
+    panel.setCursorMode("both");
+    expect(panel.cursorTargetChannel).toBe("ch1");
+
+    const modeBadge = document.querySelector<HTMLButtonElement>("#osc-meas-cursor-mode-badge");
+    expect(modeBadge?.textContent).toContain("[CH1 ▾]");
+
+    // Clic en el badge cicla al siguiente canal: CH1 -> CH2
+    modeBadge?.click();
+    expect(panel.cursorTargetChannel).toBe("ch2");
+    expect(modeBadge?.textContent).toContain("[CH2 ▾]");
+
+    // Clic de nuevo: CH2 -> CH3
+    modeBadge?.click();
+    expect(panel.cursorTargetChannel).toBe("ch3");
+    expect(modeBadge?.textContent).toContain("[CH3 ▾]");
+
+    // Cambiar canal enfocado sincroniza automáticamente el canal del cursor
+    panel.setFocusedChannel("ch4");
+    expect(panel.cursorTargetChannel).toBe("ch4");
+    expect(modeBadge?.textContent).toContain("[CH4 ▾]");
+
+    panel.setFocusedChannel("math");
+    expect(panel.cursorTargetChannel).toBe("math");
+    expect(modeBadge?.textContent).toContain("[MATH ▾]");
+  });
 });
+
 
 
 

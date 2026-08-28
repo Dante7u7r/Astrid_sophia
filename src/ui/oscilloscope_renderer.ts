@@ -625,16 +625,27 @@ export function drawOscilloscopeCursors(
   const y1 = Math.round(centerY - (v1Actual / voltsPerDiv) * divHeight - voltageOffset) + 0.5;
   const y2 = Math.round(centerY - (v2Actual / voltsPerDiv) * divHeight - voltageOffset) + 0.5;
 
+  const chColorKey = (options.sourceLabel || "ch1").toLowerCase();
+  const chColors = chColorKey === "ch2"
+    ? { main: "#38BDF8", glow: "rgba(56, 189, 248, 0.4)", text: "#BAE6FD", hover: "#7DD3FC" }
+    : chColorKey === "ch3"
+      ? { main: "#F43F5E", glow: "rgba(244, 63, 94, 0.4)", text: "#FECDD3", hover: "#FB7185" }
+      : chColorKey === "ch4"
+        ? { main: "#4ADE80", glow: "rgba(74, 222, 128, 0.4)", text: "#BBF7D0", hover: "#86EFAC" }
+        : chColorKey === "math"
+          ? { main: "#C084FC", glow: "rgba(192, 132, 252, 0.4)", text: "#F3E8FF", hover: "#D8B4FE" }
+          : { main: "#FACC15", glow: "rgba(250, 204, 21, 0.4)", text: "#FEF08A", hover: "#FDE047" };
+
   if (drawVoltage) {
     // --- V1 Cursor ---
     const isV1Active = hovered === "V1" || dragging === "V1";
-    ctx.strokeStyle = isV1Active ? "#FB7185" : "rgba(244, 63, 94, 0.85)";
+    ctx.strokeStyle = isV1Active ? chColors.hover : chColors.main;
     ctx.lineWidth = isV1Active ? 2 : 1.2;
     ctx.setLineDash(isV1Active ? [] : [4, 3]);
 
     if (isV1Active) {
       ctx.save();
-      ctx.strokeStyle = "rgba(244, 63, 94, 0.35)";
+      ctx.strokeStyle = chColors.glow;
       ctx.lineWidth = 5;
       ctx.setLineDash([]);
       ctx.beginPath();
@@ -657,7 +668,7 @@ export function drawOscilloscopeCursors(
     const v1TabX = 22;
 
     ctx.fillStyle = isV1Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
-    ctx.strokeStyle = isV1Active ? "#FB7185" : "#F43F5E";
+    ctx.strokeStyle = isV1Active ? chColors.hover : chColors.main;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -666,7 +677,7 @@ export function drawOscilloscopeCursors(
     ctx.stroke();
 
     // Left pointer notch
-    ctx.fillStyle = isV1Active ? "#FB7185" : "#F43F5E";
+    ctx.fillStyle = isV1Active ? chColors.hover : chColors.main;
     ctx.beginPath();
     ctx.moveTo(v1TabX, y1 - 3);
     ctx.lineTo(v1TabX, y1 + 3);
@@ -674,20 +685,20 @@ export function drawOscilloscopeCursors(
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = isV1Active ? "#FDA4AF" : "#F43F5E";
+    ctx.fillStyle = isV1Active ? chColors.text : chColors.main;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(v1Text, v1TabX + v1W / 2, v1TabY + 8);
 
     // --- V2 Cursor ---
     const isV2Active = hovered === "V2" || dragging === "V2";
-    ctx.strokeStyle = isV2Active ? "#FB7185" : "rgba(244, 63, 94, 0.85)";
+    ctx.strokeStyle = isV2Active ? chColors.hover : chColors.main;
     ctx.lineWidth = isV2Active ? 2 : 1.2;
     ctx.setLineDash(isV2Active ? [] : [4, 3]);
 
     if (isV2Active) {
       ctx.save();
-      ctx.strokeStyle = "rgba(244, 63, 94, 0.35)";
+      ctx.strokeStyle = chColors.glow;
       ctx.lineWidth = 5;
       ctx.setLineDash([]);
       ctx.beginPath();
@@ -709,7 +720,7 @@ export function drawOscilloscopeCursors(
     const v2TabX = 22;
 
     ctx.fillStyle = isV2Active ? "rgba(30, 41, 59, 0.96)" : "rgba(15, 23, 42, 0.92)";
-    ctx.strokeStyle = isV2Active ? "#FB7185" : "#F43F5E";
+    ctx.strokeStyle = isV2Active ? chColors.hover : chColors.main;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -718,7 +729,7 @@ export function drawOscilloscopeCursors(
     ctx.stroke();
 
     // Left pointer notch
-    ctx.fillStyle = isV2Active ? "#FB7185" : "#F43F5E";
+    ctx.fillStyle = isV2Active ? chColors.hover : chColors.main;
     ctx.beginPath();
     ctx.moveTo(v2TabX, y2 - 3);
     ctx.lineTo(v2TabX, y2 + 3);
@@ -726,7 +737,7 @@ export function drawOscilloscopeCursors(
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = isV2Active ? "#FDA4AF" : "#F43F5E";
+    ctx.fillStyle = isV2Active ? chColors.text : chColors.main;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(v2Text, v2TabX + v2W / 2, v2TabY + 8);
@@ -738,8 +749,8 @@ export function drawOscilloscopeCursors(
       ctx.save();
       ctx.setLineDash([]);
 
-      // Glowing outer ring
-      ctx.strokeStyle = "#38BDF8";
+      // Glowing outer ring in target channel color
+      ctx.strokeStyle = chColors.main;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(xPos, yPos, 6, 0, Math.PI * 2);
@@ -754,7 +765,7 @@ export function drawOscilloscopeCursors(
       ctx.stroke();
 
       // Center solid dot
-      ctx.fillStyle = "#FACC15";
+      ctx.fillStyle = chColors.text;
       ctx.beginPath();
       ctx.arc(xPos, yPos, 2.5, 0, Math.PI * 2);
       ctx.fill();
@@ -767,14 +778,14 @@ export function drawOscilloscopeCursors(
       const tagY = Math.max(22, Math.min(height - 20, yPos - 8));
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-      ctx.strokeStyle = "#38BDF8";
+      ctx.strokeStyle = chColors.main;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(tagX, tagY, tagW, 16, 3);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = "#E0F2FE";
+      ctx.fillStyle = chColors.text;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(tagText, tagX + tagW / 2, tagY + 8);

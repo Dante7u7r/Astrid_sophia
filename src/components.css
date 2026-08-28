@@ -2619,6 +2619,27 @@ select.prop-input option,
   color: var(--text-muted);
 }
 
+#osc-meas-cursor-mode-badge {
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+#osc-meas-cursor-mode-badge:hover {
+  background: rgba(250, 204, 21, 0.2);
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #fef08a;
+  transform: translateY(-0.5px);
+}
+#osc-meas-cursor-mode-badge[data-channel="ch1"] { color: #facc15; border-color: rgba(250, 204, 21, 0.35); }
+#osc-meas-cursor-mode-badge[data-channel="ch2"] { color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
+#osc-meas-cursor-mode-badge[data-channel="ch3"] { color: #f43f5e; border-color: rgba(244, 63, 94, 0.35); }
+#osc-meas-cursor-mode-badge[data-channel="ch4"] { color: #4ade80; border-color: rgba(74, 222, 128, 0.35); }
+#osc-meas-cursor-mode-badge[data-channel="math"] { color: #c084fc; border-color: rgba(192, 132, 252, 0.35); }
+
 .meas-metrics-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
