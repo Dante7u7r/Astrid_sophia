@@ -139,4 +139,34 @@ describe("CurrentAnimationRenderer", () => {
 
     expect(ctx.stroke).not.toHaveBeenCalled();
   });
+
+  it("renderiza con tono de cobre cálido en sobrecarga de potencia (Tier 3 >= 2A)", () => {
+    const renderer = new CurrentAnimationRenderer();
+    const ctx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      setLineDash: vi.fn(),
+      lineDashOffset: 0,
+      lineWidth: 1,
+      strokeStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+
+    const highCurrentWire: WireInstance = {
+      id: "W_POWER",
+      from: { componentId: "V1", pinIndex: 0 },
+      to: { componentId: "MOTOR1", pinIndex: 0 },
+      points: [{ x: 10, y: 10 }, { x: 80, y: 10 }],
+    };
+
+    const visibleBounds = { x: 0, y: 0, width: 1000, height: 1000 };
+
+    renderer.renderCurrentFlow(ctx, [highCurrentWire], { "W_POWER:I": 3.5 }, {}, visibleBounds, 1000);
+    renderer.renderCurrentFlow(ctx, [highCurrentWire], { "W_POWER:I": 3.5 }, {}, visibleBounds, 1016);
+
+    expect(ctx.stroke).toHaveBeenCalled();
+  });
 });

@@ -615,6 +615,89 @@ export function extractElectricalNetlist(
         value: contactVal,
         pins: [pin2Node, pin3Node],
       });
+    } else if (comp.type === 'diode_bridge') {
+      const pinAc1 = resolveNode(`${comp.id}:0`);
+      const pinAc2 = resolveNode(`${comp.id}:1`);
+      const pinPos = resolveNode(`${comp.id}:2`);
+      const pinNeg = resolveNode(`${comp.id}:3`);
+
+      // Extraer parámetros de modelo comercial si existe
+      const modelKey = (comp.modelName || comp.value?.toString() || "DB107").toUpperCase();
+      const dm = COMMERCIAL_DIODES[modelKey];
+
+      const dIs = dm?.is ?? comp.diodeIs ?? 8e-9;
+      const dRs = dm?.rs ?? comp.diodeRs ?? 0.045;
+      const dN = dm?.n ?? comp.diodeN ?? 1.85;
+      const dCjo = dm?.cjo ?? comp.diodeCjo ?? 25e-12;
+      const dTt = dm?.tt ?? comp.diodeTt ?? 4e-6;
+      const dBv = dm?.bv ?? comp.diodeBv ?? 1000.0;
+      const dIbv = dm?.ibv ?? comp.diodeIbv ?? 5e-5;
+      const dVf = dm?.forwardVoltage ?? comp.forwardVoltage ?? 0.95;
+
+      // Topología de Puente de Graetz:
+      // D1: Ánodo = AC1, Cátodo = DC+
+      extractedComponents.push({
+        id: `${comp.id}__D1`,
+        type: 'diode',
+        value: 0,
+        pins: [pinAc1, pinPos],
+        diodeIs: dIs,
+        diodeRs: dRs,
+        diodeN: dN,
+        diodeCjo: dCjo,
+        diodeTt: dTt,
+        diodeBv: dBv,
+        diodeIbv: dIbv,
+        forwardVoltage: dVf,
+      });
+
+      // D2: Ánodo = DC-, Cátodo = AC1
+      extractedComponents.push({
+        id: `${comp.id}__D2`,
+        type: 'diode',
+        value: 0,
+        pins: [pinNeg, pinAc1],
+        diodeIs: dIs,
+        diodeRs: dRs,
+        diodeN: dN,
+        diodeCjo: dCjo,
+        diodeTt: dTt,
+        diodeBv: dBv,
+        diodeIbv: dIbv,
+        forwardVoltage: dVf,
+      });
+
+      // D3: Ánodo = AC2, Cátodo = DC+
+      extractedComponents.push({
+        id: `${comp.id}__D3`,
+        type: 'diode',
+        value: 0,
+        pins: [pinAc2, pinPos],
+        diodeIs: dIs,
+        diodeRs: dRs,
+        diodeN: dN,
+        diodeCjo: dCjo,
+        diodeTt: dTt,
+        diodeBv: dBv,
+        diodeIbv: dIbv,
+        forwardVoltage: dVf,
+      });
+
+      // D4: Ánodo = DC-, Cátodo = AC2
+      extractedComponents.push({
+        id: `${comp.id}__D4`,
+        type: 'diode',
+        value: 0,
+        pins: [pinNeg, pinAc2],
+        diodeIs: dIs,
+        diodeRs: dRs,
+        diodeN: dN,
+        diodeCjo: dCjo,
+        diodeTt: dTt,
+        diodeBv: dBv,
+        diodeIbv: dIbv,
+        forwardVoltage: dVf,
+      });
     } else if (comp.type === 'speaker') {
       const pinsMapped = getComponentNodes(pinsKeys);
       extractedComponents.push({
@@ -1040,9 +1123,21 @@ export function extractElectricalNetlist(
         }
       }
 
+      let extractedType = comp.type;
+      if (comp.type === "zener_diode") {
+        extractedType = "diode";
+        diodeBv = comp.diodeBv ?? (Number(comp.value) > 0 ? Number(comp.value) : 5.1);
+        diodeIbv = comp.diodeIbv ?? 1e-3;
+      } else if (comp.type === "schottky_diode") {
+        extractedType = "diode";
+        forwardVoltage = comp.forwardVoltage ?? 0.3;
+      } else if (comp.type === "fuse") {
+        extractedType = "resistor";
+      }
+
       extractedComponents.push({
         id: comp.id,
-        type: comp.type,
+        type: extractedType,
         value: Number(comp.value) || 0,
         pins: pinsMapped,
         waveType: comp.waveType,

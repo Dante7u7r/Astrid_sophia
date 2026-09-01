@@ -30,14 +30,18 @@
             <button id="btn-open-circuit" class="btn-text-only" type="button" data-tooltip="Abrir circuito (.biaani o .spice)" aria-label="Abrir circuito">
               <span aria-hidden="true">📂</span><span class="header-action-label">Abrir</span>
             </button>
-            <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo" aria-label="Cargar circuito de ejemplo">
+            <select id="btn-open-demo" class="btn-text-only" data-tooltip="Cargar circuitos de ejemplo o sintetizar" aria-label="Cargar circuito de ejemplo o sintetizar">
               <option value="">📋 Demos…</option>
               <option value="01_amplificador_no_inversor.biaani">1. Amplificador No Inversor (Op-Amp)</option>
               <option value="02_rectificador_filtro_c.biaani">2. Rectificador con Filtro C</option>
               <option value="03_puente_wheatstone_desbalanceado.biaani">3. Puente de Wheatstone Desbalanceado</option>
               <option value="04_detector_cruce_por_cero_basico.biaani">4. Detector Cruce por Cero (Op-Amp)</option>
               <option value="05_detector_cruce_por_cero_aislado.biaani">5. Detector Cruce por Cero Aislado (Optoacoplador)</option>
+              <option value="__synthesize__">✨ Asistente de Síntesis CAD…</option>
             </select>
+            <button id="btn-synthesizer" class="btn-text-only" type="button" data-tooltip="Asistente de cálculo y síntesis de circuitos" aria-label="Asistente de síntesis">
+              <span aria-hidden="true">🧮</span><span class="header-action-label">Sintetizador</span>
+            </button>
             <button id="btn-save-circuit" class="btn-text-only" type="button" data-tooltip="Guardar circuito actual" aria-label="Guardar circuito">
               <span aria-hidden="true">💾</span><span class="header-action-label">Guardar</span>
             </button>
@@ -85,6 +89,26 @@
           <button id="btn-zen-mode" class="btn-text-only" type="button" data-tooltip="Modo Lienzo Inmersivo / Pantalla Completa (Ctrl+Shift+F)" aria-label="Modo Inmersivo">
             <span aria-hidden="true">🔲</span><span class="header-action-label">Zen</span>
           </button>
+          <div class="dropdown-wrapper">
+            <button id="instruments-menu-btn" class="btn-text-only" type="button" data-tooltip="Instrumentación, ERC y exportación" aria-label="Instrumentación, diagnósticos y exportación" aria-haspopup="menu" aria-expanded="false" aria-controls="instruments-dropdown">
+              <span aria-hidden="true">🛠️</span><span class="header-action-label">Instrumentación</span>
+            </button>
+            <div id="instruments-dropdown" class="dropdown-menu-box" role="menu" hidden style="display: none; position: absolute; top: calc(100% + 8px); right: 0; width: 250px; max-height: min(70vh, 560px); overflow-y: auto; padding: 10px; z-index: 1000; background: var(--bg-glass); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-depth); backdrop-filter: var(--glass-blur);">
+              <div class="menu-category-title">Paneles e interfaz</div>
+              <button class="dropdown-menu-item-btn" id="menu-toggle-left" type="button"><span>📦 Componentes</span><span>Ctrl+1</span></button>
+              <button class="dropdown-menu-item-btn" id="menu-toggle-right" type="button"><span>⚙️ Propiedades</span><span>Ctrl+2</span></button>
+              <button class="dropdown-menu-item-btn" id="menu-toggle-dock" type="button"><span>▦ Centro de instrumentos</span><span>Ctrl+3</span></button>
+              <div class="menu-category-title">Diagnóstico</div>
+              <button class="dropdown-menu-item-btn" id="menu-run-erc" type="button"><span>⚡ Ejecutar ERC</span></button>
+              <button class="dropdown-menu-item-btn" id="menu-settings" type="button"><span>⚙️ Ajustes físicos</span></button>
+              <div class="menu-category-title">Exportación</div>
+              <button class="dropdown-menu-item-btn" id="export-csv-btn" type="button"><span>📊 Datos CSV</span></button>
+              <button class="dropdown-menu-item-btn" id="export-svg-btn" type="button"><span>📈 Gráfico SVG</span></button>
+              <button class="dropdown-menu-item-btn" id="export-s2p-btn" type="button"><span>📡 Touchstone</span></button>
+              <button class="dropdown-menu-item-btn" id="export-h5-btn" type="button"><span>📦 Binario HDF5</span></button>
+              <button class="dropdown-menu-item-btn" id="export-pdf-btn" type="button"><span>📋 Reporte PDF</span></button>
+            </div>
+          </div>
           <button id="settings-trigger-btn" class="btn-text-only" type="button" data-tooltip="Configuración de simulación" aria-label="Ajustes de simulación">
             <span aria-hidden="true">⚙️</span><span class="header-action-label">Ajustes</span>
           </button>
@@ -189,6 +213,7 @@
                   
                   <button id="osc-pause-btn" class="btn-osc-mini osc-btn-action" type="button">⏸ Pausa</button>
                   <button id="osc-autofit-btn" class="btn-osc-mini osc-btn-autofit" type="button" data-tooltip="Auto-Set Inteligente: Escala vertical, tiempo y disparo óptimo">✨ Auto-Set</button>
+                  <button id="osc-autorange-btn" class="btn-osc-mini" type="button" data-tooltip="Auto-Range Continuo: Adapta la escala vertical en tiempo real para que las señales nunca se desborden">🔄 Auto-Range</button>
                   <button id="osc-snapshot-btn" class="btn-osc-mini" type="button" title="Descargar captura PNG limpia del osciloscopio">📸 PNG</button>
                   <button id="osc-csv-btn" class="btn-osc-mini" type="button" title="Exportar trazas a CSV">💾 CSV</button>
                 </div>
@@ -205,7 +230,6 @@
                       <div class="hud-item ch3"><span class="hud-lbl">CH3:</span> <span id="osc-hud-ch3-val">1.0 V/div</span></div>
                       <div class="hud-item ch4"><span class="hud-lbl">CH4:</span> <span id="osc-hud-ch4-val">1.0 V/div</span></div>
                       <div class="hud-item time"><span class="hud-lbl">TIME:</span> <span id="osc-hud-time-val">20 ms/div</span></div>
-                      <div class="hud-item speed"><span class="hud-lbl">VEL:</span> <span id="osc-hud-speed-val">1.0x</span></div>
                     </div>
 
                     <!-- Floating Fallback Solver Warning Badge on Scope -->
@@ -341,19 +365,6 @@
                         <option value="10">10 s/div</option>
                       </select>
                     </div>
-                    <div class="rack-row style-margin-top">
-                      <label for="osc-sim-speed" class="rack-label">Velocidad Sim.</label>
-                      <select id="osc-sim-speed" class="osc-select" aria-label="Velocidad de simulación interactiva">
-                        <option value="0.1">0.1x (Cámara lenta)</option>
-                        <option value="0.25">0.25x</option>
-                        <option value="0.5">0.5x</option>
-                        <option value="1" selected>1.0x (Tiempo Real)</option>
-                        <option value="2">2.0x (Rápido)</option>
-                        <option value="5">5.0x (Acelerado)</option>
-                        <option value="10">10.0x (Ultra)</option>
-                        <option value="100">Turbo (Máx CPU)</option>
-                      </select>
-                    </div>
                   </div>
 
                   <!-- TRIGGER CONTROL RACK -->
@@ -380,12 +391,15 @@
                     <div class="rack-row style-margin-top">
                       <div class="rack-label-group">
                         <label for="osc-trigger-level" class="rack-label">Nivel Disparo</label>
-                        <div style="display: flex; gap: 6px; align-items: center;">
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                          <button id="osc-trigger-0v-btn" class="btn-osc-mini" type="button" style="padding: 1px 6px; font-size: 0.7rem;" title="Centrar nivel a 0.0 V (Tierra)">⚡ 0V</button>
                           <button id="osc-trigger-50-btn" class="btn-osc-mini" type="button" style="padding: 1px 6px; font-size: 0.7rem;" title="Fijar nivel automáticamente al 50% de la señal">⚡ 50%</button>
-                          <span id="osc-trigger-level-val" class="rack-val-badge">0.0 V</span>
                         </div>
                       </div>
-                      <input id="osc-trigger-level" type="range" class="osc-slider" min="-4" max="4" step="0.05" value="0" aria-label="Nivel de disparo en divisiones" />
+                      <div class="osc-numeric-group">
+                        <input id="osc-trigger-level" type="number" step="any" class="osc-input-number" value="0.00" aria-label="Nivel de disparo en voltios" />
+                        <span class="osc-unit-badge">V</span>
+                      </div>
                     </div>
                     <div class="rack-row style-margin-top">
                       <label for="osc-trigger-sweep-mode" class="rack-label">Modo Disparo</label>
@@ -479,9 +493,12 @@
                       <div class="rack-row">
                         <div class="rack-label-group">
                           <label for="osc-focused-offset" class="rack-label">Offset Vertical</label>
-                          <span id="osc-focused-offset-val" class="ch-offset-readout">0.00 V</span>
+                          <button id="osc-focused-offset-0v-btn" class="btn-osc-mini" type="button" style="padding: 1px 6px; font-size: 0.7rem;" title="Centrar offset a 0.0 V">⚡ 0V</button>
                         </div>
-                        <input id="osc-focused-offset" type="range" class="osc-slider" min="-4" max="4" step="0.05" value="0" aria-label="Desplazamiento vertical" />
+                        <div class="osc-numeric-group">
+                          <input id="osc-focused-offset" type="number" step="any" class="osc-input-number" value="0.00" aria-label="Desplazamiento vertical en voltios" />
+                          <span class="osc-unit-badge">V</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -508,6 +525,19 @@
 
             <!-- 8. Optimizador Paramétrico y Auto-Tuning -->
             <div class="inst-content-box" id="inst-optimizer" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);"></div>
+
+            <!-- 9. Consola persistente de eventos de aplicación y simulación -->
+            <div class="inst-content-box" id="inst-console" style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--floating-window-bg);">
+              <div class="console-panel" id="console-panel" style="display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; overflow: hidden;">
+                <div class="panel-header" id="console-header" style="height: 36px; min-height: 36px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;">
+                  <h3 style="font-size: 0.68rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase;">Logs del sistema</h3>
+                  <button id="clear-console-btn" class="btn-clear-console" type="button">Limpiar</button>
+                </div>
+                <div class="console-output" id="console-output" role="log" aria-live="polite" aria-relevant="additions" style="flex: 1 1 auto; min-height: 0; padding: 8px 12px;">
+                  <div class="log-line system-msg">&gt; Consola de Biaani lista.</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- DOCK INFERIOR (COMPACT INSTRUMENT LAUNCHER HUB) -->
@@ -529,6 +559,7 @@
               <button class="inst-tab" data-tab="bode" data-short-label="BOD">📈 Bode / AC</button>
               <button class="inst-tab" data-tab="optimizer" data-short-label="OPT">🎯 Auto-Tuning</button>
               <button class="inst-tab" data-tab="intelligence" data-short-label="IA">◈ Inteligencia</button>
+              <button class="inst-tab" data-tab="console" data-short-label="LOG">⌨️ Consola</button>
             </div>
             <div class="instrument-dock-actions">
               <button
@@ -1285,7 +1316,7 @@
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; color: var(--text-color);">
                   <input type="checkbox" id="settings-disable-pacing" />
-                  ⚡ Modo Batch Headless (Sin pacing de reloj de pared para CI y benchmarks)
+                  ⚡ Modo batch acelerado (sin pacing; no representa tiempo real)
                 </label>
               </div>
             </div>

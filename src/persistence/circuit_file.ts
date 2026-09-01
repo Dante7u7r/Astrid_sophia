@@ -11,6 +11,7 @@ import {
 } from "../canvas/wire_identity";
 import type { AnalysisMode } from "../ui/simulation_controls";
 import { normalizeDmmMode } from "../simulation/dmm";
+import { isComponentType } from "../components/component_types";
 import {
   CircuitFileValidationError,
   finiteInteger,
@@ -50,6 +51,7 @@ export interface PersistedOscilloscopeState {
   isXyMode: boolean;
   isCursorsEnabled: boolean;
   isMathEnabled?: boolean;
+  isAutoRangeEnabled?: boolean;
   mathExpression?: string;
   mathVoltsPerDiv?: number;
   mathOffset?: number;
@@ -85,23 +87,13 @@ export type CircuitFileParseResult =
   | { ok: true; data: CircuitFileData; migratedFrom: string | null }
   | { ok: false; error: string };
 
-const COMPONENT_TYPES = new Set<ComponentInstance["type"]>([
-  "resistor", "capacitor", "inductor", "diode", "vsource", "ground",
-  "nmos", "opamp", "opamp_ideal", "comparator_ideal", "pmos", "npn", "pnp", "lamp", "relay", "buzzer",
-  "mcu_8051", "mcu_avr", "arduino_uno", "esp32", "raspberry_pi_pico",
-  "isource", "led", "transformer", "switch", "x", "potentiometer",
-  "ldr", "thermistor", "dmm", "fuse",
-  "zener_diode", "schottky_diode", "njf", "pjf", "opto", "igbt",
-  "bsim3nmos", "bsim3pmos", "bsim4nmos", "bsim4pmos",
-  "and_gate", "or_gate", "not_gate", "nand_gate", "nor_gate", "xor_gate",
-  "net_label", "power_port", "text_note",
-]);
-
 const ANALYSIS_MODES = new Set<AnalysisMode>([
   "DC", "AC", "TRAN", "SENS", "PSS", "STB", "PVT", "SPAR",
 ]);
 
 const NUMERIC_COMPONENT_FIELDS = [
+  "w",
+  "l",
   "wiperPosition",
   "lux",
   "temperatureCelsius",
@@ -121,9 +113,15 @@ const NUMERIC_COMPONENT_FIELDS = [
   "switchVh",
   "pinCount",
   "voltage",
+  "fontSize",
   "phase",
   "modFrequency",
   "modIndex",
+  "holdingCurrent",
+  "gateTriggerVoltage",
+  "gateTriggerCurrent",
+  "breakoverVoltage",
+  "refVoltage",
   "sourceResistance",
   "acMag",
   "acPhase",
@@ -131,6 +129,10 @@ const NUMERIC_COMPONENT_FIELDS = [
   "powerRating",
   "voltageRating",
   "esr",
+  "cpar",
+  "tc1",
+  "rleak",
+  "initialCondition",
   "dcResistance",
   "currentRating",
   "isat",
@@ -181,6 +183,8 @@ const NUMERIC_COMPONENT_FIELDS = [
   "opampEn",
   "opampIn",
   "opampFc",
+  "gateInputs",
+  "propagationDelay",
   "gateTrise",
   "gateTfall",
   "gateRout",
@@ -188,28 +192,58 @@ const NUMERIC_COMPONENT_FIELDS = [
   "gateVlow",
   "riseDelay",
   "fallDelay",
+  "motorRpm",
+  "motorAngle",
+  "servoAngle",
+  "stepperSteps",
+  "speakerPower",
+  "solenoidPosition",
+  "switchPosition",
+  "lampVoltage",
 ] as const;
 
 const BOOLEAN_COMPONENT_FIELDS = [
   "mirror",
   "mirrorY",
+  "isBlown",
   "relayClosed",
   "switchState",
   "isSubcircuitBlock",
+  "schmittTrigger",
+  "openCollector",
+  "solenoidEngaged",
+  "ssrActive",
+  "isMomentary",
+  "buzzerActive",
+  "lampBurned",
 ] as const;
 
 const STRING_COMPONENT_FIELDS = [
   "waveType",
+  "label",
+  "textColor",
+  "noteTheme",
   "firmwareHex",
+  "esp32SourceCode",
   "spiceMacro",
   "spiceNetlist",
   "subcircuitTabId",
   "subcircuitName",
   "modelName",
   "dielectricType",
+  "expression",
   "potTaper",
   "ledColor",
   "terminalStyle",
+  "logicFamily",
+  "logicState",
+  "pulseMode",
+  "symbolStandard",
+  "buzzerMode",
+  "displayChar",
+  "displayLine2",
+  "sevenSegmentType",
+  "subcircuitLayout",
 ] as const;
 
 const VALID_TERMINAL_TYPES = new Set<string>([
@@ -233,6 +267,67 @@ type WritableParsedComponent = ComponentInstance
   & Partial<Record<BooleanComponentField, boolean>>
   & Partial<Record<StringComponentField, string>>;
 
+function serializeScalarRecord(
+  value: Record<string, number | string> | undefined,
+): Record<string, number | string> | undefined {
+  return value ? { ...value } : undefined;
+}
+
+function parseScalarRecord(
+  value: unknown,
+  path: string,
+): Record<string, number | string> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new CircuitFileValidationError(`${path} debe ser un objeto.`);
+  }
+
+  const parsed: Record<string, number | string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === "string") {
+      parsed[key] = entry;
+    } else if (typeof entry === "number" && Number.isFinite(entry)) {
+      parsed[key] = entry;
+    } else {
+      throw new CircuitFileValidationError(`${path}.${key} debe ser numero finito o texto.`);
+    }
+  }
+  return parsed;
+}
+
+function parsePinLabels(value: unknown, path: string): Record<number, string> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new CircuitFileValidationError(`${path} debe ser un objeto.`);
+  }
+
+  const parsed: Record<number, string> = {};
+  for (const [rawIndex, label] of Object.entries(value)) {
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0 || typeof label !== "string") {
+      throw new CircuitFileValidationError(`${path}.${rawIndex} no es una etiqueta de pin valida.`);
+    }
+    parsed[index] = label;
+  }
+  return parsed;
+}
+
+function parseBooleanRecord(value: unknown, path: string): Record<string, boolean> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new CircuitFileValidationError(`${path} debe ser un objeto.`);
+  }
+
+  const parsed: Record<string, boolean> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "boolean") {
+      throw new CircuitFileValidationError(`${path}.${key} debe ser booleano.`);
+    }
+    parsed[key] = entry;
+  }
+  return parsed;
+}
+
 const DEFAULT_OSCILLOSCOPE: PersistedOscilloscopeState = {
   channelsEnabled: [true, false, false, false],
   voltsPerDiv: [1, 1, 1, 1],
@@ -241,7 +336,12 @@ const DEFAULT_OSCILLOSCOPE: PersistedOscilloscopeState = {
   isXyMode: false,
   isCursorsEnabled: false,
   isMathEnabled: false,
+  isAutoRangeEnabled: false,
   mathExpression: "CH1 - CH2",
+  mathVoltsPerDiv: 1,
+  mathOffset: 0,
+  cursorTargetChannel: "ch1",
+  cursorMode: "off",
   triggerChannel: "ch1",
   triggerEdge: "rising",
   triggerLevel: 0,
@@ -280,8 +380,12 @@ function serializeComponent(component: ComponentInstance): Record<string, unknow
     if (component[field] !== undefined) serialized[field] = component[field];
   }
   if (component.terminalType) serialized.terminalType = component.terminalType;
-  if (component.params) serialized.params = component.params;
-  if (component.pinLabels) serialized.pinLabels = component.pinLabels;
+  const params = serializeScalarRecord(component.params);
+  if (params) serialized.params = params;
+  const instanceParams = serializeScalarRecord(component.instanceParams);
+  if (instanceParams) serialized.instanceParams = instanceParams;
+  if (component.pinLabels) serialized.pinLabels = { ...component.pinLabels };
+  if (component.segmentStates) serialized.segmentStates = { ...component.segmentStates };
   if (component.firmware) serialized.firmwareBytes = Array.from(component.firmware);
 
   return serialized;
@@ -293,7 +397,7 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
   if (typeof value.id !== "string" || !isValidComponentId(value.id)) {
     throw new CircuitFileValidationError(`${path}.id no es valido.`);
   }
-  if (typeof value.type !== "string" || !COMPONENT_TYPES.has(value.type as ComponentInstance["type"])) {
+  if (!isComponentType(value.type)) {
     throw new CircuitFileValidationError(`${path}.type no esta soportado.`);
   }
   if ((typeof value.value !== "number" || !Number.isFinite(value.value))
@@ -303,7 +407,7 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
 
   const component: ComponentInstance = {
     id: value.id,
-    type: value.type as ComponentInstance["type"],
+    type: value.type,
     value: value.value,
     x: finiteNumber(value.x, `${path}.x`),
     y: finiteNumber(value.y, `${path}.y`),
@@ -312,14 +416,19 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
   const writable: WritableParsedComponent = component;
 
   for (const field of NUMERIC_COMPONENT_FIELDS) {
-    if (value[field] !== undefined) (writable as any)[field] = finiteNumber(value[field], `${path}.${field}`);
+    if (value[field] !== undefined) {
+      (writable as Record<NumericComponentField, number | undefined>)[field] = finiteNumber(
+        value[field],
+        `${path}.${field}`,
+      );
+    }
   }
   for (const field of BOOLEAN_COMPONENT_FIELDS) {
     if (value[field] !== undefined) {
       if (typeof value[field] !== "boolean") {
         throw new CircuitFileValidationError(`${path}.${field} debe ser booleano.`);
       }
-      (writable as any)[field] = value[field];
+      (writable as Record<BooleanComponentField, boolean | undefined>)[field] = value[field];
     }
   }
   for (const field of STRING_COMPONENT_FIELDS) {
@@ -327,7 +436,7 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
       if (typeof value[field] !== "string") {
         throw new CircuitFileValidationError(`${path}.${field} debe ser texto.`);
       }
-      (writable as any)[field] = value[field];
+      (writable as Record<StringComponentField, string | undefined>)[field] = value[field];
     }
   }
 
@@ -335,16 +444,13 @@ function parseComponent(value: unknown, index: number): ComponentInstance {
     if (typeof value.terminalType !== "string" || !VALID_TERMINAL_TYPES.has(value.terminalType)) {
       throw new CircuitFileValidationError(`${path}.terminalType no es valido.`);
     }
-    component.terminalType = value.terminalType as any;
+    component.terminalType = value.terminalType as NonNullable<ComponentInstance["terminalType"]>;
   }
 
-  if (isRecord(value.params)) {
-    component.params = { ...value.params } as Record<string, number | string>;
-  }
-
-  if (isRecord(value.pinLabels)) {
-    component.pinLabels = { ...value.pinLabels } as Record<number, string>;
-  }
+  component.params = parseScalarRecord(value.params, `${path}.params`);
+  component.instanceParams = parseScalarRecord(value.instanceParams, `${path}.instanceParams`);
+  component.pinLabels = parsePinLabels(value.pinLabels, `${path}.pinLabels`);
+  component.segmentStates = parseBooleanRecord(value.segmentStates, `${path}.segmentStates`);
 
   if (value.firmwareBytes !== undefined) {
     if (!Array.isArray(value.firmwareBytes)
@@ -472,10 +578,27 @@ function parseNumberTuple(value: unknown, path: string, fallback: [number, numbe
 }
 
 function parseOscilloscope(value: unknown): PersistedOscilloscopeState {
-  if (value === undefined) return { ...DEFAULT_OSCILLOSCOPE };
+  if (value === undefined) return createDefaultOscilloscopeState();
   if (!isRecord(value)) {
     throw new CircuitFileValidationError("oscilloscope debe ser un objeto.");
   }
+
+  const cursorTargetChannel = value.cursorTargetChannel;
+  const parsedCursorTarget = cursorTargetChannel === "ch2"
+    || cursorTargetChannel === "ch3"
+    || cursorTargetChannel === "ch4"
+    || cursorTargetChannel === "math"
+    ? cursorTargetChannel
+    : "ch1";
+
+  const cursorMode = value.cursorMode;
+  const parsedCursorMode = cursorMode === "time"
+    || cursorMode === "voltage"
+    || cursorMode === "both"
+    || cursorMode === "track"
+    ? cursorMode
+    : "off";
+
   return {
     channelsEnabled: parseBooleanTuple(value.channelsEnabled, DEFAULT_OSCILLOSCOPE.channelsEnabled),
     voltsPerDiv: parseNumberTuple(value.voltsPerDiv, "oscilloscope.voltsPerDiv", DEFAULT_OSCILLOSCOPE.voltsPerDiv),
@@ -484,7 +607,22 @@ function parseOscilloscope(value: unknown): PersistedOscilloscopeState {
     isXyMode: typeof value.isXyMode === "boolean" ? value.isXyMode : DEFAULT_OSCILLOSCOPE.isXyMode,
     isCursorsEnabled: typeof value.isCursorsEnabled === "boolean" ? value.isCursorsEnabled : DEFAULT_OSCILLOSCOPE.isCursorsEnabled,
     isMathEnabled: typeof value.isMathEnabled === "boolean" ? value.isMathEnabled : DEFAULT_OSCILLOSCOPE.isMathEnabled,
+    isAutoRangeEnabled: typeof value.isAutoRangeEnabled === "boolean"
+      ? value.isAutoRangeEnabled
+      : DEFAULT_OSCILLOSCOPE.isAutoRangeEnabled,
     mathExpression: typeof value.mathExpression === "string" ? value.mathExpression : DEFAULT_OSCILLOSCOPE.mathExpression,
+    mathVoltsPerDiv: finiteNumber(
+      value.mathVoltsPerDiv,
+      "oscilloscope.mathVoltsPerDiv",
+      DEFAULT_OSCILLOSCOPE.mathVoltsPerDiv,
+    ),
+    mathOffset: finiteNumber(
+      value.mathOffset,
+      "oscilloscope.mathOffset",
+      DEFAULT_OSCILLOSCOPE.mathOffset,
+    ),
+    cursorTargetChannel: parsedCursorTarget,
+    cursorMode: parsedCursorMode,
     triggerChannel: value.triggerChannel === "ch2" || value.triggerChannel === "ch3" || value.triggerChannel === "ch4"
       ? value.triggerChannel
       : "ch1",

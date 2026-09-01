@@ -161,8 +161,13 @@ export default defineConfig(async () => ({
             return "canvas-tools";
           }
 
-          // 7. Núcleo de Aplicación, Controladores, Inteligencia y Persistencia
-          if (norm.includes("src/intelligence/") || norm.includes("src/app/") || norm.includes("src/persistence/")) {
+          // 7. Persistencia aislada del núcleo de aplicación.
+          // Inteligencia y controladores comparten ciclos reales, por lo que permanecen
+          // juntos; persistencia sí puede versionarse y cachearse de forma independiente.
+          if (norm.includes("src/persistence/")) {
+            return "data-persistence";
+          }
+          if (norm.includes("src/intelligence/") || norm.includes("src/app/")) {
             return "app-core";
           }
 

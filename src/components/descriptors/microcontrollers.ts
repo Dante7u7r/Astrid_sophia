@@ -17,11 +17,10 @@ import {
   RPI_PICO_PIN_LABELS,
 } from "../../canvas/component_chip_catalog";
 import {
-  createEsp32Runtime,
+  getOrCreateEsp32Runtime,
   stepEsp32,
   getEsp32DevKitPinVoltages,
   DEVKIT_INDEX_TO_GPIO,
-  Esp32RuntimeState,
 } from "../../simulation/esp32_runtime";
 import type { ComponentDefinition, LocalPinDefinition } from "../types";
 
@@ -218,11 +217,7 @@ export const Esp32Definition: ComponentDefinition = {
     const branchCurrents: Record<number, number> = {};
 
     // 1. Inicializar runtime del ESP32 si no existe
-    let runtime = (comp as any)._esp32RuntimeInstance as Esp32RuntimeState | undefined;
-    if (!runtime) {
-      runtime = createEsp32Runtime(comp.esp32SourceCode);
-      (comp as any)._esp32RuntimeInstance = runtime;
-    }
+    const runtime = getOrCreateEsp32Runtime(comp, comp.esp32SourceCode);
 
     // 2. Extraer tensiones analógicas conectadas a pines GPIO
     const analogVoltages: Record<number, number> = {};
@@ -369,5 +364,4 @@ export const Pic16f84aDefinition: ComponentDefinition = {
     };
   },
 };
-
 

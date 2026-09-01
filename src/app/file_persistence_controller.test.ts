@@ -144,11 +144,13 @@ describe("initFilePersistenceController", () => {
       text: async () => "{}",
     })));
 
+    const onDemoLoaded = vi.fn();
     initFilePersistenceController({
       getTabManager: () => tabManager,
       documentController,
       addLog: vi.fn(),
       invokeTauri: vi.fn(),
+      onDemoLoaded,
     });
 
     const select = document.querySelector<HTMLSelectElement>("#btn-open-demo")!;
@@ -163,6 +165,31 @@ describe("initFilePersistenceController", () => {
       filePath: null,
       unsaved: false,
     });
+    expect(onDemoLoaded).toHaveBeenCalledWith("01", validated.data);
+  });
+
+  it("llama a onOpenSynthesizer cuando se selecciona la opcion __synthesize__", async () => {
+    document.body.innerHTML = `<select id="btn-open-demo"><option value="__synthesize__">Synth</option></select>`;
+    const tabManager = createTabManagerStub();
+    const onOpenSynthesizer = vi.fn();
+    initFilePersistenceController({
+      getTabManager: () => tabManager,
+      documentController: {
+        serializeCircuit: vi.fn(),
+        validateCircuitFileForLoad: vi.fn(),
+        deserializeCircuit: vi.fn(),
+      },
+      addLog: vi.fn(),
+      invokeTauri: vi.fn(),
+      onOpenSynthesizer,
+    });
+
+    const select = document.querySelector<HTMLSelectElement>("#btn-open-demo")!;
+    select.value = "__synthesize__";
+    select.dispatchEvent(new Event("change"));
+    await flushAsyncHandlers();
+
+    expect(onOpenSynthesizer).toHaveBeenCalledOnce();
   });
 
   it("abre un archivo en la pestana vacia activa", async () => {

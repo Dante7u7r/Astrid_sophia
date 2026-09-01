@@ -198,10 +198,7 @@ fn evaluate_targets(
                     .unwrap_or(-240.0);
                 let diff = (gain_db - target_gain_db) / target_gain_db.abs().max(1.0);
                 residuals.push(weight * diff);
-                achieved.insert(
-                    format!("target_{}_AcGainAtFreq_{}", idx, node),
-                    gain_db,
-                );
+                achieved.insert(format!("target_{}_AcGainAtFreq_{}", idx, node), gain_db);
             }
             OptimizationTarget::AcCutoffFreq {
                 node,
@@ -244,10 +241,7 @@ fn evaluate_targets(
                 let target_ratio = 1.0 / std::f64::consts::SQRT_2;
                 let diff = (ratio - target_ratio) / target_ratio;
                 residuals.push(weight * diff);
-                achieved.insert(
-                    format!("target_{}_AcCutoffFreq_{}", idx, node),
-                    gain_db_cut,
-                );
+                achieved.insert(format!("target_{}_AcCutoffFreq_{}", idx, node), gain_db_cut);
             }
             OptimizationTarget::TransientRiseTime {
                 node,
@@ -370,13 +364,25 @@ pub fn solve_circuit_optimization(
     let theta_min: Vec<f64> = params
         .iter()
         .enumerate()
-        .map(|(i, p)| if use_log[i] { p.min_val.ln() } else { p.min_val })
+        .map(|(i, p)| {
+            if use_log[i] {
+                p.min_val.ln()
+            } else {
+                p.min_val
+            }
+        })
         .collect();
 
     let theta_max: Vec<f64> = params
         .iter()
         .enumerate()
-        .map(|(i, p)| if use_log[i] { p.max_val.ln() } else { p.max_val })
+        .map(|(i, p)| {
+            if use_log[i] {
+                p.max_val.ln()
+            } else {
+                p.max_val
+            }
+        })
         .collect();
 
     let theta_to_p = |th: &[f64]| -> Vec<f64> {
@@ -422,7 +428,11 @@ pub fn solve_circuit_optimization(
         let mut jac = DMatrix::<f64>::zeros(k, m);
         for j in 0..m {
             let th_j = current_theta[j];
-            let delta = if use_log[j] { 1e-3 } else { (1e-4 * th_j.abs()).max(1e-8) };
+            let delta = if use_log[j] {
+                1e-3
+            } else {
+                (1e-4 * th_j.abs()).max(1e-8)
+            };
 
             let th_plus = (th_j + delta).clamp(theta_min[j], theta_max[j]);
             let th_minus = (th_j - delta).clamp(theta_min[j], theta_max[j]);
@@ -444,7 +454,8 @@ pub fn solve_circuit_optimization(
                     evaluate_targets(&netlist_minus, targets),
                 ) {
                     for i_target in 0..k {
-                        jac[(i_target, j)] = (res_plus[i_target] - res_minus[i_target]) / actual_delta;
+                        jac[(i_target, j)] =
+                            (res_plus[i_target] - res_minus[i_target]) / actual_delta;
                     }
                 }
             }
@@ -513,7 +524,8 @@ pub fn solve_circuit_optimization(
 
                     let mut iter_param_map = HashMap::new();
                     for (i, p) in params.iter().enumerate() {
-                        iter_param_map.insert(format!("{}.{}", p.component_id, p.property), current_p[i]);
+                        iter_param_map
+                            .insert(format!("{}.{}", p.component_id, p.property), current_p[i]);
                     }
                     history.push(OptimizationIteration {
                         iteration: iter,
@@ -523,7 +535,9 @@ pub fn solve_circuit_optimization(
                     });
 
                     let cost_drop = (prev_cost - current_cost).abs();
-                    if current_cost < settings.tolerance || (iter > 2 && cost_drop < 1e-7 * current_cost && current_cost < 1e-2) {
+                    if current_cost < settings.tolerance
+                        || (iter > 2 && cost_drop < 1e-7 * current_cost && current_cost < 1e-2)
+                    {
                         converged = true;
                         break;
                     }

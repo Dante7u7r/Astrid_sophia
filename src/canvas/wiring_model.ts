@@ -792,3 +792,96 @@ export function dragWireSegment(
   }
   return simplifyOrthogonalWirePath(result);
 }
+
+export interface JunctionInfo {
+  readonly pt: Point2D;
+  readonly nodeId?: string;
+  readonly netLabel?: string;
+  readonly voltage?: number;
+  readonly branchCount: number;
+  readonly connectedPinKeys: readonly string[];
+}
+
+/**
+ * Resuelve la información eléctrica, nodo SPICE, etiqueta de red y ramales conectados
+ * para un punto de unión en T o empalme.
+ */
+export function findJunctionInfoAt(
+  jPt: Point2D,
+  wires: readonly WireInstance[],
+  nodeMap?: Record<string, string>,
+  voltageMap?: Record<string, number>,
+  tolerance = 8,
+): JunctionInfo | null {
+  const matchingWires: WireInstance[] = [];
+  const connectedPinKeys = new Set<string>();
+  let resolvedNodeId: string | undefined;
+  let resolvedNetLabel: string | undefined;
+  let resolvedVoltage: number | undefined;
+
+  for (const w of wires) {
+    if (!w.points || w.points.length < 2) continue;
+    const pStart = w.points[0];
+    const pEnd = w.points[w.points.length - 1];
+
+    const distStart = Math.hypot(pStart.x - jPt.x, pStart.y - jPt.y);
+    const distEnd = Math.hypot(pEnd.x - jPt.x, pEnd.y - jPt.y);
+
+    if (distStart <= tolerance || distEnd <= tolerance) {
+      matchingWires.push(w);
+      if (w.label) resolvedNetLabel = w.label;
+
+      const fromKey = `${w.from.componentId}:${w.from.pinIndex}`;
+      const toKey = `${w.to.componentId}:${w.to.pinIndex}`;
+
+      if (!w.from.isJunction) {
+        connectedPinKeys.add(fromKey);
+        if (nodeMap?.[fromKey]) resolvedNodeId = nodeMap[fromKey];
+        if (voltageMap?.[fromKey] !== undefined) resolvedVoltage = voltageMap[fromKey];
+      }
+      if (!w.to.isJunction) {
+        connectedPinKeys.add(toKey);
+        if (nodeMap?.[toKey]) resolvedNodeId = nodeMap[toKey];
+        if (voltageMap?.[toKey] !== undefined) resolvedVoltage = voltageMap[toKey];
+      }
+    }
+  }
+
+  if (matchingWires.length === 0) return null;
+
+  return {
+    pt: jPt,
+    nodeId: resolvedNodeId,
+    netLabel: resolvedNetLabel,
+    voltage: resolvedVoltage,
+    branchCount: matchingWires.length,
+    connectedPinKeys: Array.from(connectedPinKeys),
+  };
+}
+
+/**
+ * Resuelve la etiqueta de red compartida para un cable dentro de su misma red eléctrica.
+ */
+export function resolveNetLabelForWire(
+  wire: WireInstance,
+  wires: readonly WireInstance[],
+  nodeMap?: Record<string, string>,
+): string | undefined {
+  if (wire.label) return wire.label;
+  const fromKey = `${wire.from.componentId}:${wire.from.pinIndex}`;
+  const toKey = `${wire.to.componentId}:${wire.to.pinIndex}`;
+  const wireNodeId = nodeMap ? (nodeMap[fromKey] ?? nodeMap[toKey]) : undefined;
+
+  if (wireNodeId && nodeMap) {
+    for (const w of wires) {
+      if (w.label) {
+        const k1 = `${w.from.componentId}:${w.from.pinIndex}`;
+        const k2 = `${w.to.componentId}:${w.to.pinIndex}`;
+        if (nodeMap[k1] === wireNodeId || nodeMap[k2] === wireNodeId) {
+          return w.label;
+        }
+      }
+    }
+  }
+  return undefined;
+}

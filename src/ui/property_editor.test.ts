@@ -773,6 +773,28 @@ describe("PropertyEditor componentes especiales", () => {
     expect(note.label).toBe("Nueva nota de ingeniería");
     expect(note.value).toBe("Nueva nota de ingeniería");
   });
+
+  test("aplica y guarda cambios en propiedades al presionar Enter en cualquier campo del formulario", () => {
+    const r1: ComponentInstance = {
+      id: "R1",
+      type: "resistor",
+      value: 1000,
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    createEditor(r1);
+
+    const valInput = document.querySelector<HTMLInputElement>("#prop-val-input");
+    valInput!.value = "4.7k";
+    valInput!.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // Disparar Enter en el campo de valor
+    const enterEvent = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+    valInput!.dispatchEvent(enterEvent);
+
+    expect(r1.value).toBe(4700);
+  });
 });
 
 

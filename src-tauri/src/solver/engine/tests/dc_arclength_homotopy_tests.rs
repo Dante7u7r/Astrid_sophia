@@ -134,7 +134,7 @@ fn test_arclength_sram_cross_coupled_inverter_pair() {
     // o un punto de equilibrio consistente
     let diff = (v1 - v2).abs();
     assert!(
-        v1 >= 0.0 && v1 <= 5.0 && v2 >= 0.0 && v2 <= 5.0,
+        (0.0..=5.0).contains(&v1) && (0.0..=5.0).contains(&v2),
         "Tensiones deben estar acotadas entre 0V y 5V (V1: {:.3} V, V2: {:.3} V, Diff: {:.3} V)",
         v1,
         v2,

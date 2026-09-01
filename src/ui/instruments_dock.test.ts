@@ -70,4 +70,26 @@ describe("InstrumentsDock", () => {
     expect(resize).toHaveBeenCalledOnce();
     window.removeEventListener("resize", resize);
   });
+
+  it("abre el instrumento seleccionado también al navegar con teclado", () => {
+    const container = createDockElement();
+    const orchestrator = {
+      components: [],
+      selectedComponent: null,
+      getComponentPins: vi.fn(() => []),
+    } as unknown as CanvasOrchestrator;
+    const opened: string[] = [];
+    const onOpen = (event: Event): void => {
+      opened.push((event as CustomEvent<{ tabId: string }>).detail.tabId);
+    };
+    window.addEventListener("open-floating-instrument", onOpen);
+    const dock = new InstrumentsDock(container, orchestrator, {});
+    const firstTab = container.querySelector<HTMLButtonElement>('[data-tab="oscilloscope"]')!;
+
+    firstTab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+
+    expect(dock.getActiveTab()).toBe("generator");
+    expect(opened).toEqual(["generator"]);
+    window.removeEventListener("open-floating-instrument", onOpen);
+  });
 });

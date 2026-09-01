@@ -8,7 +8,7 @@ import {
   type SimulationRunner,
   type SimulationRunContext,
 } from "./simulation_runner";
-import { safeInvoke } from "./tauri_mock";
+import { emitWebMockEventForTesting, safeInvoke } from "./tauri_mock";
 
 class EchoWorker {
   onmessage: ((event: MessageEvent) => void) | null = null;
@@ -67,7 +67,7 @@ describe("SimulationRunner streaming", () => {
     runner = harness.runner;
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
-      { dt: 1e-4, tMax: 0.05 },
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-principal",
     );
     expect(runner.isSimulationActive()).toBe(true);
@@ -89,7 +89,7 @@ describe("SimulationRunner streaming", () => {
     runner = harness.runner;
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
-      { dt: 1e-4, tMax: 0.05 },
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-cancelada",
     );
     await vi.advanceTimersByTimeAsync(50);
@@ -110,12 +110,12 @@ describe("SimulationRunner streaming", () => {
     runner = harness.runner;
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
-      { dt: 1e-4, tMax: 0.05 },
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-anterior",
     );
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
-      { dt: 1e-4, tMax: 0.05 },
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-nueva",
     );
     await vi.advanceTimersByTimeAsync(2_500);
@@ -135,12 +135,76 @@ describe("SimulationRunner streaming", () => {
     ]);
   });
 
-  it("despacha mutaciones en caliente (hot-patching) durante la simulacion activa", async () => {
+  it("descarta una inicialización supersedida aunque sus listeners aún estén pendientes", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+
+    const firstStart = runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
+      "tab-inicializacion-antigua",
+    );
+    const secondStart = runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
+      "tab-inicializacion-vigente",
+    );
+    await Promise.all([firstStart, secondStart]);
+    await vi.advanceTimersByTimeAsync(2_500);
+
+    expect(harness.frames).toHaveLength(60);
+    expect(harness.frames.every(({ context }) => (
+      context.ownerTabId === "tab-inicializacion-vigente"
+    ))).toBe(true);
+    expect(harness.completed).toHaveLength(1);
+    expect(harness.states.map(({ active, context }) => [active, context.ownerTabId])).toEqual([
+      [true, "tab-inicializacion-antigua"],
+      [false, "tab-inicializacion-antigua"],
+      [true, "tab-inicializacion-vigente"],
+      [false, "tab-inicializacion-vigente"],
+    ]);
+  });
+
+  it("usa pacing de reloj de pared cuando la opción no se especifica", async () => {
     const harness = createHarness();
     runner = harness.runner;
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
       { dt: 1e-4, tMax: 0.05 },
+      "tab-pacing-default",
+    );
+
+    expect(harness.frames).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(harness.frames).toHaveLength(60);
+  });
+
+  it("finaliza estado y listeners al recibir un error del stream", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+    await runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
+      "tab-error",
+    );
+    const runId = runner.getActiveRunId();
+    expect(runId).not.toBeNull();
+
+    emitWebMockEventForTesting("sim-frame-error", { runId, error: "fallo controlado" });
+
+    expect(harness.errors).toEqual(["fallo controlado"]);
+    expect(harness.states.map(({ active }) => active)).toEqual([true, false]);
+    expect(runner.isSimulationActive()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(harness.frames).toHaveLength(0);
+  });
+
+  it("despacha mutaciones en caliente (hot-patching) durante la simulacion activa", async () => {
+    const harness = createHarness();
+    runner = harness.runner;
+    await runner.startInteractiveTransient(
+      EMPTY_NETLIST,
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-hot-patch",
     );
     expect(runner.getActiveRunId()).toBeGreaterThan(0);
@@ -160,7 +224,7 @@ describe("SimulationRunner streaming", () => {
     runner = harness.runner;
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
-      { dt: 1e-4, tMax: 0.05 },
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-cache-test",
     );
 
@@ -190,7 +254,7 @@ describe("SimulationRunner streaming", () => {
     runner = harness.runner;
     await runner.startInteractiveTransient(
       EMPTY_NETLIST,
-      { dt: 1e-4, tMax: 0.05 },
+      { dt: 1e-4, tMax: 0.05, disablePacing: false },
       "tab-pause-test",
     );
 

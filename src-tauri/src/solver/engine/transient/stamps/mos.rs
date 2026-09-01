@@ -44,7 +44,11 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vgs = v_gate - v_source;
     let raw_vds = v_drain - v_source;
     let mut vds = raw_vds;
-    if vds < 0.0 && comp.comp_type != "sic_mosfet" && comp.comp_type != "gan_hemt" && comp.comp_type != "igbt" {
+    if vds < 0.0
+        && comp.comp_type != "sic_mosfet"
+        && comp.comp_type != "gan_hemt"
+        && comp.comp_type != "igbt"
+    {
         vds = 0.0;
     }
     let vbs = v_bulk - v_source;
@@ -83,7 +87,8 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                     bypass.c_ds,
                 )
             } else {
-                let res = compute_nmos_eval(comp, vgs, raw_vds, vds, vbs, tj_m, vth, kn, lambda, vt, dt);
+                let res =
+                    compute_nmos_eval(comp, vgs, raw_vds, vds, vbs, tj_m, vth, kn, lambda, vt, dt);
                 let ieq_calc = res.0 - res.1 * vgs - res.2 * vds;
                 let ieq_g_calc = res.3 - res.4 * vgs;
                 ctx.mos_bypass.insert(
@@ -104,10 +109,13 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                         c_ds: res.7,
                     },
                 );
-                (res.0, res.1, res.2, res.3, res.4, ieq_calc, ieq_g_calc, res.5, res.6, res.7)
+                (
+                    res.0, res.1, res.2, res.3, res.4, ieq_calc, ieq_g_calc, res.5, res.6, res.7,
+                )
             }
         } else {
-            let res = compute_nmos_eval(comp, vgs, raw_vds, vds, vbs, tj_m, vth, kn, lambda, vt, dt);
+            let res =
+                compute_nmos_eval(comp, vgs, raw_vds, vds, vbs, tj_m, vth, kn, lambda, vt, dt);
             let ieq_calc = res.0 - res.1 * vgs - res.2 * vds;
             let ieq_g_calc = res.3 - res.4 * vgs;
             ctx.mos_bypass.insert(
@@ -128,7 +136,9 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                     c_ds: res.7,
                 },
             );
-            (res.0, res.1, res.2, res.3, res.4, ieq_calc, ieq_g_calc, res.5, res.6, res.7)
+            (
+                res.0, res.1, res.2, res.3, res.4, ieq_calc, ieq_g_calc, res.5, res.6, res.7,
+            )
         }
     } else {
         let res = compute_nmos_eval(comp, vgs, raw_vds, vds, vbs, tj_m, vth, kn, lambda, vt, dt);
@@ -152,7 +162,9 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                 c_ds: res.7,
             },
         );
-        (res.0, res.1, res.2, res.3, res.4, ieq_calc, ieq_g_calc, res.5, res.6, res.7)
+        (
+            res.0, res.1, res.2, res.3, res.4, ieq_calc, ieq_g_calc, res.5, res.6, res.7,
+        )
     };
 
     // Estampar capacidades parásitas (Fase 13)
@@ -198,12 +210,7 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     stamp_companion_conductance(matrix_a_iter, node_drain, node_source, -gds - g_eq_ds);
     stamp_companion_conductance(matrix_a_iter, node_source, node_drain, -gds - g_eq_ds);
 
-    stamp_companion_conductance(
-        matrix_a_iter,
-        node_gate,
-        node_gate,
-        g_eq_gs + g_eq_gd + gg,
-    );
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_gate, g_eq_gs + g_eq_gd + gg);
     stamp_companion_conductance(matrix_a_iter, node_gate, node_source, -g_eq_gs - gg);
     stamp_companion_conductance(matrix_a_iter, node_source, node_gate, -g_eq_gs - gg);
     stamp_companion_conductance(matrix_a_iter, node_gate, node_drain, -g_eq_gd);
@@ -392,7 +399,11 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
             vsg,
             vsd,
             vsb,
-            comp.bsim_vth0.unwrap_or(if comp.value != 0.0 { comp.value.abs() } else { 0.35 }),
+            comp.bsim_vth0.unwrap_or(if comp.value != 0.0 {
+                comp.value.abs()
+            } else {
+                0.35
+            }),
             comp.w.unwrap_or(1.0e-6),
             comp.l.unwrap_or(0.045e-6),
             toxe,
@@ -458,25 +469,10 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
         node_drain,
         gds_cond + g_eq_sd + g_eq_gd,
     );
-    stamp_companion_conductance(
-        matrix_a_iter,
-        node_source,
-        node_drain,
-        -gds_cond - g_eq_sd,
-    );
-    stamp_companion_conductance(
-        matrix_a_iter,
-        node_drain,
-        node_source,
-        -gds_cond - g_eq_sd,
-    );
+    stamp_companion_conductance(matrix_a_iter, node_source, node_drain, -gds_cond - g_eq_sd);
+    stamp_companion_conductance(matrix_a_iter, node_drain, node_source, -gds_cond - g_eq_sd);
 
-    stamp_companion_conductance(
-        matrix_a_iter,
-        node_gate,
-        node_gate,
-        g_eq_sg + g_eq_gd + gg,
-    );
+    stamp_companion_conductance(matrix_a_iter, node_gate, node_gate, g_eq_sg + g_eq_gd + gg);
     stamp_companion_conductance(matrix_a_iter, node_gate, node_source, -g_eq_sg - gg);
     stamp_companion_conductance(matrix_a_iter, node_source, node_gate, -g_eq_sg - gg);
     stamp_companion_conductance(matrix_a_iter, node_gate, node_drain, -g_eq_gd);
@@ -535,7 +531,9 @@ fn compute_nmos_eval(
             ..IgbtParams::default()
         };
         let res = evaluate_igbt(vgs, raw_vds, &params, Some(tj_m - 273.15), None, Some(dt));
-        (res.ic, res.gm, res.go, 0.0, 1e-12, res.cge, res.cgc, res.cce)
+        (
+            res.ic, res.gm, res.go, 0.0, 1e-12, res.cge, res.cgc, res.cce,
+        )
     } else if comp.comp_type == "sic_mosfet" {
         let params = SicMosfetParams {
             vth: if comp.value > 0.0 { comp.value } else { 3.0 },
@@ -543,7 +541,9 @@ fn compute_nmos_eval(
             ..SicMosfetParams::default()
         };
         let res = evaluate_sic_mosfet(vgs, raw_vds, tj_m, &params);
-        (res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds)
+        (
+            res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds,
+        )
     } else if comp.comp_type == "gan_hemt" {
         let params = GanHemtParams {
             vth: if comp.value > 0.0 { comp.value } else { 1.5 },
@@ -551,16 +551,27 @@ fn compute_nmos_eval(
             ..GanHemtParams::default()
         };
         let res = evaluate_gan_hemt(vgs, raw_vds, tj_m, &params);
-        (res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds)
+        (
+            res.ids, res.gm, res.gds, 0.0, 1e-12, res.cgs, res.cgd, res.cds,
+        )
     } else if comp.comp_type == "bsim4nmos" {
-        let (i, g_m, g_ds, _gmb, i_g, g_g) =
-            evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, Some(tj_m), Some(comp));
+        let (i, g_m, g_ds, _gmb, i_g, g_g) = evaluate_bsim4_nmos(
+            vgs,
+            vds,
+            vbs,
+            comp.value,
+            comp.w,
+            comp.l,
+            Some(tj_m),
+            Some(comp),
+        );
         let toxe = comp.bsim_toxe.or(comp.bsim_tox).unwrap_or(1.4e-9);
         let (cgs, cgd, cds) = evaluate_bsim4_capacitances(
             vgs,
             vds,
             vbs,
-            comp.bsim_vth0.unwrap_or(if comp.value != 0.0 { comp.value } else { 0.35 }),
+            comp.bsim_vth0
+                .unwrap_or(if comp.value != 0.0 { comp.value } else { 0.35 }),
             comp.w.unwrap_or(1.0e-6),
             comp.l.unwrap_or(0.045e-6),
             toxe,
@@ -568,8 +579,16 @@ fn compute_nmos_eval(
         );
         (i, g_m, g_ds, i_g, g_g, cgs, cgd, cds)
     } else if comp.comp_type == "bsim3nmos" {
-        let (ids_v, gm_v, gds_v) =
-            evaluate_bsim3_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, Some(tj_m), Some(comp));
+        let (ids_v, gm_v, gds_v) = evaluate_bsim3_nmos(
+            vgs,
+            vds,
+            vbs,
+            comp.value,
+            comp.w,
+            comp.l,
+            Some(tj_m),
+            Some(comp),
+        );
         let (cgs, cgd, cds) = evaluate_bsim3_capacitances(
             vgs,
             vds,
@@ -591,8 +610,18 @@ fn compute_nmos_eval(
         let gm_val = ids_val / (n_factor * vt);
         let gds_val =
             i_sub0 * exp_sub * ((exp_vds / vt) * (1.0 + lambda * vds) + sub_factor * lambda);
-        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
-        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12, cgs, cgd, cds)
+        let (cgs, cgd, cds) =
+            get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (
+            ids_val,
+            gm_val,
+            gds_val.max(1e-9),
+            0.0,
+            1e-12,
+            cgs,
+            cgd,
+            cds,
+        )
     } else if vds < vgs - vth {
         let factor_early = 1.0 + lambda * vds;
         let triode_curr = kn * (2.0 * (vgs - vth) * vds - vds * vds);
@@ -600,8 +629,18 @@ fn compute_nmos_eval(
         let ids_val = triode_curr * factor_early;
         let gm_val = (2.0 * kn * vds) * factor_early;
         let gds_val = (2.0 * kn * (vgs - vth - vds)) * factor_early + triode_curr * lambda;
-        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
-        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12, cgs, cgd, cds)
+        let (cgs, cgd, cds) =
+            get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (
+            ids_val,
+            gm_val,
+            gds_val.max(1e-9),
+            0.0,
+            1e-12,
+            cgs,
+            cgd,
+            cds,
+        )
     } else {
         let factor_early = 1.0 + lambda * vds;
         let sat_curr = kn * (vgs - vth) * (vgs - vth);
@@ -609,8 +648,18 @@ fn compute_nmos_eval(
         let ids_val = sat_curr * factor_early;
         let gm_val = (2.0 * kn * (vgs - vth)) * factor_early;
         let gds_val = sat_curr * lambda;
-        let (cgs, cgd, cds) = get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
-        (ids_val, gm_val, gds_val.max(1e-9), 0.0, 1e-12, cgs, cgd, cds)
+        let (cgs, cgd, cds) =
+            get_nmos_capacitances(vgs, vds, vth, comp.w, comp.l, comp.mos_cgs, comp.mos_cgd);
+        (
+            ids_val,
+            gm_val,
+            gds_val.max(1e-9),
+            0.0,
+            1e-12,
+            cgs,
+            cgd,
+            cds,
+        )
     }
 }
 
@@ -626,12 +675,28 @@ fn compute_pmos_eval(
     vt: f64,
 ) -> (f64, f64, f64, f64, f64) {
     if comp.comp_type == "bsim4pmos" {
-        let (isd_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) =
-            evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, Some(tj_p), Some(comp));
+        let (isd_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) = evaluate_bsim4_pmos(
+            vsg,
+            vsd,
+            vsb,
+            comp.value,
+            comp.w,
+            comp.l,
+            Some(tj_p),
+            Some(comp),
+        );
         (isd_v, gm_v, gds_v, igs_v, gg_v)
     } else if comp.comp_type == "bsim3pmos" {
-        let (isd_v, gm_v, gds_v) =
-            evaluate_bsim3_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, Some(tj_p), Some(comp));
+        let (isd_v, gm_v, gds_v) = evaluate_bsim3_pmos(
+            vsg,
+            vsd,
+            vsb,
+            comp.value,
+            comp.w,
+            comp.l,
+            Some(tj_p),
+            Some(comp),
+        );
         (isd_v, gm_v, gds_v, 0.0, 1e-12)
     } else if vsg <= vth_abs {
         let i_sub0 = 1e-7;

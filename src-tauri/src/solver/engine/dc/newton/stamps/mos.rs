@@ -45,7 +45,11 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vgs = v_gate - v_source;
     let raw_vds = v_drain - v_source;
     let mut vds = raw_vds;
-    if vds < 0.0 && comp.comp_type != "sic_mosfet" && comp.comp_type != "gan_hemt" && comp.comp_type != "igbt" {
+    if vds < 0.0
+        && comp.comp_type != "sic_mosfet"
+        && comp.comp_type != "gan_hemt"
+        && comp.comp_type != "igbt"
+    {
         vds = 0.0;
     }
     let vbs = v_bulk - v_source;
@@ -95,8 +99,16 @@ pub(super) fn stamp_nmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
             Some(comp),
         )
     } else if comp.comp_type == "bsim3nmos" {
-        let (ids_v, gm_v, gds_v) =
-            evaluate_bsim3_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, ctx.netlist.temperature, Some(comp));
+        let (ids_v, gm_v, gds_v) = evaluate_bsim3_nmos(
+            vgs,
+            vds,
+            vbs,
+            comp.value,
+            comp.w,
+            comp.l,
+            ctx.netlist.temperature,
+            Some(comp),
+        );
         (ids_v, gm_v, gds_v, 0.0, 0.0, 1e-12)
     } else if vgs <= vth {
         // Corte
@@ -256,8 +268,16 @@ pub(super) fn stamp_pmos(comp: &ComponentData, ctx: &mut StampContext<'_>) {
             Some(comp),
         )
     } else if comp.comp_type == "bsim3pmos" {
-        let (isd_v, gm_v, gds_v) =
-            evaluate_bsim3_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, ctx.netlist.temperature, Some(comp));
+        let (isd_v, gm_v, gds_v) = evaluate_bsim3_pmos(
+            vsg,
+            vsd,
+            vsb,
+            comp.value,
+            comp.w,
+            comp.l,
+            ctx.netlist.temperature,
+            Some(comp),
+        );
         (isd_v, gm_v, gds_v, 0.0, 0.0, 1e-12)
     } else if vsg <= vth_abs {
         (0.0, 0.0, 1e-9, 0.0, 0.0, 1e-12)

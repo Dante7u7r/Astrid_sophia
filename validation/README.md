@@ -92,8 +92,14 @@ ngspice explícitamente; si falta el ejecutable, los casos externos fallan y no 
 Esto es correlación independiente de implementación, pero todavía no es validación de silicio:
 el caso no lineal usa un diodo Shockley ideal configurado de forma equivalente en ambos motores.
 
-La caracterización BSIM3 se ejecuta por separado con `npm run characterize:bsim`. Es
-deliberadamente no bloqueante para la entrega porque documenta una brecha conocida: el caso NMOS
-versionado falla sus cinco observaciones y presenta errores relativos de corriente entre 97.9 % y
-99.3 % frente a ngspice. Un fallo de ese comando es actualmente el resultado esperado, no una
-certificación del modelo.
+La caracterización BSIM3 se ejecuta por separado con `npm run characterize:bsim` y sigue siendo
+deliberadamente no bloqueante para la entrega. El [reporte versionado](reports/bsim-characterization.md)
+actual, generado con ngspice 47, aprueba 5/5 observaciones DC de un único caso NMOS BSIM3,
+con errores relativos de corriente entre 1.27 % y 6.89 %. El criterio es
+`max(1e-8 A, 0.25 × |I_referencia|)`; la tolerancia relativa del 25 % domina en estos puntos.
+El [caso](cases/external_dc_bsim3_nmos_transfer.json) fija VGS=0.8–1.6 V en pasos de 0.2 V,
+VDS=1 V, W=10 µm, L=0.18 µm y 27 °C. El [fixture ngspice](ngspice/dc_bsim3_nmos_transfer.cir)
+usa BSIM3v3 LEVEL=49 con VTH0=0.4 V, TOX=4 nm, U0=450 cm²/(V·s) y VSAT=8e4 m/s.
+Este PASS se limita a esos cinco puntos de fuerte inversión: no certifica BSIM completo,
+PMOS, otras geometrías o temperaturas, análisis dinámicos ni BSIM4. La familia permanece
+experimental y el reporte no constituye una validación general para predicción física.

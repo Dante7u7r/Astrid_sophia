@@ -1,6 +1,9 @@
 # Estado de validación científica
 
-Fecha de corte: 2026-08-03.
+Fecha de corte original: 2026-08-03. La matriz principal, la campaña Fase 5 y la
+caracterización BSIM se volvieron a ejecutar el 2026-08-31 tras las correcciones
+de caché, mutaciones, historial LTE, eventos y BDF: 15/15, 500/500 y 1/1 casos aprobados,
+respectivamente. Véanse los [resultados y límites de la auditoría](auditoria-2026-08-30.md).
 
 Este documento separa capacidad implementada de capacidad científicamente validada. Una prueba
 unitaria que comprueba que el solver devuelve datos no demuestra exactitud física.
@@ -17,7 +20,7 @@ unitaria que comprueba que el solver devuelve datos no demuestra exactitud físi
 | PSS | Experimental con validación limitada | Shooting con Jacobiano por diferencias finitas; un RC lineal cumple su referencia periódica, pero faltan osciladores y no lineales |
 | Polos y ceros | Experimental con validación limitada | Un caso RC analítico y repetibilidad determinista; sigue siendo un modelo reducido, no análisis de ganancia de lazo |
 | Márgenes de fase/ganancia | No implementado | Los valores heurísticos anteriores fueron retirados |
-| BSIM3/BSIM4 | Experimental y no apto para predicción | La caracterización NMOS BSIM3 contra ngspice difiere 97.9 %–99.3 % en corriente; BSIM4 aún no tiene correlación equivalente |
+| BSIM3/BSIM4 | Experimental; correlación NMOS BSIM3 limitada | El [reporte versionado](../validation/reports/bsim-characterization.md) aprueba 5/5 puntos DC de NMOS BSIM3 (VGS=0.8–1.6 V, VDS=1 V, W=10 µm, L=0.18 µm, 27 °C): error relativo de corriente 1.27 %–6.89 %, tolerancia relativa 25 %. No certifica BSIM completo ni BSIM4 |
 | MCU 8051/AVR | No simulable | La carga HEX/BIN queda disponible solo para inspección; ERC bloquea simulaciones que contengan estos componentes porque no existe una ISA completa |
 | Arduino/ESP32/Pico | Modelo funcional | Comportamiento analógico de alto nivel; no ejecuta firmware real |
 
@@ -147,10 +150,17 @@ La extracción de estabilidad ordena sus resultados de forma determinista y una 
 el análisis 32 veces. Esto retira la afirmación de que PSS y polos/ceros carecen por completo de
 referencias, pero no justifica retirar la etiqueta experimental.
 
-`npm run characterize:bsim` ejecuta un barrido NMOS BSIM3 versionado contra ngspice. Las cinco
-observaciones fallan: el error relativo de corriente va de 97.9 % a 99.3 %. Esta suite separada
-debe seguir fallando hasta que el modelo cambie; incorporarla al gate principal fingiría que la
-versión está lista o bloquearía toda entrega sin aportar una corrección del modelo.
+`npm run characterize:bsim` ejecuta un barrido NMOS BSIM3 versionado contra ngspice. El
+[reporte actual](../validation/reports/bsim-characterization.md), generado con ngspice 47,
+aprueba sus cinco observaciones: el error relativo de corriente va de 1.27 % a 6.89 %.
+El umbral versionado es `max(1e-8 A, 0.25 × |I_referencia|)`; el término relativo del 25 %
+domina en estos cinco puntos. La configuración es VGS=0.8–1.6 V en pasos de 0.2 V,
+VDS=1 V, W=10 µm, L=0.18 µm y 27 °C, con VTH0=0.4 V, TOX=4 nm,
+U0=450 cm²/(V·s) y VSAT=8e4 m/s según el
+[fixture versionado](../validation/ngspice/dc_bsim3_nmos_transfer.cir).
+La suite sigue siendo separada y no bloqueante: su PASS solo cubre esos cinco puntos
+NMOS BSIM3 en fuerte inversión, no certifica BSIM completo, PMOS, otras geometrías o
+temperaturas, análisis dinámicos ni BSIM4. Se conserva la etiqueta experimental.
 
 ## Decisión sobre límites operativos
 

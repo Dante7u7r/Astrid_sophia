@@ -492,7 +492,7 @@
 .component-card[data-type="relay"]:hover .comp-icon-box {
   background: rgba(52, 211, 153, 0.1);
   border-color: rgba(52, 211, 153, 0.35);
-  color: hsl(148, 82%, 50%);
+  color: var(--green);
   box-shadow: 0 0 10px rgba(52, 211, 153, 0.15);
 }
 
@@ -2433,8 +2433,8 @@ select.prop-input option,
 .btn-osc-mini.ch3-badge { color: #F43F5E; border-color: rgba(244, 63, 94, 0.3); }
 .btn-osc-mini.ch3-badge.active { background: rgba(244, 63, 94, 0.15); box-shadow: 0 0 10px rgba(244, 63, 94, 0.25); }
 
-.btn-osc-mini.ch4-badge { color: #4ADE80; border-color: rgba(74, 222, 128, 0.3); }
-.btn-osc-mini.ch4-badge.active { background: rgba(74, 222, 128, 0.15); box-shadow: 0 0 10px rgba(74, 222, 128, 0.25); }
+.btn-osc-mini.ch4-badge { color: #34D399; border-color: rgba(52, 211, 153, 0.3); }
+.btn-osc-mini.ch4-badge.active { background: rgba(52, 211, 153, 0.15); box-shadow: 0 0 10px rgba(52, 211, 153, 0.25); }
 
 .ch-dot {
   width: 6px;
@@ -2452,6 +2452,13 @@ select.prop-input option,
 .osc-btn-autofit:hover {
   background: rgba(102, 252, 241, 0.2) !important;
   box-shadow: 0 0 12px rgba(102, 252, 241, 0.3);
+}
+
+#osc-autorange-btn.active {
+  background: rgba(56, 189, 248, 0.22) !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
 }
 
 .osc-main-layout {
@@ -2529,7 +2536,7 @@ select.prop-input option,
 .hud-item.ch1 { color: #FACC15; }
 .hud-item.ch2 { color: #38BDF8; }
 .hud-item.ch3 { color: #F43F5E; }
-.hud-item.ch4 { color: #4ADE80; }
+.hud-item.ch4 { color: #34D399; }
 .hud-item.time { color: #e2e8f0; font-weight: bold; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 8px; }
 
 .hud-lbl {
@@ -2575,7 +2582,7 @@ select.prop-input option,
 .meas-digital-card.ch1.active { border-color: rgba(250, 204, 21, 0.35); box-shadow: inset 0 0 8px rgba(250, 204, 21, 0.05); }
 .meas-digital-card.ch2.active { border-color: rgba(56, 189, 248, 0.35); box-shadow: inset 0 0 8px rgba(56, 189, 248, 0.05); }
 .meas-digital-card.ch3.active { border-color: rgba(244, 63, 94, 0.35); box-shadow: inset 0 0 8px rgba(244, 63, 94, 0.05); }
-.meas-digital-card.ch4.active { border-color: rgba(74, 222, 128, 0.35); box-shadow: inset 0 0 8px rgba(74, 222, 128, 0.05); }
+.meas-digital-card.ch4.active { border-color: rgba(52, 211, 153, 0.35); box-shadow: inset 0 0 8px rgba(52, 211, 153, 0.05); }
 .meas-digital-card.cursors.active {
   border-color: rgba(250, 204, 21, 0.6);
   box-shadow: inset 0 0 10px rgba(250, 204, 21, 0.08), 0 0 8px rgba(56, 189, 248, 0.12);
@@ -2599,7 +2606,7 @@ select.prop-input option,
 .meas-digital-card.ch1 .meas-badge { background: rgba(250, 204, 21, 0.2); color: #FACC15; }
 .meas-digital-card.ch2 .meas-badge { background: rgba(56, 189, 248, 0.2); color: #38BDF8; }
 .meas-digital-card.ch3 .meas-badge { background: rgba(244, 63, 94, 0.2); color: #F43F5E; }
-.meas-digital-card.ch4 .meas-badge { background: rgba(74, 222, 128, 0.2); color: #4ADE80; }
+.meas-digital-card.ch4 .meas-badge { background: rgba(52, 211, 153, 0.2); color: #34D399; }
 .meas-digital-card.cursors .meas-badge { background: rgba(250, 204, 21, 0.25); color: #FDE047; letter-spacing: 0.5px; }
 .meas-digital-card.cursors .cell-lbl { color: #93c5fd; }
 .meas-digital-card.cursors .cell-num { color: #fef08a; font-size: 0.50rem; white-space: nowrap; }
@@ -2637,7 +2644,7 @@ select.prop-input option,
 #osc-meas-cursor-mode-badge[data-channel="ch1"] { color: #facc15; border-color: rgba(250, 204, 21, 0.35); }
 #osc-meas-cursor-mode-badge[data-channel="ch2"] { color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
 #osc-meas-cursor-mode-badge[data-channel="ch3"] { color: #f43f5e; border-color: rgba(244, 63, 94, 0.35); }
-#osc-meas-cursor-mode-badge[data-channel="ch4"] { color: #4ade80; border-color: rgba(74, 222, 128, 0.35); }
+#osc-meas-cursor-mode-badge[data-channel="ch4"] { color: #34d399; border-color: rgba(52, 211, 153, 0.35); }
 #osc-meas-cursor-mode-badge[data-channel="math"] { color: #c084fc; border-color: rgba(192, 132, 252, 0.35); }
 
 .meas-metrics-grid {
@@ -2807,6 +2814,48 @@ select.prop-input option,
   box-shadow: 0 0 8px var(--cyan);
 }
 
+.osc-numeric-group {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.osc-input-number {
+  font-size: clamp(0.6rem, 0.95vw, 0.7rem);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  height: 22px;
+  line-height: 1.2;
+  padding: 1px 22px 1px 6px;
+  background-color: #0f172a !important;
+  border: 1px solid rgba(102, 252, 241, 0.35);
+  border-radius: 4px;
+  color: #38bdf8 !important;
+  outline: none;
+  transition: all 0.2s ease;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.osc-input-number:hover, .osc-input-number:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(102, 252, 241, 0.3);
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.osc-unit-badge {
+  position: absolute;
+  right: 6px;
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--cyan);
+  pointer-events: none;
+}
+
 /* ── Focused Channel Tabs & Card ── */
 .osc-channel-tabs-bar {
   display: flex;
@@ -2849,8 +2898,8 @@ select.prop-input option,
 .osc-channel-tab.ch3 { color: #F43F5E; }
 .osc-channel-tab.ch3.active { background: rgba(244, 63, 94, 0.18); border-color: rgba(244, 63, 94, 0.4); box-shadow: 0 0 10px rgba(244, 63, 94, 0.2); }
 
-.osc-channel-tab.ch4 { color: #4ADE80; }
-.osc-channel-tab.ch4.active { background: rgba(74, 222, 128, 0.18); border-color: rgba(74, 222, 128, 0.4); box-shadow: 0 0 10px rgba(74, 222, 128, 0.2); }
+.osc-channel-tab.ch4 { color: #34D399; }
+.osc-channel-tab.ch4.active { background: rgba(52, 211, 153, 0.18); border-color: rgba(52, 211, 153, 0.4); box-shadow: 0 0 10px rgba(52, 211, 153, 0.2); }
 
 .osc-channel-tab.math { color: #FB923C; }
 .osc-channel-tab.math.active { background: rgba(251, 146, 60, 0.18); border-color: rgba(251, 146, 60, 0.4); box-shadow: 0 0 10px rgba(251, 146, 60, 0.2); }
@@ -2878,7 +2927,7 @@ select.prop-input option,
 .osc-focused-card.ch1 { border-left-color: #FACC15; }
 .osc-focused-card.ch2 { border-left-color: #38BDF8; }
 .osc-focused-card.ch3 { border-left-color: #F43F5E; }
-.osc-focused-card.ch4 { border-left-color: #4ADE80; }
+.osc-focused-card.ch4 { border-left-color: #34D399; }
 .osc-focused-card.math { border-left-color: #FB923C; }
 
 .ch-focused-head {
@@ -2897,7 +2946,7 @@ select.prop-input option,
 .osc-focused-card.ch1 .ch-focused-title { color: #FACC15; }
 .osc-focused-card.ch2 .ch-focused-title { color: #38BDF8; }
 .osc-focused-card.ch3 .ch-focused-title { color: #F43F5E; }
-.osc-focused-card.ch4 .ch-focused-title { color: #4ADE80; }
+.osc-focused-card.ch4 .ch-focused-title { color: #34D399; }
 .osc-focused-card.math .ch-focused-title { color: #FB923C; }
 
 /* Quick Toggles: Coupling (DC/AC/GND) & Invert (INV) */
@@ -3107,6 +3156,74 @@ select.prop-input option,
 .btn-save:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(36,200,219,0.45);
+}
+
+/* ── Modal Asistente de Síntesis CAD (E12/E24/E96) ── */
+.circuit-synthesizer-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 14, 0.88);
+  backdrop-filter: blur(8px);
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+}
+
+.circuit-synthesizer-modal.open {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.synthesizer-dialog {
+  width: 720px;
+  max-width: 94vw;
+  max-height: 90vh;
+  background: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(56, 189, 248, 0.15);
+  display: flex;
+  flex-direction: column;
+  color: #e2e8f0;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  overflow: hidden;
+  transform: scale(0.95) translateY(12px);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.circuit-synthesizer-modal.open .synthesizer-dialog {
+  transform: scale(1) translateY(0);
+}
+
+.synth-params-container {
+  background: rgba(15, 23, 42, 0.85);
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.synth-telemetry-container {
+  background: rgba(11, 17, 32, 0.95);
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  font-family: 'JetBrains Mono', 'Inter', monospace;
+  font-size: 0.85rem;
+  color: #38bdf8;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  line-height: 1.5;
+}
+
+.synth-telemetry-container strong {
+  color: #f8fafc;
 }
 
 /* ══ 8. FOOTER ═══════════════════════════════════ */
@@ -5549,6 +5666,16 @@ select.btn-text-only.sim-locked {
   font-size: var(--font-sm, 0.8rem);
   outline: none;
   transition: var(--transition-fast, all 0.12s ease-out);
+}
+
+.feedback-select {
+  cursor: pointer;
+}
+
+.feedback-select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+  padding: 6px 10px;
 }
 
 .feedback-select:focus,

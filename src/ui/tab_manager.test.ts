@@ -285,4 +285,36 @@ describe("TabManager", () => {
 
     localStorage.removeItem("astryd_workspace_session_v1");
   });
+
+  test("renombra una pestaña correctamente", () => {
+    const harness = createHarness();
+    const tab = harness.manager.createNewTab("Original")!;
+    expect(harness.manager.renameTab(tab.id, "Nuevo Nombre")).toBe(true);
+    expect(harness.manager.getTabById(tab.id)?.name).toBe("Nuevo Nombre");
+    expect(harness.manager.getTabById(tab.id)?.unsaved).toBe(true);
+  });
+
+  test("duplica una pestaña clonando sus datos", () => {
+    const harness = createHarness();
+    const original = harness.manager.createNewTab("Fuente")!;
+    const duplicate = harness.manager.duplicateTab(original.id);
+    expect(duplicate).not.toBeNull();
+    expect(duplicate?.name).toBe("Fuente (Copia)");
+    expect(harness.manager.getTabs()).toHaveLength(2);
+    expect(harness.manager.getActiveTabId()).toBe(duplicate?.id);
+  });
+
+  test("cierra otras pestañas manteniendo solo la objetivo", async () => {
+    const harness = createHarness();
+    const tab1 = harness.manager.createNewTab("Tab 1")!;
+    const tab2 = harness.manager.createNewTab("Tab 2")!;
+    const tab3 = harness.manager.createNewTab("Tab 3")!;
+
+    expect(harness.manager.getTabs()).toHaveLength(3);
+
+    await harness.manager.closeOtherTabs(tab2.id);
+
+    expect(harness.manager.getTabs()).toHaveLength(1);
+    expect(harness.manager.getTabs()[0]?.id).toBe(tab2.id);
+  });
 });

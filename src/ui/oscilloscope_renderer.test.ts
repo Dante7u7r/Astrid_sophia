@@ -27,6 +27,8 @@ function createMockContext(): CanvasRenderingContext2D {
     arc: vi.fn(),
     stroke: vi.fn(),
     fill: vi.fn(),
+    rect: vi.fn(),
+    clip: vi.fn(),
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
     fillText: vi.fn(),

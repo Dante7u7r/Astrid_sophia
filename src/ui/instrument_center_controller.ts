@@ -15,8 +15,6 @@ export class InstrumentCenterController {
     const center = document.querySelector("#bottom-dock") as HTMLElement | null;
     const backdrop = document.querySelector("#instrument-center-backdrop") as HTMLElement | null;
     const closeButton = document.querySelector("#instrument-center-close") as HTMLButtonElement | null;
-    const menuButton = document.querySelector("#instruments-menu-btn") as HTMLButtonElement | null;
-    const dockMenuItem = document.querySelector("#menu-toggle-dock") as HTMLButtonElement | null;
     if (!center || !closeButton) return;
 
     const closeCenter = (): void => {
@@ -39,17 +37,6 @@ export class InstrumentCenterController {
 
     closeButton.addEventListener("click", closeCenter);
     if (backdrop) backdrop.addEventListener("click", closeCenter);
-    menuButton?.addEventListener("click", () => {
-      if (center.classList.contains("collapsed")) {
-        this.dependencies.getPanelLayoutManager()?.setPanelCollapsed("dock", false);
-      }
-    });
-    dockMenuItem?.addEventListener("click", () => {
-      if (center.classList.contains("collapsed")) {
-        this.dependencies.getPanelLayoutManager()?.setPanelCollapsed("dock", false);
-      }
-    });
-
     document.addEventListener("keydown", (event) => {
       if (center.classList.contains("collapsed")) return;
 

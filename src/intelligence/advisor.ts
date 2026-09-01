@@ -229,8 +229,8 @@ export const ADVISOR_RULES: readonly AdvisorRule[] = [
     version: 1,
     evaluate: (context) => countTypes(context, /bsim3|bsim4/i) > 0 ? {
       title: "Trata BSIM como modelo experimental",
-      explanation: "La implementación parcial no reproduce la corriente de referencia y no sirve todavía para predicción física.",
-      evidence: `${countTypes(context, /bsim3|bsim4/i)} dispositivos BSIM; la caracterización NMOS BSIM3 contra ngspice difiere entre 97.9 % y 99.3 %.`,
+      explanation: "La correlación limitada a cinco puntos DC de NMOS BSIM3 no certifica BSIM completo ni BSIM4. La implementación sigue siendo experimental; no es una validación general para predicción física.",
+      evidence: `${countTypes(context, /bsim3|bsim4/i)} dispositivos BSIM; el reporte versionado registra 5/5 puntos NMOS BSIM3 frente a ngspice dentro de tolerancia (VGS=0.8–1.6 V, VDS=1 V, W=10 µm, L=0.18 µm, 27 °C), con errores relativos de corriente de 1.27 % a 6.89 % y tolerancia relativa del 25 %. Referencia: validation/reports/bsim-characterization.md.`,
       safetyClass: "scientific-review-required",
       confidence: 1,
     } : null,

@@ -181,6 +181,33 @@ describe("ComponentPaletteController", () => {
     expect(card?.style.display).toBe("flex");
   });
 
+  it("renderiza metadatos SPICE hostiles como texto en la paleta dinámica", () => {
+    document.body.innerHTML = `<div id="left-panel-body"></div>`;
+    initComponentPaletteController();
+    document.querySelector<HTMLButtonElement>("#btn-palette-view-list")!.click();
+
+    const hostileName = "<img/onerror=alert(1)>";
+    const hostileDescription = "<script>alert(2)</script>";
+    const card = addSubcircuitCardToPalette({
+      name: hostileName,
+      pinNames: ["IN", "OUT"],
+      pinCount: 2,
+      pinLabels: { 0: "IN", 1: "OUT" },
+      description: hostileDescription,
+      category: "Macromodelos",
+      suggestedType: "subcircuit",
+      defaultParams: {},
+      rawNetlist: `.SUBCKT ${hostileName} IN OUT\n.ENDS ${hostileName}`,
+    });
+
+    expect(card?.querySelector(".comp-name")?.textContent).toBe(hostileName);
+    expect(card?.querySelector(".comp-desc")?.textContent).toContain(hostileName);
+    expect(card?.querySelector("img, script, iframe, object, embed")).toBeNull();
+    expect(card?.querySelector("[onerror], [onload], [onclick]")).toBeNull();
+
+    document.querySelector<HTMLButtonElement>("#btn-palette-view-grid")!.click();
+  });
+
   it("renderiza el catalogo completo de componentes de forma dinamica en #left-panel-body", () => {
     document.body.innerHTML = `<div id="left-panel-body"></div>`;
     initComponentPaletteController();

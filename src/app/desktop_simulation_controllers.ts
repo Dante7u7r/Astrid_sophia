@@ -27,7 +27,7 @@ import {
   createSimulationController,
   type SimulationController,
 } from "./simulation_controller";
-import { updateQaState } from "../testing/qa_state";
+import { recordQaSolverResult, updateQaState } from "../testing/qa_state";
 
 type LogType = "system" | "send" | "receive" | "error";
 type InvokeTauri = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -128,6 +128,7 @@ export function createDesktopSimulationControllers(
     getSimulationRunner: () => simulationRunner,
     circuitState: deps.circuitState,
     setSimulationRunning,
+    onSolverResult: recordQaSolverResult,
     updateCanvasRendering: deps.updateCanvasRendering,
     updateOscilloscopeRendering: deps.updateOscilloscopeRendering,
     addLog: deps.addLog,
@@ -162,6 +163,7 @@ export function createDesktopSimulationControllers(
     getSimulationRunner: () => simulationRunner,
     getSimulationSettings: deps.getSimulationSettings,
     setSimulationSettings: deps.setSimulationSettings,
+    onSolverResult: recordQaSolverResult,
     setSimulationRunning,
     setSimulationPaused,
     setActiveAnalysisMode,

@@ -283,8 +283,7 @@ pub fn solve_newton_raphson(
             &switch_frozen_states,
             numerical_settings,
         ) {
-            let (sw_changed, new_sw) =
-                check_switch_convergence(&solution, &switch_frozen_states);
+            let (sw_changed, new_sw) = check_switch_convergence(&solution, &switch_frozen_states);
             if !sw_changed {
                 let res = build_simulation_result(netlist, n, m, vsource_map, &solution, 1)?;
                 let mut final_voltages = vec![0.0; n + 1];

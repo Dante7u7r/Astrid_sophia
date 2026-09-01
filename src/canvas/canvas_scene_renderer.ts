@@ -1,4 +1,5 @@
 import { drawComponentSymbol } from "./component_renderer";
+import { getSchematicThemeColors } from "./schematic_theme";
 import {
   createComponentLookup,
   createGridRenderPlan,
@@ -21,15 +22,22 @@ import type { AlignmentGuide } from "./alignment_guidelines";
 import { getVisibleWorldBounds, screenToWorld } from "./viewport_camera";
 import {
   calculateWireMidpoint,
+  findJunctionInfoAt,
   findWireCrossings,
   findWireJunctionPoints,
+  resolveNetLabelForWire,
   wirePathIntersects,
 } from "./wiring_model";
 import { getActiveNetHighlight, type NetHighlightResult } from "./net_highlight";
 import { drawBusSlash, getBusWidth, isBusLabel } from "./bus_wiring";
 import { CurrentAnimationRenderer } from "./current_animation_renderer";
 import { ThermalHeatmapRenderer } from "./thermal_heatmap_renderer";
-import { renderPinTelemetryHud, renderWireTelemetryHud } from "./hud_inspector";
+import {
+  renderComponentTelemetryHud,
+  renderJunctionTelemetryHud,
+  renderPinTelemetryHud,
+  renderWireTelemetryHud,
+} from "./hud_inspector";
 import { SchematicSpatialIndex } from "./spatial_index";
 import type {
   BoundingBox,
@@ -205,6 +213,7 @@ export class CanvasSceneRenderer {
         this.host.activePinForWire,
         this.host.tempWireEnd,
         (start, end) => this.host.generateOrthogonalPath(start, end),
+        isClassroom,
       );
     }
     // 6. Draw Highlights & Pins
@@ -213,11 +222,31 @@ export class CanvasSceneRenderer {
     // 6b. Draw Visual ERC Issues
     this.drawERCIssues(componentById, pinCache);
 
-    drawProbeBadges(this.ctx, probes);
+    // Calcular lecturas en vivo para las sondas de osciloscopio
+    const probeVoltages: { ch1?: number; ch2?: number; ch3?: number; ch4?: number } = {};
+    const probeKeys = ["ch1", "ch2", "ch3", "ch4"] as const;
+    for (const ch of probeKeys) {
+      const pt = probes[ch];
+      if (pt) {
+        for (const comp of visibleComponents) {
+          const pins = this.getPinsCached(comp, pinCache);
+          for (const pin of pins) {
+            if (Math.hypot(pin.x - pt.x, pin.y - pt.y) < 8) {
+              const k = `${pin.componentId}:${pin.pinIndex}`;
+              if (_voltageMap[k] !== undefined) {
+                probeVoltages[ch] = _voltageMap[k];
+              }
+            }
+          }
+        }
+      }
+    }
+
+    drawProbeBadges(this.ctx, probes, isClassroom, probeVoltages);
     drawSParameterMarkers(this.ctx, sparMarkers);
     if (!this.hasOverlayRenderer) {
-      drawSelectionBox(this.ctx, this.host.selectionStart, this.host.selectionEnd);
-      drawAlignmentGuides(this.ctx, this.host.activeAlignmentGuides ?? []);
+      drawSelectionBox(this.ctx, this.host.selectionStart, this.host.selectionEnd, isClassroom);
+      drawAlignmentGuides(this.ctx, this.host.activeAlignmentGuides ?? [], isClassroom);
     }
 
     this.ctx.restore();
@@ -250,6 +279,8 @@ export class CanvasSceneRenderer {
     });
     if (!gridPlan) return;
 
+    const theme = getSchematicThemeColors();
+
     this.ctx.save();
     this.ctx.setTransform(
       this.host.zoom * dpr, 0,
@@ -257,7 +288,7 @@ export class CanvasSceneRenderer {
       this.host.offsetX * dpr,
       this.host.offsetY * dpr,
     );
-    this.ctx.fillStyle = "rgba(148, 163, 184, 0.28)";
+    this.ctx.fillStyle = theme.grid.dotColor;
 
     let path = this.gridPathCache?.key === gridPlan.cacheKey ? this.gridPathCache.path : null;
     if (!path) {
@@ -345,6 +376,9 @@ export class CanvasSceneRenderer {
       ? this.spatialIndex.queryVisibleWires(visibleWorldBounds)
       : this.host.wires;
 
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    const theme = getSchematicThemeColors(isClassroom);
+
     for (const wire of wiresToProcess) {
       let startPt: Point2D | undefined;
       if (wire.from.isJunction && wire.from.junctionPos) {
@@ -395,17 +429,17 @@ export class CanvasSceneRenderer {
       const isBus = wire.isBus || (wire.label ? isBusLabel(wire.label) : false);
       const busWidth = wire.busWidth ?? (wire.label ? getBusWidth(wire.label) : 1);
 
-      let strokeColor = isBus ? "#818CF8" : "#64748B";
+      let strokeColor = isBus ? theme.wire.bus : theme.wire.normal;
       if (isSelected) {
-        strokeColor = "#38BDF8";
+        strokeColor = theme.wire.selected;
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 4.8 : 3.0;
       } else if (isHovered) {
-        strokeColor = isBus ? "#A5B4FC" : "#94A3B8";
+        strokeColor = isBus ? theme.wire.busHovered : theme.wire.hovered;
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 4.4 : 2.4;
       } else if (isNetHighlighted) {
-        strokeColor = "#38BDF8";
+        strokeColor = theme.wire.netHighlighted;
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = isBus ? 4.4 : 2.4;
       } else if (wire.color) {
@@ -419,13 +453,13 @@ export class CanvasSceneRenderer {
         const v = voltageMap[fromKey] ?? voltageMap[toKey];
         if (v !== undefined && !isNaN(v) && (this.host.showCurrentAnimation !== false || Object.keys(voltageMap).length > 0)) {
           if (Math.abs(v) < 0.05) {
-            strokeColor = "#475569"; // Tierra / 0V (Slate profundo)
+            strokeColor = theme.wire.ground0V; // Tierra / 0V
           } else if (v >= 4.5) {
-            strokeColor = "#F43F5E"; // Nivel ALTO / VCC (Rojo / Carmesí)
+            strokeColor = theme.wire.highVcc; // Nivel ALTO / VCC
           } else if (v < -0.5) {
-            strokeColor = "#A855F7"; // Tensión Negativa (Violeta)
+            strokeColor = theme.wire.negRail; // Tensión Negativa
           } else {
-            strokeColor = "#0284C7"; // Señal activa (Cian / Azul cielo)
+            strokeColor = theme.wire.activeSignal; // Señal activa
           }
         }
         this.ctx.strokeStyle = strokeColor;
@@ -524,21 +558,66 @@ export class CanvasSceneRenderer {
           const vWire = voltageMap[fromKey] ?? voltageMap[toKey];
           const iWire = branchCurrents[`${wire.id}:I`] ?? branchCurrents[fromKey] ?? branchCurrents[toKey];
           const wireNodeId = nodeMap ? (nodeMap[fromKey] ?? nodeMap[toKey]) : undefined;
-          renderWireTelemetryHud(this.ctx, wire, vWire, iWire, wireNodeId, this.host.transientResults);
+          const resolvedNetLabel = resolveNetLabelForWire(wire, this.host.wires, nodeMap);
+          renderWireTelemetryHud(this.ctx, wire, vWire, iWire, wireNodeId, this.host.transientResults, {
+            netLabel: resolvedNetLabel,
+            nodeId: wireNodeId,
+            fromDescriptor: `${wire.from.componentId}.${wire.from.pinIndex}`,
+            toDescriptor: `${wire.to.componentId}.${wire.to.pinIndex}`,
+          });
         }
       }
     }
 
-    // Dibujar Nodos de Unión en T (T-Junction Dots) con diseño profesional EDA
-    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+    // Dibujar Nodos de Unión en T (T-Junction Dots) con diseño profesional EDA y soporte de Hover
     for (const jPt of topology.junctions) {
-      this.ctx.fillStyle = isClassroom ? "#334155" : "#64748B";
-      this.ctx.strokeStyle = isClassroom ? "#FFFFFF" : "#0F172A";
-      this.ctx.lineWidth = 1.5;
-      this.ctx.beginPath();
-      this.ctx.arc(jPt.x, jPt.y, 3.5, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.stroke();
+      const isJunctionHovered = Boolean(
+        this.host.hoveredPin &&
+        (this.host.hoveredPin.isJunction || this.host.hoveredPin.componentId.startsWith("junction_")) &&
+        Math.hypot(this.host.hoveredPin.x - jPt.x, this.host.hoveredPin.y - jPt.y) < 7,
+      );
+
+      if (isJunctionHovered) {
+        // Halo luminoso de captura / hover
+        this.ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+        this.ctx.strokeStyle = "#38BDF8";
+        this.ctx.lineWidth = 1.8;
+        this.ctx.beginPath();
+        this.ctx.arc(jPt.x, jPt.y, 6.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = "#38BDF8";
+        this.ctx.beginPath();
+        this.ctx.arc(jPt.x, jPt.y, 4, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        if (this.host.showTelemetryHud !== false) {
+          const jInfo = findJunctionInfoAt(jPt, this.host.wires, nodeMap, voltageMap);
+          const jNodeId = jInfo?.nodeId;
+          const jNetLabel = jInfo?.netLabel;
+          const jVolt = jInfo?.voltage ?? (jNodeId !== undefined ? voltageMap[jNodeId] : undefined);
+          const jCurrent = jNodeId !== undefined ? branchCurrents[jNodeId] : undefined;
+          renderJunctionTelemetryHud(
+            this.ctx,
+            jPt,
+            jNodeId,
+            jNetLabel,
+            jInfo?.branchCount ?? 3,
+            jVolt,
+            jCurrent,
+            this.host.transientResults,
+          );
+        }
+      } else {
+        this.ctx.fillStyle = theme.wire.normal;
+        this.ctx.strokeStyle = isClassroom ? "#FFFFFF" : "#0F172A";
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.arc(jPt.x, jPt.y, 3.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+      }
     }
 
     this.ctx.restore();
@@ -637,11 +716,43 @@ export class CanvasSceneRenderer {
           this.ctx.fill();
 
           // Draw HUD de Telemetría de Pin/Nodo
-          const nodeId = nodeMap[pinKey];
-          if (this.host.showTelemetryHud !== false && isHovered && nodeId) {
+          if (this.host.showTelemetryHud !== false && isHovered && !pin.isJunction) {
+            const nodeId = nodeMap[pinKey];
             const volt = voltageMap[pinKey];
             const current = branchCurrents[pinKey] ?? branchCurrents[`${pin.componentId}:I`];
-            renderPinTelemetryHud(this.ctx, pin, nodeId, volt, current, this.host.transientResults);
+
+            let connCount = 0;
+            for (const w of this.host.wires) {
+              if (
+                (w.from.componentId === pin.componentId && w.from.pinIndex === pin.pinIndex) ||
+                (w.to.componentId === pin.componentId && w.to.pinIndex === pin.pinIndex)
+              ) {
+                connCount++;
+              }
+            }
+
+            let ercWarning: string | undefined;
+            if (this.host.ercIssues && this.host.ercIssues.length > 0) {
+              const issue = this.host.ercIssues.find(
+                (i) => i.componentId === pin.componentId && (i.pinIndex === pin.pinIndex || i.pinIndex === undefined),
+              );
+              if (issue) ercWarning = issue.message;
+            }
+
+            renderPinTelemetryHud(
+              this.ctx,
+              pin,
+              nodeId,
+              volt,
+              current,
+              this.host.transientResults,
+              {
+                componentType: comp.type,
+                componentValue: comp.value,
+                connectedCount: connCount,
+                ercWarning,
+              },
+            );
           }
         } else if (connectedPinKeys.has(pinKey)) {
           // Terminal conectado físicamente (Punto de contacto EDA consolidado)
@@ -661,6 +772,26 @@ export class CanvasSceneRenderer {
           this.ctx.arc(pin.x, pin.y, 3, 0, Math.PI * 2);
           this.ctx.fill();
         }
+      }
+    }
+
+    // Draw HUD de Telemetría y Potencia de Componente si está en hover
+    if (this.host.showTelemetryHud !== false && this.host.hoveredComponent && !this.host.hoveredPin) {
+      const comp = this.host.hoveredComponent;
+      const compPins = pinCache.get(comp.id) ?? this.host.getComponentPins(comp);
+      let vDrop: number | undefined;
+      if (compPins.length >= 2) {
+        const v0 = voltageMap[`${comp.id}:0`];
+        const v1 = voltageMap[`${comp.id}:1`];
+        if (v0 !== undefined && v1 !== undefined) {
+          vDrop = Math.abs(v0 - v1);
+        }
+      } else if (compPins.length === 1) {
+        vDrop = voltageMap[`${comp.id}:0`];
+      }
+      const iComp = branchCurrents[`${comp.id}:I`] ?? branchCurrents[`${comp.id}:0`];
+      if (vDrop !== undefined || iComp !== undefined) {
+        renderComponentTelemetryHud(this.ctx, comp, vDrop, iComp);
       }
     }
 

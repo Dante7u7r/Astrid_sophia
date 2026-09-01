@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 import supportBundleSchema from "../../feedback/contracts/support-bundle.v2.schema.json";
 import eventSchema from "../../feedback/contracts/feedback-event.v1.schema.json";
@@ -88,7 +88,7 @@ describe("paquete redactado de soporte", () => {
 });
 
 describe("IntelligenceCenter UI & Asesor Component", () => {
-  it("renderiza el rack layout del Centro de Inteligencia y las tarjetas con badges de severidad", () => {
+  it("conserva historial, privacidad y feedback junto a las tarjetas del asesor", async () => {
     const container = document.createElement("div");
     container.id = "inst-intelligence";
     document.body.appendChild(container);
@@ -98,7 +98,7 @@ describe("IntelligenceCenter UI & Asesor Component", () => {
       query: () => Promise.resolve({ events: [completed], hasMore: false }),
       export: () => Promise.resolve({ events: [completed], hasMore: false }),
       delete: () => Promise.resolve({ rowsDeleted: 0 }),
-      emit: () => true,
+      emit: vi.fn(() => true),
       flush: () => Promise.resolve(),
     };
 
@@ -107,6 +107,53 @@ describe("IntelligenceCenter UI & Asesor Component", () => {
 
     const list = document.querySelector("#intelligence-recommendations-list");
     expect(list).not.toBeNull();
+    for (const id of [
+      "intelligence-kind-filter",
+      "intelligence-history-body",
+      "intelligence-privacy-viewer",
+      "intelligence-feedback-form",
+      "intelligence-feedback-submit",
+      "intelligence-content-confirm",
+      "intelligence-feedback-category",
+      "intelligence-expected-value",
+      "intelligence-expected-unit",
+      "intelligence-feedback-note",
+      "intelligence-version-comparison",
+      "intelligence-shadow-evaluate",
+      "intelligence-shadow-rollback",
+      "intelligence-shadow-disable",
+      "intelligence-delete-expired",
+      "intelligence-delete-confirm",
+      "intelligence-delete-all",
+    ]) {
+      expect(document.getElementById(id), `${id} debe existir`).not.toBeNull();
+    }
+    expect(document.querySelectorAll('[name="feedback-rating"]')).toHaveLength(3);
+    expect(document.querySelectorAll("#intelligence-empty-state")).toHaveLength(1);
+    expect(document.querySelectorAll("#intelligence-recommendations-empty-state")).toHaveLength(1);
+
+    await center.refresh();
+    const row = document.querySelector<HTMLTableRowElement>("#intelligence-history-body tr");
+    expect(row).not.toBeNull();
+    row!.click();
+    expect(document.getElementById("intelligence-privacy-viewer")?.textContent).toContain(completed.eventId);
+    expect(document.getElementById("intelligence-empty-state")?.hidden).toBe(true);
+    expect(document.getElementById("intelligence-recommendations-empty-state")?.hidden).toBe(false);
+
+    const form = document.getElementById("intelligence-feedback-form") as HTMLFormElement;
+    const rating = document.querySelector<HTMLInputElement>('[name="feedback-rating"][value="incorrect"]')!;
+    rating.checked = true;
+    (document.getElementById("intelligence-feedback-note") as HTMLTextAreaElement).value = "Resultado revisado.";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(mockBus.emit).not.toHaveBeenCalled();
+
+    (document.getElementById("intelligence-content-confirm") as HTMLInputElement).checked = true;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(mockBus.emit).toHaveBeenCalledWith(
+      "user.feedback_submitted",
+      expect.objectContaining({ subjectEventId: completed.eventId, rating: "incorrect", note: "Resultado revisado." }),
+      { userContentConfirmed: true },
+    ));
 
     // Disparar evento de recomendaciones con diferentes clases de seguridad
     window.dispatchEvent(
@@ -146,4 +193,3 @@ describe("IntelligenceCenter UI & Asesor Component", () => {
     container.remove();
   });
 });
-

@@ -153,18 +153,6 @@ export interface SimulationRunner {
     | null;
 }
 
-// ==========================================================================
-// Estado interno del módulo (privado, cero exportación)
-// ==========================================================================
-
-let coSimulationWorker: Worker | null = null;
-
-let unlistenStream: (() => void) | null = null;
-let unlistenError: (() => void) | null = null;
-
-/** Latch del paso temporal dt. Se actualiza en cada llamada a
- *  startInteractiveTransient() y es consumido por el listener IPC. */
-let currentDt: number = 1e-4;
 let nextRunId = 1;
 
 // ==========================================================================
@@ -173,7 +161,12 @@ let nextRunId = 1;
 
 export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): SimulationRunner {
   let activeContext: SimulationRunContext | null = null;
+  let coSimulationWorker: Worker | null = null;
+  let unlistenStream: (() => void) | null = null;
+  let unlistenError: (() => void) | null = null;
+  let currentDt = 1e-4;
   let isPaused: boolean = false;
+  let lifecycleEpoch = 0;
 
   const releaseLocalResources = (): void => {
     isPaused = false;
@@ -198,7 +191,6 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
     context: SimulationRunContext,
   ): void => {
     if (activeContext?.runId !== context.runId) return;
-    callbacks.onSimulationComplete(finalTime, context);
     if (context.feedbackRun) {
       recordConvergence(context.feedbackRun, { method: "interactive-transient" });
       completeFeedbackRun(context.feedbackRun, {
@@ -206,9 +198,28 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         converged: true,
       });
     }
-    callbacks.onSimulationStateChanged(false, context);
     activeContext = null;
     releaseLocalResources();
+    callbacks.onSimulationStateChanged(false, context);
+    callbacks.onSimulationComplete(finalTime, context);
+  };
+
+  const failSimulation = (
+    error: unknown,
+    context: SimulationRunContext,
+    phase: "iteration" | "ipc",
+  ): void => {
+    if (activeContext?.runId !== context.runId) return;
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : JSON.stringify(error) ?? String(error);
+    if (context.feedbackRun) failFeedbackRun(context.feedbackRun, error, phase);
+    activeContext = null;
+    releaseLocalResources();
+    callbacks.onSimulationStateChanged(false, context);
+    callbacks.onSimulationError(message, context);
   };
 
   return {
@@ -225,13 +236,25 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       ownerTabId: string,
       feedbackRun?: FeedbackRunHandle,
     ): Promise<void> {
-      // ENMIENDA 2: Blindaje de doble listener
+      if (!Number.isFinite(settings.dt) || settings.dt <= 0) {
+        throw new RangeError("El paso temporal interactivo debe ser finito y mayor que cero.");
+      }
+      if (!Number.isFinite(settings.tMax) || settings.tMax < 0) {
+        throw new RangeError("La duración interactiva debe ser finita y no negativa (0 activa modo continuo).");
+      }
+
+      const startEpoch = ++lifecycleEpoch;
+
+      // Desacoplar inmediatamente la corrida previa evita aceptar frames mientras
+      // el backend confirma la cancelación.
       if (activeContext) {
         const previousContext = activeContext;
+        activeContext = null;
         if (previousContext.feedbackRun) cancelFeedbackRun(previousContext.feedbackRun, "replaced");
-        await invoke("stop_interactive_transient", { runId: previousContext.runId });
-        callbacks.onSimulationStateChanged(false, previousContext);
         releaseLocalResources();
+        callbacks.onSimulationStateChanged(false, previousContext);
+        await invoke("stop_interactive_transient", { runId: previousContext.runId });
+        if (startEpoch !== lifecycleEpoch) return;
       }
 
       const context: SimulationRunContext = {
@@ -252,12 +275,14 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         (c) => c.type.startsWith("mcu_") || c.type === "arduino_uno" || Boolean(c.firmware),
       );
 
+      let runWorker: Worker | null = null;
       if (hasMcus) {
         // Crear el worker de co-simulación digital
-        coSimulationWorker = new Worker(
+        runWorker = new Worker(
           new URL('./co_simulation_worker.ts', import.meta.url),
           { type: 'module' }
         );
+        coSimulationWorker = runWorker;
 
         // Mapear firmwares de componentes
         const firmware: Record<string, Uint8Array> = {};
@@ -268,14 +293,14 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         }
 
         // Inicializar runtimes MCU en el worker
-        coSimulationWorker.postMessage({
+        runWorker.postMessage({
           type: "init_interactive",
           netlist,
           firmware,
         });
 
         // Manejar respuestas del worker
-        coSimulationWorker.onmessage = (e) => {
+        runWorker.onmessage = (e) => {
           const data = e.data;
           if (
             data.type === "frame_processed"
@@ -292,8 +317,11 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         coSimulationWorker = null;
       }
 
-      // Registrar listener IPC para frames analógicos entrantes
-      unlistenStream = await listen<SimulationFrame>('sim-frame-update', (event) => {
+      // Registrar listener IPC para frames analógicos entrantes. Cada cleanup se
+      // conserva localmente hasta confirmar que esta corrida sigue siendo la activa.
+      let streamCleanup: (() => void) | null = null;
+      try {
+        streamCleanup = await listen<SimulationFrame>('sim-frame-update', (event) => {
         const frame = event.payload;
         if (
           frame.runId !== context.runId
@@ -303,8 +331,8 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
         }
 
         // Delegar procesamiento del MCU al Web Worker
-        if (coSimulationWorker) {
-          coSimulationWorker.postMessage({
+        if (runWorker) {
+          runWorker.postMessage({
             type: "process_frame",
             frame,
             dt: currentDt
@@ -315,22 +343,48 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
             completeSimulation(frame.time, context);
           }
         }
-      });
+        });
+      } catch (error: unknown) {
+        failSimulation(error, context, "ipc");
+        throw error;
+      }
+      if (startEpoch !== lifecycleEpoch || activeContext?.runId !== context.runId) {
+        streamCleanup();
+        runWorker?.terminate();
+        return;
+      }
+      unlistenStream = streamCleanup;
 
       // Registrar listener IPC para errores de simulación
-      unlistenError = await listen<SimulationStreamError>('sim-frame-error', (event) => {
+      let errorCleanup: (() => void) | null = null;
+      try {
+        errorCleanup = await listen<SimulationStreamError>('sim-frame-error', (event) => {
         if (
           event.payload.runId !== context.runId
           || activeContext?.runId !== context.runId
         ) {
           return;
         }
-        const error = typeof event.payload.error === "string"
-          ? event.payload.error
-          : JSON.stringify(event.payload.error);
-        if (context.feedbackRun) failFeedbackRun(context.feedbackRun, error, "iteration");
-        callbacks.onSimulationError(error, context);
-      });
+        failSimulation(event.payload.error, context, "iteration");
+        void invoke("stop_interactive_transient", { runId: context.runId }).catch((error: unknown) => {
+          TelemetryPanel.logError(error instanceof Error ? error.message : String(error));
+        });
+        });
+      } catch (error: unknown) {
+        failSimulation(error, context, "ipc");
+        throw error;
+      }
+      if (startEpoch !== lifecycleEpoch || activeContext?.runId !== context.runId) {
+        errorCleanup();
+        if (unlistenStream === streamCleanup) {
+          streamCleanup();
+          unlistenStream = null;
+        }
+        runWorker?.terminate();
+        if (coSimulationWorker === runWorker) coSimulationWorker = null;
+        return;
+      }
+      unlistenError = errorCleanup;
 
       // Arrancar el backend Rust
       try {
@@ -346,13 +400,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(errorMsg);
-        if (context.feedbackRun) failFeedbackRun(context.feedbackRun, err, "ipc");
-        if (activeContext?.runId === context.runId) {
-          callbacks.onSimulationStateChanged(false, context);
-          activeContext = null;
-          releaseLocalResources();
-          callbacks.onSimulationError(errorMsg, context);
-        }
+        failSimulation(err, context, "ipc");
         throw err;
       }
     },
@@ -369,7 +417,16 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
     },
 
     async stopInteractiveTransient(): Promise<void> {
+      lifecycleEpoch += 1;
       const context = activeContext;
+      if (context && activeContext?.runId === context.runId) {
+        activeContext = null;
+        if (context.feedbackRun) cancelFeedbackRun(context.feedbackRun, "user");
+        releaseLocalResources();
+        callbacks.onSimulationStateChanged(false, context);
+      } else {
+        releaseLocalResources();
+      }
       try {
         await invoke(
           'stop_interactive_transient',
@@ -378,15 +435,6 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(errorMsg);
-      } finally {
-        if (context && activeContext?.runId === context.runId) {
-          if (context.feedbackRun) cancelFeedbackRun(context.feedbackRun, "user");
-          callbacks.onSimulationStateChanged(false, context);
-          activeContext = null;
-        }
-
-        // ENMIENDA 3: Limpiar runtimes y desregistrar streams
-        releaseLocalResources();
       }
     },
 
@@ -395,7 +443,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       if (!context) return;
       try {
         await invoke('pause_interactive_transient', { runId: context.runId });
-        isPaused = true;
+        if (activeContext?.runId === context.runId) isPaused = true;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(`[Simulation Pause] Error al pausar simulación: ${errorMsg}`);
@@ -407,7 +455,7 @@ export function createSimulationRunner(callbacks: SimulationRunnerCallbacks): Si
       if (!context) return;
       try {
         await invoke('resume_interactive_transient', { runId: context.runId });
-        isPaused = false;
+        if (activeContext?.runId === context.runId) isPaused = false;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         TelemetryPanel.logError(`[Simulation Resume] Error al reanudar simulación: ${errorMsg}`);

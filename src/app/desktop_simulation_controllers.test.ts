@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     setSimulationPaused: vi.fn(),
   },
   updateQaState: vi.fn(),
+  recordQaSolverResult: vi.fn(),
 }));
 
 vi.mock("../simulation/simulation_runner", () => ({
@@ -59,6 +60,7 @@ vi.mock("../ui/simulation_controls", () => ({
 
 vi.mock("../testing/qa_state", () => ({
   updateQaState: mocks.updateQaState,
+  recordQaSolverResult: mocks.recordQaSolverResult,
 }));
 
 afterEach(() => {
@@ -72,6 +74,7 @@ afterEach(() => {
 describe("createDesktopSimulationControllers", () => {
   it("cablea runner, analisis avanzados, controller y controles", async () => {
     const setActiveAnalysisMode = vi.fn();
+    const setSimulationSettings = vi.fn();
     const bindTransientResultsToTab = vi.fn();
     const tabManager = {
       getActiveTabId: vi.fn(() => "tab-1"),
@@ -84,6 +87,7 @@ describe("createDesktopSimulationControllers", () => {
       getOrchestrator: () => null,
       getOscilloscopePanel: () => null,
       getSimulationSettings: () => ({ dt: 1, tolerance: 2, maxIterations: 3 }),
+      setSimulationSettings,
       setActiveAnalysisMode,
       getSparPorts: vi.fn(() => []),
       getSparSweepSettings: vi.fn(() => ({ fStart: 1, fEnd: 10, pointsPerDecade: 2 })),
@@ -108,12 +112,17 @@ describe("createDesktopSimulationControllers", () => {
     (mocks.interactiveCallbacks!.setSimulationRunning as (running: boolean) => void)(true);
     expect(mocks.simulationControls.setSimulationRunning).toHaveBeenCalledWith(true);
     expect(mocks.updateQaState).toHaveBeenCalledWith({ simulationRunning: true });
+    (mocks.interactiveCallbacks!.onSolverResult as (solver: string) => void)("rust");
+    expect(mocks.recordQaSolverResult).toHaveBeenLastCalledWith("rust");
+    (mocks.simulationControllerDeps!.onSolverResult as (solver: string) => void)("typescript");
+    expect(mocks.recordQaSolverResult).toHaveBeenLastCalledWith("typescript");
 
     (mocks.simulationControllerDeps!.setActiveAnalysisMode as (mode: string) => void)("AC");
     expect(setActiveAnalysisMode).toHaveBeenCalledWith("AC");
     expect(mocks.updateQaState).toHaveBeenCalledWith({ lastSimulationMode: "AC" });
 
     expect((mocks.simulationControllerDeps!.getActiveTabId as () => string | null)()).toBe("tab-1");
+    expect(mocks.simulationControllerDeps!.setSimulationSettings).toBe(setSimulationSettings);
     (mocks.simulationControllerDeps!.bindTransientResultsToTab as (tabId: string, results: unknown[]) => void)("tab-1", []);
     expect(bindTransientResultsToTab).toHaveBeenCalledWith("tab-1", []);
 

@@ -65,4 +65,43 @@ describe("DiagnosticModal", () => {
     expect(onFocus).toHaveBeenCalledWith("V1", undefined);
     expect(document.querySelector(".diagnostic-modal-backdrop")).toBeNull();
   });
+
+  test("elimina el listener de Escape al cerrar", () => {
+    const onDismiss = vi.fn();
+    DiagnosticModal.show({
+      title: "Error Detectado",
+      issues: [
+        {
+          id: "1",
+          severity: "error",
+          title: "Corto",
+          message: "V1 cortocircuitada",
+        },
+      ],
+      onDismiss,
+    });
+
+    const closeButton = document.querySelector("#btn-diag-close") as HTMLButtonElement;
+    closeButton.click();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  test("renderizar dos veces reemplaza el DOM y el listener anteriores", () => {
+    const onDismiss = vi.fn();
+    const modal = new DiagnosticModal({
+      title: "Error Detectado",
+      issues: [{ id: "1", severity: "error", title: "Corto", message: "V1 cortocircuitada" }],
+      onDismiss,
+    });
+
+    modal.render();
+    modal.render();
+    expect(document.querySelectorAll(".diagnostic-modal-backdrop")).toHaveLength(1);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
 });

@@ -27,21 +27,23 @@ const COMPONENT_BATCHES = [
     ["comp-led", "led", 2],
     ["comp-opamp", "opamp", 5],
     ["comp-lamp", "lamp", 2],
-    ["comp-relay", "relay", 4],
+    ["comp-relay", "relay", 5],
     ["comp-buzzer", "buzzer", 2],
   ],
   [
     ["comp-switch", "switch", 2],
-    ["comp-mcu-8051", "mcu_8051", 40],
-    ["comp-mcu-avr", "mcu_avr", 28],
-    ["comp-arduino-uno", "arduino_uno", 6],
-    ["comp-esp32", "esp32", 6],
-    ["comp-rpi-pico", "raspberry_pi_pico", 6],
+    ["comp-mcu_8051", "mcu_8051", 40],
+    ["comp-mcu_avr", "mcu_avr", 28],
+    ["comp-arduino_uno", "arduino_uno", 28],
+    ["comp-esp32", "esp32", 30],
+    ["comp-raspberry_pi_pico", "raspberry_pi_pico", 40],
     ["comp-subcircuit", "x", 4],
   ],
 ];
 
 let emptyCircuit;
+let restoreLeftAutoHide = false;
+let restoreRightAutoHide = false;
 
 async function appSnapshot() {
   return browser.execute(() => window.__ASTRYD_E2E__?.snapshot());
@@ -74,17 +76,25 @@ async function consoleText() {
 }
 
 async function clearConsole() {
+  await closeDiagnosticModal();
+  await closeFloatingInstruments();
+  const consolePanel = await $("#console-panel");
   const center = await $("#bottom-dock");
-  if ((await center.getAttribute("aria-hidden")) === "true") {
-    await openInstrumentsMenu();
-    await $("#menu-toggle-dock").click();
+  if (!(await consolePanel.isDisplayed())) {
+    if ((await center.getAttribute("aria-hidden")) === "true") {
+      await $("#btn-dock-toggle-bottom").click();
+    }
     await browser.waitUntil(
       async () => (await center.getAttribute("aria-hidden")) === "false",
       { timeoutMsg: "El centro de instrumentos no se abrio para limpiar la consola" },
     );
+    await $('.inst-tab[data-tab="console"]').click();
+    await consolePanel.waitForDisplayed({ timeoutMsg: "La consola no se abrió" });
   }
   await $("#clear-console-btn").click();
   await browser.waitUntil(async () => (await consoleText()).includes("Consola limpia"));
+  await closeFloatingInstruments();
+  await closeInstrumentCenter();
 }
 
 async function closeInstrumentCenter() {
@@ -96,6 +106,111 @@ async function closeInstrumentCenter() {
       { timeoutMsg: "El centro de instrumentos no se cerro" },
     );
   }
+}
+
+async function closeFloatingInstruments() {
+  await browser.execute(() => {
+    document.querySelectorAll(".floating-instrument-window").forEach((windowElement) => {
+      const closeButton = windowElement.querySelector('[aria-label="Cerrar ventana flotante"]');
+      if (closeButton instanceof HTMLButtonElement) closeButton.click();
+    });
+  });
+  await browser.waitUntil(async () => browser.execute(
+    () => document.querySelectorAll(".floating-instrument-window").length === 0,
+  ));
+}
+
+async function closeDiagnosticModal() {
+  const isOpen = await browser.execute(
+    () => document.querySelector(".diagnostic-modal-backdrop") !== null,
+  );
+  if (!isOpen) return;
+
+  await browser.execute(() => {
+    const closeButton = document.querySelector("#btn-diag-close");
+    if (closeButton instanceof HTMLButtonElement) closeButton.click();
+  });
+  await browser.waitUntil(async () => browser.execute(
+    () => document.querySelector(".diagnostic-modal-backdrop") === null,
+  ), { timeoutMsg: "El modal de diagnóstico no se cerró" });
+}
+
+async function ensureLeftPanelOpen() {
+  const panel = await $("#sidebar-left");
+  if ((await panel.getAttribute("class")).includes("collapsed")) {
+    await $("#btn-dock-toggle-left").click();
+    await browser.waitUntil(
+      async () => !(await panel.getAttribute("class")).includes("collapsed"),
+      { timeoutMsg: "El panel de componentes no se abrió" },
+    );
+  }
+}
+
+async function pinLeftPanelForSuite() {
+  await ensureLeftPanelOpen();
+  const pinButton = await $("#btn-pin-left");
+  restoreLeftAutoHide = (await pinButton.getAttribute("aria-pressed")) !== "true";
+  if (!restoreLeftAutoHide) return;
+
+  await pinButton.click();
+  await browser.waitUntil(
+    async () => (await pinButton.getAttribute("aria-pressed")) === "true",
+    { timeoutMsg: "No se pudo fijar la paleta para la suite funcional" },
+  );
+}
+
+async function restoreLeftPanelAutoHide() {
+  if (!restoreLeftAutoHide) return;
+  await browser.execute(() => {
+    const pinButton = document.querySelector("#btn-pin-left");
+    if (pinButton instanceof HTMLButtonElement) pinButton.click();
+  });
+  await browser.waitUntil(async () => (
+    await $("#btn-pin-left").getAttribute("aria-pressed")
+  ) === "false", {
+    timeoutMsg: "No se pudo restaurar el auto-ocultado de la paleta",
+  });
+  restoreLeftAutoHide = false;
+}
+
+async function ensureRightPanelOpen() {
+  const panel = await $("#sidebar-right");
+  if ((await panel.getAttribute("class")).includes("collapsed")) {
+    await $("#btn-dock-toggle-right").click();
+    await browser.waitUntil(
+      async () => !(await panel.getAttribute("class")).includes("collapsed"),
+      { timeoutMsg: "El panel de propiedades no se abrió" },
+    );
+  }
+}
+
+async function pinRightPanelForPropertyEditing() {
+  await ensureRightPanelOpen();
+  const pinButton = await $("#btn-pin-right");
+  restoreRightAutoHide = (await pinButton.getAttribute("aria-pressed")) !== "true";
+  if (!restoreRightAutoHide) return;
+
+  await pinButton.click();
+  await browser.waitUntil(
+    async () => (await pinButton.getAttribute("aria-pressed")) === "true",
+    { timeoutMsg: "No se pudo fijar el panel para editar propiedades" },
+  );
+}
+
+async function restoreRightPanelAutoHide() {
+  if (!restoreRightAutoHide) return;
+  await browser.execute(() => {
+    const pinButton = document.querySelector("#btn-pin-right");
+    if (pinButton instanceof HTMLButtonElement && pinButton.getAttribute("aria-pressed") === "true") {
+      pinButton.click();
+    }
+  });
+  await browser.waitUntil(async () => (
+    await $("#btn-pin-right").getAttribute("aria-pressed")
+  ) === "false", {
+    timeoutMsg: "No se pudo restaurar el auto-ocultado del panel de propiedades",
+  });
+  restoreRightAutoHide = false;
 }
 
 async function setSelectValue(selector, value) {
@@ -115,11 +230,18 @@ async function setSelectValue(selector, value) {
 }
 
 async function resetToEmpty() {
+  await closeDiagnosticModal();
   expect(await loadCircuit(emptyCircuit)).toBe(true);
+  await closeFloatingInstruments();
   await closeInstrumentCenter();
+  await ensureLeftPanelOpen();
+  await ensureRightPanelOpen();
 }
 
 async function showPaletteComponent(cardId) {
+  // La paleta se auto-oculta al abandonar el panel; cada interacción debe
+  // reabrirla explícitamente, igual que lo haría el usuario desde el dock.
+  await ensureLeftPanelOpen();
   const card = await $(`#${cardId}`);
   const search = await $("#component-search");
   await clearPaletteSearch();
@@ -313,11 +435,34 @@ describe("QA nativo extendido de escritorio", () => {
     await browser.waitUntil(async () => browser.execute(
       () => Boolean(window.__ASTRYD_E2E__ && window.__ASTRYD_QA__?.enabled),
     ), { timeout: 20_000, timeoutMsg: "El puente E2E de Tauri no se inicializo" });
+    await browser.execute(() => {
+      localStorage.setItem("biaani_guide_tour_seen", "true");
+      document.querySelector("#biaani-welcome-toast")?.remove();
+    });
 
     await $("#btn-new-circuit").click();
     await browser.waitUntil(async () => (await appSnapshot())?.componentCount === 0);
     emptyCircuit = await serializedCircuit();
+    await pinLeftPanelForSuite();
     await closeInstrumentCenter();
+  });
+
+  after(async () => {
+    try {
+      await restoreRightPanelAutoHide();
+    } finally {
+      await restoreLeftPanelAutoHide();
+    }
+  });
+
+  afterEach(async () => {
+    try {
+      await closeDiagnosticModal();
+      await closeFloatingInstruments();
+      await closeInstrumentCenter();
+    } finally {
+      await restoreRightPanelAutoHide();
+    }
   });
 
   it("verifica controles, busqueda, paneles, ajustes, zoom, rejilla y consola", async () => {
@@ -336,7 +481,7 @@ describe("QA nativo extendido de escritorio", () => {
 
     const search = await $("#component-search");
     await search.setValue("arduino");
-    expect(await $("#comp-arduino-uno").isDisplayed()).toBe(true);
+    expect(await $("#comp-arduino_uno").isDisplayed()).toBe(true);
     expect(await $("#comp-resistor").isDisplayed()).toBe(false);
     await clearPaletteSearch();
     expect(await $("#comp-resistor").isDisplayed()).toBe(true);
@@ -355,7 +500,7 @@ describe("QA nativo extendido de escritorio", () => {
 
     const leftToggle = await $("#btn-toggle-left");
     const leftBefore = await leftToggle.getAttribute("aria-expanded");
-    await leftToggle.click();
+    await $("#btn-dock-toggle-left").click();
     await browser.waitUntil(async () => (await leftToggle.getAttribute("aria-expanded")) !== leftBefore);
     await browser.keys("F9");
     await browser.waitUntil(async () => (await leftToggle.getAttribute("aria-expanded")) === leftBefore);
@@ -371,16 +516,17 @@ describe("QA nativo extendido de escritorio", () => {
     await settingsTrigger.click();
     const modal = await $("#settings-modal");
     await browser.waitUntil(async () => (await modal.getAttribute("aria-hidden")) === "false");
-    expect(await browser.execute(() => document.activeElement?.id)).toBe("settings-dt-input");
+    expect(await browser.execute(() => document.activeElement?.id)).toBe("settings-theme-mode-input");
     await $("#settings-dt-input").setValue("0.00002");
     await $("#settings-tol-input").setValue("0.000002");
     await $("#settings-iter-input").setValue("180");
+    await $("#settings-transient-duration-input").setValue("0");
     await $("#btn-save-settings").click();
     await browser.waitUntil(async () => (await modal.getAttribute("aria-hidden")) === "true");
     const settings = (await parsedCircuit()).simSettings;
     expect(settings).toEqual({
       dt: 0.00002,
-      transientDuration: 10,
+      transientDuration: 0,
       tolerance: 0.000002,
       maxIterations: 180,
     });
@@ -428,10 +574,14 @@ describe("QA nativo extendido de escritorio", () => {
 
   it("edita, renombra, rota, refleja, duplica y elimina un componente", async () => {
     await resetToEmpty();
+    await pinRightPanelForPropertyEditing();
     await placePaletteComponentWithKeyboard("comp-resistor");
+    await ensureRightPanelOpen();
 
     const idInput = await $("#prop-id-input");
     const valueInput = await $("#prop-val-input");
+    await idInput.waitForDisplayed({ timeoutMsg: "El ID del componente no es visible en el panel de propiedades" });
+    await idInput.waitForEnabled({ timeoutMsg: "La selección no habilitó la edición del ID del componente" });
     await idInput.setValue("R_TEST");
     await valueInput.setValue("2.2k");
     await $("#btn-apply-properties").click();
@@ -512,12 +662,13 @@ describe("QA nativo extendido de escritorio", () => {
     ].map((item) => item.sort().join("<->")).sort();
     expect(actualConnections).toEqual(expectedConnections);
 
+    await setSelectValue("#analysis-mode-select", "DC");
     await clearConsole();
-    const beforeRun = (await qaState()).lastUpdatedAt;
+    const runsBefore = (await qaState()).simulationRunCount;
     await $("#run-sim-btn").click();
     await browser.waitUntil(async () => {
       const state = await qaState();
-      return state?.lastUpdatedAt !== beforeRun
+      return state?.simulationRunCount > runsBefore
         && state?.lastSolver === "rust"
         && state?.lastSimulationMode === "DC"
         && state?.simulationRunning === false;
@@ -684,11 +835,11 @@ describe("QA nativo extendido de escritorio", () => {
     expect(await loadCircuit(divider)).toBe(true);
     await setSelectValue("#analysis-mode-select", "DC");
     await clearConsole();
-    const beforeRun = (await qaState()).lastUpdatedAt;
+    const runsBefore = (await qaState()).simulationRunCount;
     await $("#run-sim-btn").click();
     await browser.waitUntil(async () => {
       const state = await qaState();
-      return state?.lastUpdatedAt !== beforeRun
+      return state?.simulationRunCount > runsBefore
         && state?.lastSolver === "rust"
         && state?.simulationRunning === false;
     }, { timeout: 45_000 });

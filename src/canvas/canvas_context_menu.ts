@@ -23,6 +23,43 @@ export type ContextMenuCallbacks = Pick<
   | "onRedo"
 >;
 
+export type SelectionGridAlignment = "horizontal-center" | "vertical-center" | "snap";
+
+interface AlignableComponent {
+  x: number;
+  y: number;
+}
+
+export function alignSelectionToGrid(
+  components: readonly AlignableComponent[],
+  gridSize: number,
+  alignment: SelectionGridAlignment,
+): void {
+  if (components.length === 0) return;
+  if (!Number.isFinite(gridSize) || gridSize <= 0) {
+    throw new RangeError("gridSize debe ser un número finito mayor que cero");
+  }
+
+  const snap = (coordinate: number): number => Math.round(coordinate / gridSize) * gridSize;
+  if (alignment === "horizontal-center") {
+    const averageY = components.reduce((sum, component) => sum + component.y, 0) / components.length;
+    const alignedY = snap(averageY);
+    components.forEach((component) => { component.y = alignedY; });
+    return;
+  }
+  if (alignment === "vertical-center") {
+    const averageX = components.reduce((sum, component) => sum + component.x, 0) / components.length;
+    const alignedX = snap(averageX);
+    components.forEach((component) => { component.x = alignedX; });
+    return;
+  }
+
+  components.forEach((component) => {
+    component.x = snap(component.x);
+    component.y = snap(component.y);
+  });
+}
+
 export function showCanvasContextMenu(
   event: MouseEvent,
   canvas: HTMLCanvasElement,
@@ -206,6 +243,22 @@ function populateComponentMenu(
     const propPanel = document.querySelector("#property-editor");
     if (propPanel) propPanel.classList.remove("collapsed");
   }, "⚙️"));
+
+  if (clickedComp.value !== undefined && clickedComp.value !== null && clickedComp.type !== "ground") {
+    const valDisplay = String(clickedComp.value);
+    menu.appendChild(createMenuItem(`Editar Valor (${valDisplay})...`, "F2", () => {
+      const newVal = window.prompt(`Introduce el nuevo valor para [${clickedComp.id}]:`, valDisplay);
+      if (newVal !== null && newVal.trim() !== "") {
+        const trimmed = newVal.trim();
+        clickedComp.value = trimmed;
+        callbacks.onSelectionChanged(clickedComp);
+        callbacks.requestRender(true);
+        callbacks.onCanvasModified();
+        callbacks.onNetlistSync();
+        callbacks.log(`Valor de [${clickedComp.id}] actualizado a "${trimmed}"`, "system");
+      }
+    }, "✏️"));
+  }
 
   menu.appendChild(createMenuItem("Rotar 90°", "R", () => {
     orchestrator.rotateSelectedComponent();
@@ -429,24 +482,17 @@ function populateComponentMenu(
   if (orchestrator.selectedComponents.length > 1) {
     const { wrapper: alignWrapper, submenu: alignSubmenu } = createSubmenu("Alinear Selección", "📐");
     alignSubmenu.appendChild(createMenuItem("Alinear al Centro Horizontal", "", () => {
-      const avgY = orchestrator.selectedComponents.reduce((acc, c) => acc + c.y, 0) / orchestrator.selectedComponents.length;
-      const snappedY = Math.round(avgY / 20) * 20;
-      orchestrator.selectedComponents.forEach(c => { c.y = snappedY; });
+      alignSelectionToGrid(orchestrator.selectedComponents, orchestrator.gridSize, "horizontal-center");
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
     }, "⇥"));
     alignSubmenu.appendChild(createMenuItem("Alinear al Centro Vertical", "", () => {
-      const avgX = orchestrator.selectedComponents.reduce((acc, c) => acc + c.x, 0) / orchestrator.selectedComponents.length;
-      const snappedX = Math.round(avgX / 20) * 20;
-      orchestrator.selectedComponents.forEach(c => { c.x = snappedX; });
+      alignSelectionToGrid(orchestrator.selectedComponents, orchestrator.gridSize, "vertical-center");
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
     }, "⇤"));
     alignSubmenu.appendChild(createMenuItem("Ajustar a Cuadrícula (Snap Grid)", "", () => {
-      orchestrator.selectedComponents.forEach(c => {
-        c.x = Math.round(c.x / 20) * 20;
-        c.y = Math.round(c.y / 20) * 20;
-      });
+      alignSelectionToGrid(orchestrator.selectedComponents, orchestrator.gridSize, "snap");
       callbacks.requestRender(true);
       callbacks.onCanvasModified();
     }, "▦"));

@@ -17,3 +17,11 @@ mod adaptive_order {
 mod waveform_relaxation {
     include!("transient/waveform_relaxation.rs");
 }
+
+mod live_overrides {
+    include!("transient/live_overrides.rs");
+}
+
+mod event_clipping {
+    include!("transient/event_clipping.rs");
+}

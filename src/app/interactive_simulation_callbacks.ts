@@ -1,5 +1,6 @@
 import type { CanvasOrchestrator } from "../canvas_orchestrator";
 import type { CircuitStateManager } from "../simulation/circuit_state_manager";
+import { isTauriEnvironment } from "../simulation/tauri_mock";
 import type {
   SimulationRunner,
   SimulationRunnerCallbacks,
@@ -15,6 +16,7 @@ export interface InteractiveSimulationCallbackDependencies {
   getSimulationRunner(): SimulationRunner | null;
   circuitState: CircuitStateManager;
   setSimulationRunning(active: boolean): void;
+  onSolverResult?(solver: "rust" | "typescript"): void;
   updateCanvasRendering(): void;
   updateOscilloscopeRendering(): void;
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
@@ -30,6 +32,7 @@ export function createInteractiveSimulationCallbacks(
       if (!ownerTab) return;
 
       if (!tabManager?.isActiveTab(context.ownerTabId)) return;
+      dependencies.onSolverResult?.(isTauriEnvironment() ? "rust" : "typescript");
       dependencies.circuitState.setVoltagesFromFrame(frame);
 
       const oscilloscopePanel = dependencies.getOscilloscopePanel();
@@ -46,10 +49,6 @@ export function createInteractiveSimulationCallbacks(
       dependencies.updateCanvasRendering();
 
       if (frame.isFinal) {
-        dependencies.addLog(
-          `Simulacion interactiva completada en t = ${frame.time.toFixed(6)} s.`,
-          "receive",
-        );
         const orchestrator = dependencies.getOrchestrator();
         if (oscilloscopePanel && orchestrator) {
           dependencies.circuitState.actuatorHistory.precompute(
@@ -61,30 +60,26 @@ export function createInteractiveSimulationCallbacks(
       }
     },
     onSimulationError: (error, context) => {
-      const tabManager = dependencies.getTabManager();
-      if (!tabManager?.isActiveTab(context.ownerTabId)) return;
-
-      dependencies.addLog(`Error en simulacion: ${error}`, "error");
-      void dependencies.getSimulationRunner()?.stopInteractiveTransient();
+      dependencies.addLog(
+        `Error en simulacion [${context.ownerTabId}]: ${error}`,
+        "error",
+      );
       TelemetryPanel.logError(`Error en simulacion transitoria: ${error}`);
     },
     onSimulationComplete: (finalTime, context) => {
-      const tabManager = dependencies.getTabManager();
-      if (!tabManager?.isActiveTab(context.ownerTabId)) return;
-
       dependencies.addLog(
-        `Simulacion completada en t = ${finalTime.toFixed(6)} s.`,
+        `Simulacion [${context.ownerTabId}] completada en t = ${finalTime.toFixed(6)} s.`,
         "receive",
       );
     },
     onSimulationStateChanged: (active, context) => {
       const tabManager = dependencies.getTabManager();
+      dependencies.setSimulationRunning(active);
       if (!tabManager?.isActiveTab(context.ownerTabId)) return;
 
       const orchestrator = dependencies.getOrchestrator();
       if (orchestrator) orchestrator.simulationActive = active;
       if (!active) dependencies.getOscilloscopePanel()?.finish();
-      dependencies.setSimulationRunning(active);
     },
   };
 }

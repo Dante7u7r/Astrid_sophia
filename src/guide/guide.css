@@ -295,9 +295,11 @@
 .guide-welcome-toast {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   z-index: 99990;
-  width: 320px;
+  width: min(320px, calc(100vw - 32px));
   background: var(--modal-bg, rgba(13, 18, 28, 0.94));
   backdrop-filter: blur(16px);
   border: 1px solid var(--modal-border, rgba(0, 240, 255, 0.3));
@@ -313,11 +315,11 @@
 
 @keyframes guide-slide-in {
   from {
-    transform: translateY(20px);
+    transform: translate(-50%, 20px);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
+    transform: translate(-50%, 0);
     opacity: 1;
   }
 }

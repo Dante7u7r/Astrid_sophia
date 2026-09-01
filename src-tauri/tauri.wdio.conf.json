@@ -1,4 +1,5 @@
 {
+  "identifier": "com.biaani.desktop.wdio",
   "build": {
     "beforeBuildCommand": "npm run build:e2e"
   },

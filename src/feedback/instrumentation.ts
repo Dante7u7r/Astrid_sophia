@@ -84,18 +84,27 @@ export function privacyFingerprint(value: unknown): string {
   return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
+function normalizedFingerprintNumber(value: number): string {
+  return Number.isFinite(value) ? value.toPrecision(12) : "non-finite";
+}
+
+function circuitTopologyFingerprint(
+  topology: ReadonlyArray<readonly [type: string, pinCount: number]>,
+  nodes: number,
+  wires: number,
+): string {
+  // Misma forma canónica producida por normalizeForFingerprint para
+  // { nodes, topology: [{ pins, type }], wires }, sin ordenar las dos claves
+  // de cada componente ni crear 480 objetos intermedios en circuitos grandes.
+  const canonical = `{nodes:${normalizedFingerprintNumber(nodes)},topology:[${topology
+    .map(([type, pins]) => `{pins:${normalizedFingerprintNumber(pins)},type:${type}}`)
+    .join(",")}],wires:${normalizedFingerprintNumber(wires)}}`;
+  return privacyFingerprint(canonical);
+}
+
 function nodeCount(netlist: CircuitNetlist | undefined): number {
   if (!netlist) return 0;
   return new Set(netlist.components.flatMap((component) => component.pins)).size;
-}
-
-function componentHistogram(netlist: CircuitNetlist): Record<string, number> {
-  const histogram = new Map<string, number>();
-  for (const component of netlist.components) {
-    const key = component.type.slice(0, 64);
-    histogram.set(key, (histogram.get(key) ?? 0) + 1);
-  }
-  return Object.fromEntries([...histogram.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
 function errorCode(error: unknown): string {
@@ -176,24 +185,37 @@ export function recordCircuitSummary(
   wireCount = netlist.wires.length,
 ): void {
   if (!run.enabled) return;
-  const histogram = componentHistogram(netlist);
-  const topology = netlist.components.map((component) => ({
-    type: component.type,
-    pins: component.pins.length,
-  })).sort((left, right) => left.type.localeCompare(right.type) || left.pins - right.pins);
+  const histogram = new Map<string, number>();
+  const topology: Array<readonly [type: string, pinCount: number]> = [];
+  const nodes = new Set<string>();
+  let nonlinearDeviceCount = 0;
+  let reactiveDeviceCount = 0;
+  let containsFirmware = false;
+  const nonlinearType = /diode|bjt|mos|jfet|opamp|switch/i;
+  const reactiveType = /capacitor|inductor|transmission/i;
+  // Resumir en una pasada sin memorizar la identidad de una netlist mutable.
+  for (const component of netlist.components) {
+    const { type, pins } = component;
+    const histogramKey = type.slice(0, 64);
+    histogram.set(histogramKey, (histogram.get(histogramKey) ?? 0) + 1);
+    topology.push([type, pins.length]);
+    for (const pin of pins) nodes.add(pin);
+    if (nonlinearType.test(type)) nonlinearDeviceCount += 1;
+    if (reactiveType.test(type)) reactiveDeviceCount += 1;
+    containsFirmware ||= Boolean(component.firmware?.length);
+  }
+  topology.sort((left, right) => left[0].localeCompare(right[0]) || left[1] - right[1]);
+  const totalNodes = nodes.size;
   activeBus?.emit("circuit.summary_created", {
-    topologyFingerprint: privacyFingerprint({ topology, nodes: nodeCount(netlist), wires: wireCount }),
+    topologyFingerprint: circuitTopologyFingerprint(topology, totalNodes, wireCount),
     componentCount: netlist.components.length,
-    nodeCount: nodeCount(netlist),
+    nodeCount: totalNodes,
     wireCount: clampInteger(wireCount),
-    nonlinearDeviceCount: netlist.components.filter((component) =>
-      /diode|bjt|mos|jfet|opamp|switch/i.test(component.type)
-    ).length,
-    reactiveDeviceCount: netlist.components.filter((component) =>
-      /capacitor|inductor|transmission/i.test(component.type)
-    ).length,
-    componentHistogram: histogram,
-    containsFirmware: netlist.components.some((component) => Boolean(component.firmware?.length)),
+    nonlinearDeviceCount,
+    reactiveDeviceCount,
+    componentHistogram: Object.fromEntries([...histogram.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))),
+    containsFirmware,
   }, runOptions(run));
 }
 

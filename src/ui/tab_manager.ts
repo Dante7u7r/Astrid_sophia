@@ -7,7 +7,9 @@ import { type AnalysisMode, type SimulationControls } from "./simulation_control
 import type { McuDebugPanel } from "./mcu_debug_panel";
 import { ConfirmationModal } from "./confirmation_modal";
 import { TabsView } from "./tabs_view";
+import { showTabContextMenu } from "./tab_context_menu";
 import { WorkspaceStore } from "./workspace_store";
+import { cloneCircuitComponents, cloneCircuitWires } from "../persistence/circuit_file";
 import {
   saveWorkspaceSession,
   restoreWorkspaceSession,
@@ -358,6 +360,60 @@ export class TabManager {
     }
   }
 
+  public renameTab(tabId: string, newName: string): boolean {
+    const tab = this.store.findTab(tabId);
+    if (!tab) return false;
+    const clean = newName.trim();
+    if (!clean) return false;
+    tab.name = clean;
+    tab.unsaved = true;
+    this.renderTabsBar();
+    this.scheduleAutoSave();
+    return true;
+  }
+
+  public duplicateTab(tabId: string): Tab | null {
+    const sourceTab = this.store.findTab(tabId);
+    if (!sourceTab) return null;
+    if (this.activeTabId === tabId) {
+      const orch = this.callbacks.getOrchestrator();
+      if (orch) {
+        captureRuntimeIntoTab(sourceTab, {
+          orchestrator: orch,
+          oscilloscopePanel: this.callbacks.getOscilloscopePanel(),
+          activeAnalysisMode: this.callbacks.getActiveAnalysisMode(),
+          probes: this.callbacks.getProbes(),
+          sparPorts: this.callbacks.getSparPorts(),
+          voltageSnapshot: this.callbacks.getVoltageSnapshot(),
+        });
+      }
+    }
+    const dupInitialData: InitialTabData = {
+      components: cloneCircuitComponents(sourceTab.components),
+      wires: cloneCircuitWires(sourceTab.wires),
+      filePath: null,
+    };
+    const newTab = this.createNewTab(`${sourceTab.name} (Copia)`, dupInitialData, sourceTab.activeAnalysisMode);
+    if (newTab) {
+      newTab.ch1ProbeNode = sourceTab.ch1ProbeNode;
+      newTab.ch2ProbeNode = sourceTab.ch2ProbeNode;
+      newTab.ch3ProbeNode = sourceTab.ch3ProbeNode;
+      newTab.ch4ProbeNode = sourceTab.ch4ProbeNode;
+      newTab.zoom = sourceTab.zoom;
+      newTab.offsetX = sourceTab.offsetX;
+      newTab.offsetY = sourceTab.offsetY;
+      newTab.unsaved = true;
+    }
+    return newTab;
+  }
+
+  public async closeOtherTabs(targetTabId: string): Promise<void> {
+    const otherTabs = this.tabs.filter(t => t.id !== targetTabId);
+    for (const tab of otherTabs) {
+      await this.closeTab(tab.id);
+    }
+  }
+
   public renderTabsBar() {
     this.tabsView.render(this.store.getTabs(), this.store.getActiveTabId(), {
       onSelect: (tabId) => {
@@ -365,6 +421,9 @@ export class TabManager {
       },
       onClose: (tabId) => {
         void this.closeTab(tabId);
+      },
+      onContextMenu: (tabId, event) => {
+        showTabContextMenu(event, tabId, this);
       },
     });
   }

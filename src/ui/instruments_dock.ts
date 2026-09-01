@@ -52,8 +52,7 @@ export class InstrumentsDock {
       tab.addEventListener("click", () => {
         const targetTab = tab.getAttribute("data-tab");
         if (targetTab) {
-          this.switchTab(targetTab);
-          window.dispatchEvent(new CustomEvent("open-floating-instrument", { detail: { tabId: targetTab } }));
+          this.activateTab(targetTab);
         }
       });
 
@@ -81,7 +80,7 @@ export class InstrumentsDock {
         event.preventDefault();
         const nextTab = tabs[nextIndex];
         const nextTarget = nextTab.getAttribute("data-tab");
-        if (nextTarget) this.switchTab(nextTarget);
+        if (nextTarget) this.activateTab(nextTarget);
         nextTab.focus();
       });
     });
@@ -116,6 +115,11 @@ export class InstrumentsDock {
     if (optContainer) {
       this.circuitOptimizer = new CircuitOptimizerInstrument(optContainer, orchestrator, callbacks);
     }
+  }
+
+  private activateTab(tabId: string): void {
+    this.switchTab(tabId);
+    window.dispatchEvent(new CustomEvent("open-floating-instrument", { detail: { tabId } }));
   }
 
   public switchTab(tabId: string) {

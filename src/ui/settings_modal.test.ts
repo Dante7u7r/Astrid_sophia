@@ -144,4 +144,21 @@ describe("SettingsModal", () => {
     expect(onSave).not.toHaveBeenCalled();
     expect(modal.classList.contains("open")).toBe(true);
   });
+
+  test("guarda ajustes al presionar la tecla Enter", () => {
+    const onSave = vi.fn();
+    const trigger = document.querySelector("#settings-trigger-btn") as HTMLButtonElement;
+    const modal = document.querySelector("#settings-modal") as HTMLElement;
+    new SettingsModal({ dt: 0.001, tolerance: 0.00001, maxIterations: 80 }, onSave);
+    trigger.click();
+
+    const dtInput = document.querySelector("#settings-dt-input") as HTMLInputElement;
+    dtInput.value = "0.0005";
+
+    const enterEvent = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+    dtInput.dispatchEvent(enterEvent);
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ dt: 0.0005 }));
+    expect(modal.classList.contains("open")).toBe(false);
+  });
 });

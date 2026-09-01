@@ -6,6 +6,72 @@ use crate::solver::engine::transient_step_control::{
 use nalgebra::DVector;
 
 #[test]
+fn adaptive_linear_ramp_preserves_the_accepted_time_history() {
+    // Fuente ideal V=1000*t V sobre C=1 uF: I_C=1 mA, sin curvatura ni LTE real.
+    // El crecimiento adaptativo de dt obliga a que los intervalos históricos difieran.
+    let netlist = CircuitNetlist {
+        components: vec![
+            ComponentData {
+                id: "V1".to_string(),
+                comp_type: "vsource".to_string(),
+                value: 0.0,
+                pins: vec!["1".to_string(), "0".to_string()],
+                wave_type: Some("pwl".to_string()),
+                pwl_points: Some(vec![(0.0, 0.0), (1.0, 1_000.0)]),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C1".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: 1e-6,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let mut accepted_steps = 0;
+    let (results, _, _) = solve_transient_circuit_inner(
+        &netlist,
+        &TransientSettings {
+            dt: 1e-4,
+            t_max: 0.01,
+            fixed_step: Some(false),
+            integration_method: Some("trap".to_string()),
+        },
+        HashMap::new(),
+        HashMap::new(),
+        crate::solver::SolverNumericalSettings {
+            tolerance: 1e-5,
+            max_iterations: 100,
+        },
+        None,
+        None,
+        Some(|_: &TimeStepResult| {
+            accepted_steps += 1;
+            // Acota la regresión por número de pasos, no por velocidad de la máquina.
+            accepted_steps < 49
+        }),
+    )
+    .expect("La rampa debe integrar sin error");
+    assert!(
+        accepted_steps <= 48,
+        "Una rampa sin LTE debe permitir crecer dt, no generar rechazos artificiales"
+    );
+    assert!((results.last().unwrap().time - 0.01).abs() < 1e-12);
+    assert!(results
+        .windows(2)
+        .any(|pair| pair[1].time - pair[0].time > 1.5e-4));
+    for step in results {
+        assert!((step.node_voltages["1"] - 1_000.0 * step.time).abs() < 1e-10);
+        assert!(
+            (step.branch_currents["V1"] + 1e-3).abs() < 1e-10,
+            "KCL debe conservar I_V + C*dV/dt = 0"
+        );
+    }
+}
+
+#[test]
 fn test_variable_order_controller_transitions() {
     let mut controller = VariableOrderController::new("auto");
     assert!(controller.is_auto());
@@ -24,6 +90,7 @@ fn test_variable_order_controller_transitions() {
         &sol_n1,
         &sol_n2,
         1,
+        1e-4,
         1e-4,
         1e-4,
         false,
@@ -66,6 +133,7 @@ fn test_variable_order_controller_transitions() {
         &sol_prev2,
         &sol_prev3,
         1,
+        1e-5,
         1e-5,
         1e-5,
         false,

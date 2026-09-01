@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { ComponentInstance } from "../canvas_orchestrator";
+import { COMPONENT_TYPES } from "../components/component_types";
 import {
   CURRENT_CIRCUIT_FILE_VERSION,
   cloneCircuitComponents,
@@ -17,6 +18,9 @@ function completeSnapshot(): CircuitFileSnapshot {
     y: -40,
     rotation: 90,
     mirror: true,
+    mirrorY: true,
+    w: 1.2e-6,
+    l: 0.18e-6,
     waveType: "pulse",
     amplitude: 3.3,
     frequency: 8000,
@@ -30,6 +34,7 @@ function completeSnapshot(): CircuitFileSnapshot {
     relayClosed: true,
     firmwareHex: ":020000040000FA",
     firmware: Uint8Array.from([0, 1, 127, 255]),
+    esp32SourceCode: "void setup() { pinMode(2, OUTPUT); }",
     mcuClockSpeed: 16_000_000,
     primaryInductance: 0.001,
     secondaryInductance: 0.004,
@@ -40,6 +45,20 @@ function completeSnapshot(): CircuitFileSnapshot {
     switchVh: 0.2,
     switchState: true,
     spiceMacro: ".subckt demo a b\nR1 a b 1k\n.ends",
+    spiceNetlist: ".SUBCKT demo a b\nR1 a b 1k\n.ENDS demo",
+    expression: "{R_LOAD/2}",
+    cpar: 2e-12,
+    tc1: 25,
+    rleak: 1e9,
+    initialCondition: 0.25,
+    schmittTrigger: true,
+    openCollector: true,
+    logicFamily: "cmos5v",
+    symbolStandard: "IEC",
+    params: { R_LOAD: 1000, MODE: "fast" },
+    instanceParams: { GAIN: 2, CORNER: "tt" },
+    pinLabels: { 0: "IN", 1: "OUT" },
+    segmentStates: { a: true, b: false },
     pinCount: 8,
     selected: true,
     dmmValue: "3.300 V",
@@ -66,6 +85,13 @@ function completeSnapshot(): CircuitFileSnapshot {
       timeDivValue: 0.005,
       isXyMode: true,
       isCursorsEnabled: true,
+      isMathEnabled: true,
+      isAutoRangeEnabled: true,
+      mathExpression: "CH1 + CH2",
+      mathVoltsPerDiv: 0.25,
+      mathOffset: -1.5,
+      cursorTargetChannel: "math",
+      cursorMode: "track",
       triggerChannel: "ch4",
       triggerEdge: "falling",
       triggerLevel: 1.25,
@@ -97,6 +123,18 @@ describe("archivo .astryd 3.0", () => {
       couplingCoefficient: 0.97,
       switchState: true,
       pinCount: 8,
+      esp32SourceCode: "void setup() { pinMode(2, OUTPUT); }",
+      expression: "{R_LOAD/2}",
+      cpar: 2e-12,
+      tc1: 25,
+      rleak: 1e9,
+      initialCondition: 0.25,
+      schmittTrigger: true,
+      openCollector: true,
+      logicFamily: "cmos5v",
+      symbolStandard: "IEC",
+      instanceParams: { GAIN: 2, CORNER: "tt" },
+      segmentStates: { a: true, b: false },
     });
     expect(Array.from(parsed.data.components[0].firmware ?? [])).toEqual([0, 1, 127, 255]);
     expect(parsed.data.probes.ch3ProbeNode).toBe("7");
@@ -104,6 +142,37 @@ describe("archivo .astryd 3.0", () => {
     expect(parsed.data.sparPorts).toEqual([{ nodeId: "7", z0: 75 }]);
     expect(parsed.data.oscilloscope.triggerChannel).toBe("ch4");
     expect(parsed.data.oscilloscope.channelsEnabled).toEqual([true, true, false, true]);
+    expect(parsed.data.oscilloscope).toMatchObject({
+      isMathEnabled: true,
+      isAutoRangeEnabled: true,
+      mathExpression: "CH1 + CH2",
+      mathVoltsPerDiv: 0.25,
+      mathOffset: -1.5,
+      cursorTargetChannel: "math",
+      cursorMode: "track",
+    });
+  });
+
+  test("acepta en round-trip todos los tipos registrados y rechaza los desconocidos", () => {
+    const snapshot = completeSnapshot();
+    snapshot.components = COMPONENT_TYPES.map((type, index): ComponentInstance => ({
+      id: `C${index + 1}`,
+      type,
+      value: type === "dmm" ? "voltage" : 1,
+      x: index * 20,
+      y: 0,
+      rotation: 0,
+    }));
+
+    const parsed = parseCircuitFile(serializeCircuitFile(snapshot));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.data.components.map(component => component.type)).toEqual(COMPONENT_TYPES);
+    }
+
+    const unknown = JSON.parse(serializeCircuitFile(snapshot));
+    unknown.components[0].type = "componente_futuro_no_registrado";
+    expect(parseCircuitFile(JSON.stringify(unknown))).toMatchObject({ ok: false });
   });
 
   test("no persiste estado efimero de render o runtime", () => {

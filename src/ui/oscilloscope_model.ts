@@ -89,7 +89,101 @@ export function extractSampleVoltage(
   return nodeVoltages[trimmed] ?? 0.0;
 }
 
+function createTraceVoltageReader(nodeId: string): (sample: TimeStepResult) => number {
+  const trimmed = nodeId.trim();
+  const matchV = trimmed.match(/^V\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  const matchPair = matchV ? null : trimmed.match(/^(\d+)\s*[-,\/]\s*(\d+)$/);
+  const positiveNode = matchV?.[1] ?? matchPair?.[1];
+  const negativeNode = matchV?.[2] ?? matchPair?.[2];
+
+  if (positiveNode && negativeNode) {
+    return (sample) => (
+      (sample.nodeVoltages[positiveNode] ?? 0.0)
+      - (sample.nodeVoltages[negativeNode] ?? 0.0)
+    );
+  }
+  return (sample) => sample.nodeVoltages[trimmed] ?? 0.0;
+}
+
 const metricsCache = new WeakMap<readonly TimeStepResult[], Map<string, OscilloscopeMetrics>>();
+
+interface TyTraceCacheEntry {
+  readonly resultLength: number;
+  readonly firstSample: TimeStepResult;
+  readonly lastSample: TimeStepResult;
+  readonly firstTime: number;
+  readonly lastTime: number;
+  readonly points: TyTracePoint[];
+}
+
+const tyTraceCache = new WeakMap<readonly TimeStepResult[], Map<string, TyTraceCacheEntry>>();
+const MAX_TRACE_CACHE_VARIANTS = 64;
+
+function buildTraceCacheKey(
+  nodeId: string,
+  dimensions: { width: number; height: number },
+  scale: { voltsPerDiv: number; offsetPixels: number; timeDivValue: number },
+  startIndex: number,
+  config: TraceChannelConfig | undefined,
+): string {
+  return [
+    nodeId,
+    dimensions.width,
+    dimensions.height,
+    scale.voltsPerDiv,
+    scale.offsetPixels,
+    scale.timeDivValue,
+    startIndex,
+    config?.coupling ?? "dc",
+    config?.invert === true ? 1 : 0,
+    config?.interpolation ?? "linear",
+  ].join("\u0000");
+}
+
+function getCachedTrace(
+  results: readonly TimeStepResult[],
+  cacheKey: string,
+): TyTracePoint[] | null {
+  const entry = tyTraceCache.get(results)?.get(cacheKey);
+  if (!entry || results.length === 0) return null;
+
+  const firstSample = results[0];
+  const lastSample = results[results.length - 1];
+  if (
+    entry.resultLength !== results.length
+    || entry.firstSample !== firstSample
+    || entry.lastSample !== lastSample
+    || entry.firstTime !== firstSample.time
+    || entry.lastTime !== lastSample.time
+  ) {
+    return null;
+  }
+  return entry.points;
+}
+
+function cacheTrace(
+  results: readonly TimeStepResult[],
+  cacheKey: string,
+  points: TyTracePoint[],
+): TyTracePoint[] {
+  let variants = tyTraceCache.get(results);
+  if (!variants) {
+    variants = new Map();
+    tyTraceCache.set(results, variants);
+  }
+  if (variants.size >= MAX_TRACE_CACHE_VARIANTS && !variants.has(cacheKey)) {
+    variants.clear();
+  }
+  variants.set(cacheKey, {
+    resultLength: results.length,
+    firstSample: results[0],
+    lastSample: results[results.length - 1],
+    firstTime: results[0].time,
+    lastTime: results[results.length - 1].time,
+    points,
+  });
+  return points;
+}
 
 function findVisibleEndIndex(
   results: readonly TimeStepResult[],
@@ -108,7 +202,7 @@ function findVisibleEndIndex(
 
 function buildLttbTrace(
   results: readonly TimeStepResult[],
-  nodeId: string,
+  readVoltage: (sample: TimeStepResult) => number,
   startIndex: number,
   endIndex: number,
   maxPoints: number,
@@ -137,7 +231,7 @@ function buildLttbTrace(
     const nextCount = Math.max(1, nextBucketEnd - nextBucketStart);
     for (let j = nextBucketStart; j < nextBucketEnd; j++) {
       avgX += results[j].time;
-      avgY += results[j].nodeVoltages[nodeId] ?? 0;
+      avgY += readVoltage(results[j]);
     }
     avgX /= nextCount;
     avgY /= nextCount;
@@ -145,11 +239,11 @@ function buildLttbTrace(
     let maxArea = -1;
     let maxIndex = bucketStart;
     const pointAX = results[a].time;
-    const pointAY = results[a].nodeVoltages[nodeId] ?? 0;
+    const pointAY = readVoltage(results[a]);
 
     for (let j = bucketStart; j < bucketEnd; j++) {
       const px = results[j].time;
-      const py = results[j].nodeVoltages[nodeId] ?? 0;
+      const py = readVoltage(results[j]);
       const area = Math.abs(
         (pointAX - avgX) * (py - pointAY) - (pointAX - px) * (avgY - pointAY),
       ) * 0.5;
@@ -370,14 +464,22 @@ export function calculateOscilloscopeMetrics(
   return metrics;
 }
 
-export function findTriggerStartIndex(
+export interface TriggerMatchResult {
+  startIndex: number;
+  triggered: boolean;
+}
+
+export function findTriggerMatch(
   results: readonly TimeStepResult[],
   nodeId: string | null,
   edge: "rising" | "falling",
   level: number,
   timeDivValue?: number,
-): number {
-  if (!nodeId || results.length <= 2) return 0;
+  sweepMode: "auto" | "normal" | "single" = "auto",
+): TriggerMatchResult {
+  if (!nodeId || results.length <= 2) {
+    return { startIndex: 0, triggered: false };
+  }
 
   const windowDuration = timeDivValue && Number.isFinite(timeDivValue) && timeDivValue > 0
     ? timeDivValue * 10
@@ -389,43 +491,56 @@ export function findTriggerStartIndex(
   // 1. Modo Roll para bases de tiempo lentas (DSO Auto-Roll): desplazamiento continuo hacia la izquierda
   if (isRollMode && Number.isFinite(windowDuration) && totalDuration >= windowDuration) {
     const targetStartTime = latestTime - windowDuration - 1e-9;
-    return findTimeIndex(results, targetStartTime);
+    return { startIndex: findTimeIndex(results, targetStartTime), triggered: false };
   }
 
-  // 2. Si disponemos de una ventana completa de datos acumulados:
-  if (Number.isFinite(windowDuration) && totalDuration >= windowDuration) {
-    // 2a. Buscamos el cruce de disparo más reciente que disponga de una ventana completa hacia adelante (DSO Phase Lock)
-    for (let i = results.length - 2; i >= 1; i--) {
-      const v0 = extractSampleVoltage(results[i - 1].nodeVoltages, nodeId);
-      const v1 = extractSampleVoltage(results[i].nodeVoltages, nodeId);
-      const isCrossing = edge === "rising"
-        ? (v0 <= level && v1 > level)
-        : (v0 >= level && v1 < level);
+  // 2. Búsqueda de cruce de disparo desde la muestra más reciente hacia atrás (DSO Phase Lock)
+  let fallbackCrossingIdx = -1;
 
-      if (isCrossing && latestTime - results[i].time >= windowDuration - 1e-9) {
-        return i;
-      }
-    }
-
-    // 2b. Fallback cuando hay ventana completa pero no hay cruce hacia adelante: ventana rodante más reciente para no dejar huecos negros
-    const targetStartTime = latestTime - windowDuration - 1e-9;
-    return findTimeIndex(results, targetStartTime);
-  }
-
-  // 3. Arranque progresivo: Si la simulación aún no acumula una ventana completa, anclamos al primer cruce para que la onda crezca suavemente
-  for (let i = 1; i < results.length; i++) {
+  for (let i = results.length - 2; i >= 1; i--) {
     const v0 = extractSampleVoltage(results[i - 1].nodeVoltages, nodeId);
     const v1 = extractSampleVoltage(results[i].nodeVoltages, nodeId);
     const isCrossing = edge === "rising"
-      ? (v0 <= level && v1 > level)
-      : (v0 >= level && v1 < level);
+      ? ((v0 <= level && v1 > level) || (v0 < level && v1 >= level))
+      : ((v0 >= level && v1 < level) || (v0 > level && v1 <= level));
 
     if (isCrossing) {
-      return i;
+      if (fallbackCrossingIdx === -1) {
+        fallbackCrossingIdx = i;
+      }
+      if (latestTime - results[i].time >= windowDuration - 1e-9) {
+        return { startIndex: i, triggered: true };
+      }
     }
   }
 
-  return 0;
+  // Si encontramos un cruce aunque todavía no tenga una ventana completa de datos hacia adelante
+  if (fallbackCrossingIdx !== -1) {
+    return { startIndex: fallbackCrossingIdx, triggered: true };
+  }
+
+  // 3. No se encontró ningún cruce en el buffer:
+  if (sweepMode === "normal" || sweepMode === "single") {
+    return { startIndex: 0, triggered: false };
+  }
+
+  // En modo Auto sin cruce: ventana rodante más reciente (Auto-Sweep para no dejar la pantalla en negro)
+  if (Number.isFinite(windowDuration) && totalDuration >= windowDuration) {
+    const targetStartTime = latestTime - windowDuration - 1e-9;
+    return { startIndex: findTimeIndex(results, targetStartTime), triggered: false };
+  }
+
+  return { startIndex: 0, triggered: false };
+}
+
+export function findTriggerStartIndex(
+  results: readonly TimeStepResult[],
+  nodeId: string | null,
+  edge: "rising" | "falling",
+  level: number,
+  timeDivValue?: number,
+): number {
+  return findTriggerMatch(results, nodeId, edge, level, timeDivValue, "auto").startIndex;
 }
 
 export function buildTyTracePoints(
@@ -441,22 +556,12 @@ export function buildTyTracePoints(
   const windowDuration = scale.timeDivValue * 10;
   if (windowDuration <= 0 || !Number.isFinite(windowDuration)) return [];
 
+  const cacheKey = buildTraceCacheKey(nodeId, dimensions, scale, startIndex, config);
+  const cachedTrace = getCachedTrace(results, cacheKey);
+  if (cachedTrace) return cachedTrace;
+
   let effectiveStartIndex = Math.max(0, Math.min(startIndex, results.length - 1));
   let firstTime = results[effectiveStartIndex].time;
-  const latestTime = results[results.length - 1].time;
-  const totalAvailableDuration = latestTime - results[0].time;
-
-  // Si desde effectiveStartIndex no se cubre la duración esperada pero hay más datos en el buffer, rebobinar adecuadamente
-  if (latestTime - firstTime < Math.min(windowDuration * 0.5, totalAvailableDuration)) {
-    if (totalAvailableDuration >= windowDuration) {
-      const targetStartTime = latestTime - windowDuration;
-      effectiveStartIndex = findTimeIndex(results, targetStartTime);
-      firstTime = results[effectiveStartIndex].time;
-    } else {
-      effectiveStartIndex = 0;
-      firstTime = results[0].time;
-    }
-  }
 
   let endIndex = findVisibleEndIndex(results, effectiveStartIndex, firstTime + windowDuration);
   if (endIndex - effectiveStartIndex < 2 && results.length >= 2) {
@@ -470,6 +575,7 @@ export function buildTyTracePoints(
 
   const divHeight = dimensions.height / 8;
   const maxPoints = Math.max(64, Math.min(2_000, Math.ceil(dimensions.width * 2)));
+  const readVoltage = createTraceVoltageReader(nodeId);
 
   // Calculate average for AC coupling if requested
   let acOffset = 0;
@@ -484,7 +590,7 @@ export function buildTyTracePoints(
   const toPoint = (pt: TimeStepResult): TyTracePoint => {
     const relativeTime = pt.time - firstTime;
     const x = Math.max(0, Math.min(dimensions.width, (relativeTime / windowDuration) * dimensions.width));
-    let v = extractSampleVoltage(pt.nodeVoltages, nodeId);
+    let v = readVoltage(pt);
     if (config?.coupling === "gnd") {
       v = 0.0;
     } else if (config?.coupling === "ac") {
@@ -499,7 +605,7 @@ export function buildTyTracePoints(
 
   const rawTrace = buildLttbTrace(
     results,
-    nodeId,
+    readVoltage,
     effectiveStartIndex,
     endIndex,
     maxPoints,
@@ -507,10 +613,10 @@ export function buildTyTracePoints(
   );
 
   if (config?.interpolation === "sinc" && rawTrace.length >= 4 && rawTrace.length < maxPoints / 2) {
-    return interpolateSincTrace(rawTrace, Math.min(maxPoints, rawTrace.length * 4));
+    return cacheTrace(results, cacheKey, interpolateSincTrace(rawTrace, Math.min(maxPoints, rawTrace.length * 4)));
   }
 
-  return rawTrace;
+  return cacheTrace(results, cacheKey, rawTrace);
 }
 
 /**
@@ -1027,4 +1133,3 @@ export function evaluateMaskTest(
     violationPoints,
   };
 }
-

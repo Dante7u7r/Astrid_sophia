@@ -62,7 +62,6 @@ describe("DisjointSetUnion", () => {
     expect(rootXY).not.toBe(rootPQ);
   });
 });
-
 // ==========================================================================
 // EXTRACCIÓN DE NETLIST — Integración DSU + componentes
 // ==========================================================================
@@ -1082,5 +1081,79 @@ describe("extractElectricalNetlist", () => {
     expect(res.error).toBeUndefined();
     expect(res.pinToNodeMap["V1:0"]).toBe(res.pinToNodeMap["R1:0"]);
     expect(res.pinToNodeMap["V1:0"]).toBe(res.pinToNodeMap["R2:0"]);
+  });
+
+  test("extrae correctamente un puente de diodos (diode_bridge) a 4 diodos D1..D4 con polaridades de Graetz", () => {
+    const components: ComponentInstance[] = [
+      { id: "V1", type: "vsource", value: 12, x: 0, y: 0, rotation: 0 },
+      { id: "BR1", type: "diode_bridge", value: "DB107", modelName: "DB107", x: 100, y: 0, rotation: 0 },
+      { id: "RLOAD", type: "resistor", value: 1000, x: 200, y: 0, rotation: 0 },
+      { id: "GND", type: "ground", value: 0, x: 200, y: 100, rotation: 0 },
+    ];
+
+    const getPins = (c: ComponentInstance): PinInstance[] => {
+      if (c.type === "ground") {
+        return [{ componentId: c.id, pinIndex: 0, x: c.x, y: c.y, name: "GND" }];
+      }
+      if (c.type === "diode_bridge") {
+        return [
+          { componentId: c.id, pinIndex: 0, x: c.x - 40, y: c.y - 20, name: "AC1" },
+          { componentId: c.id, pinIndex: 1, x: c.x - 40, y: c.y + 20, name: "AC2" },
+          { componentId: c.id, pinIndex: 2, x: c.x + 40, y: c.y - 20, name: "DC+" },
+          { componentId: c.id, pinIndex: 3, x: c.x + 40, y: c.y + 20, name: "DC-" },
+        ];
+      }
+      return [
+        { componentId: c.id, pinIndex: 0, x: c.x - 20, y: c.y, name: "Terminal 1" },
+        { componentId: c.id, pinIndex: 1, x: c.x + 20, y: c.y, name: "Terminal 2" },
+      ];
+    };
+
+    const wires: WireInstance[] = [
+      // V1 -> AC1 y AC2
+      { id: "w1", from: { componentId: "V1", pinIndex: 0 }, to: { componentId: "BR1", pinIndex: 0 } },
+      { id: "w2", from: { componentId: "V1", pinIndex: 1 }, to: { componentId: "BR1", pinIndex: 1 } },
+      // BR1 DC+ y DC- -> RLOAD
+      { id: "w3", from: { componentId: "BR1", pinIndex: 2 }, to: { componentId: "RLOAD", pinIndex: 0 } },
+      { id: "w4", from: { componentId: "BR1", pinIndex: 3 }, to: { componentId: "RLOAD", pinIndex: 1 } },
+      // RLOAD pin 1 a GND
+      { id: "w5", from: { componentId: "RLOAD", pinIndex: 1 }, to: { componentId: "GND", pinIndex: 0 } },
+    ];
+
+    const res = extractElectricalNetlist(components, wires, getPins);
+    expect(res.error).toBeUndefined();
+
+    const nodeAc1 = res.pinToNodeMap["BR1:0"];
+    const nodeAc2 = res.pinToNodeMap["BR1:1"];
+    const nodeDcPos = res.pinToNodeMap["BR1:2"];
+    const nodeDcNeg = res.pinToNodeMap["BR1:3"];
+
+    expect(nodeAc1).toBeDefined();
+    expect(nodeAc2).toBeDefined();
+    expect(nodeDcPos).toBeDefined();
+    expect(nodeDcNeg).toBe("0"); // Conectado a GND
+
+    const d1 = res.netlist.components.find((c) => c.id === "BR1__D1");
+    const d2 = res.netlist.components.find((c) => c.id === "BR1__D2");
+    const d3 = res.netlist.components.find((c) => c.id === "BR1__D3");
+    const d4 = res.netlist.components.find((c) => c.id === "BR1__D4");
+
+    expect(d1).toBeDefined();
+    expect(d2).toBeDefined();
+    expect(d3).toBeDefined();
+    expect(d4).toBeDefined();
+
+    // D1: AC1 -> DC+
+    expect(d1?.pins).toEqual([nodeAc1, nodeDcPos]);
+    // D2: DC- -> AC1
+    expect(d2?.pins).toEqual([nodeDcNeg, nodeAc1]);
+    // D3: AC2 -> DC+
+    expect(d3?.pins).toEqual([nodeAc2, nodeDcPos]);
+    // D4: DC- -> AC2
+    expect(d4?.pins).toEqual([nodeDcNeg, nodeAc2]);
+
+    // Parámetros comerciales de DB107
+    expect(d1?.diodeBv).toBe(1000.0);
+    expect(d1?.forwardVoltage).toBe(0.95);
   });
 });

@@ -1,5 +1,9 @@
 # Cierre de QA para piloto cerrado
 
+> Registro histórico con corte del 3 de agosto de 2026. Sus cifras de pruebas,
+> instalador y rendimiento no describen el árbol actual. La auditoría en curso
+> está en [auditoria-2026-08-30.md](auditoria-2026-08-30.md).
+
 Este documento registra la validacion de la aplicacion de escritorio Tauri
 preparada para una prueba cerrada con docentes e investigadores. La web y la
 version movil permanecen fuera de alcance.
@@ -123,8 +127,12 @@ tramo sincrono medido; la corrida final obtuvo 0.24% y 0.25%, respectivamente.
   multiples equipos, GPU, DPI y versiones de Windows.
 - La matriz cientifica principal aprueba 15 casos y 50 observaciones, pero no
   equivale a una certificacion completa contra ngspice, LTspice o Proteus.
-- La caracterizacion BSIM3 separada falla 5/5 observaciones frente a ngspice,
-  con errores relativos de corriente entre 97.9% y 99.3%.
+- La [caracterización BSIM3 separada](../validation/reports/bsim-characterization.md)
+  aprueba 5/5 puntos DC de un único caso NMOS BSIM3 frente a ngspice 47, con errores
+  relativos de corriente entre 1.27 % y 6.89 % y tolerancia relativa del 25 %.
+  El caso fija VGS=0.8–1.6 V en pasos de 0.2 V, VDS=1 V, W=10 µm, L=0.18 µm
+  y 27 °C, con los parámetros del fixture versionado. No certifica BSIM completo
+  ni BSIM4; la familia permanece experimental.
 - MCU 8051/AVR conserva infraestructura temporal, pero no implementa una ISA ni
   perifericos completos; no es instruction-accurate ni cycle-accurate.
 - La automatizacion E2E usa un binario debug instrumentado; el release final se

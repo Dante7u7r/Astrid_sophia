@@ -1,4 +1,5 @@
 import type { ComponentInstance, PinInstance, Point2D } from "../canvas_orchestrator";
+import { getSchematicThemeColors } from "./schematic_theme";
 
 export type ProbeBadges = {
   ch1?: Point2D;
@@ -13,28 +14,19 @@ export interface SParameterMarker {
   y: number;
 }
 
-const probeBadgeStyles: Array<{
-  key: keyof ProbeBadges;
-  label: string;
-  color: string;
-  bgFill: string;
-}> = [
-  { key: "ch1", label: "CH1", color: "#FACC15", bgFill: "rgba(42, 36, 10, 0.95)" },
-  { key: "ch2", label: "CH2", color: "#38BDF8", bgFill: "rgba(10, 32, 48, 0.95)" },
-  { key: "ch3", label: "CH3", color: "#F43F5E", bgFill: "rgba(42, 12, 24, 0.95)" },
-  { key: "ch4", label: "CH4", color: "#4ADE80", bgFill: "rgba(10, 36, 20, 0.95)" },
-];
-
 export function drawTemporaryWire(
   ctx: CanvasRenderingContext2D,
   activePinForWire: PinInstance | null,
   tempWireEnd: Point2D | null,
   generatePath: (start: Point2D, end: Point2D) => Point2D[],
+  isClassroom?: boolean,
 ): void {
   if (!activePinForWire || !tempWireEnd) return;
 
+  const theme = getSchematicThemeColors(isClassroom);
+
   ctx.save();
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+  ctx.strokeStyle = theme.overlays.tempWireStroke;
   ctx.lineWidth = 2.0;
   ctx.setLineDash([6, 4]);
   ctx.beginPath();
@@ -49,8 +41,8 @@ export function drawTemporaryWire(
   ctx.setLineDash([]);
 
   // Indicador de punto de enganche temporal en el extremo
-  ctx.fillStyle = "#38BDF8";
-  ctx.strokeStyle = "#0F172A";
+  ctx.fillStyle = theme.overlays.tempWireNode;
+  ctx.strokeStyle = theme.isClassroom ? "#FFFFFF" : "#0F172A";
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.arc(tempWireEnd.x, tempWireEnd.y, 4, 0, Math.PI * 2);
@@ -63,15 +55,25 @@ export function drawTemporaryWire(
 export function drawProbeBadges(
   ctx: CanvasRenderingContext2D,
   probes: ProbeBadges,
+  isClassroom?: boolean,
+  probeVoltages?: { ch1?: number; ch2?: number; ch3?: number; ch4?: number },
 ): void {
-  for (const badge of probeBadgeStyles) {
+  const theme = getSchematicThemeColors(isClassroom);
+  const badgeStyles = [
+    { key: "ch1" as const, label: "CH1", ...theme.probes.ch1 },
+    { key: "ch2" as const, label: "CH2", ...theme.probes.ch2 },
+    { key: "ch3" as const, label: "CH3", ...theme.probes.ch3 },
+    { key: "ch4" as const, label: "CH4", ...theme.probes.ch4 },
+  ];
+
+  for (const badge of badgeStyles) {
     const point = probes[badge.key];
     if (!point) continue;
 
     ctx.save();
 
     // 1. Aguja hacia el pin
-    ctx.strokeStyle = badge.color;
+    ctx.strokeStyle = badge.stroke;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
@@ -79,32 +81,49 @@ export function drawProbeBadges(
     ctx.stroke();
 
     // Punto de contacto
-    ctx.fillStyle = badge.color;
+    ctx.fillStyle = badge.stroke;
     ctx.beginPath();
     ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Insignia flotante redondeada
-    const badgeW = 28;
+    // 2. Texto y medición en vivo
+    const volt = probeVoltages?.[badge.key];
+    let displayText = badge.label;
+    if (volt !== undefined && Number.isFinite(volt)) {
+      const absV = Math.abs(volt);
+      const sign = volt < 0 ? "-" : "";
+      const vStr = absV >= 1e3
+        ? `${sign}${(absV / 1e3).toFixed(1)}kV`
+        : (absV < 0.1 && absV > 1e-4 ? `${sign}${(absV * 1e3).toFixed(0)}mV` : `${sign}${absV.toFixed(2)}V`);
+      displayText = `${badge.label} • ${vStr}`;
+    }
+
+    ctx.font = "bold 8.5px 'JetBrains Mono', 'Inter', monospace";
+    const textWidth = ctx.measureText(displayText).width;
+    const badgeW = Math.max(28, textWidth + 8);
     const badgeH = 15;
     const badgeX = point.x - badgeW / 2;
     const badgeY = point.y - 23;
 
+    // 3. Insignia flotante redondeada con elevación
     ctx.fillStyle = badge.bgFill;
-    ctx.strokeStyle = badge.color;
+    ctx.strokeStyle = badge.stroke;
     ctx.lineWidth = 1.2;
 
     ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
+    } else {
+      ctx.rect(badgeX, badgeY, badgeW, badgeH);
+    }
     ctx.fill();
     ctx.stroke();
 
-    // 3. Texto del canal
-    ctx.fillStyle = badge.color;
-    ctx.font = "bold 8.5px 'JetBrains Mono', 'Inter', monospace";
+    // 4. Texto del canal
+    ctx.fillStyle = badge.text;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(badge.label, point.x, badgeY + badgeH / 2 + 0.5);
+    ctx.fillText(displayText, point.x, badgeY + badgeH / 2 + 0.5);
 
     ctx.restore();
   }
@@ -136,6 +155,7 @@ export function drawSelectionBox(
   ctx: CanvasRenderingContext2D,
   selectionStart: Point2D | null,
   selectionEnd: Point2D | null,
+  isClassroom?: boolean,
 ): void {
   if (!selectionStart || !selectionEnd) return;
 
@@ -146,9 +166,11 @@ export function drawSelectionBox(
 
   if (w < 1 && h < 1) return;
 
+  const theme = getSchematicThemeColors(isClassroom);
+
   ctx.save();
-  ctx.fillStyle = "rgba(56, 189, 248, 0.15)";
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+  ctx.fillStyle = theme.overlays.selectionBoxFill;
+  ctx.strokeStyle = theme.overlays.selectionBoxStroke;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([5, 3]);
 
@@ -166,12 +188,15 @@ export function drawSelectionBox(
 export function drawAlignmentGuides(
   ctx: CanvasRenderingContext2D,
   guides: readonly import("./alignment_guidelines").AlignmentGuide[],
+  isClassroom?: boolean,
 ): void {
   if (!guides || guides.length === 0) return;
 
+  const theme = getSchematicThemeColors(isClassroom);
+
   ctx.save();
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
-  ctx.fillStyle = "#38bdf8";
+  ctx.strokeStyle = theme.overlays.alignmentGuideStroke;
+  ctx.fillStyle = theme.overlays.alignmentGuideNode;
   ctx.lineWidth = 1.0;
   ctx.setLineDash([4, 4]);
 
@@ -212,17 +237,19 @@ export function drawErcAndDrcOverlays(
   now: number,
   hoveredPin?: PinInstance | null,
   hoveredComp?: ComponentInstance | null,
+  isClassroom?: boolean,
 ): void {
   if (!issues || issues.length === 0) return;
 
+  const theme = getSchematicThemeColors(isClassroom);
   const compMap = new Map<string, ComponentInstance>(components.map((c) => [c.id, c]));
   const pulseScale = 1 + Math.sin(now / 160) * 0.15;
   const pulseRadius = 10 + Math.sin(now / 160) * 3;
 
   for (const issue of issues) {
     const isError = issue.type === "error";
-    const strokeColor = isError ? "hsl(0, 84%, 60%)" : "hsl(38, 96%, 52%)";
-    const fillColor = isError ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)";
+    const strokeColor = isError ? theme.erc.errorStroke : theme.erc.warningStroke;
+    const fillColor = isError ? theme.erc.errorFill : theme.erc.warningFill;
 
     let anchorX = 0;
     let anchorY = 0;

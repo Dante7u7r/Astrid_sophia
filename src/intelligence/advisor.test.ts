@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import bsimCharacterization from "../../validation/reports/bsim-characterization.json";
 import type { CircuitNetlist } from "../simulation/netlist_extractor";
 import type { ERCResult } from "../simulation/simulation_dispatcher";
 import type { SimulationSettings } from "../ui/settings_modal";
@@ -38,6 +39,25 @@ function context(patch: Partial<AdvisorContext> = {}): AdvisorContext {
 }
 
 describe("asesor determinista", () => {
+  it.each(["bsim3nmos", "bsim3pmos", "bsim4nmos", "bsim4pmos"] as const)("mantiene %s experimental sin generalizar los cinco puntos NMOS BSIM3", (type) => {
+    const recommendation = evaluateAdvisor(context({
+      netlist: {
+        ...baseNetlist,
+        components: [...baseNetlist.components, { id: "M1", type, value: 0.4, pins: ["1", "0", "0", "0"] }],
+      },
+    })).find(item => item.ruleId === "model.experimental-bsim");
+    const relativeErrors = bsimCharacterization.cases[0].observations.map(observation => observation.relativeError * 100);
+
+    expect(recommendation?.safetyClass).toBe("scientific-review-required");
+    expect(recommendation?.title).toContain("experimental");
+    expect(recommendation?.explanation).toContain("no certifica BSIM completo ni BSIM4");
+    expect(recommendation?.evidence).toContain("5/5 puntos NMOS BSIM3");
+    expect(recommendation?.evidence).toContain(`${Math.min(...relativeErrors).toFixed(2)} % a ${Math.max(...relativeErrors).toFixed(2)} %`);
+    expect(recommendation?.evidence).toContain("VGS=0.8–1.6 V, VDS=1 V, W=10 µm, L=0.18 µm, 27 °C");
+    expect(recommendation?.evidence).toContain("tolerancia relativa del 25 %");
+    expect(recommendation?.evidence).toContain("validation/reports/bsim-characterization.md");
+  });
+
   it("incluye veintitrés reglas versionadas y no recomienda sobre el caso sano", () => {
     expect(ADVISOR_RULES).toHaveLength(23);
     expect(new Set(ADVISOR_RULES.map((rule) => rule.id)).size).toBe(23);

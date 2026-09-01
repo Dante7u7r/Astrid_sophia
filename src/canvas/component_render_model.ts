@@ -3,6 +3,7 @@
 // ==========================================================================
 
 import type { ComponentInstance } from "../canvas_orchestrator";
+import { getSchematicThemeColors } from "./schematic_theme";
 
 const WAVE_LABELS: Record<string, string> = {
   sine: "∿",
@@ -44,21 +45,18 @@ export function getComponentVisualState(
   isHovered: boolean,
   isClassroom?: boolean,
 ): ComponentVisualState {
-  const isClassroomTheme = isClassroom ?? (
-    typeof document !== "undefined" &&
-    document.documentElement.getAttribute("data-theme") === "classroom"
-  );
+  const theme = getSchematicThemeColors(isClassroom);
 
-  let color = isClassroomTheme ? "#1E293B" : "#E6EAF0";
+  let color = theme.component.stroke;
   let lineWidth = 2;
   let shadowBlur = 0;
 
   if (isSelected) {
-    color = isClassroomTheme ? "#0284C7" : "#38BDF8";
+    color = theme.component.strokeSelected;
     lineWidth = 2.8;
     shadowBlur = 0;
   } else if (isHovered) {
-    color = isClassroomTheme ? "#0369A1" : "#5B9FD6";
+    color = theme.component.strokeHovered;
     lineWidth = 2.4;
     shadowBlur = 0;
   }

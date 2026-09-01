@@ -23,7 +23,7 @@ export function setSafeInvokeObserver(observer: SafeInvokeObserver | null): void
   invokeObserver = observer;
 }
 
-function isTauriEnvironment(): boolean {
+export function isTauriEnvironment(): boolean {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
@@ -37,6 +37,14 @@ function emitWebEvent<T>(eventName: string, payload: T, id: number): void {
 
   const event = { event: eventName, id, payload } as Event<T>;
   handlers.forEach((handler) => handler(event as Event<unknown>));
+}
+
+/** Emite un evento únicamente en el transporte web instrumentado de pruebas. */
+export function emitWebMockEventForTesting<T>(eventName: string, payload: T): void {
+  if (import.meta.env.MODE !== "test") {
+    throw new Error("emitWebMockEventForTesting solo está disponible durante pruebas.");
+  }
+  emitWebEvent(eventName, payload, -1);
 }
 
 const webActiveMutations = new Map<string, number>();
@@ -103,7 +111,7 @@ function startWebTransient(args?: Record<string, unknown>): void {
   }
 
   const frameCount = 60;
-  const disablePacing = (args?.disablePacing as boolean | undefined) ?? false;
+  const disablePacing = (args?.disablePacing as boolean | undefined) ?? true;
 
   const emitStep = (index: number) => {
     if (cancellationId !== webTransientRunId) return;

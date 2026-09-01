@@ -158,6 +158,11 @@ export class SettingsModal {
         this.close();
         return;
       }
+      if (event.key === "Enter" && !(event.target instanceof HTMLTextAreaElement)) {
+        event.preventDefault();
+        this.save();
+        return;
+      }
       if (event.key === "Tab") this.trapFocus(event);
     });
   }

@@ -176,8 +176,16 @@ pub(super) fn prepare_ac_operating_point(
                 let vbs = v_bulk - v_source;
 
                 let (gm, gds, gg) = if comp.comp_type == "bsim4nmos" {
-                    let (_, gm_val, gds_val, _, _, gg_val) =
-                        evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, None, Some(comp));
+                    let (_, gm_val, gds_val, _, _, gg_val) = evaluate_bsim4_nmos(
+                        vgs,
+                        vds,
+                        vbs,
+                        comp.value,
+                        comp.w,
+                        comp.l,
+                        None,
+                        Some(comp),
+                    );
                     (gm_val, gds_val, gg_val)
                 } else if comp.comp_type == "bsim3nmos" {
                     let (_, gm_val, gds_val) = evaluate_bsim3_nmos(
@@ -260,8 +268,16 @@ pub(super) fn prepare_ac_operating_point(
                 let vsb = v_source - v_bulk;
 
                 let (gm, gds, gg) = if comp.comp_type == "bsim4pmos" {
-                    let (_, gm_val, gds_val, _, _, gg_val) =
-                        evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, None, Some(comp));
+                    let (_, gm_val, gds_val, _, _, gg_val) = evaluate_bsim4_pmos(
+                        vsg,
+                        vsd,
+                        vsb,
+                        comp.value,
+                        comp.w,
+                        comp.l,
+                        None,
+                        Some(comp),
+                    );
                     (gm_val, gds_val, gg_val)
                 } else if comp.comp_type == "bsim3pmos" {
                     let (_, gm_val, gds_val) = evaluate_bsim3_pmos(

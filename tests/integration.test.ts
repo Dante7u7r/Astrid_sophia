@@ -20,6 +20,7 @@ import { type ComponentInstance, type PinInstance } from '../src/canvas_orchestr
 // Mock de la capa de Tauri
 const mockInvoke = vi.fn();
 vi.mock('../src/simulation/tauri_mock', () => ({
+  isTauriEnvironment: () => true,
   safeInvoke: (cmd: string, args?: Record<string, unknown>) => mockInvoke(cmd, args)
 }));
 

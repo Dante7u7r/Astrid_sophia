@@ -381,7 +381,11 @@ pub fn evaluate_bsim4_nmos(
     let delta_t = t_actual - tnom;
     let vth0 = comp
         .and_then(|c| c.bsim_vth0)
-        .unwrap_or(if vth_netlist != 0.0 { vth_netlist } else { 0.35 });
+        .unwrap_or(if vth_netlist != 0.0 {
+            vth_netlist
+        } else {
+            0.35
+        });
     let vth_thermal = vth0 + kt1 * (delta_t / tnom);
 
     let phi_s: f64 = 0.7;
@@ -516,7 +520,11 @@ pub fn evaluate_bsim4_pmos(
     let delta_t = t_actual - tnom;
     let vth0 = comp
         .and_then(|c| c.bsim_vth0)
-        .unwrap_or(if vth_netlist != 0.0 { vth_netlist.abs() } else { 0.35 });
+        .unwrap_or(if vth_netlist != 0.0 {
+            vth_netlist.abs()
+        } else {
+            0.35
+        });
     let vth_thermal = vth0 + kt1 * (delta_t / tnom);
 
     let phi_s: f64 = 0.7;

@@ -8,9 +8,11 @@
 //! 5. Funciones auxiliares `solve_linear_real` y `solve_linear_complex` para despacho optimizado.
 
 use crate::solver::matrix::{ComplexSparseMatrix, SparseLU, SparseMatrix};
+use faer::linalg::solvers::FullPivLu;
 use faer::prelude::*;
 use faer::{Col, Mat};
 use num_complex::Complex;
+use std::sync::Arc;
 
 /// Trait unificado para backends de resolución de sistemas lineales $A \cdot x = b$.
 pub trait LinearSolverBackend: Send + Sync {
@@ -27,10 +29,11 @@ pub trait LinearSolverBackend: Send + Sync {
 
 /// Estructura de factorización LU real pre-calculada con `faer`.
 /// Permite resolver múltiples vectores RHS sucesivamente en tiempo $O(N^2)$.
+/// Las copias comparten la misma LU inmutable, independiente de la matriz original.
 #[derive(Debug, Clone)]
 pub struct FaerFactorizedReal {
     size: usize,
-    mat_a: Mat<f64>,
+    lu: Arc<FullPivLu<f64>>,
 }
 
 impl FaerFactorizedReal {
@@ -51,8 +54,7 @@ impl FaerFactorizedReal {
             vec_b[i] = rhs[i];
         }
 
-        let lu = self.mat_a.full_piv_lu();
-        let sol_col = lu.solve(&vec_b);
+        let sol_col = self.lu.solve(&vec_b);
         let mut solution = vec![0.0; n];
         for i in 0..n {
             let val = sol_col[i];
@@ -70,10 +72,11 @@ impl FaerFactorizedReal {
 
 /// Estructura de factorización LU compleja pre-calculada con `faer` de dimensión nativa $N \times N$.
 /// Permite resolver múltiples vectores RHS complejos en barridos de ruido, AC y sensibilidad en $O(N^2)$.
+/// Las copias comparten la misma LU inmutable, independiente de la matriz original.
 #[derive(Debug, Clone)]
 pub struct FaerFactorizedComplex {
     size: usize,
-    mat_c: Mat<c64>,
+    lu: Arc<FullPivLu<c64>>,
 }
 
 impl FaerFactorizedComplex {
@@ -94,8 +97,7 @@ impl FaerFactorizedComplex {
             vec_b[i] = c64::new(rhs[i].re, rhs[i].im);
         }
 
-        let lu = self.mat_c.full_piv_lu();
-        let sol_col = lu.solve(&vec_b);
+        let sol_col = self.lu.solve(&vec_b);
         let mut solution = Vec::with_capacity(n);
         for i in 0..n {
             let val = sol_col[i];
@@ -129,14 +131,23 @@ impl FaerLinearSolver {
                 }
             }
         }
-        Ok(FaerFactorizedReal { size: n, mat_a })
+        Ok(FaerFactorizedReal {
+            size: n,
+            lu: Arc::new(mat_a.full_piv_lu()),
+        })
     }
 
     /// Pre-factoriza una matriz DMatrix<f64> de nalgebra en $O(N^3)$ para resolución rápida de múltiples RHS en $O(N^2)$.
-    pub fn factorize_dense_real(&self, matrix: &nalgebra::DMatrix<f64>) -> Result<FaerFactorizedReal, String> {
+    pub fn factorize_dense_real(
+        &self,
+        matrix: &nalgebra::DMatrix<f64>,
+    ) -> Result<FaerFactorizedReal, String> {
         let n = matrix.nrows();
         if n == 0 {
-            return Ok(FaerFactorizedReal { size: 0, mat_a: Mat::zeros(0, 0) });
+            return Ok(FaerFactorizedReal {
+                size: 0,
+                lu: Arc::new(Mat::<f64>::zeros(0, 0).full_piv_lu()),
+            });
         }
         if matrix.ncols() != n {
             return Err(format!(
@@ -151,7 +162,10 @@ impl FaerLinearSolver {
                 mat_a[(r, c)] = matrix[(r, c)];
             }
         }
-        Ok(FaerFactorizedReal { size: n, mat_a })
+        Ok(FaerFactorizedReal {
+            size: n,
+            lu: Arc::new(mat_a.full_piv_lu()),
+        })
     }
 
     /// Pre-factoriza una matriz compleja directamente en dimensión $N \times N$ nativa.
@@ -170,7 +184,10 @@ impl FaerLinearSolver {
             }
         }
 
-        Ok(FaerFactorizedComplex { size: n, mat_c })
+        Ok(FaerFactorizedComplex {
+            size: n,
+            lu: Arc::new(mat_c.full_piv_lu()),
+        })
     }
 }
 
@@ -258,7 +275,10 @@ pub fn solve_linear_real(matrix: &SparseMatrix, rhs: &[f64]) -> Result<Vec<f64>,
 }
 
 /// Resuelve un sistema lineal denso directamente con `faer` (evitando construir BTreeMaps en SparseMatrix).
-pub fn solve_dense_real_direct(matrix: &nalgebra::DMatrix<f64>, rhs: &[f64]) -> Result<Vec<f64>, String> {
+pub fn solve_dense_real_direct(
+    matrix: &nalgebra::DMatrix<f64>,
+    rhs: &[f64],
+) -> Result<Vec<f64>, String> {
     let n = matrix.nrows();
     if n == 0 {
         return Ok(Vec::new());
@@ -337,6 +357,164 @@ pub fn solve_linear_complex(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_faer_factorizations_are_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<FaerFactorizedReal>();
+        assert_send_sync::<FaerFactorizedComplex>();
+    }
+
+    #[test]
+    fn test_faer_factorized_real_clone_reuses_lu() {
+        let mut matrix = nalgebra::DMatrix::from_row_slice(2, 2, &[2.0, 1.0, 1.0, 3.0]);
+        let factorized = factorize_dense_real(&matrix).unwrap();
+        let cloned = factorized.clone();
+        assert!(Arc::ptr_eq(&factorized.lu, &cloned.lu));
+
+        // La LU es un snapshot de A: editar A requiere una nueva factorización.
+        matrix[(0, 0)] = 4.0;
+        for (rhs, expected) in [([5.0, 5.0], [2.0, 1.0]), ([8.0, 9.0], [3.0, 2.0])] {
+            for cached in [&factorized, &cloned] {
+                let result = cached.solve(&rhs).unwrap();
+                for (actual, expected) in result.iter().zip(expected) {
+                    assert!((actual - expected).abs() < 1e-12);
+                }
+            }
+        }
+        assert!(Arc::ptr_eq(&factorized.lu, &cloned.lu));
+        drop(factorized);
+        assert!((cloned.solve(&[5.0, 5.0]).unwrap()[0] - 2.0).abs() < 1e-12);
+        let updated = factorize_dense_real(&matrix).unwrap();
+        assert!((updated.solve(&[5.0, 5.0]).unwrap()[0] - 10.0 / 11.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_faer_factorized_complex_clone_reuses_lu_with_zero_diagonal() {
+        let mut matrix = ComplexSparseMatrix::new(2);
+        matrix.add_element(0, 1, Complex::new(1.0, 1.0));
+        matrix.add_element(1, 0, Complex::new(2.0, -1.0));
+        matrix.add_element(1, 1, Complex::new(3.0, 2.0));
+        let factorized = factorize_linear_complex(&matrix).unwrap();
+        let cloned = factorized.clone();
+        assert!(Arc::ptr_eq(&factorized.lu, &cloned.lu));
+
+        // Oráculos A*x=b complejos; el cero diagonal exige permutación de pivotes.
+        for (rhs, expected) in [
+            (
+                [Complex::new(1.0, 3.0), Complex::new(5.0, 4.0)],
+                [Complex::new(1.0, -1.0), Complex::new(2.0, 1.0)],
+            ),
+            (
+                [Complex::new(-3.0, 1.0), Complex::new(-7.0, 4.0)],
+                [Complex::new(0.0, 0.0), Complex::new(-1.0, 2.0)],
+            ),
+        ] {
+            for cached in [&factorized, &cloned] {
+                let result = cached.solve(&rhs).unwrap();
+                for (actual, expected) in result.iter().zip(expected) {
+                    assert!((actual - expected).norm() < 1e-12);
+                }
+            }
+        }
+        assert!(Arc::ptr_eq(&factorized.lu, &cloned.lu));
+        drop(factorized);
+        let result = cloned
+            .solve(&[Complex::new(1.0, 3.0), Complex::new(5.0, 4.0)])
+            .unwrap();
+        assert!((result[0] - Complex::new(1.0, -1.0)).norm() < 1e-12);
+    }
+
+    #[test]
+    fn test_faer_factorized_empty_and_dimension_contracts() {
+        let real_empty = factorize_linear_real(&SparseMatrix::new(0)).unwrap();
+        let dense_empty = factorize_dense_real(&nalgebra::DMatrix::zeros(0, 0)).unwrap();
+        let complex_empty = factorize_linear_complex(&ComplexSparseMatrix::new(0)).unwrap();
+        assert!(real_empty.solve(&[]).unwrap().is_empty());
+        assert!(dense_empty.solve(&[]).unwrap().is_empty());
+        assert!(complex_empty.solve(&[]).unwrap().is_empty());
+
+        let real = factorize_dense_real(&nalgebra::DMatrix::identity(2, 2)).unwrap();
+        assert!(real
+            .solve(&[1.0])
+            .unwrap_err()
+            .contains("Dimensión incompatible"));
+        let complex = factorize_linear_complex(&ComplexSparseMatrix::new(2)).unwrap();
+        assert!(complex
+            .solve(&[])
+            .unwrap_err()
+            .contains("Dimensión incompatible"));
+        assert!(factorize_dense_real(&nalgebra::DMatrix::zeros(2, 3))
+            .unwrap_err()
+            .contains("Dimensión no cuadrada"));
+    }
+
+    #[test]
+    fn test_faer_factorized_singular_matrices_return_errors() {
+        let matrix = nalgebra::DMatrix::from_row_slice(2, 2, &[1.0, 2.0, 2.0, 4.0]);
+        let real = factorize_dense_real(&matrix).unwrap();
+        assert!(real.solve(&[3.0, 7.0]).is_err());
+        assert!(real.clone().solve(&[0.0, 0.0]).is_err());
+
+        let mut matrix = ComplexSparseMatrix::new(2);
+        matrix.add_element(0, 0, Complex::new(1.0, 1.0));
+        matrix.add_element(0, 1, Complex::new(2.0, 2.0));
+        matrix.add_element(1, 0, Complex::new(2.0, 2.0));
+        matrix.add_element(1, 1, Complex::new(4.0, 4.0));
+        let complex = factorize_linear_complex(&matrix).unwrap();
+        assert!(complex
+            .solve(&[Complex::new(3.0, 3.0), Complex::new(7.0, 7.0)])
+            .is_err());
+        assert!(complex.clone().solve(&[Complex::new(0.0, 0.0); 2]).is_err());
+    }
+
+    #[test]
+    fn test_faer_factorized_non_finite_rhs_returns_errors() {
+        let real = factorize_dense_real(&nalgebra::DMatrix::identity(2, 2)).unwrap();
+        let mut matrix = ComplexSparseMatrix::new(2);
+        matrix.add_element(0, 0, Complex::new(1.0, 0.0));
+        matrix.add_element(1, 1, Complex::new(1.0, 0.0));
+        let complex = factorize_linear_complex(&matrix).unwrap();
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(real.solve(&[invalid, 1.0]).is_err());
+            assert!(complex
+                .solve(&[Complex::new(1.0, invalid), Complex::new(1.0, 0.0)])
+                .is_err());
+        }
+    }
+
+    #[test]
+    fn test_faer_factorized_extreme_diagonal_scales() {
+        // Ecuaciones desacopladas: no se afirma precisión general para matrices mal condicionadas.
+        let matrix =
+            nalgebra::DMatrix::from_diagonal(&nalgebra::DVector::from_row_slice(&[1e-150, 1e150]));
+        let real = factorize_dense_real(&matrix).unwrap();
+        for expected in [[2.0, -3.0], [-4.0, 5.0]] {
+            let result = real
+                .solve(&[expected[0] * 1e-150, expected[1] * 1e150])
+                .unwrap();
+            for (actual, expected) in result.iter().zip(expected) {
+                assert!((actual - expected).abs() < 1e-12);
+            }
+        }
+
+        let mut matrix = ComplexSparseMatrix::new(2);
+        let diagonal = [Complex::new(1e-100, 1e-100), Complex::new(1e100, -1e100)];
+        matrix.add_element(0, 0, diagonal[0]);
+        matrix.add_element(1, 1, diagonal[1]);
+        let complex = factorize_linear_complex(&matrix).unwrap();
+        for expected in [
+            [Complex::new(2.0, -1.0), Complex::new(-3.0, 2.0)],
+            [Complex::new(-4.0, 3.0), Complex::new(5.0, -2.0)],
+        ] {
+            let result = complex
+                .solve(&[diagonal[0] * expected[0], diagonal[1] * expected[1]])
+                .unwrap();
+            for (actual, expected) in result.iter().zip(expected) {
+                assert!((actual - expected).norm() < 1e-12);
+            }
+        }
+    }
 
     #[test]
     fn test_faer_linear_solver_resistive_divider() {

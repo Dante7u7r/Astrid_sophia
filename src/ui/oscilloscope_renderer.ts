@@ -64,6 +64,10 @@ export function drawAcSweep(
     const amplitudes = results.nodeAmplitudes[channel.node];
     if (!amplitudes?.length) continue;
 
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
     ctx.strokeStyle = channel.color;
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -75,6 +79,7 @@ export function drawAcSweep(
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -106,23 +111,18 @@ export function drawXyTrace(
   // 1. Grid
   ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
-  ctx.setLineDash([1, 4]);
-
+  ctx.beginPath();
   for (let x = divWidth; x < width - 1; x += divWidth) {
     const rx = Math.floor(x) + 0.5;
-    ctx.beginPath();
     ctx.moveTo(rx, 0);
     ctx.lineTo(rx, height);
-    ctx.stroke();
   }
   for (let y = divHeight; y < height - 1; y += divHeight) {
     const ry = Math.floor(y) + 0.5;
-    ctx.beginPath();
     ctx.moveTo(0, ry);
     ctx.lineTo(width, ry);
-    ctx.stroke();
   }
-  ctx.setLineDash([]);
+  ctx.stroke();
 
   // 2. Axes
   ctx.strokeStyle = theme.axisLine;
@@ -169,6 +169,10 @@ export function drawXyTrace(
   }
 
   if (points.length >= 2) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -186,6 +190,8 @@ export function drawXyTrace(
     ctx.beginPath();
     renderSmoothTracePath(ctx, points);
     ctx.stroke();
+
+    ctx.restore();
   }
 
   ctx.restore();
@@ -264,28 +270,24 @@ export function drawTyReticle(
   const divHeight = height / 8;
   const theme = getInstrumentThemeColors();
 
-  // 1. High-precision Dotted Sub-grid
+  // 1. High-precision Crisp Sub-grid
   ctx.save();
   ctx.strokeStyle = theme.gridLine;
   ctx.lineWidth = 1;
-  ctx.setLineDash([1, 4]);
 
+  ctx.beginPath();
   for (let x = divWidth; x < width - 1; x += divWidth) {
     const rx = Math.floor(x) + 0.5;
-    ctx.beginPath();
     ctx.moveTo(rx, 0);
     ctx.lineTo(rx, height);
-    ctx.stroke();
   }
 
   for (let y = divHeight; y < height - 1; y += divHeight) {
     const ry = Math.floor(y) + 0.5;
-    ctx.beginPath();
     ctx.moveTo(0, ry);
     ctx.lineTo(width, ry);
-    ctx.stroke();
   }
-  ctx.setLineDash([]);
+  ctx.stroke();
 
   // 2. Primary Center Crosshairs (Continuous glowing axis)
   const centerX = Math.floor(width / 2) + 0.5;
@@ -365,8 +367,22 @@ export function drawTyReticle(
     ctx.fillText("T", width - 7, trigY);
 
     // Trigger Status Badge at top right
-    const statusText = trig.paused ? "STOP" : trig.triggered ? "TRIG'D" : trig.mode.toUpperCase();
-    const statusColor = trig.paused ? "#f43f5e" : trig.triggered ? "#22c55e" : "#38bdf8";
+    const statusText = trig.paused
+      ? "STOP"
+      : trig.triggered
+        ? "TRIG'D"
+        : trig.mode === "single"
+          ? "READY"
+          : trig.mode === "normal"
+            ? "WAIT"
+            : "AUTO";
+    const statusColor = trig.paused
+      ? "#f43f5e"
+      : trig.triggered
+        ? "#22c55e"
+        : trig.mode === "single" || trig.mode === "normal"
+          ? "#f59e0b"
+          : "#38bdf8";
 
     ctx.font = "bold 9px var(--font-mono)";
     const badgeW = ctx.measureText(statusText).width + 12;
@@ -414,6 +430,9 @@ export function drawPvtTraces(
     if (points.length < 2) continue;
 
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -464,6 +483,7 @@ export function drawSplitTyReticle(
   if (n <= 1) return;
   const slotHeight = height / n;
   const divWidth = width / 10;
+  const theme = getInstrumentThemeColors();
 
   ctx.save();
 
@@ -476,7 +496,7 @@ export function drawSplitTyReticle(
 
     // Slot separator
     if (k > 0) {
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.strokeStyle = theme.axisLine;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -485,28 +505,24 @@ export function drawSplitTyReticle(
       ctx.stroke();
     }
 
-    // Dotted sub-grid for this slot
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
+    // Crisp sub-grid for this slot
+    ctx.strokeStyle = theme.gridLine;
     ctx.lineWidth = 1;
-    ctx.setLineDash([1, 4]);
+    ctx.beginPath();
     for (let x = divWidth; x < width - 1; x += divWidth) {
       const rx = Math.floor(x) + 0.5;
-      ctx.beginPath();
       ctx.moveTo(rx, topY);
       ctx.lineTo(rx, topY + slotHeight);
-      ctx.stroke();
     }
     for (let y = divHeight; y < slotHeight - 1; y += divHeight) {
       const ry = Math.floor(topY + y) + 0.5;
-      ctx.beginPath();
       ctx.moveTo(0, ry);
       ctx.lineTo(width, ry);
-      ctx.stroke();
     }
-    ctx.setLineDash([]);
+    ctx.stroke();
 
     // Center sub-axis
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+    ctx.strokeStyle = theme.axisLine;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, Math.floor(centerY) + 0.5);
@@ -541,8 +557,22 @@ export function drawSplitTyReticle(
 
   // Trigger Status Badge at top right
   if (trigger) {
-    const statusText = trigger.paused ? "STOP" : trigger.triggered ? "TRIG'D" : trigger.mode.toUpperCase();
-    const statusColor = trigger.paused ? "#f43f5e" : trigger.triggered ? "#22c55e" : "#38bdf8";
+    const statusText = trigger.paused
+      ? "STOP"
+      : trigger.triggered
+        ? "TRIG'D"
+        : trigger.mode === "single"
+          ? "READY"
+          : trigger.mode === "normal"
+            ? "WAIT"
+            : "AUTO";
+    const statusColor = trigger.paused
+      ? "#f43f5e"
+      : trigger.triggered
+        ? "#22c55e"
+        : trigger.mode === "single" || trigger.mode === "normal"
+          ? "#f59e0b"
+          : "#38bdf8";
 
     ctx.font = "bold 9px var(--font-mono)";
     const badgeW = ctx.measureText(statusText).width + 12;
@@ -743,7 +773,7 @@ export function drawOscilloscopeCursors(
     : chColorKey === "ch3"
       ? { main: "#F43F5E", glow: "rgba(244, 63, 94, 0.4)", text: "#FECDD3", hover: "#FB7185" }
       : chColorKey === "ch4"
-        ? { main: "#4ADE80", glow: "rgba(74, 222, 128, 0.4)", text: "#BBF7D0", hover: "#86EFAC" }
+        ? { main: "#34D399", glow: "rgba(52, 211, 153, 0.4)", text: "#A7F3D0", hover: "#6EE7B7" }
         : chColorKey === "math"
           ? { main: "#C084FC", glow: "rgba(192, 132, 252, 0.4)", text: "#F3E8FF", hover: "#D8B4FE" }
           : { main: "#FACC15", glow: "rgba(250, 204, 21, 0.4)", text: "#FEF08A", hover: "#FDE047" };

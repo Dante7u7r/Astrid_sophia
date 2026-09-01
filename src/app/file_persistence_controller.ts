@@ -1,11 +1,14 @@
 import type { Tab, TabManager } from "../ui/tab_manager";
 import type { CircuitDocumentPort } from "./circuit_document_controller";
+import type { CircuitFileData } from "../persistence/circuit_file";
 
 export interface FilePersistenceControllerDependencies {
   getTabManager(): TabManager | null;
   documentController: CircuitDocumentPort;
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
   invokeTauri<T>(cmd: string, args?: unknown): Promise<T>;
+  onDemoLoaded?: (cleanName: string, data: CircuitFileData) => void | Promise<void>;
+  onOpenSynthesizer?: () => void;
 }
 
 export function initFilePersistenceController(
@@ -26,6 +29,11 @@ export function initFilePersistenceController(
       const file = demoSelect.value;
       demoSelect.value = "";
       if (!file) return;
+
+      if (file === "__synthesize__") {
+        dependencies.onOpenSynthesizer?.();
+        return;
+      }
 
       const tabManager = getTabManagerOrNull();
       if (!tabManager) return;
@@ -56,6 +64,7 @@ export function initFilePersistenceController(
             unsaved: false,
           });
           dependencies.addLog(`Demo [${file}] cargada correctamente.`, "receive");
+          await dependencies.onDemoLoaded?.(cleanName, candidate.data);
         } else {
           await tabManager.closeTab(demoTab.id);
         }

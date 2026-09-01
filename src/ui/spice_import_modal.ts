@@ -4,6 +4,101 @@ import { addModelCardToPalette, addSubcircuitCardToPalette } from "./component_p
 let modalElement: HTMLElement | null = null;
 let parsedSubcircuitsCache: ParsedSubcircuit[] = [];
 let parsedModelsCache: ParsedSpiceModel[] = [];
+const MAX_SPICE_IMPORT_BYTES = 5_000_000;
+const MAX_SPICE_DEFINITIONS = 500;
+
+function createTextElement<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  text: string,
+  cssText = "",
+): HTMLElementTagNameMap[K] {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  element.style.cssText = cssText;
+  return element;
+}
+
+interface DetectionRowOptions {
+  readonly itemType: "subckt" | "model";
+  readonly index: number;
+  readonly directive: string;
+  readonly accentColor: string;
+  readonly accentBackground: string;
+  readonly accentBorder: string;
+  readonly name: string;
+  readonly category: string;
+  readonly description: string;
+  readonly badges: readonly string[];
+}
+
+function createDetectionRow(options: DetectionRowOptions): HTMLDivElement {
+  const item = document.createElement("div");
+  item.style.cssText = `
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+  `;
+
+  const row = document.createElement("div");
+  row.style.cssText = "display: flex; align-items: center; gap: 10px;";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = true;
+  checkbox.dataset.itemType = options.itemType;
+  checkbox.dataset.index = String(options.index);
+  checkbox.id = `${options.itemType}-check-${options.index}`;
+  checkbox.style.cursor = "pointer";
+
+  const details = document.createElement("div");
+  const heading = document.createElement("div");
+  heading.style.cssText = "display: flex; align-items: center; gap: 6px;";
+
+  const directive = createTextElement(
+    "span",
+    options.directive,
+    `background: ${options.accentBackground}; color: ${options.accentColor}; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; border: 1px solid ${options.accentBorder};`,
+  );
+  const name = createTextElement(
+    "span",
+    options.name,
+    "font-size: 13px; font-weight: 600; color: #E6EDF3;",
+  );
+  const category = createTextElement(
+    "span",
+    `(${options.category})`,
+    "font-size: 11px; font-weight: normal; color: #8B949E;",
+  );
+  heading.append(directive, name, category);
+
+  const description = createTextElement(
+    "div",
+    options.description,
+    "font-size: 11px; color: #8B949E; margin-top: 2px;",
+  );
+  details.append(heading, description);
+
+  if (options.badges.length > 0) {
+    const badges = document.createElement("div");
+    badges.style.cssText = "margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap;";
+    for (const badgeText of options.badges) {
+      badges.appendChild(createTextElement(
+        "span",
+        badgeText,
+        `background: #21262D; color: ${options.accentColor}; font-size: 10px; font-family: monospace; padding: 2px 6px; border-radius: 3px; border: 1px solid #30363D;`,
+      ));
+    }
+    details.appendChild(badges);
+  }
+
+  row.append(checkbox, details);
+  item.appendChild(row);
+  return item;
+}
 
 /**
  * Abre el Modal de Importación de Bibliotecas SPICE.
@@ -195,19 +290,43 @@ function createSpiceImportModalDOM(): void {
   const detectedContainer = modal.querySelector<HTMLElement>("#spice-detected-container");
   const detectedList = modal.querySelector<HTMLElement>("#spice-detected-list");
 
-  dropzone?.addEventListener("click", () => fileInput?.click());
+  const showAnalysisError = (message: string): void => {
+    parsedSubcircuitsCache = [];
+    parsedModelsCache = [];
+    if (!detectedContainer || !detectedList || !registerBtn) return;
+    detectedContainer.style.display = "flex";
+    detectedList.replaceChildren(createTextElement(
+      "span",
+      message,
+      "font-size: 12px; color: #F85149; padding: 6px;",
+    ));
+    registerBtn.disabled = true;
+    registerBtn.style.opacity = "0.6";
+    registerBtn.style.cursor = "not-allowed";
+  };
 
-  fileInput?.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-
+  const readSpiceFile = (file: File): void => {
+    if (file.size > MAX_SPICE_IMPORT_BYTES) {
+      showAnalysisError("El archivo excede el límite de importación de 5 MB.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = String(event.target?.result ?? "");
       if (textarea) textarea.value = text;
       runAnalysis(text);
     };
+    reader.onerror = () => showAnalysisError("No se pudo leer el archivo SPICE seleccionado.");
     reader.readAsText(file);
+  };
+
+  dropzone?.addEventListener("click", () => fileInput?.click());
+
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    readSpiceFile(file);
   });
 
   dropzone?.addEventListener("dragover", (e) => {
@@ -225,13 +344,7 @@ function createSpiceImportModalDOM(): void {
     const file = e.dataTransfer?.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = String(event.target?.result ?? "");
-      if (textarea) textarea.value = text;
-      runAnalysis(text);
-    };
-    reader.readAsText(file);
+    readSpiceFile(file);
   });
 
   analyzeBtn?.addEventListener("click", () => {
@@ -242,7 +355,6 @@ function createSpiceImportModalDOM(): void {
     const checkboxes = detectedList?.querySelectorAll<HTMLInputElement>("input[type='checkbox']:checked");
     if (!checkboxes || checkboxes.length === 0) return;
 
-    let registeredCount = 0;
     checkboxes.forEach((cb) => {
       const itemType = cb.dataset.itemType;
       const index = parseInt(cb.dataset.index ?? "-1", 10);
@@ -250,13 +362,11 @@ function createSpiceImportModalDOM(): void {
         const subckt = parsedSubcircuitsCache[index];
         if (subckt) {
           addSubcircuitCardToPalette(subckt);
-          registeredCount++;
         }
       } else if (itemType === "model") {
         const model = parsedModelsCache[index];
         if (model) {
           addModelCardToPalette(model);
-          registeredCount++;
         }
       }
     });
@@ -266,101 +376,64 @@ function createSpiceImportModalDOM(): void {
 
   function runAnalysis(text: string): void {
     if (!text.trim()) return;
+    if (new Blob([text]).size > MAX_SPICE_IMPORT_BYTES) {
+      showAnalysisError("El texto excede el límite de importación de 5 MB.");
+      return;
+    }
 
     const parsed = parseSpiceLibrary(text);
-    parsedSubcircuitsCache = [...parsed.subcircuits];
-    parsedModelsCache = [...parsed.models];
-
     if (!detectedContainer || !detectedList || !registerBtn) return;
 
-    detectedList.innerHTML = "";
+    detectedList.replaceChildren();
 
     const totalFound = parsed.subcircuits.length + parsed.models.length;
 
     if (totalFound === 0) {
-      detectedContainer.style.display = "flex";
-      detectedList.innerHTML = `<span style="font-size: 12px; color: #F85149; padding: 6px;">No se encontraron directivas .SUBCKT ni .MODEL válidas en el texto proporcionado.</span>`;
-      registerBtn.disabled = true;
-      registerBtn.style.opacity = "0.6";
-      registerBtn.style.cursor = "not-allowed";
+      showAnalysisError("No se encontraron directivas .SUBCKT ni .MODEL válidas en el texto proporcionado.");
       return;
     }
+
+    if (totalFound > MAX_SPICE_DEFINITIONS) {
+      showAnalysisError(`La biblioteca contiene ${totalFound} definiciones; el límite seguro es ${MAX_SPICE_DEFINITIONS}.`);
+      return;
+    }
+
+    parsedSubcircuitsCache = [...parsed.subcircuits];
+    parsedModelsCache = [...parsed.models];
 
     detectedContainer.style.display = "flex";
 
     // 1. Renderizar Macromodelos (.SUBCKT)
     parsed.subcircuits.forEach((sub, idx) => {
-      const item = document.createElement("div");
-      item.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        background: #161B22;
-        border: 1px solid #30363D;
-        border-radius: 6px;
-      `;
-
-      const pinBadges = sub.pinNames
-        .map(
-          (p) =>
-            `<span style="background: #21262D; color: #79C0FF; font-size: 10px; font-family: monospace; padding: 2px 6px; border-radius: 3px; border: 1px solid #30363D;">${p}</span>`,
-        )
-        .join(" ");
-
-      item.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <input type="checkbox" checked data-item-type="subckt" data-index="${idx}" id="sub-check-${idx}" style="cursor: pointer;" />
-          <div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="background: rgba(56, 189, 248, 0.15); color: #38BDF8; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; border: 1px solid rgba(56, 189, 248, 0.3);">.SUBCKT</span>
-              <span style="font-size: 13px; font-weight: 600; color: #E6EDF3;">${sub.name}</span>
-              <span style="font-size: 11px; font-weight: normal; color: #8B949E;">(${sub.category})</span>
-            </div>
-            <div style="font-size: 11px; color: #8B949E; margin-top: 2px;">${sub.description}</div>
-            <div style="margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap;">${pinBadges}</div>
-          </div>
-        </div>
-      `;
-      detectedList.appendChild(item);
+      detectedList.appendChild(createDetectionRow({
+        itemType: "subckt",
+        index: idx,
+        directive: ".SUBCKT",
+        accentColor: "#79C0FF",
+        accentBackground: "rgba(56, 189, 248, 0.15)",
+        accentBorder: "rgba(56, 189, 248, 0.3)",
+        name: sub.name,
+        category: sub.category,
+        description: sub.description,
+        badges: sub.pinNames,
+      }));
     });
 
     // 2. Renderizar Modelos de Semiconductores (.MODEL)
     parsed.models.forEach((mod, idx) => {
-      const item = document.createElement("div");
-      item.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        background: #161B22;
-        border: 1px solid #30363D;
-        border-radius: 6px;
-      `;
-
       const paramEntries = Object.entries(mod.parameters || {});
-      const paramBadges = paramEntries.slice(0, 5)
-        .map(
-          ([k, v]) =>
-            `<span style="background: #21262D; color: #A78BFA; font-size: 10px; font-family: monospace; padding: 2px 6px; border-radius: 3px; border: 1px solid #30363D;">${k}=${v}</span>`,
-        )
-        .join(" ");
-
-      item.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <input type="checkbox" checked data-item-type="model" data-index="${idx}" id="model-check-${idx}" style="cursor: pointer;" />
-          <div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="background: rgba(167, 139, 250, 0.15); color: #A78BFA; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; border: 1px solid rgba(167, 139, 250, 0.3);">.MODEL ${mod.type.toUpperCase()}</span>
-              <span style="font-size: 13px; font-weight: 600; color: #E6EDF3;">${mod.name}</span>
-              <span style="font-size: 11px; font-weight: normal; color: #8B949E;">(${mod.category || "Semiconductores"})</span>
-            </div>
-            <div style="font-size: 11px; color: #8B949E; margin-top: 2px;">${mod.description || `Modelo SPICE ${mod.name}`}</div>
-            ${paramBadges ? `<div style="margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap;">${paramBadges}</div>` : ""}
-          </div>
-        </div>
-      `;
-      detectedList.appendChild(item);
+      detectedList.appendChild(createDetectionRow({
+        itemType: "model",
+        index: idx,
+        directive: `.MODEL ${mod.type.toUpperCase()}`,
+        accentColor: "#A78BFA",
+        accentBackground: "rgba(167, 139, 250, 0.15)",
+        accentBorder: "rgba(167, 139, 250, 0.3)",
+        name: mod.name,
+        category: mod.category || "Semiconductores",
+        description: mod.description || `Modelo SPICE ${mod.name}`,
+        badges: paramEntries.slice(0, 5).map(([key, value]) => `${key}=${value}`),
+      }));
     });
 
     registerBtn.disabled = false;

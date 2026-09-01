@@ -6,6 +6,7 @@ import type {
 } from "../canvas_orchestrator";
 import { ensureCanvasBuffer } from "./render_model";
 import { CurrentAnimationRenderer } from "./current_animation_renderer";
+import { FailureAnimationRenderer } from "./failure_animation_renderer";
 import { ThermalHeatmapRenderer } from "./thermal_heatmap_renderer";
 import {
   drawAlignmentGuides,
@@ -49,6 +50,7 @@ export interface CanvasOverlayHost {
 export class CanvasOverlayRenderer {
   private readonly ctx: CanvasRenderingContext2D | null;
   public readonly currentAnimationRenderer = new CurrentAnimationRenderer();
+  public readonly failureAnimationRenderer = new FailureAnimationRenderer();
   public readonly thermalHeatmapRenderer = new ThermalHeatmapRenderer();
 
   constructor(
@@ -139,7 +141,21 @@ export class CanvasOverlayRenderer {
       );
     }
 
-    // 6. Overlays de ERC/DRC (fatal: rojo, advertencia: amarillo) en tiempo real
+    // 6. Animación de Chispas y Marcadores Discretos de Fallas (Zero-GPU Waste)
+    if (isSimActive) {
+      const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+      this.failureAnimationRenderer.renderFailures(
+        this.ctx,
+        this.host.wires,
+        this.host.components,
+        branchCurrents,
+        this.host.ercIssues ?? [],
+        now,
+        isClassroom,
+      );
+    }
+
+    // 7. Overlays de ERC/DRC (fatal: rojo, advertencia: amarillo) en tiempo real
     if (hasErcIssues) {
       drawErcAndDrcOverlays(
         this.ctx,

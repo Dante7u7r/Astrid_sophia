@@ -19,6 +19,8 @@ describe("OscilloscopePanel", () => {
       scale: vi.fn(),
       save: vi.fn(),
       restore: vi.fn(),
+      rect: vi.fn(),
+      clip: vi.fn(),
       measureText: vi.fn(() => ({ width: 50 })),
       roundRect: vi.fn(),
       closePath: vi.fn(),
@@ -42,8 +44,9 @@ describe("OscilloscopePanel", () => {
 
         <select id="osc-trigger-mode"><option value="ch1">CH1</option></select>
         <select id="osc-trigger-edge"><option value="rising">Subida</option></select>
+        <button id="osc-trigger-0v-btn">⚡ 0V</button>
         <button id="osc-trigger-50-btn">⚡ 50%</button>
-        <input id="osc-trigger-level" type="range" value="0" />
+        <input id="osc-trigger-level" type="number" value="0.00" />
         <select id="osc-trigger-sweep-mode"><option value="auto">Auto</option></select>
 
         <button id="osc-mode-ty" class="active">T-Y</button>
@@ -68,7 +71,8 @@ describe("OscilloscopePanel", () => {
           </div>
           <select id="osc-focused-volts"><option value="1">1.0 V/div</option></select>
           <span id="osc-focused-volts-badge">1.0 V/div</span>
-          <input id="osc-focused-offset" type="range" value="0" />
+          <button id="osc-focused-offset-0v-btn">⚡ 0V</button>
+          <input id="osc-focused-offset" type="number" value="0.00" />
           <span id="osc-focused-offset-val">0.00 V</span>
           <button id="osc-focused-pick-probe-btn">🎯 Probar</button>
         </div>
@@ -375,23 +379,46 @@ describe("OscilloscopePanel", () => {
     expect(panel.mathExpression).toBe("INTEG(CH1)");
   });
 
-  it("ajusta la velocidad de simulación y sincroniza el HUD", () => {
+  it("permite ajustar el nivel de disparo numéricamente y con el botón 0V", () => {
     const panel = new OscilloscopePanel();
-    let emittedSpeed = 0;
-    panel.onSpeedChanged = (spd) => {
-      emittedSpeed = spd;
-    };
+    const trigInput = document.querySelector<HTMLInputElement>("#osc-trigger-level");
+    const trig0vBtn = document.querySelector<HTMLButtonElement>("#osc-trigger-0v-btn");
 
-    panel.setSimulationSpeed(2.0);
-    expect(panel.simulationSpeedMultiplier).toBe(2.0);
+    panel.triggerLevel = 2.5;
+    panel.syncFocusedChannelUI();
+    expect(trigInput?.value).toBe("2.50");
 
-    const speedSelect = document.querySelector<HTMLSelectElement>("#osc-sim-speed");
-    if (speedSelect) {
-      speedSelect.value = "5";
-      speedSelect.dispatchEvent(new Event("change"));
-      expect(panel.simulationSpeedMultiplier).toBe(5.0);
-      expect(emittedSpeed).toBe(5.0);
+    if (trigInput) {
+      trigInput.value = "-1.2";
+      trigInput.dispatchEvent(new Event("input"));
+      expect(panel.triggerLevel).toBeCloseTo(-1.2, 2);
     }
+
+    trig0vBtn?.click();
+    expect(panel.triggerLevel).toBe(0.0);
+    expect(trigInput?.value).toBe("0.00");
+  });
+
+  it("permite ajustar el offset vertical en voltios y centrarlo a cero con el botón 0V", () => {
+    const panel = new OscilloscopePanel();
+    const offsetInput = document.querySelector<HTMLInputElement>("#osc-focused-offset");
+    const offset0vBtn = document.querySelector<HTMLButtonElement>("#osc-focused-offset-0v-btn");
+
+    panel.voltsPerDivCh1 = 2.0; // 2 V/div
+    panel.offsetCh1 = 1.5;      // 1.5 div = 3.0 V
+    panel.syncFocusedChannelUI();
+    expect(offsetInput?.value).toBe("3.00");
+
+    if (offsetInput) {
+      offsetInput.value = "-4.0";
+      offsetInput.dispatchEvent(new Event("input"));
+      // -4.0 V / 2.0 V/div = -2.0 divs
+      expect(panel.offsetCh1).toBeCloseTo(-2.0, 2);
+    }
+
+    offset0vBtn?.click();
+    expect(panel.offsetCh1).toBe(0.0);
+    expect(offsetInput?.value).toBe("0.00");
   });
 
   it("sincroniza el selector timeDivSelect tanto con formato decimal como exponencial", () => {
@@ -630,6 +657,169 @@ describe("OscilloscopePanel", () => {
 
     panel.isXyMode = true;
     expect(() => panel.draw()).not.toThrow();
+  });
+
+  it("mantiene el canal enfocado al hacer clic en marcadores de tierra superpuestos en el borde izquierdo", () => {
+    const panel = new OscilloscopePanel();
+    const canvas = document.querySelector<HTMLCanvasElement>("#osc-canvas");
+    expect(canvas).not.toBeNull();
+
+    // Activar CH1 y CH2, ambos con offset 0V
+    panel.setChannelActive("ch1", true);
+    panel.setChannelActive("ch2", true);
+    panel.offsetCh1 = 0.0;
+    panel.offsetCh2 = 0.0;
+
+    // Enfocar CH2
+    panel.setFocusedChannel("ch2");
+    expect(panel.focusedChannel).toBe("ch2");
+
+    // Simular mousedown en el borde izquierdo (x=10, y=200 que corresponde al centro Y)
+    if (canvas) {
+      const rectSpy = vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 400,
+        bottom: 400,
+        right: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      const mousedownEvent = new MouseEvent("mousedown", {
+        clientX: 10,
+        clientY: 200,
+      });
+      canvas.dispatchEvent(mousedownEvent);
+
+      // Debe mantenerse en CH2 por prioridad de foco y no saltar a CH1
+      expect(panel.focusedChannel).toBe("ch2");
+
+      rectSpy.mockRestore();
+    }
+  });
+
+  it("abre el menú contextual del osciloscopio al hacer clic derecho y ejecuta acciones", () => {
+    const panel = new OscilloscopePanel();
+    const canvas = document.querySelector<HTMLCanvasElement>("#osc-canvas");
+    expect(canvas).not.toBeNull();
+
+    if (canvas) {
+      const rectSpy = vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 400,
+        bottom: 400,
+        right: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      // Disparar contextmenu en Y=150 (por encima del centro Y=200 -> voltaje positivo)
+      const contextEvent = new MouseEvent("contextmenu", {
+        clientX: 400,
+        clientY: 150,
+        bubbles: true,
+        cancelable: true,
+      });
+      canvas.dispatchEvent(contextEvent);
+
+      const menu = document.getElementById("osc-context-menu");
+      expect(menu).not.toBeNull();
+
+      const items = Array.from(menu?.querySelectorAll<HTMLButtonElement>(".context-menu-item") || []);
+      expect(items.length).toBeGreaterThanOrEqual(7);
+
+      // Probar Fijar Disparo
+      const trigItem = items.find(btn => btn.textContent?.includes("Fijar Disparo"));
+      expect(trigItem).toBeDefined();
+      trigItem?.click();
+      expect(panel.triggerLevel).toBeCloseTo(1.0, 1);
+
+      // Reabrir y probar Centrar Disparo en 0V
+      canvas.dispatchEvent(contextEvent);
+      const menu2 = document.getElementById("osc-context-menu");
+      const zeroTrigItem = Array.from(menu2?.querySelectorAll<HTMLButtonElement>(".context-menu-item") || [])
+        .find(btn => btn.textContent?.includes("Centrar Disparo en 0V"));
+      zeroTrigItem?.click();
+      expect(panel.triggerLevel).toBe(0.0);
+
+      rectSpy.mockRestore();
+    }
+  });
+
+  it("permite mover cursores a coordenadas mediante el menú contextual", () => {
+    const panel = new OscilloscopePanel();
+    const canvas = document.querySelector<HTMLCanvasElement>("#osc-canvas");
+    if (canvas) {
+      const rectSpy = vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 400,
+        bottom: 400,
+        right: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      panel.moveNearestCursorT(0.4);
+      expect(panel.cursorMode).toBe("time");
+      expect(panel.isCursorsEnabled).toBe(true);
+
+      panel.moveNearestCursorV(3.5);
+      expect(panel.cursorMode).toBe("both");
+      expect(panel.isCursorsEnabled).toBe(true);
+
+      rectSpy.mockRestore();
+    }
+  });
+
+  it("permite activar y alternar el modo Auto-Range dinámico y ajusta automáticamente la escala V/div si la señal excede el límite de pantalla", () => {
+    const panel = new OscilloscopePanel();
+    expect(panel.isAutoRangeEnabled).toBe(false);
+
+    panel.isAutoRangeEnabled = true;
+    panel.updateAutoRangeButtonState();
+    expect(panel.isAutoRangeEnabled).toBe(true);
+
+    // Simular señal de 30Vpp en CH2 mientras CH2 está configurado a 2.0 V/div
+    panel.ch2ProbeNode = "3";
+    panel.setChannelActive("ch2", true);
+    panel.voltsPerDivCh2 = 2.0;
+
+    const samples: TimeStepResult[] = [];
+    for (let i = 0; i < 50; i++) {
+      samples.push({
+        time: i * 0.0001,
+        nodeVoltages: { "3": 15.0 * Math.sin(i * 0.2) },
+        branchCurrents: {},
+      });
+    }
+    panel.transientResults = samples;
+
+    // Ejecutar check forzado
+    panel.runAutoRangeCheck(true);
+
+    // Debe escalar de 2.0 V/div a 5.0 V/div o 10.0 V/div para alojar los 15V pico en ~3 divisiones
+    expect(panel.voltsPerDivCh2).toBeGreaterThanOrEqual(5.0);
+  });
+
+  it("persiste y restaura correctamente isAutoRangeEnabled en getPersistentState y applyPersistentState", () => {
+    const panel = new OscilloscopePanel();
+    panel.isAutoRangeEnabled = true;
+    const state = panel.getPersistentState();
+    expect(state.isAutoRangeEnabled).toBe(true);
+
+    const panel2 = new OscilloscopePanel();
+    panel2.isAutoRangeEnabled = false;
+    panel2.applyPersistentState(state);
+    expect(panel2.isAutoRangeEnabled).toBe(true);
   });
 });
 

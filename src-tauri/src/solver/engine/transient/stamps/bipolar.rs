@@ -114,19 +114,44 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     let vntol = 1e-6;
     let tol_be = reltol * vbe.abs().max(vbe_old.abs()) + vntol;
     let tol_bc = reltol * vbc.abs().max(vbc_old.abs()) + vntol;
-    let (_ide, gbe, ieq_be, _idc, gbc, ieq_bc) = if ctx.iter > 0
-        && (vbe_new - vbe_old).abs() < tol_be
-        && (vbc_new - vbc_old).abs() < tol_bc
-    {
-        if let Some(bypass) = ctx.bjt_bypass.get(&comp.id) {
-            (
-                bypass.ide,
-                bypass.gbe,
-                bypass.ieq_be,
-                bypass.idc,
-                bypass.gbc,
-                bypass.ieq_bc,
-            )
+    let (_ide, gbe, ieq_be, _idc, gbc, ieq_bc) =
+        if ctx.iter > 0 && (vbe_new - vbe_old).abs() < tol_be && (vbc_new - vbc_old).abs() < tol_bc
+        {
+            if let Some(bypass) = ctx.bjt_bypass.get(&comp.id) {
+                (
+                    bypass.ide,
+                    bypass.gbe,
+                    bypass.ieq_be,
+                    bypass.idc,
+                    bypass.gbc,
+                    bypass.ieq_bc,
+                )
+            } else {
+                let (ide_raw, gbe_raw, _ieq_be_raw) = evaluate_pn_junction(vbe, vt_b, is_b);
+                let ide_c = ide_raw * k_early;
+                let gbe_c = gbe_raw * k_early;
+                let ieq_be_c = ide_c - gbe_c * vbe;
+
+                let (idc_raw, gbc_raw, _ieq_bc_raw) = evaluate_pn_junction(vbc, vt_b, is_b);
+                let idc_c = idc_raw * k_early;
+                let gbc_c = gbc_raw * k_early;
+                let ieq_bc_c = idc_c - gbc_c * vbc;
+
+                ctx.bjt_bypass.insert(
+                    comp.id.clone(),
+                    crate::solver::engine::transient_workspace::BjtBypassState {
+                        last_vbe: vbe,
+                        last_vbc: vbc,
+                        gbe: gbe_c,
+                        gbc: gbc_c,
+                        ieq_be: ieq_be_c,
+                        ieq_bc: ieq_bc_c,
+                        ide: ide_c,
+                        idc: idc_c,
+                    },
+                );
+                (ide_c, gbe_c, ieq_be_c, idc_c, gbc_c, ieq_bc_c)
+            }
         } else {
             let (ide_raw, gbe_raw, _ieq_be_raw) = evaluate_pn_junction(vbe, vt_b, is_b);
             let ide_c = ide_raw * k_early;
@@ -152,33 +177,7 @@ pub(super) fn stamp_bipolar(comp: &ComponentData, ctx: &mut StampContext<'_>) {
                 },
             );
             (ide_c, gbe_c, ieq_be_c, idc_c, gbc_c, ieq_bc_c)
-        }
-    } else {
-        let (ide_raw, gbe_raw, _ieq_be_raw) = evaluate_pn_junction(vbe, vt_b, is_b);
-        let ide_c = ide_raw * k_early;
-        let gbe_c = gbe_raw * k_early;
-        let ieq_be_c = ide_c - gbe_c * vbe;
-
-        let (idc_raw, gbc_raw, _ieq_bc_raw) = evaluate_pn_junction(vbc, vt_b, is_b);
-        let idc_c = idc_raw * k_early;
-        let gbc_c = gbc_raw * k_early;
-        let ieq_bc_c = idc_c - gbc_c * vbc;
-
-        ctx.bjt_bypass.insert(
-            comp.id.clone(),
-            crate::solver::engine::transient_workspace::BjtBypassState {
-                last_vbe: vbe,
-                last_vbc: vbc,
-                gbe: gbe_c,
-                gbc: gbc_c,
-                ieq_be: ieq_be_c,
-                ieq_bc: ieq_bc_c,
-                ide: ide_c,
-                idc: idc_c,
-            },
-        );
-        (ide_c, gbe_c, ieq_be_c, idc_c, gbc_c, ieq_bc_c)
-    };
+        };
 
     let g_be_b = gbe / (beta_f + 1.0);
     let g_bc_b = gbc / (beta_r + 1.0);

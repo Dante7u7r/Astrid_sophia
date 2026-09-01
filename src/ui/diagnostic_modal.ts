@@ -24,6 +24,7 @@ export interface DiagnosticModalOptions {
 export class DiagnosticModal {
   private static currentInstance: DiagnosticModal | null = null;
   private backdropElement: HTMLElement | null = null;
+  private keyHandler: ((event: KeyboardEvent) => void) | null = null;
 
   public static show(options: DiagnosticModalOptions): DiagnosticModal {
     if (DiagnosticModal.currentInstance) {
@@ -46,6 +47,7 @@ export class DiagnosticModal {
 
   public render(): void {
     if (typeof document === 'undefined') return;
+    this.removeRenderedState();
     let container = document.getElementById('diagnostic-modal-container');
     if (!container) {
       container = document.createElement('div');
@@ -166,12 +168,12 @@ export class DiagnosticModal {
     });
 
     // Cerrar con Escape
-    const keyHandler = (e: KeyboardEvent) => {
+    this.keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleClose();
       }
     };
-    window.addEventListener('keydown', keyHandler);
+    window.addEventListener('keydown', this.keyHandler);
     backdrop.dataset.keyHandler = 'true';
 
     container.appendChild(backdrop);
@@ -179,8 +181,19 @@ export class DiagnosticModal {
   }
 
   public close(): void {
-    if (this.backdropElement && this.backdropElement.parentElement) {
-      this.backdropElement.parentElement.removeChild(this.backdropElement);
+    this.removeRenderedState();
+    if (DiagnosticModal.currentInstance === this) {
+      DiagnosticModal.currentInstance = null;
+    }
+  }
+
+  private removeRenderedState(): void {
+    if (this.keyHandler && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.keyHandler);
+      this.keyHandler = null;
+    }
+    if (this.backdropElement) {
+      this.backdropElement.remove();
       this.backdropElement = null;
     }
   }

@@ -7,15 +7,15 @@ import type { CircuitNetlist } from "./netlist_extractor";
 
 describe("Demo Circuits E2E Oracle & Integrity Suite", () => {
   const demosDir = path.resolve(__dirname, "../../public/demos");
-  const demoFiles = [
-    "01_amplificador_no_inversor.astryd",
-    "02_rectificador_filtro_c.astryd",
-    "03_puente_wheatstone_desbalanceado.astryd",
-    "04_detector_cruce_por_cero_basico.astryd",
-    "05_detector_cruce_por_cero_aislado.astryd",
+  const demoCases = [
+    { fileName: "01_amplificador_no_inversor.astryd", mode: "TRAN" },
+    { fileName: "02_rectificador_filtro_c.astryd", mode: "TRAN" },
+    { fileName: "03_puente_wheatstone_desbalanceado.astryd", mode: "DC" },
+    { fileName: "04_detector_cruce_por_cero_basico.astryd", mode: "TRAN" },
+    { fileName: "05_detector_cruce_por_cero_aislado.astryd", mode: "TRAN" },
   ];
 
-  it.each(demoFiles)("Demo '%s' must be valid, well-formed and parse cleanly", (fileName) => {
+  it.each(demoCases)("Demo '$fileName' must be valid, well-formed and parse cleanly", ({ fileName, mode }) => {
     const filePath = path.join(demosDir, fileName);
     expect(fs.existsSync(filePath)).toBe(true);
 
@@ -28,6 +28,10 @@ describe("Demo Circuits E2E Oracle & Integrity Suite", () => {
       expect(parsed.data.wires.length).toBeGreaterThan(0);
       expect(parsed.data.simSettings).toBeDefined();
       expect(parsed.data.simSettings.dt).toBeGreaterThan(0);
+      expect(parsed.data.activeAnalysisMode).toBe(mode);
+      if (mode === "TRAN") {
+        expect(parsed.data.simSettings.transientDuration).toBeGreaterThan(0);
+      }
     }
   });
 

@@ -139,8 +139,13 @@ export class RenderController {
     }
   }
 
+  private isEcoModeActive(): boolean {
+    return typeof document !== "undefined" && Boolean(document.hidden);
+  }
+
   private doCanvasRender(): void {
     if (this.dependencies.isVisualAuditStep("skip-render")) return;
+    if (this.isEcoModeActive()) return;
 
     const orchestrator = this.dependencies.getOrchestrator();
     if (!orchestrator) return;
@@ -218,6 +223,7 @@ export class RenderController {
     orchestrator: CanvasOrchestrator,
     _branchCurrents: Readonly<Record<string, number>>,
   ): boolean {
+    if (this.isEcoModeActive()) return false;
     if (orchestrator.simulationPaused) return false;
     if (orchestrator.simulationActive) return true;
     const osc = this.dependencies.getOscilloscopePanel();

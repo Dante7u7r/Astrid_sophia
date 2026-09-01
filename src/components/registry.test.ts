@@ -8,10 +8,10 @@ import { ALL_COMPONENT_DEFINITIONS } from "./descriptors/index";
 import type { ComponentDefinition } from "./types";
 
 describe("ComponentRegistry & ComponentDescriptor System", () => {
-  it("contiene registrados todos los 84 componentes del catálogo estándar", () => {
+  it("contiene registrados todos los 85 componentes del catálogo estándar", () => {
     const all = globalComponentRegistry.getAll();
-    expect(all.length).toBe(84);
-    expect(ALL_COMPONENT_DEFINITIONS.length).toBe(84);
+    expect(all.length).toBe(85);
+    expect(ALL_COMPONENT_DEFINITIONS.length).toBe(85);
 
     const expectedTypes: ComponentInstance["type"][] = [
       "resistor",
@@ -32,6 +32,7 @@ describe("ComponentRegistry & ComponentDescriptor System", () => {
       "diode",
       "zener_diode",
       "schottky_diode",
+      "diode_bridge",
       "led",
       "nmos",
       "pmos",

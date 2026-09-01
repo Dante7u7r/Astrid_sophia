@@ -197,6 +197,11 @@ export function attachCanvasInput(
         orchestrator.activePinForWire = orchestrator.hoveredPin;
         orchestrator.tempWireEnd = orchestrator.snapPointToGrid(worldPt);
       } else if (orchestrator.hoveredWireHandle) {
+        // Un clic sobre un segmento debe seleccionarlo aunque el mismo punto también
+        // pueda iniciar su arrastre. Sin esta selección, un clic sin movimiento dejaba
+        // a Delete/propiedades sin objetivo.
+        orchestrator.selectComponentAt(worldPt.x, worldPt.y, e.shiftKey);
+        callbacks.onSelectionChanged(null);
         orchestrator.startDraggingWireHandle(orchestrator.hoveredWireHandle, worldPt);
       } else {
         const isShift = e.shiftKey;
@@ -725,6 +730,45 @@ export function attachCanvasInput(
     // --- Selection-required shortcuts ---
     const hasSelection = hasCanvasSelection(orchestrator);
 
+    // --- Teclas rápidas EDA de inserción directa cuando no hay selección activa ---
+    if (!hasSelection && !ctrl && !e.altKey) {
+      if (key === "r") {
+        e.preventDefault();
+        armStampTool({ type: "resistor", value: "1k", name: "Resistencia (1kΩ)" });
+        callbacks.log("Herramienta rápida: Resistencia (1kΩ) armada.", "system");
+        callbacks.requestRender(true);
+        return;
+      }
+      if (key === "c") {
+        e.preventDefault();
+        armStampTool({ type: "capacitor", value: "1u", name: "Condensador (1µF)" });
+        callbacks.log("Herramienta rápida: Condensador (1µF) armado.", "system");
+        callbacks.requestRender(true);
+        return;
+      }
+      if (key === "g") {
+        e.preventDefault();
+        armStampTool({ type: "ground", value: "0V", name: "Tierra (GND)" });
+        callbacks.log("Herramienta rápida: Tierra (GND) armada.", "system");
+        callbacks.requestRender(true);
+        return;
+      }
+      if (key === "v") {
+        e.preventDefault();
+        armStampTool({ type: "vsource", value: "5V", name: "Fuente DC (5V)" });
+        callbacks.log("Herramienta rápida: Fuente DC (5V) armada.", "system");
+        callbacks.requestRender(true);
+        return;
+      }
+      if (key === "d") {
+        e.preventDefault();
+        armStampTool({ type: "diode", value: "1N4148", name: "Diodo (1N4148)" });
+        callbacks.log("Herramienta rápida: Diodo (1N4148) armado.", "system");
+        callbacks.requestRender(true);
+        return;
+      }
+    }
+
     if (!hasSelection) return;
 
     if (key === "r") {
@@ -1113,9 +1157,36 @@ export function attachCanvasDrop(
     window.addEventListener("blur", resetDrag, { once: true });
   };
 
+  const onDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+      ".component-card, .palette-favorite-chip",
+    );
+    if (!target) return;
+
+    event.preventDefault();
+    const rect = canvasViewport.getBoundingClientRect();
+    const data = parsePaletteComponentData(target.dataset);
+    const placed = placeComponent(
+      data.type,
+      data.value,
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+      {
+        modelName: data.modelName,
+        pinCount: data.pinCount,
+        pinLabels: data.pinLabels,
+        spiceNetlist: data.spiceNetlist,
+      },
+    );
+    if (placed) armStampTool(null);
+  };
+
   document.addEventListener("pointerdown", onDocumentPointerDown);
+  document.addEventListener("keydown", onDocumentKeyDown);
   paletteCleanups.push(() => {
     document.removeEventListener("pointerdown", onDocumentPointerDown);
+    document.removeEventListener("keydown", onDocumentKeyDown);
     resetDrag();
   });
 
@@ -1187,7 +1258,7 @@ function attachProbePointerDrag(
     CH1: { color: "#FACC15", bg: "rgba(250, 204, 21, 0.15)" },
     CH2: { color: "#38BDF8", bg: "rgba(56, 189, 248, 0.15)" },
     CH3: { color: "#F43F5E", bg: "rgba(244, 63, 94, 0.15)" },
-    CH4: { color: "#4ADE80", bg: "rgba(74, 222, 128, 0.15)" },
+    CH4: { color: "#34D399", bg: "rgba(52, 211, 153, 0.15)" },
   };
 
   const isInsideCanvas = (clientX: number, clientY: number): boolean => {

@@ -125,6 +125,9 @@ export function initSimulationControls(
   analysisModeSelect = document.querySelector('#analysis-mode-select') as HTMLSelectElement | null;
   runSimBtn = document.querySelector('#run-sim-btn') as HTMLButtonElement | null;
   stopSimBtn = document.querySelector('#stop-sim-btn') as HTMLButtonElement | null;
+  if (analysisModeSelect?.value) {
+    currentMode = analysisModeSelect.value as AnalysisMode;
+  }
   let simulationRunning = false;
   let simulationPaused = false;
 
@@ -168,6 +171,9 @@ export function initSimulationControls(
   }
 
   function applySimulationVisualState(running: boolean, paused: boolean = false): void {
+    if (analysisModeSelect?.value) {
+      currentMode = analysisModeSelect.value as AnalysisMode;
+    }
     simulationRunning = running;
     simulationPaused = running && paused;
     if (!runSimBtn || !stopSimBtn) return;
@@ -244,6 +250,9 @@ export function initSimulationControls(
 
   if (runSimBtn && stopSimBtn) {
     runSimBtn.addEventListener('click', async () => {
+      if (analysisModeSelect?.value) {
+        currentMode = analysisModeSelect.value as AnalysisMode;
+      }
       const meta = ANALYSIS_MODES_METADATA[currentMode] ?? ANALYSIS_MODES_METADATA.DC;
       if (simulationRunning && meta.isStreaming) {
         if (simulationPaused) {

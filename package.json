@@ -7,8 +7,8 @@
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
-    "node": "24.18.0",
-    "npm": "11.16.0"
+    "node": ">=24.18.0 <25",
+    "npm": ">=11.16.0 <12"
   },
   "bin": {
     "biaani": "./scripts/headless_cli.mjs",
@@ -55,26 +55,30 @@
     "jspdf": "^4.2.1"
   },
   "overrides": {
-    "dompurify": "3.4.12",
-    "@wdio/native-utils": "2.5.0",
+    "dompurify": "3.4.14",
+    "@wdio/native-utils": "2.6.0",
+    "@puppeteer/browsers": "3.2.1",
+    "deepmerge-ts": "8.0.2",
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.18",
     "serialize-javascript": "7.0.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2",
     "@vitest/coverage-v8": "4.1.9",
-    "@wdio/cli": "^9.30.0",
-    "@wdio/local-runner": "^9.30.0",
-    "@wdio/mocha-framework": "^9.30.0",
-    "@wdio/spec-reporter": "^9.29.1",
-    "@wdio/tauri-plugin": "^1.2.0",
-    "@wdio/tauri-service": "^1.2.0",
+    "@wdio/cli": "^9.31.4",
+    "@wdio/local-runner": "^9.31.4",
+    "@wdio/mocha-framework": "^9.31.2",
+    "@wdio/spec-reporter": "^9.31.2",
+    "@wdio/tauri-plugin": "^1.3.0",
+    "@wdio/tauri-service": "^1.3.0",
     "ajv": "^8.18.0",
     "happy-dom": "^20.10.6",
     "playwright": "^1.61.1",
     "typescript": "~5.6.2",
     "vite": "^6.0.3",
     "vitest": "^4.1.9",
-    "webdriverio": "^9.30.0"
+    "webdriverio": "^9.31.4"
   }
 }

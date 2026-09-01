@@ -26,6 +26,15 @@ export interface TranspiledComponentSpec {
   readonly catalogItem: EnhancedCatalogItem;
 }
 
+function escapeSvgText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export interface CanonicalPinoutEntry {
   readonly pattern: RegExp;
   readonly pinCount: number;
@@ -340,6 +349,7 @@ export function transpileSpiceSubcircuitToComponent(
 
   const cleanId = `spice-${subckt.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
   const shortName = subckt.name.slice(0, 8);
+  const svgShortName = escapeSvgText(shortName.slice(0, 5));
 
   const effectivePinLabels: Record<number, string> = {};
   effectivePinNames.forEach((name, i) => {
@@ -347,7 +357,7 @@ export function transpileSpiceSubcircuitToComponent(
   });
 
   // SVG Icons según el tipo de encapsulado
-  let svgIconIeee = `<rect x="6" y="6" width="28" height="28" rx="2" stroke="#38BDF8" /><text x="20" y="24" text-anchor="middle" font-size="8" font-family="monospace" fill="#38BDF8">${shortName.slice(0, 5)}</text>`;
+  let svgIconIeee = `<rect x="6" y="6" width="28" height="28" rx="2" stroke="#38BDF8" /><text x="20" y="24" text-anchor="middle" font-size="8" font-family="monospace" fill="#38BDF8">${svgShortName}</text>`;
   let svgIconIec = svgIconIeee;
 
   if (layoutStyle === "to220") {
@@ -360,7 +370,7 @@ export function transpileSpiceSubcircuitToComponent(
     svgIconIeee = `<path d="M 8 12 C 8 8, 14 8, 14 12 C 14 8, 20 8, 20 12 M 20 12 C 20 8, 26 8, 26 12 C 26 8, 32 8, 32 12 M 17 6 L 17 34 M 23 6 L 23 34" stroke="#A78BFA" stroke-width="1.2" fill="none" />`;
     svgIconIec = svgIconIeee;
   } else {
-    svgIconIeee = `<rect x="8" y="6" width="24" height="28" rx="2" fill="currentColor" fill-opacity="0.12" stroke="#818CF8" /><circle cx="20" cy="6" r="2.5" fill="#818CF8" /><text x="20" y="23" text-anchor="middle" font-size="7" font-family="monospace" font-weight="bold" fill="#818CF8">${shortName.slice(0, 5)}</text>`;
+    svgIconIeee = `<rect x="8" y="6" width="24" height="28" rx="2" fill="currentColor" fill-opacity="0.12" stroke="#818CF8" /><circle cx="20" cy="6" r="2.5" fill="#818CF8" /><text x="20" y="23" text-anchor="middle" font-size="7" font-family="monospace" font-weight="bold" fill="#818CF8">${svgShortName}</text>`;
     svgIconIec = svgIconIeee;
   }
 

@@ -587,14 +587,12 @@ impl MixedSignalScheduler {
     }
 
     pub fn schedule_event(&mut self, event: MixedSignalEvent) {
-        let pos = self
-            .events
-            .binary_search_by(|e| {
-                e.time
-                    .partial_cmp(&event.time)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .unwrap_or_else(|e| e);
+        // Insertar después de los timestamps iguales conserva el orden causal
+        // de eventos simultáneos (FIFO). `total_cmp` mantiene además un orden
+        // determinista si algún dato interno no finito alcanza el scheduler.
+        let pos = self.events.partition_point(|queued| {
+            queued.time.total_cmp(&event.time) != std::cmp::Ordering::Greater
+        });
         self.events.insert(pos, event);
     }
 

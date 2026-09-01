@@ -53,4 +53,22 @@ describe("InstrumentCenterController", () => {
 
     expect(panelLayoutManager.setPanelCollapsed).toHaveBeenLastCalledWith("dock", true);
   });
+
+  it("no duplica las acciones del menú, que pertenecen a InstrumentationMenu", () => {
+    setupDom();
+    const panelLayoutManager = {
+      setPanelCollapsed: vi.fn(),
+    } as unknown as PanelLayoutManager;
+
+    createInstrumentCenterController({
+      getPanelLayoutManager: () => panelLayoutManager,
+      isTypingInFormField: () => false,
+      onResizeRequested: vi.fn(),
+    }).init();
+
+    document.querySelector<HTMLButtonElement>("#instruments-menu-btn")!.click();
+    document.querySelector<HTMLButtonElement>("#menu-toggle-dock")!.click();
+
+    expect(panelLayoutManager.setPanelCollapsed).not.toHaveBeenCalled();
+  });
 });

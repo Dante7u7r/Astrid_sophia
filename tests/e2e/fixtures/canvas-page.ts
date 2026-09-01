@@ -23,6 +23,10 @@ export const test = base.extend<CanvasHelpers>({
     await page.waitForFunction(() => typeof (window as any).orchestrator !== "undefined" && (window as any).orchestrator !== null, {
       timeout: 10000,
     });
+    const pinLeft = page.locator("#btn-pin-left");
+    if (await pinLeft.isVisible() && await pinLeft.getAttribute("aria-pressed") !== "true") {
+      await pinLeft.click();
+    }
     await use(page);
   },
 
@@ -108,33 +112,60 @@ export const test = base.extend<CanvasHelpers>({
     });
   },
 
-  placeComponent: async ({ page }, use) => {
+  placeComponent: async ({ page, canvas }, use) => {
     await use(async (type: string, x: number, y: number) => {
+      const search = page.locator("#component-search");
+      if (!(await search.isVisible())) {
+        const expand = page.locator("#btn-expand-left");
+        if (await expand.isVisible()) await expand.click();
+        else await page.locator("#btn-dock-toggle-left").click();
+        await search.waitFor({ state: "visible" });
+      }
+      await search.fill(type);
       const card = page.locator(`.component-card[data-type="${type}"]`).first();
+      await card.waitFor({ state: "visible" });
+      const initialCount = await page.evaluate(() => (window as any).orchestrator?.components?.length ?? 0);
       await card.click();
-      await page.waitForTimeout(100);
-
-      // Posicionar el componente recién colocado en las coordenadas de mundo deseadas (x, y)
+      const canvasBox = await canvas.boundingBox();
+      if (!canvasBox) throw new Error("Canvas bounding box not found");
+      await canvas.click({
+        position: {
+          x: canvasBox.width * 0.65,
+          y: canvasBox.height * 0.55,
+        },
+      });
+      await search.fill("");
+      await page.waitForFunction(
+        ({ count }) => ((window as any).orchestrator?.components?.length ?? 0) > count,
+        { count: initialCount },
+      );
       await page.evaluate(
         ({ compType, targetX, targetY }) => {
           const orch = (window as any).orchestrator;
-          if (!orch) return;
-          const comp = [...orch.components].reverse().find((c: any) => c.type === compType);
-          if (comp) {
-            comp.x = targetX;
-            comp.y = targetY;
-            orch.updateWireConnections();
-            orch.requestRender?.(true);
-          }
+          const component = [...(orch?.components ?? [])].reverse().find((item: any) => item.type === compType);
+          if (!component) throw new Error(`No se encontró el componente recién colocado: ${compType}`);
+          component.x = targetX;
+          component.y = targetY;
+          orch.updateWireConnections();
+          orch.requestRender?.(true);
         },
-        { compType: type, targetX: x, targetY: y }
+        { compType: type, targetX: x, targetY: y },
       );
     });
   },
 
   dragComponentFromPalette: async ({ page, canvas }, use) => {
     await use(async (type: string, targetWorldX: number, targetWorldY: number) => {
+      const search = page.locator("#component-search");
+      if (!(await search.isVisible())) {
+        const expand = page.locator("#btn-expand-left");
+        if (await expand.isVisible()) await expand.click();
+        else await page.locator("#btn-dock-toggle-left").click();
+        await search.waitFor({ state: "visible" });
+      }
+      await search.fill(type);
       const card = page.locator(`.component-card[data-type="${type}"]`).first();
+      await card.waitFor({ state: "visible" });
       const cardBox = await card.boundingBox();
       if (!cardBox) throw new Error(`Card for component ${type} not found`);
 
@@ -154,6 +185,7 @@ export const test = base.extend<CanvasHelpers>({
       await page.mouse.down();
       await page.mouse.move(screenX, screenY, { steps: 8 });
       await page.mouse.up();
+      await search.fill("");
       await page.waitForTimeout(100);
     });
   },
@@ -198,7 +230,13 @@ export const test = base.extend<CanvasHelpers>({
 
   deleteSelected: async ({ page }, use) => {
     await use(async () => {
-      await page.keyboard.press("Delete");
+      const deleteButton = page.locator("#btn-delete-selected");
+      if (await deleteButton.isVisible() && await deleteButton.isEnabled()) {
+        await deleteButton.click();
+      } else {
+        await page.locator("#circuit-canvas").focus();
+        await page.keyboard.press("Delete");
+      }
       await page.waitForTimeout(100);
     });
   },

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CanvasOrchestrator } from "../canvas_orchestrator";
-import { attachCanvasInput, type CanvasInputCallbacks } from "./canvas_input_controller";
+import { attachCanvasDrop, attachCanvasInput, type CanvasInputCallbacks } from "./canvas_input_controller";
 import { armStampTool, getArmedStampTool } from "../ui/component_palette_controller";
 
 function callbacks(): CanvasInputCallbacks {
@@ -35,6 +35,108 @@ describe("canvas_input_controller", () => {
   let cleanup: (() => void) | undefined;
 
   afterEach(() => cleanup?.());
+
+  it.each(["Enter", " "])("coloca desde la paleta con la tecla accesible %o", (key) => {
+    const viewport = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    const card = document.createElement("div");
+    card.className = "component-card";
+    card.tabIndex = 0;
+    card.dataset.type = "resistor";
+    card.dataset.default = "1000";
+    viewport.appendChild(canvas);
+    document.body.append(viewport, card);
+
+    const bounds = {
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 200,
+      right: 400,
+      bottom: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    };
+    viewport.getBoundingClientRect = vi.fn(() => bounds);
+    canvas.getBoundingClientRect = vi.fn(() => bounds);
+
+    const newComponent = { id: "R1", type: "resistor", value: 1000, x: 200, y: 100, rotation: 0 };
+    const addComponent = vi.fn(() => newComponent);
+    const orchestrator = {
+      screenToWorld: (x: number, y: number) => ({ x, y }),
+      snapPointToGrid: (point: { x: number; y: number }) => point,
+      addComponent,
+      selectedComponent: null,
+    } as unknown as CanvasOrchestrator;
+    const inputCallbacks = callbacks();
+
+    cleanup = attachCanvasDrop(viewport, canvas, orchestrator, inputCallbacks);
+    armStampTool({ type: "resistor", value: 1000, name: "Resistencia" });
+    card.focus();
+    card.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+
+    expect(addComponent).toHaveBeenCalledWith("resistor", 200, 100, 1000);
+    expect(orchestrator.selectedComponent).toBe(newComponent);
+    expect(inputCallbacks.onComponentPlaced).toHaveBeenCalledWith(newComponent);
+    expect(getArmedStampTool()).toBeNull();
+  });
+
+  it("selecciona el cable antes de iniciar el arrastre de su segmento", () => {
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 200,
+      right: 400,
+      bottom: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }));
+    document.body.appendChild(canvas);
+
+    const wire = {
+      id: "W1",
+      from: { componentId: "R1", pinIndex: 1 },
+      to: { componentId: "R2", pinIndex: 0 },
+      points: [{ x: 100, y: 100 }, { x: 300, y: 100 }],
+    };
+    const handle = { wire, type: "segment", index: 0 };
+    const startDraggingWireHandle = vi.fn();
+    const selectComponentAt = vi.fn(() => {
+      orchestrator.selectedWire = wire;
+      return null;
+    });
+    const orchestrator = {
+      screenToWorld: (x: number, y: number) => ({ x, y }),
+      checkHover: vi.fn(),
+      selectComponentAt,
+      startDraggingWireHandle,
+      hoveredPin: null,
+      hoveredWire: wire,
+      hoveredWireHandle: handle,
+      selectedComponent: null,
+      selectedComponents: [],
+      selectedWire: null,
+      selectedWires: [],
+    } as unknown as CanvasOrchestrator;
+    const inputCallbacks = callbacks();
+
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+    canvas.dispatchEvent(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 200,
+      clientY: 100,
+      bubbles: true,
+    }));
+
+    expect(selectComponentAt).toHaveBeenCalledWith(200, 100, false);
+    expect(orchestrator.selectedWire).toBe(wire);
+    expect(startDraggingWireHandle).toHaveBeenCalledWith(handle, { x: 200, y: 100 });
+    expect(inputCallbacks.onSelectionChanged).toHaveBeenCalledWith(null);
+  });
 
   it("acerca y aleja con teclado sin requerir una selección", () => {
     const canvas = document.createElement("canvas");
@@ -599,6 +701,44 @@ describe("canvas_input_controller", () => {
     expect(removeSelected).toHaveBeenCalled();
     expect(inputCallbacks.onSelectionChanged).toHaveBeenCalledWith(null);
     expect(inputCallbacks.onCanvasModified).toHaveBeenCalled();
+  });
+
+  it("arma herramientas de componentes con teclas rápidas EDA (R, C, G, V, D) cuando no hay selección", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+
+    const orchestrator = {
+      selectedWire: null,
+      selectedComponents: [],
+      selectedComponent: null,
+    } as unknown as CanvasOrchestrator;
+
+    const inputCallbacks = callbacks();
+    cleanup = attachCanvasInput(canvas, orchestrator, inputCallbacks);
+
+    // Tecla R -> Resistencia
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+    expect(getArmedStampTool()?.type).toBe("resistor");
+
+    // Tecla C -> Condensador
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", bubbles: true }));
+    expect(getArmedStampTool()?.type).toBe("capacitor");
+
+    // Tecla G -> Tierra
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
+    expect(getArmedStampTool()?.type).toBe("ground");
+
+    // Tecla V -> Fuente
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true }));
+    expect(getArmedStampTool()?.type).toBe("vsource");
+
+    // Tecla D -> Diodo
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true }));
+    expect(getArmedStampTool()?.type).toBe("diode");
+
+    // Escape -> Cancela herramienta armada
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(getArmedStampTool()).toBeNull();
   });
 });
 

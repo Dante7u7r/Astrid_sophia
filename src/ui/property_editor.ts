@@ -1223,7 +1223,7 @@ export class PropertyEditor {
     }
 
     // Auto-guardado reactivo en todos los inputs y selects del formulario
-    const propertiesForm = document.querySelector("#properties-form");
+    const propertiesForm = document.querySelector<HTMLElement>("#properties-form");
     if (propertiesForm) {
       propertiesForm.addEventListener("input", (e) => {
         const target = e.target as HTMLElement;
@@ -1346,11 +1346,17 @@ export class PropertyEditor {
 
     const applyFromKeyboard = (event: KeyboardEvent): void => {
       if (event.key !== "Enter") return;
+      if (event.target instanceof HTMLTextAreaElement && !event.ctrlKey) return;
       event.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur();
       this.applyCurrentProperties({ isLiveInput: false });
+      if (this.btnApplyProperties) {
+        this.btnApplyProperties.classList.add("active");
+        setTimeout(() => this.btnApplyProperties?.classList.remove("active"), 200);
+      }
     };
-    this.propIdInput?.addEventListener("keydown", applyFromKeyboard);
-    this.propValInput?.addEventListener("keydown", applyFromKeyboard);
+
+    propertiesForm?.addEventListener("keydown", applyFromKeyboard);
 
     const btnCopySpice = document.querySelector("#btn-copy-spice-card") as HTMLButtonElement | null;
     if (btnCopySpice) {

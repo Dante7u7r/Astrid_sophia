@@ -196,7 +196,11 @@ fn test_mixed_signal_not_gate() {
     let data = result.unwrap();
     let v_out = *data.node_voltages.get("2").unwrap_or(&5.0);
     // La compuerta NOT invierte 5V (true) a aprox 0V (false)
-    assert!(v_out < 0.5, "La salida de la compuerta NOT con entrada de 5V debería estar cerca de 0V, obtenida: {}V", v_out);
+    assert!(
+        v_out < 0.5,
+        "La salida de la compuerta NOT con entrada de 5V debería estar cerca de 0V, obtenida: {}V",
+        v_out
+    );
 }
 
 #[test]
@@ -245,8 +249,8 @@ fn test_logic_gate_analog_rise_fall_ramp() {
                 delay: Some(0.0),
                 gate_trise: Some(100e-9), // 100 ns tiempo de subida analógico
                 gate_tfall: Some(100e-9), // 100 ns tiempo de bajada analógico
-                gate_vhigh: Some(2.0), // Umbral de entrada alto
-                gate_vlow: Some(0.8),  // Umbral de entrada bajo
+                gate_vhigh: Some(2.0),    // Umbral de entrada alto
+                gate_vlow: Some(0.8),     // Umbral de entrada bajo
                 gate_rout: Some(50.0),
                 ..Default::default()
             },
@@ -259,7 +263,7 @@ fn test_logic_gate_analog_rise_fall_ramp() {
     };
 
     let settings = TransientSettings {
-        dt: 10e-9,   // 10 ns
+        dt: 10e-9,     // 10 ns
         t_max: 1.5e-6, // 1.5 µs
         integration_method: Some("BE".to_string()),
         fixed_step: Some(true),
@@ -273,14 +277,24 @@ fn test_logic_gate_analog_rise_fall_ramp() {
     )
     .unwrap();
 
-    let v_50ns_into_rise = results.iter()
-        .min_by(|a, b| ((a.time - 1.05e-6).abs()).partial_cmp(&(b.time - 1.05e-6).abs()).unwrap())
+    let v_50ns_into_rise = results
+        .iter()
+        .min_by(|a, b| {
+            ((a.time - 1.05e-6).abs())
+                .partial_cmp(&(b.time - 1.05e-6).abs())
+                .unwrap()
+        })
         .map(|s| *s.node_voltages.get("2").unwrap())
         .unwrap();
 
     // A t = 1.2 µs (200 ns tras el flanco), la salida debe haber alcanzado 5V
-    let v_completed_rise = results.iter()
-        .min_by(|a, b| ((a.time - 1.2e-6).abs()).partial_cmp(&(b.time - 1.2e-6).abs()).unwrap())
+    let v_completed_rise = results
+        .iter()
+        .min_by(|a, b| {
+            ((a.time - 1.2e-6).abs())
+                .partial_cmp(&(b.time - 1.2e-6).abs())
+                .unwrap()
+        })
         .map(|s| *s.node_voltages.get("2").unwrap())
         .unwrap();
 
@@ -335,8 +349,8 @@ fn test_sub_microsecond_zero_crossing_event_localization() {
     };
 
     let settings = TransientSettings {
-        dt: 25e-6, // 25 µs (paso grande para probar la localización de cruce por cero)
-        t_max: 200e-6, // 200 µs
+        dt: 25e-6,     // 25 µs (paso grande para probar la localización de cruce por cero)
+        t_max: 500e-6, // Incluye el cruce descendente en 416.6667 µs.
         integration_method: Some("trap".to_string()),
         fixed_step: Some(false),
     };
@@ -356,15 +370,44 @@ fn test_sub_microsecond_zero_crossing_event_localization() {
         v_prev >= 2.5 && v_curr < 2.5
     });
 
-    assert!(transition_step.is_some(), "Debe haber ocurrido una transición de la compuerta");
-    let (s_prev, s_curr) = (transition_step.unwrap()[0].time, transition_step.unwrap()[1].time);
+    assert!(
+        transition_step.is_some(),
+        "Debe haber ocurrido una transición de la compuerta"
+    );
+    let (s_prev, s_curr) = (
+        transition_step.unwrap()[0].time,
+        transition_step.unwrap()[1].time,
+    );
     let t_expected = (1.0 / 12.0) * 1e-3 + 20e-9; // 83.3333 µs + 20 ns = 83.3533 µs
 
     // El cruce debe haber sido detectado en el intervalo esperado con exactitud sub-microsegundo
     assert!(
         s_prev <= t_expected + 1e-9 && s_curr >= t_expected - 1e-9,
         "La transición ocurrió en [{:.3}µs, {:.3}µs], esperado: {:.3}µs",
-        s_prev * 1e6, s_curr * 1e6, t_expected * 1e6
+        s_prev * 1e6,
+        s_curr * 1e6,
+        t_expected * 1e6
+    );
+    assert!(
+        s_curr - s_prev <= 1e-6,
+        "El intervalo localizado no debe superar 1 µs"
+    );
+
+    // En el flanco descendente la secante puede quedar antes del cruce: la
+    // localización debe resolver un extremo que realmente cambió de estado.
+    let rising_output = results
+        .windows(2)
+        .find(|window| window[0].node_voltages["2"] < 2.5 && window[1].node_voltages["2"] >= 2.5)
+        .expect("Debe existir la transición ascendente de la salida NOT");
+    let lower = rising_output[0].time;
+    let upper = rising_output[1].time;
+    let expected = (5.0 / 12.0) * 1e-3 + 20e-9;
+    assert!(
+        lower <= expected + 1e-9 && upper >= expected - 1e-9,
+        "Cruce descendente: salida en [{lower:.12}, {upper:.12}] s, esperado {expected:.12} s"
+    );
+    assert!(
+        upper - lower <= 1e-6,
+        "El intervalo localizado no debe superar 1 µs"
     );
 }
-

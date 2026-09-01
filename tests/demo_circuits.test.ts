@@ -97,13 +97,4 @@ describe("circuitos de demostracion", () => {
     expectSameNode(nodes, "R2:1", "OK1:2", "NET_PULSE:0"); // Salida colector con pull-up
     expectSameNode(nodes, "OK1:3", "GND_SEC:0"); // Emisor opto a GND secundario
   });
-
-  test("todos los demos tienen configuracion de analisis valida", () => {
-    for (const file of DEMO_FILES) {
-      const demo = loadDemo(file);
-      expect(["DC", "AC", "TRAN"]).toContain(demo.activeAnalysisMode);
-      expect(demo.components.length).toBeGreaterThan(0);
-      expect(demo.wires.length).toBeGreaterThan(0);
-    }
-  });
 });

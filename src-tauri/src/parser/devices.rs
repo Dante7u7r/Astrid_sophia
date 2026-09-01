@@ -560,8 +560,7 @@ pub fn parse_spice_netlist_to_native(netlist_str: &str) -> Result<CircuitNetlist
                                 comp.bsim_vmax =
                                     get_evaluated_model_param(m, "vmax", &global_params);
                                 comp.bsim_u0 = get_evaluated_model_param(m, "u0", &global_params);
-                                comp.bsim_tox =
-                                    get_evaluated_model_param(m, "tox", &global_params);
+                                comp.bsim_tox = get_evaluated_model_param(m, "tox", &global_params);
                                 comp.bsim_toxe =
                                     get_evaluated_model_param(m, "toxe", &global_params);
                                 comp.bsim_vth0 =

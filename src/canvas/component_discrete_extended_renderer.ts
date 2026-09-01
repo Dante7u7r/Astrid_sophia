@@ -463,3 +463,146 @@ export function drawIgbt(
   ctx.restore();
 }
 
+/**
+ * Renderiza un Puente Rectificador de Diodos Integrado (Graetz Bridge) de 4 terminales.
+ * Pines:
+ *  0: Entrada AC 1 (AC1 / ~) en (-40, -20)
+ *  1: Entrada AC 2 (AC2 / ~) en (-40,  20)
+ *  2: Salida DC+ (+)         en ( 40, -20)
+ *  3: Salida DC- (-)         en ( 40,  20)
+ */
+export function drawDiodeBridge(ctx: CanvasRenderingContext2D, comp: ComponentInstance, color: string): void {
+  const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
+
+  ctx.save();
+
+  // 1. Terminal Leads
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Entrada AC1: (-40, -20) -> (-26, -20)
+  ctx.moveTo(-40, -20);
+  ctx.lineTo(-26, -20);
+  // Entrada AC2: (-40, 20) -> (-26, 20)
+  ctx.moveTo(-40, 20);
+  ctx.lineTo(-26, 20);
+  // Salida DC+: (40, -20) -> (26, -20)
+  ctx.moveTo(40, -20);
+  ctx.lineTo(26, -20);
+  // Salida DC-: (40, 20) -> (26, 20)
+  ctx.moveTo(40, 20);
+  ctx.lineTo(26, 20);
+  ctx.stroke();
+
+  // 2. Encapsulado del Módulo Rectificador (Cuerpo rectangular estilizado con chaflán)
+  ctx.save();
+  ctx.fillStyle = isClassroom ? "rgba(241, 245, 249, 0.95)" : "rgba(11, 17, 32, 0.92)";
+  ctx.strokeStyle = isClassroom ? "rgba(71, 85, 105, 0.5)" : "rgba(56, 189, 248, 0.4)";
+  ctx.lineWidth = 1.4;
+
+  const bx = -26;
+  const by = -28;
+  const bw = 52;
+  const bh = 56;
+  const rad = 6;
+
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(bx, by, bw, bh, rad);
+  } else {
+    ctx.rect(bx, by, bw, bh);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  // Marca de chaflán de esquina positiva (arriba a la derecha)
+  ctx.strokeStyle = isClassroom ? "#DC2626" : "#F43F5E";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(20, -28);
+  ctx.lineTo(26, -22);
+  ctx.stroke();
+  ctx.restore();
+
+  // 3. Símbolo interno del Rombo de Graetz
+  ctx.save();
+  ctx.strokeStyle = isClassroom ? "rgba(100, 116, 139, 0.6)" : "rgba(148, 163, 184, 0.5)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -18); // Arriba
+  ctx.lineTo(16, 0);  // Derecha (+)
+  ctx.lineTo(0, 18);  // Abajo
+  ctx.lineTo(-16, 0); // Izquierda
+  ctx.closePath();
+  ctx.stroke();
+
+  // Diodos estilizados en los 4 brazos del rombo
+  const drawBridgeDiode = (fromX: number, fromY: number, toX: number, toY: number) => {
+    const mx = (fromX + toX) / 2;
+    const my = (fromY + toY) / 2;
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    const px = -uy;
+    const py = ux;
+
+    // Triángulo
+    ctx.beginPath();
+    ctx.moveTo(mx + ux * 3.5, my + uy * 3.5);
+    ctx.lineTo(mx - ux * 3.5 + px * 3, my - uy * 3.5 + py * 3);
+    ctx.lineTo(mx - ux * 3.5 - px * 3, my - uy * 3.5 - py * 3);
+    ctx.closePath();
+    ctx.fillStyle = isClassroom ? "#475569" : "#94A3B8";
+    ctx.fill();
+
+    // Barra de cátodo
+    ctx.beginPath();
+    ctx.moveTo(mx + ux * 3.5 + px * 3, my + uy * 3.5 + py * 3);
+    ctx.lineTo(mx + ux * 3.5 - px * 3, my + uy * 3.5 - py * 3);
+    ctx.stroke();
+  };
+
+  // D1: (-16, 0) -> (0, -18) hacia la rama superior (+)
+  drawBridgeDiode(-16, 0, 0, -18);
+  // D2: (0, 18) -> (-16, 0) desde la rama inferior (-)
+  drawBridgeDiode(0, 18, -16, 0);
+  // D3: (0, 18) -> (16, 0)
+  drawBridgeDiode(0, 18, 16, 0);
+  // D4: (16, 0) -> (0, -18)
+  drawBridgeDiode(16, 0, 0, -18);
+  ctx.restore();
+
+  // 4. Etiquetas de Polaridad en los 4 extremos
+  ctx.save();
+  ctx.font = "bold 9px 'JetBrains Mono', 'Inter', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // AC1: '~'
+  ctx.fillStyle = isClassroom ? "#0284C7" : "#38BDF8";
+  ctx.fillText("~", -18, -20);
+
+  // AC2: '~'
+  ctx.fillText("~", -18, 20);
+
+  // DC+: '+'
+  ctx.fillStyle = isClassroom ? "#DC2626" : "#F43F5E";
+  ctx.fillText("+", 18, -20);
+
+  // DC-: '-'
+  ctx.fillStyle = isClassroom ? "#2563EB" : "#60A5FA";
+  ctx.fillText("-", 18, 20);
+
+  // Modelo comercial o identificador
+  const modelText = comp.modelName || comp.value?.toString() || "BRIDGE";
+  ctx.font = "bold 7.5px 'JetBrains Mono', monospace";
+  ctx.fillStyle = isClassroom ? "#334155" : "#94A3B8";
+  ctx.fillText(modelText.length > 8 ? modelText.slice(0, 8) : modelText, 0, 0);
+
+  ctx.restore();
+  ctx.restore();
+}
+

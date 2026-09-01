@@ -9,6 +9,8 @@
  * 2. Modo Fijado al Lienzo (Pinned 📌): Se ancla a la esquina superior derecha del lienzo y restringe su movimiento al lienzo.
  */
 
+import { showFloatingInstrumentContextMenu } from "./floating_instrument_context_menu";
+
 export interface FloatingWindowInfo {
   tabId: string;
   title: string;
@@ -31,6 +33,7 @@ export class FloatingInstrumentManager {
     logic: { title: "Analizador Lógico", icon: "⌗" },
     fft: { title: "Espectro FFT", icon: "📈" },
     tracer: { title: "Trazador I-V", icon: "🔬" },
+    console: { title: "Consola del Sistema", icon: "⌨️" },
     intelligence: { title: "Asistente IA", icon: "◈" },
   };
 
@@ -221,6 +224,15 @@ export class FloatingInstrumentManager {
         e.stopPropagation();
         this.popIn(tabId);
       }
+    });
+
+    // Menú contextual personalizado CAD para la ventana flotante
+    win.addEventListener("contextmenu", (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.tagName.toLowerCase() === "canvas" && target.id === "osc-canvas") {
+        return; // El canvas del osciloscopio gestiona su propio menú detallado
+      }
+      showFloatingInstrumentContextMenu(e, tabId, this, windowRecord);
     });
 
     // Activar arrastre y elevación al enfocar

@@ -258,7 +258,11 @@ pub fn format_va_expr(expr: &VaExpr) -> String {
 /// (sqrt, exp, ln, log10, pow, abs, min, max, sin, cos, tan, sinh, cosh, tanh, floor, ceil, round),
 /// constantes físicas (pi, e, vt, boltz, q) y sufijos de ingeniería estándar (k, meg, u, n, p, f, m, etc.).
 pub fn evaluate_expression(expr: &str, param_env: &HashMap<String, f64>) -> Result<f64, String> {
-    let clean = expr.trim().trim_start_matches('{').trim_end_matches('}').trim();
+    let clean = expr
+        .trim()
+        .trim_start_matches('{')
+        .trim_end_matches('}')
+        .trim();
     if clean.is_empty() {
         return Err("Expresión vacía".to_string());
     }
@@ -351,7 +355,10 @@ fn tokenize_param_expr(s: &str) -> Result<Vec<ParamToken>, String> {
                             break;
                         }
                         i += 1;
-                    } else if (c == '+' || c == '-') && i > start && (chars[i - 1] == 'e' || chars[i - 1] == 'E') {
+                    } else if (c == '+' || c == '-')
+                        && i > start
+                        && (chars[i - 1] == 'e' || chars[i - 1] == 'E')
+                    {
                         i += 1;
                     } else {
                         break;
@@ -363,7 +370,10 @@ fn tokenize_param_expr(s: &str) -> Result<Vec<ParamToken>, String> {
                 } else if let Ok(val) = raw_token.parse::<f64>() {
                     tokens.push(ParamToken::Num(val));
                 } else {
-                    return Err(format!("Número o sufijo SPICE inválido en expresión: '{}'", raw_token));
+                    return Err(format!(
+                        "Número o sufijo SPICE inválido en expresión: '{}'",
+                        raw_token
+                    ));
                 }
             }
             c if c.is_ascii_alphabetic() || c == '_' => {
@@ -497,7 +507,10 @@ impl<'a> ParamExprParser<'a> {
                 let inner = self.parse_expression()?;
                 match self.next_token() {
                     Some(ParamToken::RParen) => Ok(inner),
-                    other => Err(format!("Se esperaba ')' en expresión, encontrado: {:?}", other)),
+                    other => Err(format!(
+                        "Se esperaba ')' en expresión, encontrado: {:?}",
+                        other
+                    )),
                 }
             }
             Some(ParamToken::Ident(name)) => {
@@ -558,7 +571,10 @@ impl<'a> ParamExprParser<'a> {
                     }
                 }
             }
-            other => Err(format!("Token inesperado en expresión matemática: {:?}", other)),
+            other => Err(format!(
+                "Token inesperado en expresión matemática: {:?}",
+                other
+            )),
         }
     }
 
@@ -650,7 +666,10 @@ impl<'a> ParamExprParser<'a> {
                 let x = args.first().copied().ok_or("round requiere 1 argumento")?;
                 Ok(x.round())
             }
-            _ => Err(format!("Función matemática no reconocida en expresión SPICE: '{}'", name)),
+            _ => Err(format!(
+                "Función matemática no reconocida en expresión SPICE: '{}'",
+                name
+            )),
         }
     }
 }

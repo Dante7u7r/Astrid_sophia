@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CircuitNetlist } from "../simulation/netlist_extractor";
 import { FeedbackBus, type FeedbackStoreStatus, type FeedbackTransport } from "./feedback_bus";
 import {
@@ -8,6 +8,7 @@ import {
   failFeedbackRun,
   observeInvokeAfter,
   observeInvokeBefore,
+  privacyFingerprint,
   recordCircuitSummary,
   recordErc,
 } from "./instrumentation";
@@ -58,7 +59,81 @@ async function enabledBus(): Promise<{ bus: FeedbackBus; transport: CapturingTra
 
 afterEach(() => configureFeedbackInstrumentation(null));
 
+function previousCircuitSummary(input: CircuitNetlist, wireCount = input.wires.length) {
+  const histogram = new Map<string, number>();
+  for (const component of input.components) {
+    const key = component.type.slice(0, 64);
+    histogram.set(key, (histogram.get(key) ?? 0) + 1);
+  }
+  const countNodes = () => new Set(input.components.flatMap((component) => component.pins)).size;
+  const topology = input.components.map((component) => ({
+    type: component.type,
+    pins: component.pins.length,
+  })).sort((left, right) => left.type.localeCompare(right.type) || left.pins - right.pins);
+  return {
+    topologyFingerprint: privacyFingerprint({ topology, nodes: countNodes(), wires: wireCount }),
+    componentCount: input.components.length,
+    nodeCount: countNodes(),
+    wireCount,
+    nonlinearDeviceCount: input.components.filter((component) =>
+      /diode|bjt|mos|jfet|opamp|switch/i.test(component.type)
+    ).length,
+    reactiveDeviceCount: input.components.filter((component) =>
+      /capacitor|inductor|transmission/i.test(component.type)
+    ).length,
+    componentHistogram: Object.fromEntries([...histogram.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))),
+    containsFirmware: input.components.some((component) => Boolean(component.firmware?.length)),
+  };
+}
+
 describe("instrumentación de feedback", () => {
+  it("conserva exactamente el resumen previo y su privacidad en topologías mixtas y mutables", async () => {
+    const { bus, transport } = await enabledBus();
+    const firmware = new Uint8Array([251, 239, 223, 211, 199]);
+    const mixed: CircuitNetlist = {
+      components: [
+        { pins: ["N_SECRET_B", "0"], value: 345678.9123, type: "resistor", id: "R_SECRET" },
+        { id: "C_SECRET", type: "capacitor", pins: ["N_SECRET_A", "N_SECRET_B"], value: 1e-9 },
+        { value: 1, pins: ["N_SECRET_A", "0", "N_SECRET_B"], id: "M_SECRET", type: "bsim3nmos" },
+        { id: "D_SECRET", value: 1, type: "DIODE", pins: ["N_SECRET_B", "0"] },
+        { id: "T_SECRET", type: "transmission_line", value: 50, pins: ["N_SECRET_A", "0", "N_SECRET_B", "0"] },
+        { id: "U_SECRET", pins: ["N_SECRET_A", "0"], type: "mcu_avr", value: 1, firmware },
+        { id: "LONG_SECRET", type: `custom_${"x".repeat(80)}`, value: 1, pins: [] },
+        { id: "EMPTY_FW_SECRET", type: "mcu_avr", value: 1, pins: ["0"], firmware: new Uint8Array() },
+      ],
+      wires: [{ id: "WIRE_SECRET", nodes: ["N_SECRET_A", "N_SECRET_B"] }],
+    };
+    const run = beginFeedbackRun({ analysis: "DC" });
+    const expected = previousCircuitSummary(mixed, 7);
+    recordCircuitSummary(run, mixed, 7);
+    mixed.components.reverse();
+    recordCircuitSummary(run, mixed, 7);
+    // La misma netlist puede cambiar entre llamadas: no debe utilizarse una caché por identidad.
+    mixed.components.push({ id: "R_NEW_SECRET", type: "resistor", value: 2, pins: ["N_NEW_SECRET", "0"] });
+    const expectedAfterMutation = previousCircuitSummary(mixed, 7);
+    recordCircuitSummary(run, mixed, 7);
+    await bus.flush();
+
+    const summaries = (transport.events as Array<{ kind: string; payload: unknown }>)
+      .filter((event) => event.kind === "circuit.summary_created");
+    expect(summaries.map((event) => event.payload)).toEqual([expected, expected, expectedAfterMutation]);
+    const serialized = JSON.stringify(summaries);
+    for (const secret of ["SECRET", "345678.9123", JSON.stringify(firmware), JSON.stringify([...firmware])]) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
+  it("lee una sola vez los pines de cada componente al construir el resumen", async () => {
+    const { bus } = await enabledBus();
+    const pinsRead = vi.fn(() => ["PRIVATE_NODE", "0"]);
+    const component = { id: "R_PRIVATE", type: "resistor", value: 1, get pins() { return pinsRead(); } };
+    const run = beginFeedbackRun({ analysis: "DC" });
+    recordCircuitSummary(run, { components: [component], wires: [] });
+    expect(pinsRead).toHaveBeenCalledTimes(1);
+    await bus.flush();
+  });
+
   it("correlaciona el ciclo completo sin persistir contenido del circuito", async () => {
     const { bus, transport } = await enabledBus();
     const run = beginFeedbackRun({

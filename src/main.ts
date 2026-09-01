@@ -14,7 +14,12 @@ import { McuDebugPanel } from "./ui/mcu_debug_panel";
 import { type SimulationRunner } from "./simulation/simulation_runner";
 import { createCircuitStateManager } from "./simulation/circuit_state_manager";
 import { attachCanvasInput, attachCanvasDrop } from "./canvas/canvas_input_controller";
-import { isTypingInFormField, installWebviewKeyGuards, installWebviewAutofillGuards } from "./canvas/keyboard_guards";
+import {
+  isTypingInFormField,
+  installWebviewKeyGuards,
+  installWebviewAutofillGuards,
+  installWebviewContextMenuGuard,
+} from "./canvas/keyboard_guards";
 import { TooltipManager } from "./ui/tooltip_manager";
 import { TabManager } from "./ui/tab_manager";
 import { PropertyEditor } from "./ui/property_editor";
@@ -41,6 +46,8 @@ import { installPerformanceHarness } from "./performance/performance_harness";
 import {
   initFilePersistenceController,
 } from "./app/file_persistence_controller";
+import { resolveDemoProbeTargets } from "./app/demo_auto_setup";
+import { getComponentPins } from "./canvas/component_pins";
 import {
   type CircuitDocumentController,
 } from "./app/circuit_document_controller";
@@ -67,6 +74,7 @@ import {
 import { GuideEngine } from "./guide";
 import { CrashReporter } from "./app/crash_reporter";
 import { FeedbackModal } from "./ui/feedback_modal";
+import { CircuitSynthesizerModal } from "./ui/circuit_synthesizer_modal";
 import type { DiagnosticCollectorDeps } from "./feedback/diagnostic_collector";
 // Variables Globales del Estado — centralizadas en CircuitStateManager
 const circuitState = createCircuitStateManager();
@@ -119,6 +127,7 @@ let panelLayoutManager: PanelLayoutManager | null = null;
 let instrumentsDock: InstrumentsDock | null = null;
 let floatingInstrumentManager: FloatingInstrumentManager | null = null;
 let sidePanelController: SidePanelController | null = null;
+let synthesizerModal: CircuitSynthesizerModal | null = null;
 
 
 
@@ -583,6 +592,8 @@ window.addEventListener("DOMContentLoaded", () => {
   installWebviewKeyGuards(import.meta.env.DEV);
   // Desactivar popups de autocompletado e historial del navegador en inputs
   installWebviewAutofillGuards();
+  // Bloquear menú contextual nativo genérico del navegador
+  installWebviewContextMenuGuard();
 
   // Inicializar gestor de tooltips premium
   TooltipManager.init();
@@ -797,11 +808,113 @@ function getDiagnosticCollectorDeps(): DiagnosticCollectorDeps {
 function initFilePersistence() {
   if (!circuitDocumentController) return;
 
+  synthesizerModal = new CircuitSynthesizerModal({
+    onInsertCircuit: async (pkg, createNewTab) => {
+      const tabMgr = tabManager;
+      const documentController = circuitDocumentController;
+      if (!tabMgr || !documentController) return false;
+
+      const title = pkg.title || "Circuito Sintetizado";
+      const serializedCircuit = JSON.stringify(pkg.circuit);
+      const validatedCircuit = documentController.validateCircuitFileForLoad(serializedCircuit);
+      if (!validatedCircuit) return false;
+      const circuitData = validatedCircuit.data;
+      let createdTabId: string | null = null;
+
+      if (createNewTab) {
+        const newTab = tabMgr.createNewTab(title, {
+          components: circuitData.components,
+          wires: circuitData.wires,
+          filePath: null,
+        }, circuitData.activeAnalysisMode);
+        if (!newTab) return false;
+        createdTabId = newTab.id;
+      }
+
+      if (!documentController.deserializeCircuit(serializedCircuit, validatedCircuit)) {
+        if (createdTabId) await tabMgr.closeTab(createdTabId);
+        return false;
+      }
+      // El circuito sintetizado todavía no existe en disco. Mantener la marca
+      // de cambios evita que la pestaña pueda cerrarse sin confirmación.
+      tabMgr.markCurrentTabAsModified();
+      const ownerTabId = tabMgr.getActiveTabId();
+
+      try {
+        orchestrator?.resetCameraToCircuit();
+        const extraction = extractElectricalNetlist(circuitData.components, circuitData.wires, getComponentPins);
+        const probeTargets = resolveDemoProbeTargets(circuitData.components, extraction.pinToNodeMap);
+        if (probeTargets.ch1Node) {
+          probePlacementController.placeProbe("CH1", probeTargets.ch1Node);
+        }
+        if (probeTargets.ch2Node) {
+          probePlacementController.placeProbe("CH2", probeTargets.ch2Node);
+        }
+        panelLayoutManager?.setPanelCollapsed("dock", false);
+        instrumentsDock?.switchTab("oscilloscope");
+
+        // La inserción ya terminó. Una simulación continua o rechazada por ERC
+        // no debe bloquear el modal ni cambiar el resultado de la inserción.
+        void simulationController?.runSimulation(circuitData.activeAnalysisMode).then(() => {
+          setTimeout(() => {
+            if (!ownerTabId || tabManager?.getActiveTabId() !== ownerTabId) return;
+            oscilloscopePanel?.autoFit();
+          }, 250);
+        }).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          addLog(`El circuito se insertó, pero falló la simulación automática: ${message}`, "error");
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`El circuito se insertó, pero no se pudo completar su preparación automática: ${message}`, "error");
+      }
+      return true;
+    },
+    addLog,
+  });
+
+  const btnSynth = document.getElementById("btn-synthesizer");
+  btnSynth?.addEventListener("click", () => {
+    synthesizerModal?.open();
+  });
+
   initFilePersistenceController({
     getTabManager: () => tabManager,
     documentController: circuitDocumentController,
     addLog,
     invokeTauri: invoke,
+    onOpenSynthesizer: () => synthesizerModal?.open(),
+    onDemoLoaded: async (_cleanName, data) => {
+      const ownerTabId = tabManager?.getActiveTabId();
+      // 1. Centrar y encuadrar circuito en el viewport
+      orchestrator?.resetCameraToCircuit();
+
+      // 2. Extraer mapa de nodos y ubicar sondas CH1 / CH2 automáticamente
+      const extraction = extractElectricalNetlist(data.components, data.wires, getComponentPins);
+      const probeTargets = resolveDemoProbeTargets(data.components, extraction.pinToNodeMap);
+
+      if (probeTargets.ch1Node) {
+        probePlacementController.placeProbe("CH1", probeTargets.ch1Node);
+      }
+      if (probeTargets.ch2Node) {
+        probePlacementController.placeProbe("CH2", probeTargets.ch2Node);
+      }
+
+      // 3. Abrir el dock de instrumentos y activar el osciloscopio
+      panelLayoutManager?.setPanelCollapsed("dock", false);
+      instrumentsDock?.switchTab("oscilloscope");
+
+      // 4. Ejecutar automáticamente el análisis declarado por la demo.
+      // Forzar TRAN aquí desincronizaba la UI y dejaba demos DC ejecutando un
+      // transitorio continuo cuando transientDuration era cero.
+      await simulationController?.runSimulation(data.activeAnalysisMode);
+
+      // 5. Tras recibir las primeras muestras, auto-ajustar escalas del osciloscopio
+      setTimeout(() => {
+        if (!ownerTabId || tabManager?.getActiveTabId() !== ownerTabId) return;
+        oscilloscopePanel?.autoFit();
+      }, 250);
+    },
   });
 }
 

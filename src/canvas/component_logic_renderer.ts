@@ -4,10 +4,10 @@
  */
 
 export interface LogicGateRenderOptions {
-  levelA?: "1" | "0" | "X";
-  levelB?: "1" | "0" | "X";
-  levelY?: "1" | "0" | "X";
-  inputLevels?: readonly ("1" | "0" | "X" | undefined)[];
+  levelA?: "1" | "0" | "X" | "Z";
+  levelB?: "1" | "0" | "X" | "Z";
+  levelY?: "1" | "0" | "X" | "Z";
+  inputLevels?: readonly ("1" | "0" | "X" | "Z" | undefined)[];
   inputCount?: number;
   schmittTrigger?: boolean;
   openCollector?: boolean;
@@ -25,20 +25,28 @@ export function getGateInputYOffsets(count: number): number[] {
   return Array.from({ length: count }, (_, i) => -half + i * step);
 }
 
-function getLogicColor(level?: "1" | "0" | "X"): string {
+function getLogicColor(level?: "1" | "0" | "X" | "Z"): string {
   const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
   if (level === "1") return isClassroom ? "#059669" : "#10B981"; // Verde Esmeralda (Nivel Alto)
   if (level === "0") return isClassroom ? "#475569" : "#64748B"; // Pizarra / Gris Oscuro (Nivel Bajo)
   if (level === "X") return isClassroom ? "#D97706" : "#F59E0B"; // Ámbar (Indeterminado)
+  if (level === "Z") return isClassroom ? "#EA580C" : "#F97316"; // Naranja brillante (Alta impedancia / Flotante)
   return isClassroom ? "#334155" : "#475569";
 }
 
-function drawLogicTerminalNode(ctx: CanvasRenderingContext2D, x: number, y: number, level?: "1" | "0" | "X"): void {
+function drawLogicTerminalNode(ctx: CanvasRenderingContext2D, x: number, y: number, level?: "1" | "0" | "X" | "Z"): void {
   if (!level) return;
   ctx.save();
   ctx.fillStyle = getLogicColor(level);
   ctx.beginPath();
-  ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+  if (level === "Z") {
+    ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  } else {
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+  }
   ctx.fill();
   ctx.restore();
 }

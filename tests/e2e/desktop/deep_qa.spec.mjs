@@ -5,7 +5,7 @@ const EMPTY_FILE = {
   components: [],
   wires: [],
   viewport: { zoom: 1, offsetX: 520, offsetY: 300 },
-  simSettings: { dt: 0.00001, tolerance: 0.00001, maxIterations: 100 },
+  simSettings: { dt: 0.00001, tolerance: 0.00001, maxIterations: 100, transientDuration: 0.01 },
   activeAnalysisMode: "DC",
   probes: {
     ch1ProbeNode: null,
@@ -194,13 +194,32 @@ async function worldToClient(point) {
   }, point);
 }
 
+let restoreInstrumentAutoHide = false;
+
 async function openInstrumentCenter() {
   const dock = await $("#bottom-dock");
   if ((await dock.getAttribute("class")).includes("collapsed")) {
-    await $("#instruments-menu-btn").click();
-    await $("#menu-toggle-dock").click();
+    await $("#btn-dock-toggle-bottom").click();
   }
-  await browser.waitUntil(async () => !(await dock.getAttribute("class")).includes("collapsed"));
+  try {
+    await browser.waitUntil(async () => !(await dock.getAttribute("class")).includes("collapsed"));
+  } catch (error) {
+    const state = await browser.execute(() => {
+      const button = document.querySelector("#btn-dock-toggle-bottom");
+      const rect = button?.getBoundingClientRect();
+      const hit = rect ? document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) : null;
+      return {
+        dock: document.querySelector("#bottom-dock")?.className,
+        hidden: document.querySelector("#bottom-dock")?.getAttribute("aria-hidden"),
+        buttonRect: rect?.toJSON(),
+        hit: hit?.id || hit?.className,
+        focused: document.activeElement?.id,
+        floatingWindows: document.querySelectorAll(".floating-instrument-window").length,
+        layout: localStorage.getItem("astryd_panel_layout"),
+      };
+    });
+    throw new Error(`No se abrió el centro de instrumentos: ${JSON.stringify(state)}. ${String(error)}`);
+  }
 }
 
 async function closeInstrumentCenter() {
@@ -214,13 +233,41 @@ async function closeInstrumentCenter() {
   }
 }
 
+async function closeFloatingInstruments() {
+  await browser.execute(() => {
+    document.querySelectorAll(".floating-instrument-window").forEach((windowElement) => {
+      const closeButton = windowElement.querySelector('[aria-label="Cerrar ventana flotante"]');
+      if (closeButton instanceof HTMLButtonElement) closeButton.click();
+    });
+  });
+  await browser.waitUntil(async () => browser.execute(
+    () => document.querySelectorAll(".floating-instrument-window").length === 0,
+  ));
+}
+
+async function closeExperimentalWarning() {
+  const modal = await $("#experimental-warning-modal");
+  if ((await modal.getAttribute("class")).includes("open")) {
+    await $("#btn-exp-cancel").click();
+    await browser.waitUntil(async () => !(await modal.getAttribute("class")).includes("open"));
+  }
+}
+
 async function runAnalysis(mode) {
   await setControl("#analysis-mode-select", mode, "change");
-  const before = (await qaState()).lastUpdatedAt;
+  const runsBefore = (await qaState()).simulationRunCount;
   await $("#run-sim-btn").click();
+  const experimentalModal = await $("#experimental-warning-modal");
+  if ((await experimentalModal.getAttribute("class")).includes("open")) {
+    await $("#btn-exp-confirm").click();
+    await browser.waitUntil(
+      async () => !(await experimentalModal.getAttribute("class")).includes("open"),
+      { timeoutMsg: `La confirmación experimental de ${mode} no cerró el modal` },
+    );
+  }
   await browser.waitUntil(async () => {
     const state = await qaState();
-    return state?.lastUpdatedAt !== before
+    return state?.simulationRunCount > runsBefore
       && state?.lastSimulationMode === mode
       && state?.lastSolver === "rust"
       && state?.simulationRunning === false;
@@ -230,7 +277,10 @@ async function runAnalysis(mode) {
   });
   expect(await $("#run-sim-btn").isEnabled()).toBe(true);
   expect(await $("#stop-sim-btn").isEnabled()).toBe(false);
-  expect((await qaState()).lastLogType).not.toBe("error");
+  const finalQaState = await qaState();
+  if (finalQaState.lastLogType === "error") {
+    throw new Error(`El análisis ${mode} terminó con error: ${finalQaState.lastLog ?? "sin detalle"}`);
+  }
 }
 
 describe("QA nativo profundo de escritorio", () => {
@@ -242,6 +292,16 @@ describe("QA nativo profundo de escritorio", () => {
   });
 
   afterEach(async () => {
+    await closeExperimentalWarning();
+    await closeFloatingInstruments();
+    if (restoreInstrumentAutoHide) {
+      await browser.execute(() => {
+        const pin = document.querySelector("#instrument-center-pin");
+        if (pin instanceof HTMLButtonElement && pin.getAttribute("aria-pressed") === "true") pin.click();
+      });
+      expect(await $("#instrument-center-pin").getAttribute("aria-pressed")).toBe("false");
+      restoreInstrumentAutoHide = false;
+    }
     await closeInstrumentCenter();
   });
 
@@ -363,12 +423,19 @@ describe("QA nativo profundo de escritorio", () => {
   it("controla generador, navegacion de instrumentos y trazador I-V", async () => {
     await loadAndSelect(component("V1", "vsource", 5));
     await openInstrumentCenter();
+    // La navegación mantiene visible el centro. En modo auto-ocultar, abrir
+    // una ventana flotante programa su cierre y hace inestable esta precondición.
+    const instrumentPin = await $("#instrument-center-pin");
+    restoreInstrumentAutoHide = (await instrumentPin.getAttribute("aria-pressed")) !== "true";
+    if (restoreInstrumentAutoHide) await instrumentPin.click();
+    expect(await instrumentPin.getAttribute("aria-pressed")).toBe("true");
     await $('[data-tab="generator"]').click();
-    await browser.waitUntil(async () => (await $("#gen-source-info").getText()).includes("V1"));
-    await setControl("#gen-wave-type", "sine", "change");
-    await setControl("#gen-freq-slider", 2500);
-    await setControl("#gen-amp-slider", 3.3);
-    await setControl("#gen-offset-slider", 1.2);
+    await browser.waitUntil(async () => (await $("#gen-source-card").getText()).includes("V1"));
+    await $('.gen-wave-btn[data-wave="sine"]').click();
+    await setControl("#gen-unit-freq", 1000, "change");
+    await setControl("#gen-num-freq", 2.5, "change");
+    await setControl("#gen-num-amp", 3.3, "change");
+    await setControl("#gen-num-offset", 1.2, "change");
     let source = (await parsedCircuit()).components[0];
     expect(source.waveType).toBe("sine");
     expect(source.frequency).toBe(2500);
@@ -376,22 +443,30 @@ describe("QA nativo profundo de escritorio", () => {
     expect(source.offset).toBeCloseTo(1.2);
 
     const generatorTab = await $('[data-tab="generator"]');
-    await generatorTab.click();
+    await browser.execute(() => {
+      const tab = document.querySelector('[data-tab="generator"]');
+      if (tab instanceof HTMLButtonElement) tab.focus();
+    });
     await browser.keys(Key.ArrowRight);
     expect(await $('[data-tab="logic"]').getAttribute("aria-selected")).toBe("true");
-    await $("#logic-clear-btn").click();
-    await $('[data-tab="fft"]').click();
-    await $("#fft-src-ch2").click();
-    expect(await $("#fft-src-ch2").getAttribute("class")).toContain("active");
+    await $("#logic-btn-clear").click();
+    await browser.execute(() => {
+      const tab = document.querySelector('[data-tab="logic"]');
+      if (tab instanceof HTMLButtonElement) tab.focus();
+    });
+    await browser.keys(Key.ArrowRight);
+    expect(await $('[data-tab="fft"]').getAttribute("aria-selected")).toBe("true");
+    await $("#fft-btn-ch2").click();
+    expect(await $("#fft-btn-ch2").getAttribute("class")).toContain("active");
 
-    await browser.keys(Key.Escape);
+    await closeFloatingInstruments();
     await loadAndSelect(component("D1", "diode", 0));
     await openInstrumentCenter();
     await $('[data-tab="tracer"]').click();
-    await browser.waitUntil(async () => (await $("#tracer-comp-name").getText()) === "D1", {
+    await browser.waitUntil(async () => (await $("#tracer-schematic-link").getText()).includes("D1"), {
       timeout: 5_000,
     });
-    await $("#tracer-run-btn").click();
+    await $("#tracer-btn-run").click();
     const nonEmptyCanvas = await browser.execute(() => {
       const canvas = document.querySelector("#tracer-canvas");
       if (!(canvas instanceof HTMLCanvasElement)) return false;
@@ -443,7 +518,7 @@ describe("QA nativo profundo de escritorio", () => {
     await runAnalysis("STB");
     resultState = await snapshot();
     expect(resultState.analysisMode).toBe("STB");
-    expect(await consoleText()).toContain("EXTRACCIÓN EXPERIMENTAL DE POLOS Y CEROS");
+    expect(await consoleText()).toContain("ANÁLISIS DE ESTABILIDAD Y GANANCIA DE LAZO");
   });
 
   it("ejecuta la matriz PVT comercial y devuelve tres trazas nativas", async () => {

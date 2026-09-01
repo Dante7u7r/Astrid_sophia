@@ -51,12 +51,13 @@ export class CurrentAnimationRenderer {
     const period = dashLength + gapLength;
     const coreWidth = Math.max(1.2, 2.0 / Math.pow(zoomScale, 0.3));
 
-    // Clasificación de cables en 3 niveles de velocidad física:
-    // Nivel 0: Bajo (< 5 mA) -> vel = 0.5x
-    // Nivel 1: Medio (5 mA - 100 mA) -> vel = 1.2x
-    // Nivel 2: Alto / Corto (> 100 mA) -> vel = 2.8x
-    const fwdTiers: WireInstance[][] = [[], [], []];
-    const revTiers: WireInstance[][] = [[], [], []];
+    // Clasificación de cables en 4 niveles de velocidad y estado físico:
+    // Nivel 0: Señal baja (< 5 mA) -> vel = 0.5x
+    // Nivel 1: Señal estándar (5 mA - 100 mA) -> vel = 1.2x
+    // Nivel 2: Carga activa (100 mA - 2 A) -> vel = 2.5x
+    // Nivel 3: Sobrecarga de potencia (>= 2 A) -> vel = 3.5x (Cobre térmico cálido no parpadeante)
+    const fwdTiers: WireInstance[][] = [[], [], [], []];
+    const revTiers: WireInstance[][] = [[], [], [], []];
 
     for (let w = 0; w < wires.length; w++) {
       const wire = wires[w];
@@ -96,7 +97,7 @@ export class CurrentAnimationRenderer {
       // Culling inteligente: Si no hay corriente apreciable, omitir dibujo de este cable
       if (absI < 1e-7) continue;
 
-      const tier = absI < 0.005 ? 0 : absI < 0.1 ? 1 : 2;
+      const tier = absI < 0.005 ? 0 : absI < 0.1 ? 1 : absI < 2.0 ? 2 : 3;
       if (current > 0) {
         fwdTiers[tier].push(wire);
       } else {
@@ -104,14 +105,17 @@ export class CurrentAnimationRenderer {
       }
     }
 
-    const tierMultipliers = [0.5, 1.2, 2.8];
+    const tierMultipliers = [0.5, 1.2, 2.5, 3.5];
 
     ctx.save();
+    // Opacidad adaptativa al alejar el zoom para evitar saturación visual en esquemas grandes
+    const zoomAlpha = Math.max(0.35, Math.min(1.0, zoomScale * 1.15));
+    ctx.globalAlpha = zoomAlpha;
     ctx.lineWidth = coreWidth;
     ctx.lineCap = "round";
 
-    // 1. Trazado de Corriente Directa (Amarillo Ámbar / Oro)
-    for (let t = 0; t < 3; t++) {
+    // 1. Trazado de Corriente Directa (Ámbar / Oro / Cobre Cálido)
+    for (let t = 0; t < 4; t++) {
       const tierWires = fwdTiers[t];
       if (tierWires.length === 0) continue;
 
@@ -120,7 +124,7 @@ export class CurrentAnimationRenderer {
 
       ctx.setLineDash([dashLength, gapLength]);
       ctx.lineDashOffset = offset;
-      ctx.strokeStyle = t === 2 ? "#FEF08A" : t === 1 ? "#F59E0B" : "rgba(245, 158, 11, 0.75)";
+      ctx.strokeStyle = t === 3 ? "#FB923C" : t === 2 ? "#FEF08A" : t === 1 ? "#F59E0B" : "rgba(245, 158, 11, 0.75)";
 
       ctx.beginPath();
       for (let i = 0; i < tierWires.length; i++) {
@@ -133,8 +137,8 @@ export class CurrentAnimationRenderer {
       ctx.stroke();
     }
 
-    // 2. Trazado de Corriente Inversa (Azul Eléctrico / Cyan)
-    for (let t = 0; t < 3; t++) {
+    // 2. Trazado de Corriente Inversa (Cyan / Celeste / Cobre Cálido)
+    for (let t = 0; t < 4; t++) {
       const tierWires = revTiers[t];
       if (tierWires.length === 0) continue;
 
@@ -143,7 +147,7 @@ export class CurrentAnimationRenderer {
 
       ctx.setLineDash([dashLength, gapLength]);
       ctx.lineDashOffset = offset;
-      ctx.strokeStyle = t === 2 ? "#E0F2FE" : t === 1 ? "#0EA5E9" : "rgba(14, 165, 233, 0.75)";
+      ctx.strokeStyle = t === 3 ? "#FB923C" : t === 2 ? "#E0F2FE" : t === 1 ? "#0EA5E9" : "rgba(14, 165, 233, 0.75)";
 
       ctx.beginPath();
       for (let i = 0; i < tierWires.length; i++) {

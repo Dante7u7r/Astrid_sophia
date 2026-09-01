@@ -41,7 +41,7 @@ pub(super) struct StampContext<'a> {
 
 pub(super) fn stamp_component(comp: &ComponentData, ctx: &mut StampContext<'_>) {
     match comp.comp_type.as_str() {
-        "diode" | "led" => junctions::stamp_diode(comp, ctx),
+        "diode" | "zener_diode" | "schottky_diode" | "led" => junctions::stamp_diode(comp, ctx),
         "opto" => junctions::stamp_opto(comp, ctx),
         "nmos" | "bsim3nmos" | "bsim4nmos" | "sic_mosfet" | "gan_hemt" | "igbt" => {
             mos::stamp_nmos(comp, ctx)

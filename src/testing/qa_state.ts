@@ -6,12 +6,15 @@ export interface AstrydQaState {
   lastLogType: "system" | "send" | "receive" | "error" | null;
   lastDemoFile: string | null;
   lastSimulationMode: AnalysisMode | null;
-  lastSolver: "rust" | "typescript" | null;
+  lastSolver: "rust" | "typescript" | "mock" | null;
   lastDcNodeVoltages: Record<string, number>;
   activeInstrumentTab: string | null;
   simulationRunning: boolean;
+  simulationRunCount: number;
   lastUpdatedAt: string;
 }
+
+type QaStatePatch = Partial<Omit<AstrydQaState, "enabled" | "simulationRunCount">>;
 
 declare global {
   interface Window {
@@ -32,6 +35,7 @@ const state: AstrydQaState = {
   lastDcNodeVoltages: {},
   activeInstrumentTab: null,
   simulationRunning: false,
+  simulationRunCount: 0,
   lastUpdatedAt: new Date(0).toISOString(),
 };
 
@@ -41,10 +45,21 @@ export function installQaState(): void {
   syncDomState();
 }
 
-export function updateQaState(patch: Partial<Omit<AstrydQaState, "enabled">>): void {
+export function updateQaState(patch: QaStatePatch): void {
   if (!QA_ENABLED) return;
+  if (patch.simulationRunning === true && !state.simulationRunning) {
+    state.simulationRunCount += 1;
+    state.lastSolver = null;
+    state.lastDcNodeVoltages = {};
+  }
   Object.assign(state, patch, { lastUpdatedAt: new Date().toISOString() });
   syncDomState();
+}
+
+/** Solo se registra al recibir resultados, nunca a partir del texto de un log. */
+export function recordQaSolverResult(solver: "rust" | "typescript" | "mock"): void {
+  if (!QA_ENABLED || state.lastSolver === solver) return;
+  updateQaState({ lastSolver: solver });
 }
 
 export function recordQaLog(
@@ -53,7 +68,7 @@ export function recordQaLog(
 ): void {
   if (!QA_ENABLED) return;
 
-  const patch: Partial<Omit<AstrydQaState, "enabled">> = {
+  const patch: QaStatePatch = {
     lastLog: text,
     lastLogType: type,
   };
@@ -61,12 +76,6 @@ export function recordQaLog(
   const demoMatch = text.match(/Demo \[(.+?)\] cargada correctamente/);
   if (demoMatch) {
     patch.lastDemoFile = demoMatch[1];
-  }
-
-  if (text.includes("Rust")) {
-    patch.lastSolver = "rust";
-  } else if (text.includes("TypeScript")) {
-    patch.lastSolver = "typescript";
   }
 
   const dcMatch = text.match(/^Nodo\s+(.+?):\s+Voltaje\s+=\s+(-?\d+(?:\.\d+)?)\s+V/);
@@ -89,5 +98,6 @@ function syncDomState(): void {
   root.dataset.qaLastSolver = state.lastSolver ?? "";
   root.dataset.qaActiveInstrumentTab = state.activeInstrumentTab ?? "";
   root.dataset.qaSimulationRunning = String(state.simulationRunning);
+  root.dataset.qaSimulationRunCount = String(state.simulationRunCount);
   root.dataset.qaNodeVoltages = JSON.stringify(state.lastDcNodeVoltages);
 }

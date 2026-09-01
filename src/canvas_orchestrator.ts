@@ -69,6 +69,7 @@ import {
   type SParameterMarker,
 } from "./canvas/render_overlays";
 import { globalCircuitClipboard } from "./canvas/circuit_clipboard";
+import type { ComponentType } from "./components/component_types";
 
 export {
   copyComponentConfiguration,
@@ -163,7 +164,7 @@ export interface BoundingBox {
 
 export interface ComponentInstance {
   id: string;
-  type: 'resistor' | 'capacitor' | 'inductor' | 'diode' | 'zener_diode' | 'schottky_diode' | 'fuse' | 'vsource' | 'ground' | 'nmos' | 'opamp' | 'opamp_ideal' | 'comparator_ideal' | 'pmos' | 'npn' | 'pnp' | 'igbt' | 'lamp' | 'relay' | 'buzzer' | 'mcu_8051' | 'mcu_avr' | 'mcu_pic16' | 'arduino_uno' | 'esp32' | 'raspberry_pi_pico' | 'isource' | 'led' | 'transformer' | 'switch' | 'switch_spdt' | 'switch_dpdt' | 'pushbutton' | 'dc_motor' | 'servo_motor' | 'stepper_motor' | 'speaker' | 'solenoid' | 'ssr' | 'seven_segment' | 'lcd_16x2' | 'x' | 'potentiometer' | 'ldr' | 'thermistor' | 'dmm' | 'and_gate' | 'or_gate' | 'not_gate' | 'nand_gate' | 'nor_gate' | 'xor_gate' | 'opto' | 'njf' | 'pjf' | 'bsim3nmos' | 'bsim3pmos' | 'bsim4nmos' | 'bsim4pmos' | 'net_label' | 'text_note' | 'power_port' | 'vcvs' | 'vccs' | 'ccvs' | 'cccs' | 'flipflop_d' | 'flipflop_jk' | 'bcd_to_7seg' | 'shift_register_595' | 'ic_4017' | 'ic_7490' | 'ic_74193' | 'ic_74138' | 'ic_74151' | 'scr' | 'triac' | 'diac' | 'tl431' | 'wattmeter' | 'logic_probe' | 'pulse_generator' | 'frequency_counter' | 'stb_probe';
+  type: ComponentType;
   value: number | string;
   w?: number;
   l?: number;

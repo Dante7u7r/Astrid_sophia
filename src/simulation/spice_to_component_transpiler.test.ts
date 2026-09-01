@@ -157,6 +157,26 @@ describe("SPICE to Component Transpiler & Commercial IC Engine", () => {
     expect(transpiled.catalogItem.svgIconIeee).toContain("NE555");
   });
 
+  it("escapa nombres de subcircuito antes de incorporarlos al SVG de la paleta", () => {
+    const hostileName = "<img/onerror=alert(1)>";
+    const subckt: ParsedSubcircuit = {
+      name: hostileName,
+      pinNames: ["IN", "OUT"],
+      pinCount: 2,
+      pinLabels: { 0: "IN", 1: "OUT" },
+      description: "Modelo hostil de prueba",
+      category: "Macromodelos",
+      suggestedType: "subcircuit",
+      defaultParams: {},
+      rawNetlist: `.SUBCKT ${hostileName} IN OUT\n.ENDS ${hostileName}`,
+    };
+
+    const icon = transpileSpiceSubcircuitToComponent(subckt).catalogItem.svgIconIeee;
+    expect(icon).toContain("&lt;img");
+    expect(icon).not.toContain("<img");
+    expect(icon).not.toContain("onerror=");
+  });
+
   it("Valida la biblioteca comercial pre-cargada oficial (29 componentes comerciales estándar)", () => {
     const preloaded = getCommercialPreloadedComponents();
     expect(preloaded.length).toBe(COMMERCIAL_SUBCIRCUITS.length);

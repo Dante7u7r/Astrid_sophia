@@ -6,6 +6,9 @@ import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
 import type { Tab, TabManager } from "../ui/tab_manager";
 import { createInteractiveSimulationCallbacks } from "./interactive_simulation_callbacks";
 
+const isNative = vi.hoisted(() => vi.fn(() => true));
+vi.mock("../simulation/tauri_mock", () => ({ isTauriEnvironment: isNative }));
+
 function createFrame(overrides: Partial<SimulationFrame> = {}): SimulationFrame {
   return {
     runId: 1,
@@ -20,7 +23,9 @@ function createFrame(overrides: Partial<SimulationFrame> = {}): SimulationFrame 
 }
 
 describe("createInteractiveSimulationCallbacks", () => {
-  it("aplica un frame de la pestana activa al estado, osciloscopio y render", () => {
+  it.each([true, false])("aplica el frame de la pestaña activa e identifica su procedencia (nativo=%s)", (native) => {
+    isNative.mockReturnValue(native);
+    const onSolverResult = vi.fn();
     const circuitState = createCircuitStateManager();
     const transientResults = [
       { time: 0.01, nodeVoltages: { "1": 5 }, branchCurrents: { V1: 0.02 } },
@@ -38,6 +43,7 @@ describe("createInteractiveSimulationCallbacks", () => {
       getSimulationRunner: () => null,
       circuitState,
       setSimulationRunning: vi.fn(),
+      onSolverResult,
       updateCanvasRendering: vi.fn(),
       updateOscilloscopeRendering: vi.fn(),
       addLog: vi.fn(),
@@ -51,9 +57,11 @@ describe("createInteractiveSimulationCallbacks", () => {
     );
     expect(circuitState.getVoltageMap()).toEqual({ "1": 5 });
     expect(oscilloscopePanel.transientResults).toBe(transientResults);
+    expect(onSolverResult).toHaveBeenCalledWith(native ? "rust" : "typescript");
   });
 
-  it("ignora errores y frames de pestanas inactivas", () => {
+  it("ignora el render de frames inactivos pero registra sus errores", () => {
+    const onSolverResult = vi.fn();
     const circuitState = createCircuitStateManager();
     const tabManager = {
       appendTransientFrameToTab: vi.fn(() => ({
@@ -71,6 +79,7 @@ describe("createInteractiveSimulationCallbacks", () => {
       getSimulationRunner: () => ({ stopInteractiveTransient: vi.fn() }) as any,
       circuitState,
       setSimulationRunning: vi.fn(),
+      onSolverResult,
       updateCanvasRendering,
       updateOscilloscopeRendering: vi.fn(),
       addLog,
@@ -81,7 +90,11 @@ describe("createInteractiveSimulationCallbacks", () => {
 
     expect(circuitState.getVoltageMap()).toEqual({});
     expect(updateCanvasRendering).not.toHaveBeenCalled();
-    expect(addLog).not.toHaveBeenCalled();
+    expect(onSolverResult).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      expect.stringContaining("Error en simulacion [tab-1]: boom"),
+      "error",
+    );
   });
 
   it("finaliza el estado visual al recibir el final del transitorio", () => {

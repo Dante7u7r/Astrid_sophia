@@ -243,7 +243,11 @@ pub fn flatten_subcircuit(
         }
 
         // Mapear los pines del componente hijo
-        let Some(first_char) = child_local_id.chars().next().map(|c| c.to_ascii_lowercase()) else {
+        let Some(first_char) = child_local_id
+            .chars()
+            .next()
+            .map(|c| c.to_ascii_lowercase())
+        else {
             continue;
         };
 

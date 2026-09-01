@@ -157,8 +157,16 @@ pub(super) fn extract_noise_operating_point(
             let vbs = v_bulk - v_source;
 
             let (ids, gm, gds, igs, gg) = if comp.comp_type == "bsim4nmos" {
-                let (ids_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) =
-                    evaluate_bsim4_nmos(vgs, vds, vbs, comp.value, comp.w, comp.l, None, Some(comp));
+                let (ids_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) = evaluate_bsim4_nmos(
+                    vgs,
+                    vds,
+                    vbs,
+                    comp.value,
+                    comp.w,
+                    comp.l,
+                    None,
+                    Some(comp),
+                );
                 (ids_v, gm_v, gds_v, igs_v, gg_v)
             } else if comp.comp_type == "bsim3nmos" {
                 let (ids_v, gm_v, gds_v) = evaluate_bsim3_nmos(
@@ -255,8 +263,16 @@ pub(super) fn extract_noise_operating_point(
             let vsb = v_source - v_bulk;
 
             let (isd, gm, gds, igs, gg) = if comp.comp_type == "bsim4pmos" {
-                let (isd_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) =
-                    evaluate_bsim4_pmos(vsg, vsd, vsb, comp.value, comp.w, comp.l, None, Some(comp));
+                let (isd_v, gm_v, gds_v, _gmb_v, igs_v, gg_v) = evaluate_bsim4_pmos(
+                    vsg,
+                    vsd,
+                    vsb,
+                    comp.value,
+                    comp.w,
+                    comp.l,
+                    None,
+                    Some(comp),
+                );
                 (isd_v, gm_v, gds_v, igs_v, gg_v)
             } else if comp.comp_type == "bsim3pmos" {
                 let (isd_v, gm_v, gds_v) = evaluate_bsim3_pmos(

@@ -65,10 +65,26 @@ interface DesktopE2eBridgeDependencies {
   setDisablePacing?: (disable: boolean) => void;
 }
 
+export interface DesktopE2eRuntime {
+  readonly isDevelopment: boolean;
+  readonly mode: string;
+}
+
+/**
+ * El puente expone mutaciones y serialización internas, por lo que su habilitación
+ * debe decidirse durante la compilación. Una query string nunca debe poder activarlo
+ * en un artefacto de producción.
+ */
+export function isDesktopE2eBridgeEnabled(runtime: DesktopE2eRuntime): boolean {
+  return runtime.isDevelopment || runtime.mode === "wdio" || runtime.mode === "audit";
+}
+
 export function installDesktopE2eBridge(dependencies: DesktopE2eBridgeDependencies): void {
   const isAuditOrE2e = typeof import.meta !== "undefined"
-    && (import.meta.env.DEV || import.meta.env.MODE === "wdio"
-        || (typeof window !== "undefined" && window.location.search.includes("e2e=1")));
+    && isDesktopE2eBridgeEnabled({
+      isDevelopment: import.meta.env.DEV,
+      mode: import.meta.env.MODE,
+    });
   if (!isAuditOrE2e) return;
 
   // The Tauri service compares the native title with document.title exactly.

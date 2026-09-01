@@ -38,8 +38,8 @@ function getLogicGatePins(comp?: { gateInputs?: number }): readonly LocalPinDefi
   return pins;
 }
 
-function getLogicLevel(voltage?: number, vth: number = 2.5): "1" | "0" | "X" | undefined {
-  if (voltage === undefined) return undefined;
+function getLogicLevel(voltage?: number, vth: number = 2.5): "1" | "0" | "X" | "Z" | undefined {
+  if (voltage === undefined) return "Z";
   if (voltage >= vth * 0.8) return "1";
   if (voltage <= vth * 0.35) return "0";
   return "X";
@@ -63,7 +63,7 @@ function extractGateLevels(
     };
   }
 
-  const inputLevels: ("1" | "0" | "X" | undefined)[] = [];
+  const inputLevels: ("1" | "0" | "X" | "Z" | undefined)[] = [];
   for (let i = 0; i < inputs; i++) {
     const v = voltageMap[`${comp.id}:${i}`];
     inputLevels.push(getLogicLevel(v, vth));

@@ -403,7 +403,7 @@ export class IntelligenceCenter {
     container.replaceChildren();
     if (recommendations.length === 0) {
       const emptyDiv = this.documentRef.createElement("div");
-      emptyDiv.id = "intelligence-empty-state";
+      emptyDiv.id = "intelligence-recommendations-empty-state";
       emptyDiv.style.cssText = "font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; border-radius: 6px;";
       emptyDiv.textContent = "✓ Sin advertencias ni conflictos detectados en el circuito actual.";
       container.appendChild(emptyDiv);
@@ -664,73 +664,124 @@ export class IntelligenceCenter {
     if (!container || this.element("intelligence-recommendations-list")) return;
 
     container.innerHTML = `
-      <div class="intel-main-layout">
-        <!-- Área Principal: Lista de Recomendaciones del Asesor -->
-        <main class="intel-content-area">
-          <!-- Barra Superior: Estado Global y Acciones -->
-          <div class="intel-top-bar">
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <span style="font-weight: bold; font-size: 0.75rem; color: #38bdf8; display: flex; align-items: center; gap: 4px;">
-                ◈ Asesor Experto y Diagnóstico
-              </span>
-            </div>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <span id="intelligence-live-status" style="font-size: 0.65rem; color: var(--text-muted); font-family: var(--font-mono);">
-                Asistente en tiempo real listo
-              </span>
-            </div>
-          </div>
-
-          <!-- Lista de Tarjetas del Asesor -->
-          <div id="intelligence-recommendations-list" class="intel-recommendations-scroll">
-            <div id="intelligence-empty-state" style="font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 30px; border-radius: 6px;">
-              ✓ Sin advertencias ni conflictos detectados en el circuito actual.
-            </div>
-          </div>
-        </main>
-
-        <!-- Barra Lateral: Telemetría, Rendimiento y Salud MNA -->
-        <aside class="intel-sidebar">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-            <h4 class="gen-section-title" style="color: #38bdf8;">📊 Telemetría y Solver</h4>
-          </div>
-
-          <!-- Tarjetas de Métricas -->
-          <div class="tracer-metric-card">
-            <span class="rack-label" style="font-size: 0.55rem; color: #38bdf8;">Tasa de Éxito MNA</span>
-            <span id="intelligence-success-rate" class="tracer-metric-val" style="color: #22c55e;">100%</span>
-          </div>
-
-          <div class="tracer-metric-card">
-            <span class="rack-label" style="font-size: 0.55rem; color: #a855f7;">Latencia P95 del Solver</span>
-            <span id="intelligence-p95" class="tracer-metric-val" style="color: #c084fc;">—</span>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-            <div class="tracer-metric-card">
-              <span class="rack-label" style="font-size: 0.55rem;">Eventos</span>
-              <span id="intelligence-event-count" style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold; color: #fff;">0</span>
-            </div>
-            <div class="tracer-metric-card">
-              <span class="rack-label" style="font-size: 0.55rem;">Almacén</span>
-              <span id="intelligence-byte-count" style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold; color: #fff;">0 B</span>
-            </div>
-          </div>
-
-          <div class="tracer-metric-card">
-            <span class="rack-label" style="font-size: 0.55rem;">Consentimiento</span>
-            <span id="intelligence-consent-summary" style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-sub);">Local</span>
-          </div>
-
-          <!-- Botones de Acción -->
-          <div style="display: flex; gap: 4px; margin-top: 4px;">
-            <button id="intelligence-refresh-btn" type="button" class="intel-btn" style="flex: 1; justify-content: center;">🔄 Actualizar</button>
-            <button id="intelligence-export-btn" type="button" class="intel-btn" style="flex: 1; justify-content: center;">📥 Exportar</button>
-          </div>
-
-          <div id="intelligence-shadow-status" style="font-size: 0.62rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
-        </aside>
+      <div class="intelligence-toolbar">
+        <div>
+          <h3>Asesor experto e inteligencia local</h3>
+          <p id="intelligence-consent-summary">Cargando estado local…</p>
+        </div>
+        <div class="intelligence-actions">
+          <button id="intelligence-refresh-btn" class="intel-btn" type="button">Actualizar</button>
+          <button id="intelligence-export-btn" class="intel-btn" type="button">Exportar paquete redactado</button>
+        </div>
       </div>
+
+      <div class="intelligence-scroll">
+        <section class="intelligence-metrics" aria-labelledby="intelligence-health-title">
+          <h4 id="intelligence-health-title">Salud de simulación</h4>
+          <dl>
+            <div><dt>Eventos</dt><dd id="intelligence-event-count">0</dd></div>
+            <div><dt>Datos</dt><dd id="intelligence-byte-count">0 B</dd></div>
+            <div><dt>Éxito</dt><dd id="intelligence-success-rate">—</dd></div>
+            <div><dt>Duración p95</dt><dd id="intelligence-p95">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="intelligence-section" aria-labelledby="intelligence-recommendations-title">
+          <h4 id="intelligence-recommendations-title">Sugerencias deterministas</h4>
+          <p>Las sugerencias se explican y nunca modifican el circuito automáticamente.</p>
+          <div id="intelligence-recommendations-list">
+            <div id="intelligence-recommendations-empty-state">Sin sugerencias activas.</div>
+          </div>
+        </section>
+
+        <section class="intelligence-section" aria-labelledby="intelligence-history-title">
+          <div class="intelligence-section-heading">
+            <h4 id="intelligence-history-title">Historial reciente</h4>
+            <label>Filtrar
+              <select id="intelligence-kind-filter" class="prop-input">
+                <option value="">Todos los eventos</option>
+                <option value="simulation.completed">Simulaciones completadas</option>
+                <option value="simulation.failed">Fallos</option>
+                <option value="erc.completed">ERC</option>
+                <option value="user.feedback_submitted">Correcciones humanas</option>
+              </select>
+            </label>
+          </div>
+          <div class="intelligence-table-wrap">
+            <table class="intelligence-table">
+              <thead>
+                <tr><th scope="col">Fecha</th><th scope="col">Evento</th><th scope="col">Análisis</th><th scope="col">Estado</th></tr>
+              </thead>
+              <tbody id="intelligence-history-body"></tbody>
+            </table>
+          </div>
+          <p id="intelligence-empty-state">No hay datos locales para este filtro.</p>
+        </section>
+
+        <section class="intelligence-section" aria-labelledby="intelligence-feedback-title">
+          <h4 id="intelligence-feedback-title">Marcar resultado</h4>
+          <form id="intelligence-feedback-form">
+            <fieldset>
+              <legend>¿El resultado fue físicamente plausible?</legend>
+              <label><input type="radio" name="feedback-rating" value="correct" required> Correcto</label>
+              <label><input type="radio" name="feedback-rating" value="uncertain"> Dudoso</label>
+              <label><input type="radio" name="feedback-rating" value="incorrect"> Incorrecto</label>
+            </fieldset>
+            <label>Categoría
+              <select id="intelligence-feedback-category" class="prop-input">
+                <option value="model">Modelo</option>
+                <option value="convergence">Convergencia</option>
+                <option value="performance">Rendimiento</option>
+                <option value="interface">Interfaz</option>
+                <option value="other">Otra</option>
+              </select>
+            </label>
+            <div class="intelligence-feedback-value">
+              <label>Valor esperado <input id="intelligence-expected-value" class="prop-input" type="number" step="any"></label>
+              <label>Unidad <input id="intelligence-expected-unit" class="prop-input" maxlength="32" placeholder="V, A, Hz…"></label>
+            </div>
+            <label>Comentario opcional
+              <textarea id="intelligence-feedback-note" class="prop-input" maxlength="2000" rows="3"></textarea>
+            </label>
+            <label class="intelligence-confirm">
+              <input id="intelligence-content-confirm" type="checkbox" required>
+              Confirmo que deseo guardar este comentario como contenido local de usuario.
+            </label>
+            <button id="intelligence-feedback-submit" class="intel-btn" type="submit">Guardar feedback</button>
+          </form>
+        </section>
+
+        <section class="intelligence-section" aria-labelledby="intelligence-comparison-title">
+          <h4 id="intelligence-comparison-title">Comparación entre versiones</h4>
+          <div id="intelligence-version-comparison">Aún no hay versiones comparables.</div>
+        </section>
+
+        <section class="intelligence-section" aria-labelledby="intelligence-shadow-title">
+          <h4 id="intelligence-shadow-title">Aprendizaje en modo sombra</h4>
+          <p id="intelligence-shadow-status">No evaluado. Nunca modifica parámetros ni recomendaciones visibles.</p>
+          <div class="intelligence-actions">
+            <button id="intelligence-shadow-evaluate" class="intel-btn" type="button">Evaluar dataset local</button>
+            <button id="intelligence-shadow-rollback" class="intel-btn" type="button">Restaurar modelo anterior</button>
+            <button id="intelligence-shadow-disable" class="intel-btn" type="button">Desactivar modelo</button>
+          </div>
+        </section>
+
+        <section class="intelligence-section" aria-labelledby="intelligence-privacy-title">
+          <h4 id="intelligence-privacy-title">Visor de privacidad</h4>
+          <p>Vista exacta del último evento seleccionado; no muestra datos fuera del almacén local.</p>
+          <pre id="intelligence-privacy-viewer" tabindex="0">Selecciona una fila del historial.</pre>
+        </section>
+
+        <section class="intelligence-section intelligence-danger" aria-labelledby="intelligence-data-title">
+          <h4 id="intelligence-data-title">Mis datos</h4>
+          <button id="intelligence-delete-expired" class="intel-btn" type="button">Borrar vencidos</button>
+          <label>Escribe ELIMINAR para borrar todo
+            <input id="intelligence-delete-confirm" class="prop-input" autocomplete="off">
+          </label>
+          <button id="intelligence-delete-all" class="intel-btn" type="button" disabled>Eliminar todo</button>
+        </section>
+      </div>
+      <p id="intelligence-live-status" class="sr-only" role="status" aria-live="polite">Asistente en tiempo real listo.</p>
     `;
   }
 

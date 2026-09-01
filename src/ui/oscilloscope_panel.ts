@@ -15,11 +15,13 @@ import {
   type MaskToleranceDefinition,
   buildTyTracePoints,
   findTriggerStartIndex,
+  findTriggerMatch,
   formatOscilloscopeTime,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
   type OscilloscopeChannel,
   type TriggerEdge,
+  type TyTracePoint,
   OSCILLOSCOPE_TIME_PER_DIV,
   OSCILLOSCOPE_VOLTS_PER_DIV,
 } from "./oscilloscope_model";
@@ -48,6 +50,7 @@ import {
 import { ensureCanvasDpr } from "./canvas_dpr";
 import { evaluateWaveformMath } from "./waveform_math_parser";
 import { getInstrumentThemeColors } from "./instrument_theme";
+import { showOscilloscopeContextMenu } from "./oscilloscope_context_menu";
 import {
   calculateAutomatedMeasurements,
   exportMeasurementsToCsv,
@@ -97,17 +100,20 @@ export class OscilloscopePanel {
 
   // Timebase & Trigger DOM elements
   private timeDivSelect: HTMLSelectElement | null = null;
-  private simSpeedSelect: HTMLSelectElement | null = null;
   public simulationSpeedMultiplier = 1.0;
   private cursorsBtn: HTMLButtonElement | null = null;
   private mathBtn: HTMLButtonElement | null = null;
   private snapshotBtn: HTMLButtonElement | null = null;
   private csvBtn: HTMLButtonElement | null = null;
+  private autoRangeBtn: HTMLButtonElement | null = null;
+  public isAutoRangeEnabled = false;
+  private autoRangeDebounceCounter = 0;
 
   private triggerModeSelect: HTMLSelectElement | null = null;
   private triggerEdgeSelect: HTMLSelectElement | null = null;
-  private triggerLevelSlider: HTMLInputElement | null = null;
+  private triggerLevelInput: HTMLInputElement | null = null;
   private triggerSweepModeSelect: HTMLSelectElement | null = null;
+  private trigger0vBtn: HTMLButtonElement | null = null;
   private trigger50Btn: HTMLButtonElement | null = null;
 
   private modeTyBtn: HTMLButtonElement | null = null;
@@ -116,7 +122,7 @@ export class OscilloscopePanel {
   private isSplitMode = false;
 
   // Tabbed Focused Channel UI elements
-  private focusedChannel: "ch1" | "ch2" | "ch3" | "ch4" | "math" = "ch1";
+  public focusedChannel: "ch1" | "ch2" | "ch3" | "ch4" | "math" = "ch1";
   private focusedCard: HTMLElement | null = null;
   private focusedTitle: HTMLElement | null = null;
   private focusedToggleBtn: HTMLButtonElement | null = null;
@@ -127,7 +133,8 @@ export class OscilloscopePanel {
   private focusedInvBtn: HTMLButtonElement | null = null;
   private focusedVoltsSelect: HTMLSelectElement | null = null;
   private focusedVoltsBadge: HTMLElement | null = null;
-  private focusedOffsetSlider: HTMLInputElement | null = null;
+  private focusedOffsetInput: HTMLInputElement | null = null;
+  private focusedOffset0vBtn: HTMLButtonElement | null = null;
   private focusedOffsetVal: HTMLElement | null = null;
 
   // Math Presets and Coupling container
@@ -171,7 +178,7 @@ export class OscilloscopePanel {
   // PVT Multi-corner overlay
   public pvtMode = false;
   public pvtTraces: PvtTrace[] = [];
-  public pvtColors: string[] = ['#FACC15', '#38BDF8', '#F43F5E', '#4ADE80', '#FB923C'];
+  public pvtColors: string[] = ['#FACC15', '#38BDF8', '#F43F5E', '#34D399', '#FB923C'];
 
   // SPAR (S-Parameter) state
   public sparResult: SParameterResult | null = null;
@@ -234,6 +241,7 @@ export class OscilloscopePanel {
   public triggerLevel = 0.0; // volts
   public triggerSweepMode: "auto" | "normal" | "single" = "auto";
   private singleTriggerFired = false;
+  private lastTriggeredFrames = new Map<string, TyTracePoint[]>();
 
   private oscMouseX: number | null = null;
   private oscMouseY: number | null = null;
@@ -315,7 +323,13 @@ export class OscilloscopePanel {
       cursorT2: this.cursorT2,
       cursorV1: this.cursorV1,
       cursorV2: this.cursorV2,
+      isAutoRangeEnabled: this.isAutoRangeEnabled,
     };
+  }
+
+  public updateAutoRangeButtonState(): void {
+    if (!this.autoRangeBtn) return;
+    this.autoRangeBtn.classList.toggle("active", this.isAutoRangeEnabled);
   }
 
   public updateCursorButtonState(): void {
@@ -337,14 +351,7 @@ export class OscilloscopePanel {
     this.cursorMode = mode;
     this.isCursorsEnabled = mode !== "off";
     this.updateCursorButtonState();
-    this.updateMeasurementsIfNeeded(
-      [
-        { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
-        { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: "#38BDF8" },
-        { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: "#F43F5E" },
-        { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: "#4ADE80" },
-      ],
-    );
+    this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
     this.draw();
   }
 
@@ -400,9 +407,13 @@ export class OscilloscopePanel {
     this.syncTimeDivSelect(state.timeDivValue);
     if (this.triggerModeSelect) this.triggerModeSelect.value = state.triggerChannel;
     if (this.triggerEdgeSelect) this.triggerEdgeSelect.value = state.triggerEdge;
-    if (this.triggerLevelSlider) {
-      const vPerDiv = this.getVoltsPerDiv(state.triggerChannel) || 1;
-      this.triggerLevelSlider.value = (state.triggerLevel / vPerDiv).toFixed(2);
+    if (this.triggerLevelInput) {
+      this.triggerLevelInput.value = state.triggerLevel.toFixed(2);
+    }
+
+    if (typeof state.isAutoRangeEnabled === "boolean") {
+      this.isAutoRangeEnabled = state.isAutoRangeEnabled;
+      this.updateAutoRangeButtonState();
     }
 
     this.modeTyBtn?.classList.toggle("active", !state.isXyMode);
@@ -421,17 +432,18 @@ export class OscilloscopePanel {
     this.oscCh4Btn = document.querySelector("#osc-ch4-btn");
 
     this.timeDivSelect = document.querySelector("#osc-time-div");
-    this.simSpeedSelect = document.querySelector("#osc-sim-speed");
     this.cursorsBtn = document.querySelector("#osc-cursors-btn");
     this.mathBtn = document.querySelector("#osc-math-btn");
     this.snapshotBtn = document.querySelector("#osc-snapshot-btn");
     this.csvBtn = document.querySelector("#osc-csv-btn");
+    this.autoRangeBtn = document.querySelector("#osc-autorange-btn");
 
     this.triggerModeSelect = document.querySelector("#osc-trigger-mode");
     this.triggerEdgeSelect = document.querySelector("#osc-trigger-edge");
-    this.triggerLevelSlider = document.querySelector("#osc-trigger-level");
-    this.triggerSweepModeSelect = document.querySelector("#osc-trigger-sweep-mode");
+    this.triggerLevelInput = document.querySelector("#osc-trigger-level");
+    this.trigger0vBtn = document.querySelector("#osc-trigger-0v-btn");
     this.trigger50Btn = document.querySelector("#osc-trigger-50-btn");
+    this.triggerSweepModeSelect = document.querySelector("#osc-trigger-sweep-mode");
 
     this.modeTyBtn = document.querySelector("#osc-mode-ty");
     this.modeXyBtn = document.querySelector("#osc-mode-xy");
@@ -448,7 +460,8 @@ export class OscilloscopePanel {
     this.focusedInvBtn = document.querySelector("#osc-focused-inv");
     this.focusedVoltsSelect = document.querySelector("#osc-focused-volts");
     this.focusedVoltsBadge = document.querySelector("#osc-focused-volts-badge");
-    this.focusedOffsetSlider = document.querySelector("#osc-focused-offset");
+    this.focusedOffsetInput = document.querySelector("#osc-focused-offset");
+    this.focusedOffset0vBtn = document.querySelector("#osc-focused-offset-0v-btn");
     this.focusedOffsetVal = document.querySelector("#osc-focused-offset-val");
 
     // Math Presets & Rows
@@ -510,28 +523,14 @@ export class OscilloscopePanel {
     this.cursorTargetChannel = ch;
     this.clampCursorVoltagesToVisibleRange();
     this.syncFocusedChannelUI();
-    this.updateMeasurementsIfNeeded(
-      [
-        { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
-        { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: "#38BDF8" },
-        { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: "#F43F5E" },
-        { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: "#4ADE80" },
-      ],
-    );
+    this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
     this.draw();
   }
 
   public setCursorTargetChannel(ch: "ch1" | "ch2" | "ch3" | "ch4" | "math"): void {
     this.cursorTargetChannel = ch;
     this.clampCursorVoltagesToVisibleRange();
-    this.updateMeasurementsIfNeeded(
-      [
-        { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
-        { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: "#38BDF8" },
-        { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: "#F43F5E" },
-        { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: "#4ADE80" },
-      ],
-    );
+    this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
     this.draw();
   }
 
@@ -634,14 +633,16 @@ export class OscilloscopePanel {
     if (this.focusedVoltsBadge) this.focusedVoltsBadge.textContent = this.formatVolts(v);
 
     // Offset
-    const off = this.getOffsetDivs(ch);
-    if (this.focusedOffsetSlider) this.focusedOffsetSlider.value = off.toString();
-    if (this.focusedOffsetVal) this.focusedOffsetVal.textContent = this.formatOffset(off, v);
+    const offDivs = this.getOffsetDivs(ch);
+    const offVolts = offDivs * v;
+    if (this.focusedOffsetInput && document.activeElement !== this.focusedOffsetInput) {
+      this.focusedOffsetInput.value = offVolts.toFixed(2);
+    }
+    if (this.focusedOffsetVal) this.focusedOffsetVal.textContent = this.formatOffset(offDivs, v);
 
-    // Trigger level slider sync
-    if (this.triggerLevelSlider) {
-      const trigVPerDiv = this.getVoltsPerDiv(this.triggerChannel) || 1;
-      this.triggerLevelSlider.value = (this.triggerLevel / trigVPerDiv).toFixed(2);
+    // Trigger level input sync
+    if (this.triggerLevelInput && document.activeElement !== this.triggerLevelInput) {
+      this.triggerLevelInput.value = this.triggerLevel.toFixed(2);
     }
   }
 
@@ -659,20 +660,10 @@ export class OscilloscopePanel {
 
     const trigVal = document.querySelector("#osc-trigger-level-val");
     if (trigVal) trigVal.textContent = `${this.triggerLevel >= 0 ? '+' : ''}${this.triggerLevel.toFixed(2)} V`;
-
-    const hudSpeed = document.querySelector("#osc-hud-speed-val");
-    if (hudSpeed) {
-      const spd = this.simulationSpeedMultiplier;
-      hudSpeed.textContent = spd >= 100 ? "Turbo" : `${spd.toFixed(spd < 1 ? 2 : 1)}x`;
-    }
   }
 
   public setSimulationSpeed(speed: number): void {
     this.simulationSpeedMultiplier = Math.max(0.01, speed);
-    if (this.simSpeedSelect) {
-      this.simSpeedSelect.value = speed.toString();
-    }
-    this.updateHud();
   }
 
   private initEvents() {
@@ -691,20 +682,37 @@ export class OscilloscopePanel {
 
       // Check left edge ground markers (x <= 28)
       if (x <= 28) {
-        const activeOffsets: [number, number, boolean][] = [
+        const candidateMarkers: Array<{ chNum: 1 | 2 | 3 | 4; dist: number; isFocused: boolean }> = [];
+        const channels: [1 | 2 | 3 | 4, number, boolean][] = [
           [1, this.offsetCh1, this.oscCh1Btn?.classList.contains("active") ?? true],
           [2, this.offsetCh2, this.oscCh2Btn?.classList.contains("active") ?? false],
           [3, this.offsetCh3, this.oscCh3Btn?.classList.contains("active") ?? false],
           [4, this.offsetCh4, this.oscCh4Btn?.classList.contains("active") ?? false],
         ];
-        for (const [chNum, offDivs, active] of activeOffsets) {
+        for (const [chNum, offDivs, active] of channels) {
           if (!active) continue;
           const tagY = centerY - offDivs * divHeight;
-          if (Math.abs(y - tagY) <= 12) {
-            this.draggingMarker = { type: "channelOffset", channel: chNum as 1 | 2 | 3 | 4 };
-            this.setFocusedChannel(`ch${chNum}` as "ch1" | "ch2" | "ch3" | "ch4");
-            return;
+          const dist = Math.abs(y - tagY);
+          if (dist <= 14) {
+            candidateMarkers.push({
+              chNum,
+              dist,
+              isFocused: this.focusedChannel === `ch${chNum}`,
+            });
           }
+        }
+
+        if (candidateMarkers.length > 0) {
+          // Prioritize currently focused channel if it is within touch range, otherwise closest
+          candidateMarkers.sort((a, b) => {
+            if (a.isFocused && !b.isFocused) return -1;
+            if (!a.isFocused && b.isFocused) return 1;
+            return a.dist - b.dist;
+          });
+          const chosen = candidateMarkers[0];
+          this.draggingMarker = { type: "channelOffset", channel: chosen.chNum };
+          this.setFocusedChannel(`ch${chosen.chNum}`);
+          return;
         }
       }
 
@@ -806,14 +814,7 @@ export class OscilloscopePanel {
             this.draggingMarker.cursor === "T1" || this.draggingMarker.cursor === "T2"
               ? "ew-resize"
               : "ns-resize";
-          this.updateMeasurementsIfNeeded(
-            [
-              { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: "#FACC15" },
-              { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: "#38BDF8" },
-              { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: "#F43F5E" },
-              { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: "#4ADE80" },
-            ],
-          );
+          this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
           this.draw();
         }
       } else {
@@ -888,6 +889,10 @@ export class OscilloscopePanel {
       this.hoveredCursor = null;
       this.draggingMarker = null;
       this.draw();
+    });
+
+    this.oscCanvas.addEventListener("contextmenu", (e) => {
+      showOscilloscopeContextMenu(e, this);
     });
 
     // Wheel zoom: Vertical Volts/div (o Horizontal Time/div con Shift)
@@ -1078,66 +1083,81 @@ export class OscilloscopePanel {
       this.draw();
     });
 
-    this.focusedOffsetSlider?.addEventListener("input", () => {
-      const val = parseFloat(this.focusedOffsetSlider?.value || "0.0");
-      const ch = this.focusedChannel;
-      if (ch === "math") this.mathOffset = val;
-      else if (ch === "ch1") this.offsetCh1 = val;
-      else if (ch === "ch2") this.offsetCh2 = val;
-      else if (ch === "ch3") this.offsetCh3 = val;
-      else if (ch === "ch4") this.offsetCh4 = val;
-      this.syncFocusedChannelUI();
+    this.focusedOffsetInput?.addEventListener("input", () => {
+      if (this.focusedOffsetInput) {
+        const valVolts = parseFloat(this.focusedOffsetInput.value);
+        if (Number.isFinite(valVolts)) {
+          const ch = this.focusedChannel;
+          const vPerDiv = this.getVoltsPerDiv(ch) || 1.0;
+          const offDivs = valVolts / vPerDiv;
+          if (ch === "math") this.mathOffset = offDivs;
+          else if (ch === "ch1") this.offsetCh1 = offDivs;
+          else if (ch === "ch2") this.offsetCh2 = offDivs;
+          else if (ch === "ch3") this.offsetCh3 = offDivs;
+          else if (ch === "ch4") this.offsetCh4 = offDivs;
+        }
+      }
       this.draw();
+    });
+
+    this.focusedOffset0vBtn?.addEventListener("click", () => {
+      this.setFocusedOffsetZero();
     });
 
     // 4. Horizontal Timebase & Trigger
-    this.timeDivSelect?.addEventListener("input", () => {
+    const onTimeDivChange = () => {
       if (this.timeDivSelect) this.timeDivValue = parseFloat(this.timeDivSelect.value);
       this.updateHud();
       this.draw();
-    });
+    };
+    this.timeDivSelect?.addEventListener("input", onTimeDivChange);
+    this.timeDivSelect?.addEventListener("change", onTimeDivChange);
 
-    this.simSpeedSelect?.addEventListener("change", () => {
-      const speed = parseFloat(this.simSpeedSelect?.value ?? "1.0");
-      if (Number.isFinite(speed) && speed > 0) {
-        this.simulationSpeedMultiplier = speed;
-        this.onSpeedChanged?.(speed);
-        this.updateHud();
-      }
-    });
-
-    this.triggerModeSelect?.addEventListener("input", () => {
+    const onTriggerModeChange = () => {
       if (this.triggerModeSelect) this.triggerChannel = normalizeTriggerChannel(this.triggerModeSelect.value);
       this.syncFocusedChannelUI();
       this.draw();
-    });
+    };
+    this.triggerModeSelect?.addEventListener("input", onTriggerModeChange);
+    this.triggerModeSelect?.addEventListener("change", onTriggerModeChange);
 
-    this.triggerEdgeSelect?.addEventListener("input", () => {
+    const onTriggerEdgeChange = () => {
       if (this.triggerEdgeSelect) this.triggerEdge = normalizeTriggerEdge(this.triggerEdgeSelect.value);
       this.draw();
-    });
+    };
+    this.triggerEdgeSelect?.addEventListener("input", onTriggerEdgeChange);
+    this.triggerEdgeSelect?.addEventListener("change", onTriggerEdgeChange);
 
-    this.triggerLevelSlider?.addEventListener("input", () => {
-      if (this.triggerLevelSlider) {
-        const vPerDiv = this.getVoltsPerDiv(this.triggerChannel) || 1;
-        const divs = parseFloat(this.triggerLevelSlider.value || "0");
-        this.triggerLevel = divs * vPerDiv;
+    const onTriggerLevelChange = () => {
+      if (this.triggerLevelInput) {
+        const val = parseFloat(this.triggerLevelInput.value);
+        if (Number.isFinite(val)) {
+          this.triggerLevel = val;
+        }
       }
       this.updateHud();
       this.draw();
+    };
+    this.triggerLevelInput?.addEventListener("input", onTriggerLevelChange);
+    this.triggerLevelInput?.addEventListener("change", onTriggerLevelChange);
+
+    this.trigger0vBtn?.addEventListener("click", () => {
+      this.setTriggerLevelZero();
     });
 
     this.trigger50Btn?.addEventListener("click", () => {
       this.setTriggerTo50Percent();
     });
 
-    this.triggerSweepModeSelect?.addEventListener("input", () => {
+    const onTriggerSweepModeChange = () => {
       if (this.triggerSweepModeSelect) {
         this.triggerSweepMode = (this.triggerSweepModeSelect.value as "auto" | "normal" | "single") || "auto";
         this.singleTriggerFired = false;
       }
       this.draw();
-    });
+    };
+    this.triggerSweepModeSelect?.addEventListener("input", onTriggerSweepModeChange);
+    this.triggerSweepModeSelect?.addEventListener("change", onTriggerSweepModeChange);
 
     // Mode toggles
     this.modeTyBtn?.addEventListener("click", () => {
@@ -1190,6 +1210,16 @@ export class OscilloscopePanel {
     // Snapshot PNG & CSV Export
     this.snapshotBtn?.addEventListener("click", () => this.snapshotPng());
     this.csvBtn?.addEventListener("click", () => this.exportCsv());
+
+    // Auto-Range continuous toggle button
+    this.autoRangeBtn?.addEventListener("click", () => {
+      this.isAutoRangeEnabled = !this.isAutoRangeEnabled;
+      this.updateAutoRangeButtonState();
+      if (this.isAutoRangeEnabled) {
+        this.runAutoRangeCheck(true);
+      }
+      this.draw();
+    });
 
     // Top bar channel buttons (click toggles and focuses)
     const setupChBtn = (btn: HTMLButtonElement | null, ch: "ch1" | "ch2" | "ch3" | "ch4") => {
@@ -1286,6 +1316,10 @@ export class OscilloscopePanel {
     const isCh3Active = this.oscCh3Btn?.classList.contains("active") ?? false;
     const isCh4Active = this.oscCh4Btn?.classList.contains("active") ?? false;
 
+    if (this.isAutoRangeEnabled) {
+      this.runAutoRangeCheck();
+    }
+
     const ch1Color = themeColors.traceColors.ch1;
     const ch2Color = themeColors.traceColors.ch2;
     const ch3Color = themeColors.traceColors.ch3;
@@ -1353,13 +1387,16 @@ export class OscilloscopePanel {
       const ctx = this.oscCtx;
       const divHeight = height / 8;
       const triggerNode = this.getProbeNodeByChannel(this.triggerChannel);
-      const triggerStartIdx = findTriggerStartIndex(
+      const trigMatch = findTriggerMatch(
         this.transientResults,
         triggerNode,
         this.triggerEdge,
         this.triggerLevel,
         this.timeDivValue,
+        this.triggerSweepMode,
       );
+      const triggerStartIdx = trigMatch.startIndex;
+      const isTriggered = trigMatch.triggered;
 
       if (this.isSplitMode && activeChannelsList.length > 1) {
         const slotHeight = height / activeChannelsList.length;
@@ -1377,7 +1414,7 @@ export class OscilloscopePanel {
             levelVolts: this.triggerLevel,
             voltsPerDiv: this.getVoltsPerDiv(this.triggerChannel),
             mode: this.triggerSweepMode,
-            triggered: triggerStartIdx > 0,
+            triggered: isTriggered,
             paused: this.isOscPaused,
           },
         );
@@ -1400,6 +1437,9 @@ export class OscilloscopePanel {
           const shiftedPoints = tracePoints.map((pt) => ({ x: pt.x, y: pt.y + topY }));
 
           ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, topY, width, slotHeight);
+          ctx.clip();
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
 
@@ -1433,14 +1473,14 @@ export class OscilloscopePanel {
             levelVolts: this.triggerLevel,
             voltsPerDiv: this.getVoltsPerDiv(this.triggerChannel),
             mode: this.triggerSweepMode,
-            triggered: triggerStartIdx > 0,
+            triggered: isTriggered,
             paused: this.isOscPaused,
           },
         });
 
         // Handle Trigger Single Shot
         if (this.triggerSweepMode === "single" && this.isSimulating && !this.singleTriggerFired) {
-          if (triggerStartIdx > 0 || (this.transientResults.length > 5 && this.triggerLevel === 0)) {
+          if (isTriggered && this.transientResults.length >= 4) {
             this.singleTriggerFired = true;
             this.pause();
           }
@@ -1455,20 +1495,36 @@ export class OscilloscopePanel {
           isActive: boolean,
           config: { coupling: "dc" | "ac" | "gnd"; invert: boolean; interpolation?: "linear" | "sinc" },
         ) => {
-          if (!isActive || !nodeId || triggerStartIdx >= this.transientResults.length) return;
+          if (!isActive || !nodeId) return;
 
-          const offsetPixels = offsetDivs * divHeight;
-          const tracePoints = buildTyTracePoints(
-            this.transientResults,
-            nodeId,
-            { width, height },
-            { voltsPerDiv, offsetPixels, timeDivValue: this.timeDivValue },
-            triggerStartIdx,
-            config,
-          );
+          let tracePoints: TyTracePoint[] = [];
+
+          if (this.triggerSweepMode === "normal" && !isTriggered && this.lastTriggeredFrames.has(nodeId)) {
+            tracePoints = this.lastTriggeredFrames.get(nodeId)!;
+          } else {
+            if (triggerStartIdx >= this.transientResults.length) return;
+            if (this.triggerSweepMode === "normal" && !isTriggered) return;
+
+            const offsetPixels = offsetDivs * divHeight;
+            tracePoints = buildTyTracePoints(
+              this.transientResults,
+              nodeId,
+              { width, height },
+              { voltsPerDiv, offsetPixels, timeDivValue: this.timeDivValue },
+              triggerStartIdx,
+              config,
+            );
+            if (isTriggered && tracePoints.length >= 2) {
+              this.lastTriggeredFrames.set(nodeId, tracePoints);
+            }
+          }
+
           if (tracePoints.length < 2) return;
 
           ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, width, height);
+          ctx.clip();
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
 
@@ -1540,6 +1596,9 @@ export class OscilloscopePanel {
 
             if (mathPoints.length > 1) {
               ctx.save();
+              ctx.beginPath();
+              ctx.rect(0, 0, width, height);
+              ctx.clip();
               ctx.strokeStyle = "#FB923C";
               ctx.lineWidth = 2.0;
               ctx.setLineDash([4, 2]);
@@ -1586,14 +1645,7 @@ export class OscilloscopePanel {
         }
       }
 
-      this.updateMeasurementsIfNeeded(
-        [
-          { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: isCh1Active, color: "#FACC15" },
-          { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: isCh2Active, color: "#38BDF8" },
-          { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: isCh3Active, color: "#F43F5E" },
-          { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: isCh4Active, color: "#4ADE80" },
-        ],
-      );
+      this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
 
       if (this.isCursorsEnabled || this.cursorMode !== "off") {
         const effectiveMode = this.cursorMode === "off" ? "both" : this.cursorMode;
@@ -1653,6 +1705,54 @@ export class OscilloscopePanel {
     }
 
     this.scheduleNextFrame();
+  }
+
+  public getActiveMeasurementChannelsList() {
+    const themeColors = getInstrumentThemeColors();
+    return [
+      { id: "osc-meas-ch1", node: this.ch1ProbeNode, active: this.isChannelActive("ch1"), color: themeColors.traceColors.ch1 },
+      { id: "osc-meas-ch2", node: this.ch2ProbeNode, active: this.isChannelActive("ch2"), color: themeColors.traceColors.ch2 },
+      { id: "osc-meas-ch3", node: this.ch3ProbeNode, active: this.isChannelActive("ch3"), color: themeColors.traceColors.ch3 },
+      { id: "osc-meas-ch4", node: this.ch4ProbeNode, active: this.isChannelActive("ch4"), color: themeColors.traceColors.ch4 },
+    ];
+  }
+
+  public moveNearestCursorT(fraction: number): void {
+    if (this.cursorMode === "off" || !this.isCursorsEnabled) {
+      this.cursorMode = "time";
+    } else if (this.cursorMode === "voltage") {
+      this.cursorMode = "both";
+    }
+    this.isCursorsEnabled = true;
+    this.updateCursorButtonState();
+    const d1 = Math.abs(this.cursorT1 - fraction);
+    const d2 = Math.abs(this.cursorT2 - fraction);
+    if (d1 <= d2) {
+      this.cursorT1 = Math.max(0.02, Math.min(0.98, fraction));
+    } else {
+      this.cursorT2 = Math.max(0.02, Math.min(0.98, fraction));
+    }
+    this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
+    this.draw();
+  }
+
+  public moveNearestCursorV(volts: number): void {
+    if (this.cursorMode === "off" || !this.isCursorsEnabled) {
+      this.cursorMode = "voltage";
+    } else if (this.cursorMode === "time") {
+      this.cursorMode = "both";
+    }
+    this.isCursorsEnabled = true;
+    this.updateCursorButtonState();
+    const d1 = Math.abs(this.cursorV1 - volts);
+    const d2 = Math.abs(this.cursorV2 - volts);
+    if (d1 <= d2) {
+      this.cursorV1 = volts;
+    } else {
+      this.cursorV2 = volts;
+    }
+    this.updateMeasurementsIfNeeded(this.getActiveMeasurementChannelsList());
+    this.draw();
   }
 
   private updateMeasurementsIfNeeded(channels: readonly {
@@ -1953,9 +2053,76 @@ export class OscilloscopePanel {
     this.refreshVisibility();
   }
 
+  public setTriggerLevelZero(): void {
+    this.triggerLevel = 0.0;
+    this.syncFocusedChannelUI();
+    this.updateHud();
+    this.draw();
+  }
+
+  public setFocusedOffsetZero(): void {
+    const ch = this.focusedChannel;
+    if (ch === "math") this.mathOffset = 0.0;
+    else if (ch === "ch1") this.offsetCh1 = 0.0;
+    else if (ch === "ch2") this.offsetCh2 = 0.0;
+    else if (ch === "ch3") this.offsetCh3 = 0.0;
+    else if (ch === "ch4") this.offsetCh4 = 0.0;
+    this.syncFocusedChannelUI();
+    this.draw();
+  }
+
+  public runAutoRangeCheck(force = false): void {
+    if (!this.isAutoRangeEnabled || this.transientResults.length < 5) return;
+    this.autoRangeDebounceCounter++;
+    if (!force && this.autoRangeDebounceCounter % 6 !== 0) return;
+
+    let changed = false;
+    const channels: Array<{ ch: OscilloscopeChannel; node: string | null; curV: number }> = [
+      { ch: "ch1", node: this.ch1ProbeNode, curV: this.voltsPerDivCh1 },
+      { ch: "ch2", node: this.ch2ProbeNode, curV: this.voltsPerDivCh2 },
+      { ch: "ch3", node: this.ch3ProbeNode, curV: this.voltsPerDivCh3 },
+      { ch: "ch4", node: this.ch4ProbeNode, curV: this.voltsPerDivCh4 },
+    ];
+
+    for (const { ch, node, curV } of channels) {
+      if (!this.isChannelActive(ch) || !node) continue;
+      const metrics = calculateOscilloscopeMetrics(this.transientResults, node);
+      const vMaxAbs = Math.max(Math.abs(metrics.vmax), Math.abs(metrics.vmin), metrics.vpp / 2);
+      if (!Number.isFinite(vMaxAbs) || vMaxAbs <= 0.005) continue;
+
+      const currentDivs = vMaxAbs / (curV || 1);
+      if (currentDivs > 3.6 || (currentDivs < 0.9 && curV > 0.001)) {
+        const requiredV = vMaxAbs / 3.0;
+        const targetV = OSCILLOSCOPE_VOLTS_PER_DIV.find((val) => val >= requiredV)
+          ?? OSCILLOSCOPE_VOLTS_PER_DIV[OSCILLOSCOPE_VOLTS_PER_DIV.length - 1];
+
+        if (targetV !== curV) {
+          if (ch === "ch1") this.voltsPerDivCh1 = targetV;
+          else if (ch === "ch2") this.voltsPerDivCh2 = targetV;
+          else if (ch === "ch3") this.voltsPerDivCh3 = targetV;
+          else if (ch === "ch4") this.voltsPerDivCh4 = targetV;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      this.syncFocusedChannelUI();
+      this.updateHud();
+    }
+  }
+
   public setTriggerTo50Percent(): void {
     if (this.transientResults.length === 0) return;
-    const trigNode = this.getProbeNodeByChannel(this.triggerChannel);
+    let trigNode = this.getProbeNodeByChannel(this.triggerChannel);
+    if (!trigNode) {
+      const fallbackCh = this.getAutoFitChannel();
+      if (fallbackCh) {
+        this.triggerChannel = fallbackCh;
+        if (this.triggerModeSelect) this.triggerModeSelect.value = fallbackCh;
+        trigNode = this.getProbeNodeByChannel(fallbackCh);
+      }
+    }
     if (!trigNode) return;
     this.triggerLevel = calculateTrigger50Percent(this.transientResults, trigNode);
     this.syncFocusedChannelUI();
@@ -2062,6 +2229,10 @@ export class OscilloscopePanel {
     if (primaryFit) {
       this.timeDivValue = primaryFit.timeDivValue;
       this.syncTimeDivSelect(primaryFit.timeDivValue);
+      if (primaryChannel && this.getProbeNodeByChannel(primaryChannel)) {
+        this.triggerChannel = primaryChannel;
+        if (this.triggerModeSelect) this.triggerModeSelect.value = primaryChannel;
+      }
       if (typeof primaryFit.triggerLevel50 === "number") {
         this.triggerLevel = primaryFit.triggerLevel50;
       }

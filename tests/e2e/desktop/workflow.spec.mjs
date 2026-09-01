@@ -1,15 +1,21 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Key } from "webdriverio";
 
-const DEMO_FILE = "01_filtro_rc.astryd";
 const DEMO_CASES = [
-  { file: "01_filtro_rc.astryd", tab: "01_filtro_rc", mode: "DC", components: 4, wires: 4 },
-  { file: "02_puente_rectificador.astryd", tab: "02_puente_rectificador", mode: "TRAN", components: 8, wires: 11 },
-  { file: "03_arduino_led.astryd", tab: "03_arduino_led", mode: "TRAN", components: 4, wires: 4 },
-  { file: "04_amp_bjt_bode.astryd", tab: "04_amp_bjt_bode", mode: "AC", components: 9, wires: 12 },
+  { file: "01_amplificador_no_inversor.biaani", tab: "01_amplificador_no_inversor", mode: "TRAN", components: 9, wires: 9 },
+  { file: "02_rectificador_filtro_c.biaani", tab: "02_rectificador_filtro_c", mode: "TRAN", components: 14, wires: 16 },
+  { file: "03_puente_wheatstone_desbalanceado.biaani", tab: "03_puente_wheatstone_desbalanceado", mode: "DC", components: 7, wires: 12 },
+  { file: "04_detector_cruce_por_cero_basico.biaani", tab: "04_detector_cruce_por_cero_basico", mode: "TRAN", components: 12, wires: 12 },
+  { file: "05_detector_cruce_por_cero_aislado.biaani", tab: "05_detector_cruce_por_cero_aislado", mode: "TRAN", components: 16, wires: 19 },
 ];
+const PRIMARY_DEMO = DEMO_CASES[2];
+const DEMO_FILE = PRIMARY_DEMO.file;
+const DEMO_COMPLETION_TIMEOUT_MS = 60_000;
+let restoreLeftAutoHide = false;
+let feedbackConsentToRestore = null;
+let feedbackSessionToDelete = null;
 
 async function appSnapshot() {
   return browser.execute(() => window.__ASTRYD_E2E__?.snapshot());
@@ -19,8 +25,86 @@ async function qaState() {
   return browser.execute(() => window.__ASTRYD_QA__);
 }
 
+async function ensureLeftPanelOpen() {
+  const panel = await $("#sidebar-left");
+  if (!(await panel.getAttribute("class")).includes("collapsed")) return;
+  await $("#btn-dock-toggle-left").click();
+  await browser.waitUntil(
+    async () => !(await panel.getAttribute("class")).includes("collapsed"),
+    { timeoutMsg: "La paleta de componentes no se abrió" },
+  );
+}
+
+async function pinLeftPanelForSuite() {
+  await ensureLeftPanelOpen();
+  const pinButton = await $("#btn-pin-left");
+  restoreLeftAutoHide = (await pinButton.getAttribute("aria-pressed")) !== "true";
+  if (!restoreLeftAutoHide) return;
+  await pinButton.click();
+  await browser.waitUntil(
+    async () => (await pinButton.getAttribute("aria-pressed")) === "true",
+    { timeoutMsg: "No se pudo fijar la paleta para el flujo E2E" },
+  );
+}
+
+async function restoreLeftPanelAutoHide() {
+  if (!restoreLeftAutoHide) return;
+  await browser.execute(() => {
+    const pinButton = document.querySelector("#btn-pin-left");
+    if (pinButton instanceof HTMLButtonElement) pinButton.click();
+  });
+  await browser.waitUntil(async () => (
+    await $("#btn-pin-left").getAttribute("aria-pressed")
+  ) === "false", {
+    timeoutMsg: "No se pudo restaurar el auto-ocultado de la paleta",
+  });
+  restoreLeftAutoHide = false;
+}
+
+async function closeFloatingInstruments() {
+  await browser.execute(() => {
+    document.querySelectorAll(".floating-instrument-window").forEach((windowElement) => {
+      const closeButton = windowElement.querySelector('[aria-label="Cerrar ventana flotante"]');
+      if (closeButton instanceof HTMLButtonElement) closeButton.click();
+    });
+  });
+  await browser.waitUntil(async () => browser.execute(
+    () => document.querySelectorAll(".floating-instrument-window").length === 0,
+  ));
+}
+
+async function closeInstrumentCenterIfOpen() {
+  const center = await $("#bottom-dock");
+  if ((await center.getAttribute("aria-hidden")) === "true") return;
+  await browser.execute(() => {
+    const button = document.querySelector("#instrument-center-close");
+    if (button instanceof HTMLButtonElement) button.click();
+  });
+  await browser.waitUntil(
+    async () => (await center.getAttribute("aria-hidden")) === "true",
+    { timeoutMsg: "El centro de instrumentos no se cerró" },
+  );
+}
+
+async function startSimulationWithPointer() {
+  const runButton = await $("#run-sim-btn");
+  await runButton.waitForEnabled({
+    timeout: 10_000,
+    timeoutMsg: "El control de simulación permaneció deshabilitado antes del arranque",
+  });
+  await browser.action("pointer", { parameters: { pointerType: "mouse" } })
+    .move({ duration: 0, origin: runButton, x: 0, y: 0 })
+    .down({ button: 0 })
+    .up({ button: 0 })
+    .perform();
+}
+
 async function selectDemo(filename) {
+  const demo = DEMO_CASES.find((candidate) => candidate.file === filename);
+  expect(demo).toBeDefined();
+  const runsBeforeSelection = (await qaState())?.simulationRunCount ?? 0;
   const demoSelect = await $("#btn-open-demo");
+  const startedAt = performance.now();
   const demoOptionIndex = await browser.execute((value) => {
     const select = document.querySelector("#btn-open-demo");
     if (!(select instanceof HTMLSelectElement)) return -1;
@@ -37,6 +121,40 @@ async function selectDemo(filename) {
     timeout: 15_000,
     timeoutMsg: `La demo ${filename} no termino de cargar`,
   });
+  let lastObserved = null;
+  try {
+    await browser.waitUntil(async () => {
+      const state = await qaState();
+      lastObserved = {
+        state,
+        runtime: await browser.execute(() => {
+          const osc = window.oscilloscopePanel;
+          const orch = window.orchestrator;
+          const samples = osc?.transientResults ?? [];
+          return {
+            sampleCount: samples.length,
+            firstSampleTime: samples[0]?.time,
+            lastSampleTime: samples.at(-1)?.time,
+            paused: osc?.isOscPaused,
+            simulationPaused: orch?.simulationPaused,
+            ipcStatus: document.querySelector("#ipc-status-text")?.textContent,
+          };
+        }),
+        console: await browser.execute(() => document.querySelector("#console-output")?.textContent ?? ""),
+      };
+      return state?.simulationRunCount > runsBeforeSelection
+        && state?.lastSimulationMode === demo.mode
+        && state?.simulationRunning === false
+        && state?.lastSolver === "rust";
+    }, {
+      timeout: DEMO_COMPLETION_TIMEOUT_MS,
+      interval: 50,
+      timeoutMsg: `La ejecución automática de ${filename} no terminó en Rust`,
+    });
+  } catch (error) {
+    throw new Error(`${String(error)}. Estado observado: ${JSON.stringify(lastObserved)}`);
+  }
+  console.log(`[demo-perf] ${filename} completada en ${(performance.now() - startedAt).toFixed(0)} ms`);
 }
 
 async function setFeedbackConsent(mode) {
@@ -216,6 +334,47 @@ async function wireCanvasPins(from, to) {
 }
 
 describe("flujo nativo de escritorio", () => {
+  before(async () => {
+    const canvas = await $("#circuit-canvas");
+    await canvas.waitForDisplayed({ timeout: 20_000 });
+    await browser.waitUntil(async () => browser.execute(
+      () => Boolean(window.__ASTRYD_E2E__ && window.__ASTRYD_QA__?.enabled),
+    ), { timeout: 20_000, timeoutMsg: "El puente E2E de Tauri no se inicializo" });
+    await browser.execute(() => {
+      localStorage.setItem("biaani_guide_tour_seen", "true");
+      document.querySelector("#biaani-welcome-toast")?.remove();
+    });
+    await pinLeftPanelForSuite();
+  });
+
+  after(async () => {
+    try {
+      if (feedbackSessionToDelete) {
+        await browser.tauri.execute(
+          (tauri, request) => tauri.core.invoke("delete_feedback_data", { request }),
+          { scope: "session", sessionId: feedbackSessionToDelete },
+        );
+        feedbackSessionToDelete = null;
+      }
+    } finally {
+      try {
+        if (feedbackConsentToRestore) {
+          await browser.tauri.execute(
+            (tauri, mode) => tauri.core.invoke("set_feedback_consent", { mode }),
+            feedbackConsentToRestore,
+          );
+          feedbackConsentToRestore = null;
+        }
+      } finally {
+        try {
+          await closeFloatingInstruments();
+        } finally {
+          await restoreLeftPanelAutoHide();
+        }
+      }
+    }
+  });
+
   it("carga, simula, guarda, usa instrumentos, edita, cablea y restaura", async () => {
     const canvas = await $("#circuit-canvas");
     await canvas.waitForDisplayed({ timeout: 20_000 });
@@ -228,13 +387,17 @@ describe("flujo nativo de escritorio", () => {
     expectTrustedEvents(await trustedInputEvents(), ["change"]);
 
     const baseline = await appSnapshot();
-    expect(baseline.componentCount).toBe(4);
-    expect(baseline.wireCount).toBe(4);
-    expect(baseline.activeTabName).toBe("01_filtro_rc");
+    expect(baseline.componentCount).toBe(PRIMARY_DEMO.components);
+    expect(baseline.wireCount).toBe(PRIMARY_DEMO.wires);
+    expect(baseline.activeTabName).toBe(PRIMARY_DEMO.tab);
+    const autoDemoCenter = await $("#bottom-dock");
+    expect(await autoDemoCenter.getAttribute("aria-hidden")).toBe("false");
+    await closeInstrumentCenterIfOpen();
 
     const originalFeedback = await browser.tauri.execute(
       (tauri) => tauri.core.invoke("get_feedback_status"),
     );
+    feedbackConsentToRestore = originalFeedback.consentMode;
     const benchmarkNetlist = feedbackBenchmarkNetlist();
     await setFeedbackConsent("disabled");
     const feedbackDisabledBefore = await browser.execute(
@@ -281,6 +444,25 @@ describe("flujo nativo de escritorio", () => {
     const synchronousOverheadPercent = (
       Math.max(0, localNonSolverP95 - disabledNonSolverP95) / solverP95
     ) * 100;
+    // Conservar todas las mediciones, incluidas las corridas que fallen el gate.
+    // Con 12 muestras, este p95 por rango más cercano coincide con el máximo.
+    const measuredAt = new Date().toISOString();
+    const performanceDir = resolve("desktop-e2e-results", "performance");
+    await mkdir(performanceDir, { recursive: true });
+    await writeFile(join(performanceDir, `feedback-${measuredAt.replace(/[:.]/g, "-")}.json`), JSON.stringify({
+      measuredAt,
+      binary: process.env.ASTRYD_E2E_BINARY_PATH ?? "src-tauri/target/debug/biaani.exe",
+      componentCount: benchmarkNetlist.components.length,
+      samplesPerPhase: 12,
+      feedbackDisabledBefore,
+      feedbackLocalDurations,
+      feedbackDisabledAfter,
+      typicalOverheadPercent,
+      tailOverheadPercent,
+      synchronousOverheadPercent,
+      directInstrumentationPercent,
+      limits: { synchronousPercent: 3, directInstrumentationPercent: 2 },
+    }, null, 2));
     console.log(
       `[feedback-perf] 480 componentes: raw median=${typicalOverheadPercent.toFixed(2)}%, raw p95=${tailOverheadPercent.toFixed(2)}%, synchronous=${synchronousOverheadPercent.toFixed(2)}%, instrumentation p95=${instrumentationP95.toFixed(3)}ms (${directInstrumentationPercent.toFixed(2)}%)`,
     );
@@ -292,8 +474,14 @@ describe("flujo nativo de escritorio", () => {
     expect(directInstrumentationPercent).toBeLessThanOrEqual(2);
     const feedbackStartedAfter = Date.now() - 1;
 
-    await $("#run-sim-btn").click();
-    await browser.waitUntil(async () => (await qaState())?.lastSolver === "rust", {
+    const runsBeforeManualSimulation = (await qaState()).simulationRunCount;
+    await startSimulationWithPointer();
+    await browser.waitUntil(async () => {
+      const state = await qaState();
+      return state?.simulationRunCount > runsBeforeManualSimulation
+        && state?.lastSolver === "rust"
+        && state?.simulationRunning === false;
+    }, {
       timeout: 30_000,
       timeoutMsg: "La simulacion nativa no reporto el solver Rust",
     });
@@ -309,6 +497,7 @@ describe("flujo nativo de escritorio", () => {
     );
     const started = feedbackPage.events.find((event) => event.kind === "simulation.started");
     expect(started).toBeDefined();
+    feedbackSessionToDelete = started.sessionId;
     const correlated = feedbackPage.events.filter((event) => event.runId === started.runId);
     expect(correlated.map((event) => event.kind)).toEqual(expect.arrayContaining([
       "simulation.started",
@@ -320,7 +509,15 @@ describe("flujo nativo de escritorio", () => {
     expect(correlated.every((event) => event.workspaceId === started.workspaceId)).toBe(true);
     expect(started.workspaceId).toMatch(/^fnv1a32:[0-9a-f]{8}$/);
     const persistedFeedback = JSON.stringify(correlated);
-    for (const forbidden of ["firmware", "nodeVoltages", "branchCurrents", "01_filtro_rc", "V1", "R1", "C1"]) {
+    for (const forbidden of [
+      "firmware",
+      "nodeVoltages",
+      "branchCurrents",
+      PRIMARY_DEMO.tab,
+      "GND1",
+      "R1",
+      "DMM1",
+    ]) {
       expect(persistedFeedback).not.toContain(forbidden);
     }
     await installExportCapture();
@@ -359,7 +556,7 @@ describe("flujo nativo de escritorio", () => {
     const supportBundle = JSON.parse(supportExport.text);
     expect(supportBundle.manifest.format).toBe("astryd-feedback-support");
     expect(supportBundle.manifest.formatVersion).toBe(2);
-    expect(supportBundle.summaryMarkdown).toContain("# Diagnóstico de Astryd Sophia");
+    expect(supportBundle.summaryMarkdown).toContain("# Diagnóstico de Biaani");
     expect(supportExport.text).not.toContain(started.eventId);
     expect(supportExport.text).not.toContain(started.runId);
     await $("#intelligence-shadow-evaluate").click();
@@ -367,13 +564,16 @@ describe("flujo nativo de escritorio", () => {
       timeout: 10_000,
       timeoutMsg: "El modo sombra no informó su bloqueo por datos insuficientes",
     });
-    await $("#instrument-center-close").click();
+    await closeFloatingInstruments();
+    await closeInstrumentCenterIfOpen();
 
     await browser.tauri.execute(
       (tauri, request) => tauri.core.invoke("delete_feedback_data", { request }),
       { scope: "session", sessionId: started.sessionId },
     );
+    feedbackSessionToDelete = null;
     await setFeedbackConsent(originalFeedback.consentMode);
+    feedbackConsentToRestore = null;
 
     const serialized = await browser.execute(() => window.__ASTRYD_E2E__.serializeCircuit());
     const savedPath = join(tmpdir(), `astryd-desktop-e2e-${process.pid}.astryd`);
@@ -385,17 +585,15 @@ describe("flujo nativo de escritorio", () => {
     expect(await readFile(savedPath, "utf8")).toBe(serialized);
 
     const center = await $("#bottom-dock");
-    if (!(await center.getAttribute("class")).includes("collapsed")) {
-      await $("#instrument-center-close").click();
-      await browser.waitUntil(async () => (await center.getAttribute("class")).includes("collapsed"));
-    }
+    await closeInstrumentCenterIfOpen();
     await $("#instruments-menu-btn").click();
     await $("#menu-toggle-dock").click();
     await browser.waitUntil(async () => !(await center.getAttribute("class")).includes("collapsed"), {
       timeoutMsg: "El centro de instrumentos no se abrio",
     });
 
-    for (const instrument of ["oscilloscope", "generator", "logic", "fft", "tracer", "intelligence"]) {
+    for (const instrument of ["oscilloscope", "generator", "logic", "fft", "tracer", "intelligence", "console"]) {
+      await closeFloatingInstruments();
       await $(`.inst-tab[data-tab="${instrument}"]`).click();
       await browser.waitUntil(async () => (await qaState())?.activeInstrumentTab === instrument, {
         timeoutMsg: `No se activo el instrumento ${instrument}`,
@@ -403,14 +601,16 @@ describe("flujo nativo de escritorio", () => {
       expect(await $(`#inst-${instrument}`).isDisplayed()).toBe(true);
     }
     expect(await $("#console-panel").isDisplayed()).toBe(true);
-    await $("#instrument-center-close").click();
-    await browser.waitUntil(async () => (await center.getAttribute("class")).includes("collapsed"));
+    await closeFloatingInstruments();
+    await closeInstrumentCenterIfOpen();
 
     const resistor = await $("#comp-resistor");
     await captureTrustedInputEvents();
     await dragPaletteComponent(resistor, canvas, { x: 0.78, y: 0.72 });
     const paletteEvents = await trustedInputEvents();
-    await browser.waitUntil(async () => (await appSnapshot())?.componentCount === 5, {
+    await browser.waitUntil(async () => (
+      await appSnapshot()
+    )?.componentCount === PRIMARY_DEMO.components + 1, {
       timeoutMsg: "Arrastrar el resistor no agrego el componente",
     });
     expectTrustedEvents(paletteEvents, ["pointerdown", "pointermove", "pointerup"]);
@@ -429,7 +629,9 @@ describe("flujo nativo de escritorio", () => {
       { x: newResistor.pins[0].clientX, y: newResistor.pins[0].clientY },
       { x: ground.pins[0].clientX, y: ground.pins[0].clientY },
     );
-    await browser.waitUntil(async () => (await appSnapshot())?.wireCount === 5, {
+    await browser.waitUntil(async () => (
+      await appSnapshot()
+    )?.wireCount === PRIMARY_DEMO.wires + 1, {
       timeoutMsg: "El gesto de cableado no creo la conexion",
     });
     const wireEvents = await trustedInputEvents();
@@ -442,14 +644,14 @@ describe("flujo nativo de escritorio", () => {
     );
     expect(loaded).toBe(true);
     const restored = await appSnapshot();
-    expect(restored.componentCount).toBe(4);
-    expect(restored.wireCount).toBe(4);
+    expect(restored.componentCount).toBe(PRIMARY_DEMO.components);
+    expect(restored.wireCount).toBe(PRIMARY_DEMO.wires);
 
-    const qaTimestampBeforeResimulation = (await qaState()).lastUpdatedAt;
-    await $("#run-sim-btn").click();
+    const runsBeforeResimulation = (await qaState()).simulationRunCount;
+    await startSimulationWithPointer();
     await browser.waitUntil(async () => {
       const state = await qaState();
-      return state?.lastUpdatedAt !== qaTimestampBeforeResimulation
+      return state?.simulationRunCount > runsBeforeResimulation
         && state?.lastSimulationMode === "DC"
         && state?.lastSolver === "rust"
         && state?.simulationRunning === false;
@@ -468,7 +670,7 @@ describe("flujo nativo de escritorio", () => {
     expect(exports[0].size).toBeGreaterThan(30);
     expect(exports[1].filename).toBe("grafico_simulacion.svg");
     expect(exports[1].text).toContain("<svg");
-    expect(exports[1].text).toContain("Astryd Sophia");
+    expect(exports[1].text).toContain("Biaani");
     expect(exports[2].filename).toBe("reporte_punto_operacion_cc.h5");
     expect(exports[2].prefix.slice(0, 8)).toEqual([0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a]);
     expect(exports[2].size).toBeGreaterThan(32);
@@ -486,7 +688,7 @@ describe("flujo nativo de escritorio", () => {
       ...Array.from({ length: pvtOptionIndex }, () => Key.ArrowDown),
       Key.Enter,
     ]);
-    await $("#run-sim-btn").click();
+    await startSimulationWithPointer();
     const commercialProfile = await $(".pvt-profile-btn");
     await commercialProfile.waitForDisplayed({ timeout: 15_000 });
     await commercialProfile.click();
@@ -520,6 +722,7 @@ describe("flujo nativo de escritorio", () => {
     const canvas = await $("#circuit-canvas");
     await canvas.waitForDisplayed({ timeout: 20_000 });
     const instrumentCenter = await $("#bottom-dock");
+    await closeFloatingInstruments();
     if ((await instrumentCenter.getAttribute("aria-hidden")) !== "true") {
       await $("#instrument-center-close").click();
       await browser.waitUntil(
@@ -532,14 +735,7 @@ describe("flujo nativo de escritorio", () => {
 
     for (const demo of DEMO_CASES) {
       await selectDemo(demo.file);
-      const closeInstrumentCenter = await $("#instrument-center-close");
-      if (await closeInstrumentCenter.isDisplayed()) {
-        await closeInstrumentCenter.click();
-        await browser.waitUntil(
-          async () => !(await closeInstrumentCenter.isDisplayed()),
-          { timeoutMsg: `El centro de instrumentos cubre el esquema ${demo.file}` },
-        );
-      }
+      await closeInstrumentCenterIfOpen();
       const snapshot = await appSnapshot();
       expect(snapshot.componentCount).toBe(demo.components);
       expect(snapshot.wireCount).toBe(demo.wires);
@@ -557,31 +753,10 @@ describe("flujo nativo de escritorio", () => {
       await canvas.moveTo({ xOffset: 12, yOffset: 12 });
       await browser.saveScreenshot(join(outputDir, `${demo.tab}-schematic.png`));
 
-      const beforeRun = (await qaState()).lastUpdatedAt;
-      await $("#run-sim-btn").click();
-      if (demo.mode === "TRAN") {
-        await browser.waitUntil(async () => {
-          const state = await qaState();
-          return (await appSnapshot()).transientSampleCount > 1
-            && state?.simulationRunning === true
-            && await $("#stop-sim-btn").isEnabled();
-        }, {
-          timeout: 30_000,
-          timeoutMsg: `El transitorio de ${demo.file} se desactivó antes de reproducir sus muestras`,
-        });
-      }
-      await browser.waitUntil(async () => {
-        const state = await qaState();
-        return state?.lastUpdatedAt !== beforeRun
-          && state?.lastSimulationMode === demo.mode
-          && state?.lastSolver === "rust"
-          && state?.simulationRunning === false;
-      }, {
-        timeout: 90_000,
-        timeoutMsg: `La simulacion nativa de ${demo.file} no termino correctamente`,
-      });
-
       const finalState = await qaState();
+      expect(finalState.lastSimulationMode).toBe(demo.mode);
+      expect(finalState.lastSolver).toBe("rust");
+      expect(finalState.simulationRunning).toBe(false);
       if (finalState.lastLogType === "error") {
         throw new Error(`${demo.file} termino con error: ${finalState.lastLog}`);
       }

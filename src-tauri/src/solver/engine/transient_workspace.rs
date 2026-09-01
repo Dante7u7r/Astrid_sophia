@@ -207,7 +207,11 @@ impl TransientWorkspace {
 
     /// Prepara el paso copiando la matriz lineal base a la matriz de paso sin realocar memoria.
     #[inline(always)]
-    pub fn prepare_step_matrix(&mut self, matrix_a_linear: &DMatrix<f64>, vector_z_linear: &DVector<f64>) {
+    pub fn prepare_step_matrix(
+        &mut self,
+        matrix_a_linear: &DMatrix<f64>,
+        vector_z_linear: &DVector<f64>,
+    ) {
         self.matrix_a_step.copy_from(matrix_a_linear);
         self.vector_z_step.copy_from(vector_z_linear);
     }

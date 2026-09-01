@@ -43,6 +43,12 @@ select {
   background-repeat: no-repeat;
 }
 
+select option,
+option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
 html {
   width: 100%;
   height: 100%;
@@ -959,6 +965,21 @@ body {
   animation: dropdownFadeIn 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
+.menu-category-title {
+  margin: 9px 6px 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-category-title:first-child {
+  margin-top: 0;
+}
+
 @keyframes dropdownFadeIn {
   from {
     opacity: 0;
@@ -1305,4 +1326,3 @@ body.zen-mode .zen-exit-pill:focus-visible {
   font-family: var(--font-mono, monospace);
   color: var(--cyan, #38bdf8);
 }
-

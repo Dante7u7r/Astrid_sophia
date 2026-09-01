@@ -31,7 +31,9 @@ fn update_switch_state(
 
     if let Some(&forced) = overrides.and_then(|fields| fields.get("switch_state")) {
         let forced_bool = forced >= 0.5;
-        let old = switch_states.insert(comp.id.clone(), forced_bool).unwrap_or(false);
+        let old = switch_states
+            .insert(comp.id.clone(), forced_bool)
+            .unwrap_or(false);
         return old != forced_bool;
     }
 

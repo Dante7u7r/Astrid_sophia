@@ -61,6 +61,7 @@ export interface SimulationControllerDependencies {
   updateCanvasRendering(): void;
   updateOscilloscopeRendering(): void;
   setIpcStatus(text: string, color: string): void;
+  onSolverResult?(solver: "rust" | "typescript" | "mock"): void;
   addLog(text: string, type?: "system" | "send" | "receive" | "error"): void;
 }
 
@@ -206,7 +207,7 @@ export class SimulationController {
     }
     if (hasBsim) {
       this.dependencies.addLog(
-        "BSIM EXPERIMENTAL: implementación parcial. La caracterización NMOS BSIM3 contra ngspice muestra errores de corriente de 97.9 % a 99.3 %; no usar para predicción física.",
+        "BSIM EXPERIMENTAL: implementación parcial. El reporte versionado registra 5/5 puntos DC de NMOS BSIM3 frente a ngspice dentro de tolerancia (VGS=0.8–1.6 V, VDS=1 V, W=10 µm, L=0.18 µm, 27 °C), con errores relativos de corriente de 1.27 % a 6.89 % y tolerancia relativa del 25 %. Esto no certifica BSIM completo ni BSIM4; no usar como validación general para predicción física. Referencia: validation/reports/bsim-characterization.md.",
         "error",
       );
     }
@@ -349,6 +350,7 @@ export class SimulationController {
       );
     }
 
+    this.dependencies.setSimulationRunning(true);
     await dispatchSimulation(netlist, mode, {
       simSettings: simulationSettings,
       transientDuration,
@@ -366,6 +368,7 @@ export class SimulationController {
     }, {
       addLog: (text, type) => this.dependencies.addLog(text, type),
       onResultsReady: (resultMode, results) => this.applyResults(resultMode, results),
+      onSolverResult: (solver) => this.dependencies.onSolverResult?.(solver),
       onIpcStatusUpdate: (text, color) => this.dependencies.setIpcStatus(text, color),
       updateCanvasRendering: () => this.dependencies.updateCanvasRendering(),
       onSimulationFinished: () => this.dependencies.setSimulationRunning(false),

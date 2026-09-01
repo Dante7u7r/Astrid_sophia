@@ -37,4 +37,22 @@ describe("TabsView", () => {
     expect(onClose).toHaveBeenCalledWith(tab.id);
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
+
+  it("emite onContextMenu al hacer clic derecho sobre la pestaña", () => {
+    document.body.innerHTML = '<div id="tabs-container"></div>';
+    const tab = createWorkspaceTab("tab-1", "Hoja Principal");
+    const onContextMenu = vi.fn();
+
+    new TabsView().render([tab], tab.id, {
+      onSelect: vi.fn(),
+      onClose: vi.fn(),
+      onContextMenu,
+    });
+
+    const tabEl = document.querySelector<HTMLElement>(".tab-item");
+    const contextEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    tabEl?.dispatchEvent(contextEvent);
+
+    expect(onContextMenu).toHaveBeenCalledWith(tab.id, expect.any(MouseEvent));
+  });
 });

@@ -56,6 +56,9 @@
   --cyan:        #38BDF8;
   --cyan-dim:    #0284C7;
   --cyan-glow:   rgba(56, 189, 248, 0.20);
+  --teal:        #5BF3E4;
+  --teal-dim:    #2DD4BF;
+  --teal-glow:   rgba(91, 243, 228, 0.20);
   --blue:        #5B9FD6;
   --purple:      #A855F7;
   --purple-glow: rgba(168, 85, 247, 0.20);
@@ -75,11 +78,11 @@
   --danger:        var(--red);
   --warning:       var(--amber);
 
-  /* ── Tipografía ── */
+  /* ── Tipografía (Alto Contraste WCAG AA) ── */
   --text-bright:  #F8FAFC;
   --text-main:    #E6EAF0;
-  --text-sub:     #94A3B8;
-  --text-muted:   #64748B;
+  --text-sub:     #CBD5E1;
+  --text-muted:   #8A9EA7;
   --text-inverse: #0F172A;
 
   /* ── Centro de Instrumentos (Dock & Launcher) ── */
@@ -192,6 +195,9 @@
   --cyan:        #0284C7;
   --cyan-dim:    #0369A1;
   --cyan-glow:   rgba(2, 132, 199, 0.20);
+  --teal:        #0D9488;
+  --teal-dim:    #0F766E;
+  --teal-glow:   rgba(13, 148, 136, 0.20);
   --blue:        #2563EB;
   --purple:      #7C3AED;
   --purple-glow: rgba(124, 58, 237, 0.20);
@@ -311,6 +317,8 @@
   color: var(--input-color) !important;
 }
 
+[data-theme="classroom"] select option,
+[data-theme="classroom"] option,
 [data-theme="classroom"] .header-mode-select option,
 [data-theme="classroom"] #btn-open-demo option,
 [data-theme="classroom"] .header-mode-select optgroup,
@@ -413,6 +421,32 @@
 [data-theme="classroom"] .modal-footer {
   background: var(--modal-header-bg) !important;
   border-top: 1px solid var(--border-color) !important;
+}
+
+[data-theme="classroom"] .circuit-synthesizer-modal {
+  background: rgba(15, 23, 42, 0.55) !important;
+}
+
+[data-theme="classroom"] .synthesizer-dialog {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15) !important;
+}
+
+[data-theme="classroom"] .synth-params-container {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="classroom"] .synth-telemetry-container {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f766e !important;
+}
+
+[data-theme="classroom"] .synth-telemetry-container strong {
+  color: #0f172a !important;
 }
 
 /* Paleta de Componentes Izquierda en Modo Aula */
@@ -1652,6 +1686,11 @@
   background: var(--input-bg) !important;
   border: 1px solid var(--input-border) !important;
   color: var(--input-color) !important;
+}
+
+[data-theme="classroom"] .feedback-select option {
+  background: #ffffff !important;
+  color: #0f172a !important;
 }
 
 [data-theme="classroom"] .feedback-select:focus,

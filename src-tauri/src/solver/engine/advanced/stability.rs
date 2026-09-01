@@ -292,10 +292,15 @@ pub fn run_stability_analysis(netlist: &CircuitNetlist) -> Result<PoleZeroResult
 
                     let idx_c = n_c > 0 && dynamic_nodes.contains(&n_c);
                     let idx_e = n_e > 0 && dynamic_nodes.contains(&n_e);
+                    // La matriz reducida contiene únicamente nodos dinámicos. Una
+                    // transconductancia puede tener su fila en un nodo dinámico y
+                    // su variable de control en un nodo algebraico (caso típico:
+                    // LED del opto alimentado en DC y colector con C_OUT). En ese
+                    // caso la perturbación algebraica no es una variable de estado
+                    // y no tiene columna en esta proyección; no debe indexarse ni
+                    // convertirse artificialmente en otro nodo dinámico.
                     let stamp_g = |r: usize, c: usize, g: f64, g_mat: &mut DMatrix<f64>| {
-                        if r > 0 && c > 0 {
-                            let ir = *node_to_idx.get(&r).unwrap();
-                            let ic = *node_to_idx.get(&c).unwrap();
+                        if let (Some(&ir), Some(&ic)) = (node_to_idx.get(&r), node_to_idx.get(&c)) {
                             g_mat[(ir, ic)] += g;
                         }
                     };
@@ -500,7 +505,10 @@ pub fn calculate_middlebrook_loop_gain(
         // Fallback: Detectar OpAmp con lazo de realimentación
         let mut found_pair = None;
         for comp in &netlist.components {
-            if comp.comp_type == "opamp" || comp.comp_type == "opamp_ideal" || comp.comp_type == "comparator_ideal" {
+            if comp.comp_type == "opamp"
+                || comp.comp_type == "opamp_ideal"
+                || comp.comp_type == "comparator_ideal"
+            {
                 let pin_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
                 let pin_out = if comp.pins.len() >= 5 {
                     comp.pins[4].parse::<usize>().unwrap_or(0)
@@ -651,8 +659,7 @@ pub fn calculate_middlebrook_loop_gain(
                         let f_p2 = (2.0 * gbw).max(1.0);
                         let pole_factor1 = Complex::new(1.0, f_val / f_p1);
                         let pole_factor2 = Complex::new(1.0, f_val / f_p2);
-                        let g_m_opamp =
-                            (Complex::new(g_m_val, 0.0) / pole_factor1) / pole_factor2;
+                        let g_m_opamp = (Complex::new(g_m_val, 0.0) / pole_factor1) / pole_factor2;
 
                         stamp_conductance(mat, pin_in_pos, pin_in_pos, g_in);
                         stamp_conductance(mat, pin_in_neg, pin_in_neg, g_in);
@@ -809,8 +816,7 @@ pub fn calculate_middlebrook_loop_gain(
         if (p_prev.phase_deg + 180.0 >= 0.0 && p_curr.phase_deg + 180.0 < 0.0)
             || (p_prev.phase_deg + 180.0 <= 0.0 && p_curr.phase_deg + 180.0 > 0.0)
         {
-            let frac =
-                (-180.0 - p_prev.phase_deg) / (p_curr.phase_deg - p_prev.phase_deg + 1e-30);
+            let frac = (-180.0 - p_prev.phase_deg) / (p_curr.phase_deg - p_prev.phase_deg + 1e-30);
             let f_180_val =
                 p_prev.frequency_hz + frac * (p_curr.frequency_hz - p_prev.frequency_hz);
             let mag_at_180 =
@@ -832,4 +838,3 @@ pub fn calculate_middlebrook_loop_gain(
         sweep_points,
     })
 }
-

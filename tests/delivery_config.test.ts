@@ -9,6 +9,17 @@ function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(resolve(root, relativePath), "utf8")) as T;
 }
 
+interface TauriIsolationConfig {
+  identifier?: string;
+  app: {
+    withGlobalTauri: boolean;
+    windows?: Array<{ dataDirectory?: string }>;
+    security: {
+      capabilities: Array<string | { identifier: string; permissions: string[] }>;
+    };
+  };
+}
+
 describe("configuracion de entrega escritorio", () => {
   it("empaqueta Windows y conserva limites minimos de ventana", () => {
     const config = readJson<{
@@ -29,6 +40,45 @@ describe("configuracion de entrega escritorio", () => {
       minWidth: 900,
       minHeight: 600,
     });
+  });
+
+  it("separa el perfil y los datos E2E del identificador de produccion", () => {
+    const production = readJson<TauriIsolationConfig>("src-tauri/tauri.conf.json");
+    const e2e = readJson<TauriIsolationConfig>("src-tauri/tauri.wdio.conf.json");
+
+    expect(production.identifier).toBe("com.biaani.desktop");
+    expect(e2e.identifier).toBe("com.biaani.desktop.wdio");
+    expect(e2e.identifier).not.toBe(production.identifier);
+
+    // Tauri 2 deriva el perfil WebView2 de LocalData/identifier y app_data_dir()
+    // de Data/identifier. lib.rs abre feedback dentro de este ultimo directorio.
+    // Sin dataDirectory explicito, el overlay separa ambos almacenes por identidad.
+    for (const window of [...(production.app.windows ?? []), ...(e2e.app.windows ?? [])]) {
+      expect(window.dataDirectory).toBeUndefined();
+    }
+  });
+
+  it("mantiene la instrumentacion WDIO fuera de la configuracion de produccion", () => {
+    const production = readJson<TauriIsolationConfig>("src-tauri/tauri.conf.json");
+    const e2e = readJson<TauriIsolationConfig>("src-tauri/tauri.wdio.conf.json");
+    const defaultCapability = readJson<{ permissions: string[] }>("src-tauri/capabilities/default.json");
+
+    expect(production.app.withGlobalTauri).toBe(false);
+    expect(production.app.security.capabilities).toEqual(["default"]);
+    expect(defaultCapability.permissions.some(permission => permission.startsWith("wdio:"))).toBe(false);
+    expect(e2e.app.withGlobalTauri).toBe(true);
+    expect(e2e.app.security.capabilities).toContainEqual(expect.objectContaining({
+      identifier: "wdio",
+      permissions: ["wdio:default"],
+    }));
+  });
+
+  it("compila los E2E nativos con el overlay aislado y la feature WDIO explicita", () => {
+    const packageJson = readJson<{ scripts: Record<string, string> }>("package.json");
+    const buildE2e = packageJson.scripts["test:e2e:desktop:build"];
+
+    expect(buildE2e).toContain("--features wdio");
+    expect(buildE2e).toContain("--config src-tauri/tauri.wdio.conf.json");
   });
 
   it("no deja metadatos placeholder en npm ni Cargo", () => {

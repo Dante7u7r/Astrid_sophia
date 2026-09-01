@@ -282,7 +282,7 @@ fn test_oracle_04_detector_cruce_por_cero_basico() {
     let neg_step = results.iter().find(|s| (s.time - 0.0125).abs() < 1e-4).expect("Paso negativo no encontrado");
     let v_out_neg = neg_step.node_voltages.get("2").copied().unwrap_or(0.0);
     assert!(
-        v_out_neg < -13.0 && v_out_neg >= -14.2,
+        (-14.2..-13.0).contains(&v_out_neg),
         "Vout en semiciclo negativo debe saturar a ~-13.7V, obtenido: {:.4}V",
         v_out_neg
     );
@@ -401,4 +401,3 @@ fn test_oracle_05_detector_cruce_por_cero_aislado() {
         v_out_zero
     );
 }
-

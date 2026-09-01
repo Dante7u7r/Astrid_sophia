@@ -167,6 +167,7 @@ export function createDesktopControllerRegistry(
     getOscilloscopePanel: () => oscilloscopePanel,
     getInstrumentsDock: deps.getInstrumentsDock,
     getSimulationSettings: deps.getSimulationSettings,
+    setSimulationSettings: deps.setSimulationSettings,
     setActiveAnalysisMode: deps.setActiveAnalysisMode,
     getSparPorts: deps.getSparPorts,
     getSparSweepSettings: deps.getSparSweepSettings,

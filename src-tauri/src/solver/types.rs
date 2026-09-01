@@ -264,8 +264,16 @@ pub struct WireData {
 #[serde(rename_all = "camelCase")]
 pub struct MutualInductance {
     pub id: String,
+    #[serde(alias = "l1_id", alias = "l1Id")]
     pub l1_id: String,
+    #[serde(alias = "l2_id", alias = "l2Id")]
     pub l2_id: String,
+    #[serde(
+        alias = "k_coeff",
+        alias = "kCoeff",
+        alias = "coupling_factor",
+        alias = "couplingFactor"
+    )]
     pub k_coeff: f64,
 }
 
@@ -299,11 +307,26 @@ pub struct CircuitNetlist {
     pub temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fixed_step: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "mutual_inductances",
+        alias = "mutualInductances",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub mutual_inductances: Option<Vec<MutualInductance>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "thermal_config",
+        alias = "thermalConfig",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub thermal_config: Option<ThermalConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "subcircuit_definitions",
+        alias = "subcircuitDefinitions",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub subcircuit_definitions: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub triggers: Option<Vec<AnalogEventTrigger>>,

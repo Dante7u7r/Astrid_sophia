@@ -22,6 +22,7 @@
 // ==========================================================================
 
 import { invokeTyped, type SimulationDispatchResult } from "./tauri_commands";
+import { isTauriEnvironment } from "./tauri_mock";
 import { type CircuitNetlist } from "./netlist_extractor";
 import { type SimulationRunner } from "./simulation_runner";
 import { TelemetryPanel } from "../ui/telemetry_panel";
@@ -221,6 +222,8 @@ export interface DispatchCallbacks {
   addLog: (text: string, type: 'system' | 'send' | 'receive' | 'error') => void;
   /** Invocado al recibir resultados exitosos del solver (Rust o fallback TS) */
   onResultsReady: (mode: AnalysisMode, results: SimulationDispatchResult) => void;
+  /** Motor que produjo resultados; TRAN nativo lo notifica al recibir un frame. */
+  onSolverResult?: (solver: "rust" | "typescript" | "mock") => void;
   /** Actualiza el indicador de estado IPC en la barra de herramientas */
   onIpcStatusUpdate: (text: string, color: string) => void;
   updateCanvasRendering: () => void;
@@ -454,6 +457,9 @@ export async function dispatchSimulation(
         break;
       }
     }
+    if (mode !== "TRAN" && dispatchResult !== undefined) {
+      callbacks.onSolverResult?.(isTauriEnvironment() ? "rust" : "mock");
+    }
     if (mode !== "TRAN" && config.feedbackRun && dispatchResult !== undefined) {
       recordConvergence(config.feedbackRun, dispatchResult);
       completeFeedbackRun(config.feedbackRun, {
@@ -526,6 +532,7 @@ export async function dispatchSimulation(
           } else {
             if (config.feedbackRun) completeFeedbackRun(config.feedbackRun, { pointCount: tsRes.length, converged: true });
             callbacks.onResultsReady(mode, tsRes);
+            callbacks.onSolverResult?.("typescript");
             callbacks.onIpcStatusUpdate("FALLBACK: SOLO LINEAL", "var(--warning)");
             callbacks.updateCanvasRendering();
           }
@@ -564,6 +571,7 @@ export async function dispatchSimulation(
             }
             callbacks.addLog("----------------------------------------------------------------", "system");
             callbacks.onResultsReady(mode, tsRes);
+            callbacks.onSolverResult?.("typescript");
             callbacks.onIpcStatusUpdate("FALLBACK: SOLO LINEAL", "var(--warning)");
             callbacks.updateCanvasRendering();
           }

@@ -4,7 +4,7 @@
 
 import { drawCompactComponent } from "../../canvas/component_compact_renderer";
 import { drawLed } from "../../canvas/component_discrete_renderer";
-import { drawIgbt, drawJfet, drawOptocoupler } from "../../canvas/component_discrete_extended_renderer";
+import { drawDiodeBridge, drawIgbt, drawJfet, drawOptocoupler } from "../../canvas/component_discrete_extended_renderer";
 import type { ComponentDefinition, LocalPinDefinition } from "../types";
 
 const STANDARD_TWO_PINS: readonly LocalPinDefinition[] = [
@@ -121,6 +121,7 @@ export const LedDefinition: ComponentDefinition = {
 
     const isOverCurrent = iBranch > 0.04 || (vDiff > 4.5 && comp.ledColor !== "uv");
     const isReverseOvervoltage = vDiff < -6.0;
+    const isClassroom = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "classroom";
 
     drawLed(ctx, comp, state.color);
 
@@ -129,6 +130,13 @@ export const LedDefinition: ComponentDefinition = {
       ctx.fillStyle = "#EF4444";
       ctx.font = "bold 8px 'Inter', sans-serif";
       ctx.fillText(isReverseOvervoltage ? "💥 VRRM EXCEDIDO" : "🔥 SOBRECORRIENTE", -36, -14);
+      ctx.restore();
+    } else if (isClassroom && vDiff < -1.2) {
+      ctx.save();
+      ctx.fillStyle = "#B45309";
+      ctx.font = "bold 8px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("🚫 POLARIDAD INVERSA", 0, -14);
       ctx.restore();
     }
   },
@@ -776,4 +784,26 @@ export const IgbtDefinition: ComponentDefinition = {
   },
 };
 
-
+export const DiodeBridgeDefinition: ComponentDefinition = {
+  type: "diode_bridge",
+  name: "Puente Rectificador de Diodos",
+  description: "Puente rectificador de onda completa integrado (Graetz) de 4 terminales (AC1, AC2, DC+, DC-).",
+  category: "semiconductores",
+  prefix: "BR",
+  defaultProperties: { value: "DB107", modelName: "DB107", forwardVoltage: 1.0 },
+  halfExtents: { halfW: 40, halfH: 30 },
+  hasStandardLeads: false,
+  getPins: () => [
+    { index: 0, x: -40, y: -20, label: "~", name: "Entrada CA 1 (AC1 / ~)" },
+    { index: 1, x: -40, y: 20, label: "~", name: "Entrada CA 2 (AC2 / ~)" },
+    { index: 2, x: 40, y: -20, label: "+", name: "Salida Continua Positiva (DC+ / +)" },
+    { index: 3, x: 40, y: 20, label: "-", name: "Salida Continua Negativa (DC- / -)" },
+  ],
+  render: (ctx, comp, state, options) => {
+    if (options?.detail === "compact") {
+      drawCompactComponent(ctx, comp, state.color);
+      return;
+    }
+    drawDiodeBridge(ctx, comp, state.color);
+  },
+};

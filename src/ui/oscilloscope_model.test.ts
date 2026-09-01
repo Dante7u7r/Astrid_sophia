@@ -9,6 +9,7 @@ import {
   buildTyTracePoints,
   interpolateSincTrace,
   findTriggerStartIndex,
+  findTriggerMatch,
   findTimeIndex,
   normalizeTriggerChannel,
   normalizeTriggerEdge,
@@ -67,14 +68,26 @@ describe("oscilloscope_model", () => {
       point(0.6, 1),
     ];
 
-    expect(findTriggerStartIndex(results, "1", "rising", 0)).toBe(2);
+    expect(findTriggerStartIndex(results, "1", "rising", 0)).toBe(5);
     expect(findTriggerStartIndex(results, "1", "falling", 0)).toBe(4);
     expect(findTriggerStartIndex(results, null, "rising", 0)).toBe(0);
+
+    // Búsqueda detallada con findTriggerMatch en diferentes modos de disparo
+    const matchAuto = findTriggerMatch(results, "1", "rising", 0, 0.05, "auto");
+    expect(matchAuto.triggered).toBe(true);
+    expect(matchAuto.startIndex).toBe(1);
 
     // Fallback a ventana rodante cuando hay tiempo suficiente pero no cruce con ventana completa
     const noCrossingResults = Array.from({ length: 20 }, (_, i) => point(i * 0.05, 5));
     const rollStart = findTriggerStartIndex(noCrossingResults, "1", "rising", 0, 0.05);
     expect(noCrossingResults[rollStart].time).toBeCloseTo(0.45, 2);
+
+    const matchNormalNoCrossing = findTriggerMatch(noCrossingResults, "1", "rising", 0, 0.05, "normal");
+    expect(matchNormalNoCrossing.triggered).toBe(false);
+    expect(matchNormalNoCrossing.startIndex).toBe(0);
+
+    const matchSingleNoCrossing = findTriggerMatch(noCrossingResults, "1", "rising", 0, 0.05, "single");
+    expect(matchSingleNoCrossing.triggered).toBe(false);
   });
 
   it("construye puntos T-Y dentro de la ventana visible", () => {

@@ -1,20 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { browser } from "@wdio/globals";
+import type {} from "@wdio/tauri-service";
+import { cleanupWindowsWebDrivers } from "./scripts/windows_driver_cleanup";
 
 const appBinaryPath = process.env.ASTRYD_E2E_BINARY_PATH
   ? resolve(process.env.ASTRYD_E2E_BINARY_PATH)
-  : resolve("src-tauri/target/debug/astryd-sophia.exe");
-
-function cleanupWindowsWebDrivers(): void {
-  if (process.platform !== "win32") return;
-  for (const imageName of ["tauri-driver.exe", "msedgedriver.exe"]) {
-    try {
-      execFileSync("taskkill.exe", ["/F", "/T", "/IM", imageName], { stdio: "ignore" });
-    } catch {
-      // taskkill returns a non-zero exit code when there is nothing to stop.
-    }
-  }
-}
+  : resolve("src-tauri/target/debug/biaani.exe");
 
 export const config = {
   runner: "local",
@@ -46,5 +37,11 @@ export const config = {
     ui: "bdd",
     timeout: 120_000,
   },
-  onComplete: cleanupWindowsWebDrivers,
+  beforeSuite: async () => {
+    const identifier = await browser.tauri.execute(tauri => tauri.core.invoke("plugin:app|identifier"));
+    if (identifier !== "com.biaani.desktop.wdio") {
+      throw new Error("E2E bloqueado: el ejecutable no utiliza el perfil aislado de pruebas.");
+    }
+  },
+  onComplete: () => cleanupWindowsWebDrivers(),
 };

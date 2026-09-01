@@ -301,10 +301,9 @@ pub fn solve_arclength_continuation_core(
                         break;
                     }
 
-                    if let Ok(dx) = crate::solver::linear_backend::solve_linear_real(
-                        &polish_j,
-                        res.as_slice(),
-                    ) {
+                    if let Ok(dx) =
+                        crate::solver::linear_backend::solve_linear_real(&polish_j, res.as_slice())
+                    {
                         let dx_vec = DVector::from_vec(dx);
                         x_interp += &dx_vec;
                         for i in 1..=n {
@@ -580,8 +579,11 @@ pub fn find_multiple_dc_operating_points_arclength(
 
         if corrector_converged {
             // Verificar cruce con lambda = 1.0
-            if (current_lambda - 1.0) * (pred_lambda - 1.0) <= 0.0 && (pred_lambda - current_lambda).abs() > 1e-9 {
-                let theta = ((1.0 - current_lambda) / (pred_lambda - current_lambda)).clamp(0.0, 1.0);
+            if (current_lambda - 1.0) * (pred_lambda - 1.0) <= 0.0
+                && (pred_lambda - current_lambda).abs() > 1e-9
+            {
+                let theta =
+                    ((1.0 - current_lambda) / (pred_lambda - current_lambda)).clamp(0.0, 1.0);
                 let mut x_interp = &current_x * (1.0 - theta) + &pred_x * theta;
                 let mut interp_prev_voltages = vec![0.0; n + 1];
                 for i in 1..=n {
@@ -620,10 +622,9 @@ pub fn find_multiple_dc_operating_points_arclength(
                         break;
                     }
 
-                    if let Ok(dx) = crate::solver::linear_backend::solve_linear_real(
-                        &polish_j,
-                        res.as_slice(),
-                    ) {
+                    if let Ok(dx) =
+                        crate::solver::linear_backend::solve_linear_real(&polish_j, res.as_slice())
+                    {
                         let dx_vec = DVector::from_vec(dx);
                         x_interp += &dx_vec;
                         for i in 1..=n {

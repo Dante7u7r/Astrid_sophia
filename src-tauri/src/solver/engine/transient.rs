@@ -38,9 +38,17 @@ use super::transient_step_control::{
     IntegrationMethodType, VariableOrderController,
 };
 use super::transient_switches::update_switch_states;
-use super::transient_thermal::{initialize_transient_thermal_models, update_device_junction_temperatures};
+use super::transient_thermal::{
+    initialize_transient_thermal_models, update_device_junction_temperatures,
+};
 use super::transient_workspace::TransientWorkspace;
 use stamps::{stamp_behavioral_sources, stamp_component, StampContext};
+
+struct MixedSignalCrossingBracket {
+    lower_dt: f64,
+    upper_dt: f64,
+    attempts: usize,
+}
 
 pub fn solve_transient_circuit(
     netlist: &CircuitNetlist,
@@ -217,6 +225,9 @@ where
 
     let mut ms_scheduler = initialize_mixed_signal_scheduler(netlist);
     let mut mcu_manager = McuRuntimeManager::new(netlist)?;
+    let has_mixed_signal_inputs = netlist.components.iter().any(|comp| {
+        comp.comp_type.ends_with("_gate") || (is_mcu_component(comp) && comp.pins.len() >= 6)
+    });
 
     // VARIABLES DE TIEMPO ADAPTATIVO
     let mut dt = settings.dt;
@@ -301,6 +312,7 @@ where
     let mut results = Vec::new();
     let mut local_overrides = ComponentOverrideMap::new();
     let mut ws = TransientWorkspace::new(size, n);
+    let mut crossing_bracket: Option<MixedSignalCrossingBracket> = None;
 
     // `t` representa siempre el último tiempo aceptado. No se publica un falso
     // estado inicial: la primera solución integrada corresponde a t=dt.
@@ -309,7 +321,13 @@ where
         // El último paso puede ser menor que el nominal para terminar exactamente
         // en tMax sin calcular ni etiquetar una muestra fuera del intervalo.
         dt = dt.min(t_max - t);
-        drain_live_overrides(&mut local_overrides, &live_overrides, live_run_id);
+        if drain_live_overrides(&mut local_overrides, &live_overrides, live_run_id) {
+            // Un cambio en vivo puede modificar A aunque dt y el método sigan iguales.
+            // Los overrides persistentes o repetidos no requieren refactorizar cada paso.
+            ws.invalidate_linear_factorization();
+            // Las cotas obtenidas con el circuito anterior ya no son aplicables.
+            crossing_bracket = None;
+        }
 
         let active_method = order_controller.active_method;
         let trap_active_this_step = active_method == IntegrationMethodType::Trap
@@ -329,10 +347,6 @@ where
             IntegrationMethodType::Gear6 => 6.min(order_controller.steps_with_current_method + 1),
             IntegrationMethodType::Trap => 2,
         };
-        let mut dts_for_bdf = vec![dt];
-        dts_for_bdf.extend_from_slice(&recent_dts);
-        let bdf_alphas = compute_bdf_coefficients(bdf_order, &dts_for_bdf);
-
         // Respaldar estados antes de intentar resolver el paso reutilizando la memoria del workspace
         ws.backup.save(
             &cap_states,
@@ -360,6 +374,11 @@ where
             }
         }
         let step_time = t + dt;
+        // Los coeficientes deben corresponder al dt realmente integrado, que
+        // puede ser menor que el propuesto si hay un evento digital intermedio.
+        let mut dts_for_bdf = vec![dt];
+        dts_for_bdf.extend_from_slice(&recent_dts);
+        let bdf_alphas = compute_bdf_coefficients(bdf_order, &dts_for_bdf);
 
         // Preparar matrices del paso en buffers de trabajo preasignados
         ws.prepare_step_matrix(&matrix_a_linear, &vector_z_linear);
@@ -554,16 +573,18 @@ where
             }
         } else {
             // Factorization Caching para circuitos lineales con validación exacta de firma de integración:
-            let current_sig = crate::solver::engine::transient_workspace::LinearCompanionSignature {
-                dt_bits: dt.to_bits(),
-                trap_active: trap_active_this_step,
-                gear2_active: gear2_active_this_step,
-                bdf_order: if active_method.is_bdf() { bdf_order } else { 0 },
-                bdf_alpha0_bits: bdf_alphas.first().copied().unwrap_or(0.0).to_bits(),
-                gear_a_bits: gear_a.to_bits(),
-            };
+            let current_sig =
+                crate::solver::engine::transient_workspace::LinearCompanionSignature {
+                    dt_bits: dt.to_bits(),
+                    trap_active: trap_active_this_step,
+                    gear2_active: gear2_active_this_step,
+                    bdf_order: if active_method.is_bdf() { bdf_order } else { 0 },
+                    bdf_alpha0_bits: bdf_alphas.first().copied().unwrap_or(0.0).to_bits(),
+                    gear_a_bits: gear_a.to_bits(),
+                };
 
-            let is_cache_valid = ws.cached_linear_factorization.is_some() && ws.cached_signature == current_sig;
+            let is_cache_valid =
+                ws.cached_linear_factorization.is_some() && ws.cached_signature == current_sig;
             let linear_sol_res = if is_cache_valid {
                 ws.cached_linear_factorization
                     .as_ref()
@@ -593,6 +614,76 @@ where
 
         // Si convergió, evaluamos el LTE y predecimos método y timestep
         if let Ok(ref step_solution) = step_solution_res {
+            let mut localized_scheduler = None;
+            if has_mixed_signal_inputs {
+                // Detectar cruces nuevos sin publicar muestras ni consumir eventos pendientes.
+                let mut trial_scheduler = ms_scheduler.clone();
+                trial_scheduler.events.clear();
+                detect_mixed_signal_crossings(netlist, &mut trial_scheduler, step_solution, t, dt);
+                let crosses = trial_scheduler.events.iter().any(|event| {
+                    matches!(
+                        event.event_type,
+                        MixedSignalEventType::LogicInputCrossing { .. }
+                    )
+                });
+                if crosses || crossing_bracket.is_some() {
+                    let bracket = crossing_bracket.get_or_insert(MixedSignalCrossingBracket {
+                        lower_dt: 0.0,
+                        upper_dt: dt,
+                        attempts: 0,
+                    });
+                    if crosses {
+                        bracket.upper_dt = bracket.upper_dt.min(dt);
+                    } else {
+                        bracket.lower_dt = bracket.lower_dt.max(dt);
+                    }
+                    let time_tolerance =
+                        1e-12_f64.max(8.0 * f64::EPSILON * step_time.abs().max(1.0));
+                    let localized = bracket.upper_dt - bracket.lower_dt <= time_tolerance;
+                    if localized && crosses {
+                        // El extremo superior fue resuelto y sí cruzó. No extrapolar el
+                        // evento sobre el intervalo amplio anterior, ni fabricar una muestra.
+                        for event in &mut trial_scheduler.events {
+                            event.time = step_time;
+                        }
+                        for event in &ms_scheduler.events {
+                            trial_scheduler.schedule_event(event.clone());
+                        }
+                        localized_scheduler = Some(trial_scheduler);
+                    } else {
+                        bracket.attempts += 1;
+                        let refined_dt = if localized {
+                            bracket.upper_dt
+                        } else {
+                            bracket.lower_dt + 0.5 * (bracket.upper_dt - bracket.lower_dt)
+                        };
+                        if bracket.attempts > 64 || t + refined_dt <= t || refined_dt == dt {
+                            return Err(format!(
+                                "No se pudo localizar el cruce digital con progreso temporal en t={t:.6e} s."
+                            ));
+                        }
+                        // Reintentar desde el último estado aceptado. El predictor LTE,
+                        // sus contadores, los historiales y los MCU aún no avanzaron.
+                        ws.backup.restore(
+                            &mut cap_states,
+                            &mut ind_states,
+                            &mut cap_states_prev,
+                            &mut ind_states_prev,
+                            &mut cap_history,
+                            &mut ind_history,
+                            &mut switch_states,
+                            &mut mcu_tchip,
+                            &mut mcu_vsample,
+                            &mut mcu_vdaceff,
+                            &mut device_tjunc,
+                            &mut thermal_models,
+                            &mut ms_scheduler,
+                        );
+                        dt = refined_dt;
+                        continue;
+                    }
+                }
+            }
             let decision = predict_variable_order_step(
                 &mut order_controller,
                 step_solution,
@@ -602,6 +693,8 @@ where
                 n,
                 dt,
                 prev_dt,
+                // recent_dts solo avanza al aceptar el paso, igual que sol_n1/sol_n2.
+                recent_dts.get(1).copied().unwrap_or(prev_dt),
                 is_fixed,
                 steps_completed,
                 lte_tol,
@@ -614,6 +707,7 @@ where
 
             // Decidir si aceptamos o rechazamos el paso temporal
             if !is_fixed && !decision.step_accepted {
+                crossing_bracket = None;
                 // RECHAZAR PASO: Restaurar estados del backup y reducir dt
                 ws.backup.restore(
                     &mut cap_states,
@@ -636,6 +730,7 @@ where
                 continue; // Volver a intentar la misma iteración temporal con el dt reducido
             } else {
                 // ACEPTAR PASO: Guardar resultado y avanzar
+                crossing_bracket = None;
                 let accepted_dt = dt;
                 let accepted_time = step_time;
                 current_solution = step_solution.clone();
@@ -703,13 +798,17 @@ where
                     },
                 });
 
-                detect_mixed_signal_crossings(
-                    netlist,
-                    &mut ms_scheduler,
-                    step_solution,
-                    t,
-                    accepted_dt,
-                );
+                if let Some(localized) = localized_scheduler {
+                    ms_scheduler = localized;
+                } else {
+                    detect_mixed_signal_crossings(
+                        netlist,
+                        &mut ms_scheduler,
+                        step_solution,
+                        t,
+                        accepted_dt,
+                    );
+                }
                 process_mixed_signal_events(netlist, &mut ms_scheduler, accepted_time);
                 mcu_manager.step_native_mcus(
                     netlist,
@@ -788,6 +887,7 @@ where
                 }
             }
         } else {
+            crossing_bracket = None;
             // Si la iteración física en sí misma divergió matemáticamente y dt > dt_min, reducimos dt e intentamos nuevamente
             if dt > dt_min {
                 ws.backup.restore(

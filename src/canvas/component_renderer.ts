@@ -12,6 +12,7 @@ import {
   shouldDrawStandardLeads,
   shouldDrawValueLabel,
 } from "./component_render_model";
+import { getSchematicThemeColors } from "./schematic_theme";
 
 export interface ComponentRenderOptions {
   readonly detail?: "full" | "compact";
@@ -38,17 +39,15 @@ export function drawComponentSymbol(
     ctx.scale(scaleX, scaleY);
   }
 
-  const isClassroomTheme = options.isClassroom ?? (
-    typeof document !== "undefined" &&
-    document.documentElement.getAttribute("data-theme") === "classroom"
-  );
+  const theme = getSchematicThemeColors(options.isClassroom);
+  const isClassroomTheme = theme.isClassroom;
 
   const visualState = getComponentVisualState(isSelected, isHovered, isClassroomTheme);
   const { color } = visualState;
 
   ctx.strokeStyle = color;
   ctx.lineWidth = visualState.lineWidth;
-  ctx.fillStyle = isClassroomTheme ? "rgba(248, 250, 252, 0.95)" : "rgba(10, 15, 29, 0.90)";
+  ctx.fillStyle = theme.component.fill;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
@@ -92,8 +91,8 @@ export function drawComponentSymbol(
   const labelLayout = getComponentLabelLayout(comp);
 
   ctx.fillStyle = isSelected
-    ? (isClassroomTheme ? "#0284C7" : "#38BDF8")
-    : (isClassroomTheme ? "#0F172A" : "#F1F5F9");
+    ? theme.component.labelSelected
+    : theme.component.labelDefault;
   ctx.font = "bold 11px 'Inter', sans-serif";
   ctx.textAlign = labelLayout.align ?? "center";
   ctx.textBaseline = "middle";

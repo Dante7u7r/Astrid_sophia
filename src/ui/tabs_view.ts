@@ -3,6 +3,7 @@ import type { Tab } from "./workspace_state";
 export interface TabsViewHandlers {
   onSelect(tabId: string): void;
   onClose(tabId: string): void;
+  onContextMenu?(tabId: string, event: MouseEvent): void;
 }
 
 export class TabsView {
@@ -45,6 +46,11 @@ export class TabsView {
       tabEl.appendChild(closeBtn);
       tabEl.addEventListener("click", () => {
         handlers.onSelect(tab.id);
+      });
+
+      tabEl.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        handlers.onContextMenu?.(tab.id, event);
       });
 
       container.appendChild(tabEl);

@@ -44,6 +44,65 @@ let activeViewMode: PaletteViewMode = "grid";
 let activeSymbolStandard: SymbolStandard = "IEEE";
 let activeCategoryFilter: string = "all";
 
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const SAFE_ICON_ELEMENTS = new Set(["circle", "ellipse", "g", "line", "path", "polygon", "polyline", "rect", "text"]);
+const SAFE_ICON_ATTRIBUTES = new Set([
+  "cx", "cy", "d", "fill", "fill-opacity", "font-family", "font-size", "font-weight",
+  "height", "opacity", "points", "r", "rx", "ry", "stroke", "stroke-dasharray",
+  "stroke-linecap", "stroke-linejoin", "stroke-width", "text-anchor", "transform",
+  "width", "x", "x1", "x2", "y", "y1", "y2",
+]);
+
+function createTextNodeElement<K extends keyof HTMLElementTagNameMap>(
+  tagName: K,
+  className: string,
+  value: string,
+): HTMLElementTagNameMap[K] {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.textContent = value;
+  return element;
+}
+
+function createCatalogIcon(svgMarkup: string, size: number): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NAMESPACE, "svg");
+  svg.setAttribute("viewBox", "0 0 40 40");
+  svg.setAttribute("class", "comp-svg-icon");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2.2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+
+  // Los iconos proceden del catálogo interno. La lista blanca evita que una futura
+  // fuente dinámica convierta este único punto de parseo SVG en una vía de inyección.
+  svg.innerHTML = svgMarkup;
+  for (const element of Array.from(svg.querySelectorAll("*"))) {
+    if (!SAFE_ICON_ELEMENTS.has(element.localName)) {
+      element.remove();
+      continue;
+    }
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase();
+      const unsafeUrl = /url\s*\(/i.test(attribute.value);
+      if (!SAFE_ICON_ATTRIBUTES.has(name) || unsafeUrl) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+
+  return svg;
+}
+
+function createIconBox(svgMarkup: string, size: number): HTMLDivElement {
+  const iconBox = document.createElement("div");
+  iconBox.className = "comp-icon-box";
+  iconBox.appendChild(createCatalogIcon(svgMarkup, size));
+  return iconBox;
+}
+
 const preloadedCommercialItems = getCommercialPreloadedComponents().map((c) => c.catalogItem);
 let dynamicCatalog: EnhancedCatalogItem[] = [...COMPONENT_CATALOG, ...preloadedCommercialItems];
 let fuseInstance: Fuse<EnhancedCatalogItem> | null = null;
@@ -224,13 +283,13 @@ function renderFavoritesChips(): void {
 
     const svgIcon = activeSymbolStandard === "IEC" ? item.svgIconIec : item.svgIconIeee;
 
-    chip.innerHTML = `
-      <svg viewBox="0 0 40 40" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        ${svgIcon}
-      </svg>
-      <span>${item.shortName}</span>
-      ${item.hotkey ? `<kbd>${item.hotkey}</kbd>` : ""}
-    `;
+    chip.append(
+      createCatalogIcon(svgIcon, 16),
+      createTextNodeElement("span", "", item.shortName),
+    );
+    if (item.hotkey) {
+      chip.appendChild(createTextNodeElement("kbd", "", item.hotkey));
+    }
 
     chip.addEventListener("click", () => {
       armStampTool({
@@ -341,44 +400,50 @@ function createComponentCard(item: EnhancedCatalogItem): HTMLElement {
   if (isArmed) card.classList.add("palette-card-armed");
 
   if (activeViewMode === "grid") {
-    card.innerHTML = `
-      <div class="comp-icon-box">
-        <svg viewBox="0 0 40 40" class="comp-svg-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          ${svgIcon}
-        </svg>
-      </div>
-      <div class="comp-details-compact">
-        <span class="comp-name">${item.shortName || item.name}</span>
-        ${item.hotkey ? `<kbd class="comp-hotkey">${item.hotkey}</kbd>` : ""}
-      </div>
-    `;
+    const details = document.createElement("div");
+    details.className = "comp-details-compact";
+    details.appendChild(createTextNodeElement("span", "comp-name", item.shortName || item.name));
+    if (item.hotkey) {
+      details.appendChild(createTextNodeElement("kbd", "comp-hotkey", item.hotkey));
+    }
+    card.append(createIconBox(svgIcon, 28), details);
     card.title = `${item.name} (${item.defaultVal}${item.unit ? ` ${item.unit}` : ""})\n${item.description}\nClic para colocar · Doble clic o Shift+Clic para continuo · Arrastrar para colocar`;
   } else {
     // Vista de Ficha Técnica Detallada (Académica)
-    const eqBadge = item.physicsEquation ? `<div class="comp-equation"><code>${item.physicsEquation}</code></div>` : "";
-    const spiceBadge = item.spiceModelLevel ? `<span class="comp-spice-tag">SPICE: ${item.spiceModelLevel}</span>` : "";
-    const seriesBadges = item.commercialSeries ? item.commercialSeries.map((s) => `<span class="comp-series-badge">${s}</span>`).join("") : "";
+    const details = document.createElement("div");
+    details.className = "comp-details-full";
 
-    card.innerHTML = `
-      <div class="comp-icon-box">
-        <svg viewBox="0 0 40 40" class="comp-svg-icon" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          ${svgIcon}
-        </svg>
-      </div>
-      <div class="comp-details-full">
-        <div class="comp-header-row">
-          <span class="comp-name">${item.name}</span>
-          <span class="comp-unit-badge">${item.defaultVal}${item.unit ? ` ${item.unit}` : ""}</span>
-          ${item.hotkey ? `<kbd class="comp-hotkey">${item.hotkey}</kbd>` : ""}
-        </div>
-        <p class="comp-desc">${item.academicSummary || item.description}</p>
-        ${eqBadge}
-        <div class="comp-meta-row">
-          ${spiceBadge}
-          ${seriesBadges}
-        </div>
-      </div>
-    `;
+    const header = document.createElement("div");
+    header.className = "comp-header-row";
+    header.append(
+      createTextNodeElement("span", "comp-name", item.name),
+      createTextNodeElement("span", "comp-unit-badge", `${item.defaultVal}${item.unit ? ` ${item.unit}` : ""}`),
+    );
+    if (item.hotkey) {
+      header.appendChild(createTextNodeElement("kbd", "comp-hotkey", item.hotkey));
+    }
+    details.append(
+      header,
+      createTextNodeElement("p", "comp-desc", item.academicSummary || item.description),
+    );
+
+    if (item.physicsEquation) {
+      const equation = document.createElement("div");
+      equation.className = "comp-equation";
+      equation.appendChild(createTextNodeElement("code", "", item.physicsEquation));
+      details.appendChild(equation);
+    }
+
+    const metadata = document.createElement("div");
+    metadata.className = "comp-meta-row";
+    if (item.spiceModelLevel) {
+      metadata.appendChild(createTextNodeElement("span", "comp-spice-tag", `SPICE: ${item.spiceModelLevel}`));
+    }
+    for (const series of item.commercialSeries ?? []) {
+      metadata.appendChild(createTextNodeElement("span", "comp-series-badge", series));
+    }
+    details.appendChild(metadata);
+    card.append(createIconBox(svgIcon, 30), details);
   }
 
   // Evento Clic -> Armar herramienta (unitaria por defecto, Shift para continuo)
@@ -735,12 +800,13 @@ export function addSubcircuitCardToPalette(subckt: ParsedSubcircuit): HTMLElemen
     card.dataset.modelName = subckt.name;
     card.dataset.pinCount = String(subckt.pinCount);
     card.dataset.default = subckt.name;
-    card.innerHTML = `
-      <div class="comp-details">
-        <span class="comp-name">${subckt.name}</span>
-        <span class="comp-desc">${subckt.description || "Macromodelo SPICE"}</span>
-      </div>
-    `;
+    const details = document.createElement("div");
+    details.className = "comp-details";
+    details.append(
+      createTextNodeElement("span", "comp-name", subckt.name),
+      createTextNodeElement("span", "comp-desc", subckt.description || "Macromodelo SPICE"),
+    );
+    card.appendChild(details);
     catContainer.appendChild(card);
     return card;
   }

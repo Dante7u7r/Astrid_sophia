@@ -9,10 +9,9 @@ const MAX_COMPONENT_PINS: usize = 64;
 fn expected_pin_range(comp_type: &str) -> Option<(usize, usize)> {
     match comp_type {
         "ground" => Some((1, 1)),
-        "resistor" | "capacitor" | "inductor" | "diode" | "led" | "vsource" | "isource"
-        | "bvoltage" | "bcurrent" | "switch" | "cccs" | "ccvs" | "stb_probe" | "probe_stb" => {
-            Some((2, 2))
-        }
+        "resistor" | "fuse" | "capacitor" | "inductor" | "diode" | "zener_diode"
+        | "schottky_diode" | "led" | "vsource" | "isource" | "bvoltage" | "bcurrent" | "switch"
+        | "cccs" | "ccvs" | "stb_probe" | "probe_stb" => Some((2, 2)),
         "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "sic_mosfet"
         | "gan_hemt" | "igbt" => Some((3, 4)),
         "npn" | "pnp" | "njf" | "pjf" => Some((3, 3)),
@@ -237,8 +236,10 @@ pub fn find_floating_nodes(netlist: &CircuitNetlist, n: usize) -> HashSet<usize>
 
 fn dc_conduction_pin_pairs(comp_type: &str, pin_count: usize) -> Vec<(usize, usize)> {
     match comp_type {
-        "resistor" | "inductor" | "diode" | "led" | "vsource" | "bvoltage" | "switch" | "ccvs"
-        | "vcvs" | "stb_probe" | "probe_stb" => vec![(0, 1)],
+        "resistor" | "fuse" | "inductor" | "diode" | "zener_diode" | "schottky_diode" | "led"
+        | "vsource" | "bvoltage" | "switch" | "ccvs" | "vcvs" | "stb_probe" | "probe_stb" => {
+            vec![(0, 1)]
+        }
         "nmos" | "pmos" | "bsim3nmos" | "bsim3pmos" | "bsim4nmos" | "bsim4pmos" | "sic_mosfet"
         | "gan_hemt" | "igbt" | "verilog_a" => {
             vec![(1, 2)]

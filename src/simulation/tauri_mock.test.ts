@@ -58,6 +58,7 @@ describe("Tauri web mock streaming", () => {
     await safeInvoke("start_interactive_transient", {
       netlist: { components: [], wires: [] },
       settings: { dt: 1e-4, tMax: 0.05 },
+      disablePacing: false,
     });
     await vi.advanceTimersByTimeAsync(50);
     await safeInvoke("stop_interactive_transient");
@@ -79,11 +80,13 @@ describe("Tauri web mock streaming", () => {
       netlist: { components: [], wires: [] },
       settings: { dt: 1e-4, tMax: 0.05 },
       runId: 100,
+      disablePacing: false,
     });
     await safeInvoke("start_interactive_transient", {
       netlist: { components: [], wires: [] },
       settings: { dt: 1e-4, tMax: 0.05 },
       runId: 101,
+      disablePacing: false,
     });
     await safeInvoke("stop_interactive_transient", { runId: 100 });
     await vi.advanceTimersByTimeAsync(2_500);

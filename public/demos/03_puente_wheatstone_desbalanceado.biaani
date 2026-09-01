@@ -465,7 +465,7 @@
     "maxIterations": 100,
     "transientDuration": 0
   },
-  "activeAnalysisMode": "TRAN",
+  "activeAnalysisMode": "DC",
   "probes": {
     "ch1ProbeNode": "1",
     "ch2ProbeNode": "2",

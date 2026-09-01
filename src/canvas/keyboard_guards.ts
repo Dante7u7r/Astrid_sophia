@@ -94,3 +94,27 @@ export function installWebviewAutofillGuards(): void {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 }
+
+/**
+ * Bloquea el menú contextual nativo del WebView/navegador en toda la aplicación,
+ * evitando que aparezcan opciones web genéricas (Atrás, Actualizar, Inspeccionar).
+ * Permite que los menús contextuales personalizados (Canvas, Instrumentos, Tabs)
+ * gestionen su propio comportamiento. Permite el menú nativo únicamente en inputs/textareas
+ * si hay texto seleccionado para copiar/cortar.
+ */
+export function installWebviewContextMenuGuard(): void {
+  if (typeof window === 'undefined') return;
+
+  window.addEventListener('contextmenu', (e: MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target) {
+      const isInput = target.matches('input, textarea');
+      const hasTextSelection = (window.getSelection()?.toString().length ?? 0) > 0;
+      if (isInput && hasTextSelection) {
+        return; // Permitir menú nativo de copiar/pegar en inputs con texto seleccionado
+      }
+    }
+    // Prevenir el menú contextual web por defecto
+    e.preventDefault();
+  }, { capture: false });
+}

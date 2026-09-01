@@ -60,13 +60,6 @@ export function initInstrumentationMenu(actions: InstrumentationMenuActions): Ac
 
   const menu = new AccessibleMenu(button, dropdown);
 
-  button.addEventListener("click", () => {
-    actions.toggleInstrumentCenter();
-    if (actions.openInstrument) {
-      actions.openInstrument("oscilloscope");
-    }
-  });
-
   dropdown.querySelector("#menu-toggle-left")?.addEventListener("click", actions.toggleLeftPanel);
   dropdown.querySelector("#menu-toggle-right")?.addEventListener("click", actions.toggleRightPanel);
   dropdown.querySelector("#menu-toggle-dock")?.addEventListener("click", actions.toggleInstrumentCenter);

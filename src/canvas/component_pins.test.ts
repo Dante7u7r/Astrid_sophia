@@ -44,4 +44,18 @@ describe("getComponentPins", () => {
     expect(pins[0].x).toBe(60);
     expect(pins[3].x).toBe(140);
   });
+
+  it("genera 4 pines para Puente Rectificador de Diodos (diode_bridge)", () => {
+    const pins = getComponentPins(component({ id: "BR1", type: "diode_bridge", x: 100, y: 200 }));
+
+    expect(pins).toHaveLength(4);
+    // Pin 0 (AC1) en (-40, -20) -> (60, 180)
+    expect(pins[0]).toMatchObject({ componentId: "BR1", pinIndex: 0, x: 60, y: 180, label: "~" });
+    // Pin 1 (AC2) en (-40, 20) -> (60, 220)
+    expect(pins[1]).toMatchObject({ componentId: "BR1", pinIndex: 1, x: 60, y: 220, label: "~" });
+    // Pin 2 (DC+) en (40, -20) -> (140, 180)
+    expect(pins[2]).toMatchObject({ componentId: "BR1", pinIndex: 2, x: 140, y: 180, label: "+" });
+    // Pin 3 (DC-) en (40, 20) -> (140, 220)
+    expect(pins[3]).toMatchObject({ componentId: "BR1", pinIndex: 3, x: 140, y: 220, label: "-" });
+  });
 });

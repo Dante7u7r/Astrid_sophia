@@ -27,17 +27,20 @@ pub(crate) fn drain_live_overrides(
     local_overrides: &mut ComponentOverrideMap,
     live_overrides: &Option<Arc<Mutex<Vec<crate::ComponentMutation>>>>,
     live_run_id: Option<u64>,
-) {
+) -> bool {
+    let mut changed = false;
     if let Some(queue) = live_overrides {
         if let Ok(mut guard) = queue.lock() {
             for mutation in take_live_mutations(&mut guard, live_run_id) {
-                local_overrides
+                let previous = local_overrides
                     .entry(mutation.component_id)
                     .or_default()
                     .insert(mutation.field, mutation.value);
+                changed |= previous != Some(mutation.value);
             }
         }
     }
+    changed
 }
 
 pub(crate) fn apply_static_live_overrides(
@@ -62,18 +65,17 @@ pub(crate) fn apply_static_live_overrides(
                             }
                         }
                     }
-                    "isource"
-                        if comp.wave_type.is_none() => {
-                            let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
-                            let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
-                            let diff = new_val - comp.value;
-                            if node_pos > 0 {
-                                vector_z[node_pos - 1] -= diff;
-                            }
-                            if node_neg > 0 {
-                                vector_z[node_neg - 1] += diff;
-                            }
+                    "isource" if comp.wave_type.is_none() => {
+                        let node_pos = comp.pins[0].parse::<usize>().unwrap_or(0);
+                        let node_neg = comp.pins[1].parse::<usize>().unwrap_or(0);
+                        let diff = new_val - comp.value;
+                        if node_pos > 0 {
+                            vector_z[node_pos - 1] -= diff;
                         }
+                        if node_neg > 0 {
+                            vector_z[node_neg - 1] += diff;
+                        }
+                    }
                     _ => {}
                 }
             }

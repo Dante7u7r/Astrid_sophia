@@ -5,12 +5,11 @@
 import type { ComponentInstance } from "../canvas_orchestrator";
 import {
   compileEsp32Sketch,
-  createEsp32Runtime,
-  Esp32RuntimeState,
+  getOrCreateEsp32Runtime,
 } from "../simulation/esp32_runtime";
 
 let activeModal: HTMLElement | null = null;
-let serialPollingInterval: any = null;
+let serialPollingInterval: ReturnType<typeof setInterval> | null = null;
 
 const CODE_PRESETS: Record<string, string> = {
   blink: `// 1. Blink LED Onboard (IO2)
@@ -53,6 +52,7 @@ void loop() {
   pwm_ledc: `// 3. Control de Brillo PWM (LEDC en IO4)
 int pwmPin = 4;
 int ledcChannel = 0;
+int duty = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -62,14 +62,9 @@ void setup() {
 }
 
 void loop() {
-  for (int duty = 0; duty <= 255; duty += 15) {
-    ledcWrite(ledcChannel, duty);
-    delay(50);
-  }
-  for (int duty = 255; duty >= 0; duty -= 15) {
-    ledcWrite(ledcChannel, duty);
-    delay(50);
-  }
+  ledcWrite(ledcChannel, duty);
+  duty = (duty + 15) % 256;
+  delay(50);
 }`,
 
   adc_telemetry: `// 4. Lectura Analógica ADC (IO34) y Telemetría
@@ -100,11 +95,7 @@ export function openEsp32CodeModal(
 ): void {
   closeEsp32CodeModal();
 
-  let runtime = (comp as any)._esp32RuntimeInstance as Esp32RuntimeState | undefined;
-  if (!runtime) {
-    runtime = createEsp32Runtime(comp.esp32SourceCode);
-    (comp as any)._esp32RuntimeInstance = runtime;
-  }
+  const runtime = getOrCreateEsp32Runtime(comp, comp.esp32SourceCode);
 
   const modal = document.createElement("div");
   modal.className = "esp32-modal-overlay";
@@ -143,8 +134,8 @@ export function openEsp32CodeModal(
       <div style="display: flex; align-items: center; gap: 10px;">
         <span style="font-size: 20px;">⚡</span>
         <div>
-          <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #38bdf8;">ESP32 DevKit V1 — Editor de Código C++ & Monitor Serie</h3>
-          <p style="margin: 2px 0 0 0; font-size: 11px; color: #94a3b8;">Ejecución en tiempo real con matriz de 30 pines y periféricos de hardware</p>
+          <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #38bdf8;">ESP32 DevKit V1 — Intérprete Arduino & Monitor Serie</h3>
+          <p style="margin: 2px 0 0 0; font-size: 11px; color: #94a3b8;">Subconjunto educativo seguro: sentencias escalares, GPIO, ADC, DAC, LEDC y Serial; sin if/for/while</p>
         </div>
       </div>
       <button id="close-esp32-btn" style="background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px 8px;">✕</button>
@@ -163,7 +154,7 @@ export function openEsp32CodeModal(
       </div>
 
       <button id="compile-run-btn" style="background: #0284c7; border: none; color: #ffffff; font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-        <span>▶️</span> Cargar y Compilar
+        <span>▶️</span> Validar y ejecutar
       </button>
     </div>
 
@@ -171,9 +162,9 @@ export function openEsp32CodeModal(
     <div style="display: flex; flex: 1; overflow: hidden;">
       <!-- Editor de Código -->
       <div style="flex: 1.2; display: flex; flex-direction: column; border-right: 1px solid rgba(255, 255, 255, 0.1);">
-        <textarea id="esp32-code-area" spellcheck="false" style="flex: 1; background: #020617; color: #a5f3fc; border: none; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.5; resize: none; outline: none;">${runtime.sourceCode}</textarea>
+        <textarea id="esp32-code-area" spellcheck="false" style="flex: 1; background: #020617; color: #a5f3fc; border: none; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.5; resize: none; outline: none;"></textarea>
         <div id="compiler-status" style="padding: 6px 12px; background: rgba(30, 41, 59, 0.6); font-size: 11px; color: #10b981; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-          ✓ Código listo para ejecución en tiempo real
+          Listo para validar el subconjunto soportado
         </div>
       </div>
 
@@ -199,6 +190,7 @@ export function openEsp32CodeModal(
   const clearSerialBtn = container.querySelector("#clear-serial-btn") as HTMLButtonElement;
   const statusEl = container.querySelector("#compiler-status") as HTMLDivElement;
   const terminalEl = container.querySelector("#serial-terminal") as HTMLElement;
+  codeArea.value = runtime.sourceCode;
 
   presetSelect.addEventListener("change", () => {
     const selected = presetSelect.value;
@@ -210,27 +202,27 @@ export function openEsp32CodeModal(
   const handleCompile = () => {
     const code = codeArea.value;
     comp.esp32SourceCode = code;
-    const ok = compileEsp32Sketch(runtime!, code);
+    const ok = compileEsp32Sketch(runtime, code);
     if (ok) {
       statusEl.style.color = "#10b981";
-      statusEl.textContent = "✓ Compilación exitosa. Ejecutando sketch en el ESP32...";
+      statusEl.textContent = "✓ Sketch válido. El intérprete educativo está ejecutándolo.";
       onCodeUpdated?.(code);
     } else {
       statusEl.style.color = "#ef4444";
-      statusEl.textContent = `❌ Error de sintaxis: ${runtime!.errorMessage}`;
+      statusEl.textContent = `❌ ${runtime.errorMessage}`;
     }
   };
 
   compileBtn.addEventListener("click", handleCompile);
   closeBtn.addEventListener("click", () => closeEsp32CodeModal());
   clearSerialBtn.addEventListener("click", () => {
-    if (runtime) runtime.serialTxBuffer = [];
+    runtime.serialTxBuffer = [];
     terminalEl.textContent = "";
   });
 
   // Polling del búfer serie en vivo para actualizar el terminal
   serialPollingInterval = setInterval(() => {
-    if (runtime && runtime.serialTxBuffer.length > 0 && terminalEl) {
+    if (runtime.serialTxBuffer.length > 0) {
       while (runtime.serialTxBuffer.length > 0) {
         const line = runtime.serialTxBuffer.shift();
         if (line) {
@@ -248,9 +240,7 @@ export function closeEsp32CodeModal(): void {
     serialPollingInterval = null;
   }
   if (activeModal) {
-    try {
-      document.body.removeChild(activeModal);
-    } catch (e) {}
+    activeModal.remove();
     activeModal = null;
   }
 }

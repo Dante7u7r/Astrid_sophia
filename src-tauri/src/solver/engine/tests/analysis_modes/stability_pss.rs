@@ -101,8 +101,7 @@ fn test_stability_analysis_rc_pole() {
     let p = data.poles[0];
     let serialized = serde_json::to_value(&data).expect("el resultado debe serializarse");
     assert!(
-        serialized["poles"][0]["re"].is_number()
-            && serialized["poles"][0]["im"].is_number(),
+        serialized["poles"][0]["re"].is_number() && serialized["poles"][0]["im"].is_number(),
         "Los polos IPC deben usar objetos explícitos {{re, im}}, no tuplas"
     );
     // El polo debe estar muy cercano a -1000 rad/s
@@ -110,6 +109,127 @@ fn test_stability_analysis_rc_pole() {
         (p.re + 1000.0).abs() < 1.0,
         "El polo debería ser aproximadamente -1000, obtenido: {:?}",
         p
+    );
+}
+
+#[test]
+fn test_stability_opto_with_algebraic_led_and_dynamic_collector() {
+    // El lado LED no almacena energía: sus nodos son algebraicos. El colector sí es
+    // dinámico por C_OUT. Para el modelo unilateral del opto, el polo de salida es:
+    //   p = -(1 / R_C + g_o) / C_OUT  [rad/s]
+    // donde g_o = CTR * I_LED * sech²(V_CE / V_SAT) / V_SAT [S].
+    const V_SUPPLY: f64 = 5.0;
+    const R_LED_OHM: f64 = 1_000.0;
+    const R_COLLECTOR_OHM: f64 = 10_000.0;
+    const C_OUT_F: f64 = 10.0e-9;
+    const CTR: f64 = 0.5;
+    const V_SAT_V: f64 = 0.2;
+
+    let netlist = CircuitNetlist {
+        mutual_inductances: None,
+        thermal_config: None,
+        components: vec![
+            ComponentData {
+                id: "V_LED".to_string(),
+                comp_type: "vsource".to_string(),
+                value: V_SUPPLY,
+                pins: vec!["1".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_LED".to_string(),
+                comp_type: "resistor".to_string(),
+                value: R_LED_OHM,
+                pins: vec!["1".to_string(), "2".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "V_CC".to_string(),
+                comp_type: "vsource".to_string(),
+                value: V_SUPPLY,
+                pins: vec!["4".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "R_C".to_string(),
+                comp_type: "resistor".to_string(),
+                value: R_COLLECTOR_OHM,
+                pins: vec!["4".to_string(), "3".to_string()],
+                ..Default::default()
+            },
+            ComponentData {
+                id: "O1".to_string(),
+                comp_type: "opto".to_string(),
+                value: 0.0,
+                pins: vec![
+                    "2".to_string(), // ánodo LED: algebraico
+                    "0".to_string(), // cátodo LED
+                    "3".to_string(), // colector: dinámico
+                    "0".to_string(), // emisor
+                ],
+                opto_ctr: Some(CTR),
+                opto_vsat: Some(V_SAT_V),
+                diode_is: Some(1.0e-12),
+                diode_n: Some(1.0),
+                ..Default::default()
+            },
+            ComponentData {
+                id: "C_OUT".to_string(),
+                comp_type: "capacitor".to_string(),
+                value: C_OUT_F,
+                pins: vec!["3".to_string(), "0".to_string()],
+                ..Default::default()
+            },
+        ],
+        wires: vec![],
+        temperature: Some(300.15),
+        fixed_step: None,
+        subcircuit_definitions: None,
+        triggers: None,
+    };
+
+    let op = solve_dc_circuit(&netlist).expect("el punto de operación del opto debe converger");
+    let v_led = *op
+        .node_voltages
+        .get("2")
+        .expect("el punto de operación debe incluir el ánodo LED");
+    let v_ce = *op
+        .node_voltages
+        .get("3")
+        .expect("el punto de operación debe incluir el colector");
+    let i_led_a = (V_SUPPLY - v_led) / R_LED_OHM;
+    let tanh_vce = (v_ce / V_SAT_V).tanh();
+    let g_out_siemens = CTR * i_led_a * (1.0 - tanh_vce * tanh_vce) / V_SAT_V;
+    let expected_pole_rad_s = -(1.0 / R_COLLECTOR_OHM + g_out_siemens) / C_OUT_F;
+
+    let result = run_stability_analysis(&netlist)
+        .expect("STB no debe entrar en pánico con el lado LED algebraico");
+    assert!(
+        result.is_stable,
+        "la salida RC pasiva del opto debe ser estable"
+    );
+    assert_eq!(
+        result.poles.len(),
+        1,
+        "un único capacitor independiente debe producir un polo"
+    );
+
+    let pole = result.poles[0];
+    assert!(
+        pole.re.is_finite() && pole.im.is_finite(),
+        "el polo debe ser finito, obtenido: {pole:?}"
+    );
+    assert!(
+        pole.im.abs() <= 1.0e-6,
+        "la red de primer orden debe tener polo real; Im(p)={} rad/s",
+        pole.im
+    );
+    let relative_error = (pole.re - expected_pole_rad_s).abs() / expected_pole_rad_s.abs();
+    assert!(
+        relative_error <= 0.02,
+        "polo esperado {expected_pole_rad_s:.6e} rad/s, obtenido {:.6e} rad/s (error relativo {:.3}%)",
+        pole.re,
+        100.0 * relative_error
     );
 }
 
@@ -272,8 +392,15 @@ fn test_colpitts_oscillator_pss_and_phase_noise() {
         triggers: None,
     };
 
-    let result = solve_oscillator_pss_and_phase_noise(&netlist, Some(711.76e3), Some(vec![1.0e4, 1.0e5, 1.0e6]));
-    assert!(result.is_ok(), "El PSS del oscilador Colpitts debe converger exitosamente");
+    let result = solve_oscillator_pss_and_phase_noise(
+        &netlist,
+        Some(711.76e3),
+        Some(vec![1.0e4, 1.0e5, 1.0e6]),
+    );
+    assert!(
+        result.is_ok(),
+        "El PSS del oscilador Colpitts debe converger exitosamente"
+    );
 
     let pss_data = result.unwrap();
     assert!(
@@ -453,7 +580,8 @@ fn test_vco_frequency_tuning() {
     let netlist_high = build_vco_netlist(5.0);
 
     let res_low = solve_oscillator_pss_and_phase_noise(&netlist_low, Some(500.0e3), None).unwrap();
-    let res_high = solve_oscillator_pss_and_phase_noise(&netlist_high, Some(500.0e3), None).unwrap();
+    let res_high =
+        solve_oscillator_pss_and_phase_noise(&netlist_high, Some(500.0e3), None).unwrap();
 
     assert!(res_low.fundamental_frequency_hz > 0.0);
     assert!(res_high.fundamental_frequency_hz > 0.0);
@@ -526,9 +654,18 @@ fn test_middlebrook_loop_gain_opamp_feedback() {
     let stab = run_stability_analysis(&netlist)
         .expect("El análisis de estabilidad y Loop Gain debe ejecutarse con éxito");
 
-    assert!(stab.is_stable, "El amplificador con realimentación negativa debe ser estable");
-    assert!(stab.loop_phase_margin_deg.is_some(), "Debe calcular el Margen de Fase");
-    assert!(stab.unity_gain_frequency_hz.is_some(), "Debe calcular la frecuencia de ganancia unitaria");
+    assert!(
+        stab.is_stable,
+        "El amplificador con realimentación negativa debe ser estable"
+    );
+    assert!(
+        stab.loop_phase_margin_deg.is_some(),
+        "Debe calcular el Margen de Fase"
+    );
+    assert!(
+        stab.unity_gain_frequency_hz.is_some(),
+        "Debe calcular la frecuencia de ganancia unitaria"
+    );
 
     let pm = stab.loop_phase_margin_deg.unwrap();
     assert!(
@@ -601,11 +738,17 @@ fn test_middlebrook_loop_gain_direct_sweep() {
     };
 
     let loop_gain_res = calculate_middlebrook_loop_gain(&netlist, None, None);
-    assert!(loop_gain_res.is_ok(), "El barrido de Middlebrook Loop Gain debe ejecutarse");
+    assert!(
+        loop_gain_res.is_ok(),
+        "El barrido de Middlebrook Loop Gain debe ejecutarse"
+    );
     let lg = loop_gain_res.unwrap();
 
     assert!(lg.is_stable, "El lazo debe ser estable");
-    assert!(!lg.sweep_points.is_empty(), "El barrido debe contener puntos de respuesta en frecuencia");
+    assert!(
+        !lg.sweep_points.is_empty(),
+        "El barrido debe contener puntos de respuesta en frecuencia"
+    );
 
     // A baja frecuencia la ganancia de lazo debe ser alta (~80 dB)
     let p_dc = &lg.sweep_points[0];
@@ -669,15 +812,25 @@ fn test_stability_tian_probe_explicit_buffer() {
     };
 
     let res = calculate_middlebrook_loop_gain(&netlist, Some("STB1"), None);
-    assert!(res.is_ok(), "El análisis Tian con sonda STB1 debe ejecutarse");
+    assert!(
+        res.is_ok(),
+        "El análisis Tian con sonda STB1 debe ejecutarse"
+    );
     let lg = res.unwrap();
 
     assert!(lg.is_stable, "El seguidor con OpAmp debe ser estable");
-    assert!(lg.sweep_points.len() > 50, "Debe generar barrido denso de frecuencias");
+    assert!(
+        lg.sweep_points.len() > 50,
+        "Debe generar barrido denso de frecuencias"
+    );
 
     // Margen de fase debe ser positivo y cercano a 90 grados para polo dominante único
     if let Some(pm) = lg.phase_margin_deg {
-        assert!(pm > 45.0 && pm < 100.0, "Margen de fase esperado entre 45° y 100°, obtenido: {:.2}°", pm);
+        assert!(
+            pm > 45.0 && pm < 100.0,
+            "Margen de fase esperado entre 45° y 100°, obtenido: {:.2}°",
+            pm
+        );
     }
 }
 
@@ -745,10 +898,16 @@ fn test_stability_tian_probe_feedback_divider() {
     };
 
     let res = calculate_middlebrook_loop_gain(&netlist, Some("STB1"), None);
-    assert!(res.is_ok(), "El análisis Tian con sonda STB1 debe ejecutarse");
+    assert!(
+        res.is_ok(),
+        "El análisis Tian con sonda STB1 debe ejecutarse"
+    );
     let lg = res.unwrap();
 
-    assert!(lg.is_stable, "El amplificador con realimentación negativa debe ser estable");
+    assert!(
+        lg.is_stable,
+        "El amplificador con realimentación negativa debe ser estable"
+    );
     // Ganancia DC de lazo esperada: Aol * beta = 100000 * (1/10) = 10000 (80 dB)
     let p_dc = &lg.sweep_points[0];
     assert!(

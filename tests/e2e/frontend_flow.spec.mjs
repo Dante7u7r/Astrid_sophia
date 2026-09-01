@@ -96,10 +96,36 @@ async function runE2ETests() {
     // 1. Validar carga básica del DOM y Canvas
     console.log("  [1/10] ✓ Verificando lienzo principal y viewport...");
     await page.waitForSelector("#circuit-canvas", { state: "visible", timeout: 5000 });
+    const pinLeft = page.locator("#btn-pin-left");
+    if (await pinLeft.isVisible() && await pinLeft.getAttribute("aria-pressed") !== "true") {
+      await pinLeft.click();
+    }
     const canvasBox = await page.locator("#circuit-canvas").boundingBox();
     if (!canvasBox || canvasBox.width < 400 || canvasBox.height < 300) {
       throw new Error(`Dimensiones de lienzo insuficientes: ${JSON.stringify(canvasBox)}`);
     }
+    const canvas = page.locator("#circuit-canvas");
+    const stampFromPalette = async (card, xFraction, yFraction) => {
+      const type = await card.getAttribute("data-type");
+      const search = page.locator("#component-search");
+      if (!(await search.isVisible())) {
+        const expand = page.locator("#btn-expand-left");
+        if (await expand.isVisible()) await expand.click();
+        else await page.locator("#btn-dock-toggle-left").click();
+        await search.waitFor({ state: "visible" });
+      }
+      if (type) await search.fill(type);
+      await card.waitFor({ state: "visible" });
+      await card.click();
+      await canvas.click({
+        position: {
+          x: canvasBox.width * xFraction,
+          y: canvasBox.height * yFraction,
+        },
+      });
+      await search.fill("");
+      await delay(150);
+    };
 
     // 2. Validar barra de herramientas y paleta de componentes
     console.log("  [2/10] ✓ Probando Colocación de Componentes (Place Components)...");
@@ -110,8 +136,7 @@ async function runE2ETests() {
 
     // Colocar Resistor R1
     const resistorCard = page.locator('.component-card[data-type="resistor"]').first();
-    await resistorCard.click();
-    await delay(150);
+    await stampFromPalette(resistorCard, 0.50, 0.45);
     let snapshot = await page.evaluate(() => window.__ASTRYD_E2E__?.snapshot());
     const r1 = snapshot.components[0];
 
@@ -124,8 +149,7 @@ async function runE2ETests() {
 
     // Colocar Fuente V1
     const vsourceCard = page.locator('.component-card[data-type="vsource"]').first();
-    await vsourceCard.click();
-    await delay(150);
+    await stampFromPalette(vsourceCard, 0.35, 0.45);
     snapshot = await page.evaluate(() => window.__ASTRYD_E2E__?.snapshot());
     const v1 = snapshot.components.find((c) => c.type === "vsource");
 
@@ -140,8 +164,7 @@ async function runE2ETests() {
 
     // Colocar Capacitor C1
     const capacitorCard = page.locator('.component-card[data-type="capacitor"]').first();
-    await capacitorCard.click();
-    await delay(150);
+    await stampFromPalette(capacitorCard, 0.65, 0.35);
     snapshot = await page.evaluate(() => window.__ASTRYD_E2E__?.snapshot());
     const c1 = snapshot.components.find((c) => c.type === "capacitor");
 
@@ -156,8 +179,7 @@ async function runE2ETests() {
 
     // Colocar GND
     const gndCard = page.locator('.component-card[data-type="ground"]').first();
-    await gndCard.click();
-    await delay(150);
+    await stampFromPalette(gndCard, 0.65, 0.60);
 
     snapshot = await page.evaluate(() => window.__ASTRYD_E2E__?.snapshot());
     if (!snapshot || snapshot.componentCount < 4) {

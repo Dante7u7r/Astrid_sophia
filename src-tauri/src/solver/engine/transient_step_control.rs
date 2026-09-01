@@ -174,6 +174,7 @@ pub(crate) fn estimate_local_truncation_error(
     node_count: usize,
     dt: f64,
     previous_dt: f64,
+    older_dt: f64,
     is_fixed: bool,
     steps_completed: usize,
     integration_method: &str,
@@ -220,14 +221,17 @@ pub(crate) fn estimate_local_truncation_error(
         };
         let mut maximum: f64 = 0.0;
         let prev_h = previous_dt.max(1e-18);
+        let older_h = older_dt.max(1e-18);
         let mut check_node = |i: usize| {
             if i < node_count {
+                // Cada diferencia usa el intervalo de sus muestras aceptadas.
+                // En una malla adaptativa el intervalo anterior no sustituye al más antiguo.
                 let d1 = (step_solution[i] - sol_n[i]) / dt;
                 let d2 = (sol_n[i] - sol_n1[i]) / prev_h;
-                let d3 = (sol_n1[i] - sol_n2[i]) / prev_h;
+                let d3 = (sol_n1[i] - sol_n2[i]) / older_h;
                 let dd1 = 2.0 * (d1 - d2) / (dt + prev_h);
-                let dd2 = (d2 - d3) / prev_h;
-                let third_derivative = 3.0 * (dd1 - dd2) / (dt + 2.0 * prev_h);
+                let dd2 = 2.0 * (d2 - d3) / (prev_h + older_h);
+                let third_derivative = 3.0 * (dd1 - dd2) / (dt + prev_h + older_h);
                 let lte_raw = coefficient * dt.powi(3) * third_derivative.abs();
                 let norm_scale = reltol * step_solution[i].abs() + vntol;
                 maximum = maximum.max(lte_raw / norm_scale);
@@ -308,6 +312,7 @@ pub fn predict_variable_order_step(
     node_count: usize,
     dt: f64,
     previous_dt: f64,
+    older_dt: f64,
     is_fixed: bool,
     steps_completed: usize,
     lte_tol: f64,
@@ -337,6 +342,7 @@ pub fn predict_variable_order_step(
         node_count,
         dt,
         previous_dt,
+        older_dt,
         false,
         steps_completed,
         controller.active_method.as_str(),
@@ -527,10 +533,159 @@ mod tests {
     use super::*;
 
     #[test]
+    fn nonuniform_linear_ramp_has_zero_trapezoidal_lte() {
+        // V(t)=1000*t V; los intervalos reales son 0.1, 0.2 y 0.1 ms.
+        let estimate = estimate_local_truncation_error(
+            &DVector::from_vec(vec![0.4]),
+            &DVector::from_vec(vec![0.3]),
+            &DVector::from_vec(vec![0.1]),
+            &DVector::from_vec(vec![0.0]),
+            1,
+            1e-4,
+            2e-4,
+            1e-4,
+            false,
+            3,
+            "trap",
+            Some(1e-5),
+            Some(1e-6),
+            None,
+        );
+        assert!(
+            estimate.maximum < 1e-9,
+            "Una rampa exacta debe tener LTE nulo: obtenido {}",
+            estimate.maximum
+        );
+    }
+
+    fn polynomial_lte(intervals: [f64; 3], degree: i32) -> (f64, f64) {
+        let [dt, previous_dt, older_dt] = intervals;
+        let times = [
+            dt + previous_dt + older_dt,
+            previous_dt + older_dt,
+            older_dt,
+            0.0,
+        ];
+        // V(t)=7+5t+2t^p V con t en segundos. V'''=12 V/s³ si p=3, cero si p<3.
+        let values = times.map(|t| DVector::from_vec(vec![7.0 + 5.0 * t + 2.0 * t.powi(degree)]));
+        let estimate = estimate_local_truncation_error(
+            &values[0],
+            &values[1],
+            &values[2],
+            &values[3],
+            1,
+            dt,
+            previous_dt,
+            older_dt,
+            false,
+            3,
+            "trap",
+            Some(1e-5),
+            Some(1e-6),
+            None,
+        );
+        let expected = if degree == 3 {
+            // Se conserva el coeficiente trapezoidal existente de 1/12.
+            dt.powi(3) / (1e-5 * values[0][0].abs() + 1e-6)
+        } else {
+            0.0
+        };
+        (estimate.maximum, expected)
+    }
+
+    #[test]
+    fn nonuniform_quadratic_has_zero_trapezoidal_lte() {
+        for intervals in [[0.1, 0.2, 0.1], [0.1, 0.3, 0.2], [0.25, 0.125, 0.375]] {
+            let (actual, expected) = polynomial_lte(intervals, 2);
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "Intervalos {intervals:?}: una cuadrática exige LTE=0, obtenido {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn nonuniform_cubic_uses_its_exact_third_derivative() {
+        for intervals in [[0.1, 0.2, 0.1], [0.1, 0.3, 0.2], [0.25, 0.125, 0.375]] {
+            let (actual, expected) = polynomial_lte(intervals, 3);
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "Intervalos {intervals:?}: esperado {expected}, obtenido {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn uniform_polynomials_preserve_the_trapezoidal_lte_coefficient() {
+        for degree in 1..=3 {
+            for dt in [0.1, 0.25, 1.0] {
+                let (actual, expected) = polynomial_lte([dt; 3], degree);
+                assert!(
+                    (actual - expected).abs() < 1e-9,
+                    "Grado {degree}, dt={dt}: esperado {expected}, obtenido {actual}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejected_proposal_does_not_advance_the_accepted_lte_history() {
+        let mut controller = VariableOrderController::new("trap");
+        controller.steps_with_current_method = 3;
+        let accepted = [0.3, 0.1, 0.0].map(|v| DVector::from_vec(vec![v]));
+        let rejected = predict_variable_order_step(
+            &mut controller,
+            &DVector::from_vec(vec![20.0]),
+            &accepted[0],
+            &accepted[1],
+            &accepted[2],
+            1,
+            1e-4,
+            2e-4,
+            1e-4,
+            false,
+            3,
+            1.0,
+            1e-7,
+            2.5e-4,
+            1e-5,
+            1e-6,
+            None,
+        );
+        assert!(!rejected.step_accepted);
+        assert_eq!(controller.steps_with_current_method, 3);
+
+        // El reintento vuelve a usar los mismos tres estados y sus intervalos aceptados.
+        let retried = predict_variable_order_step(
+            &mut controller,
+            &DVector::from_vec(vec![0.35]),
+            &accepted[0],
+            &accepted[1],
+            &accepted[2],
+            1,
+            0.5e-4,
+            2e-4,
+            1e-4,
+            false,
+            3,
+            1.0,
+            1e-7,
+            2.5e-4,
+            1e-5,
+            1e-6,
+            None,
+        );
+        assert!(retried.step_accepted);
+        assert!(retried.lte_max < 1e-9);
+        assert_eq!(controller.steps_with_current_method, 4);
+    }
+
+    #[test]
     fn fixed_step_has_no_lte_rejection_signal() {
         let sample = DVector::from_vec(vec![1.0]);
         let estimate = estimate_local_truncation_error(
-            &sample, &sample, &sample, &sample, 1, 1e-3, 1e-3, true, 4, "trap", None, None, None,
+            &sample, &sample, &sample, &sample, 1, 1e-3, 1e-3, 1e-3, true, 4, "trap", None, None,
+            None,
         );
         assert_eq!(estimate.maximum, 0.0);
         assert_eq!(estimate.integrator_order, 1.0);
@@ -544,6 +699,7 @@ mod tests {
             &DVector::from_vec(vec![1.0]),
             &DVector::from_vec(vec![0.0]),
             1,
+            1.0,
             1.0,
             1.0,
             false,

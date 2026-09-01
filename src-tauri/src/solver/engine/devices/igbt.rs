@@ -15,22 +15,22 @@ use serde::{Deserialize, Serialize};
 /// Parámetros físicos para el modelo de IGBT (ej: IKW40N120H3, FGA25N120ANTD)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IgbtParams {
-    pub vth: f64,          // Tensión de umbral de compuerta Vth (V) (~4.0 - 6.0 V)
-    pub kp: f64,           // Parámetro de transconductancia MOS Kp (A/V^2) (~5.0 - 25.0)
-    pub lambda: f64,       // Modulación de canal Early (1/V) (~0.002)
-    pub alpha_pnp: f64,    // Factor de ganancia base ancha PNP alfa_0 (~0.4 - 0.7)
-    pub tau_hl: f64,       // Tiempo de recombinación a alto nivel de inyección (s) (~1.0 - 4.0 µs)
-    pub wb0: f64,          // Anchura de base de deriva a Vce=0 (m) (~80e-6 m)
-    pub bv_ces: f64,       // Tensión de ruptura Colector-Emisor (V) (~1200 V)
-    pub is_pnp: f64,       // Corriente de saturación de la unión emisor-base PNP (A) (~1e-12 A)
-    pub v_eb0: f64,        // Tensión de codo de la unión emisor-base (V) (~0.7 V)
-    pub cge: f64,          // Capacidad Gate-Emitter (F) (~1.5 - 4.0 nF)
-    pub cgc0: f64,         // Capacidad Gate-Collector a Vce=0 (F) (~100 - 400 pF)
-    pub cce0: f64,         // Capacidad Collector-Emitter a Vce=0 (F) (~200 - 800 pF)
-    pub v0_gc: f64,        // Tensión de escala para Miller Cgc (V) (~10.0 V)
-    pub m_gc: f64,         // Exponente de variación de capacidad Miller (~0.6)
+    pub vth: f64,            // Tensión de umbral de compuerta Vth (V) (~4.0 - 6.0 V)
+    pub kp: f64,             // Parámetro de transconductancia MOS Kp (A/V^2) (~5.0 - 25.0)
+    pub lambda: f64,         // Modulación de canal Early (1/V) (~0.002)
+    pub alpha_pnp: f64,      // Factor de ganancia base ancha PNP alfa_0 (~0.4 - 0.7)
+    pub tau_hl: f64, // Tiempo de recombinación a alto nivel de inyección (s) (~1.0 - 4.0 µs)
+    pub wb0: f64,    // Anchura de base de deriva a Vce=0 (m) (~80e-6 m)
+    pub bv_ces: f64, // Tensión de ruptura Colector-Emisor (V) (~1200 V)
+    pub is_pnp: f64, // Corriente de saturación de la unión emisor-base PNP (A) (~1e-12 A)
+    pub v_eb0: f64,  // Tensión de codo de la unión emisor-base (V) (~0.7 V)
+    pub cge: f64,    // Capacidad Gate-Emitter (F) (~1.5 - 4.0 nF)
+    pub cgc0: f64,   // Capacidad Gate-Collector a Vce=0 (F) (~100 - 400 pF)
+    pub cce0: f64,   // Capacidad Collector-Emitter a Vce=0 (F) (~200 - 800 pF)
+    pub v0_gc: f64,  // Tensión de escala para Miller Cgc (V) (~10.0 V)
+    pub m_gc: f64,   // Exponente de variación de capacidad Miller (~0.6)
     pub temp_coeff_vth: f64, // Coeficiente térmico de Vth (V/K) (~ -0.004)
-    pub temp_coeff_kp: f64,  // Exponente térmico de Kp (~ -1.5)
+    pub temp_coeff_kp: f64, // Exponente térmico de Kp (~ -1.5)
 }
 
 impl Default for IgbtParams {
@@ -45,9 +45,9 @@ impl Default for IgbtParams {
             bv_ces: 1200.0,
             is_pnp: 1e-12,
             v_eb0: 0.72,
-            cge: 2.2e-9,    // 2.2 nF
-            cgc0: 180e-12,  // 180 pF
-            cce0: 350e-12,  // 350 pF
+            cge: 2.2e-9,   // 2.2 nF
+            cgc0: 180e-12, // 180 pF
+            cce0: 350e-12, // 350 pF
             v0_gc: 12.0,
             m_gc: 0.65,
             temp_coeff_vth: -0.004,
@@ -59,14 +59,14 @@ impl Default for IgbtParams {
 /// Resultado de la evaluación física no lineal del IGBT
 #[derive(Debug, Clone, Copy)]
 pub struct IgbtEvaluationResult {
-    pub ic: f64,       // Corriente total de colector (A)
-    pub ie: f64,       // Corriente de emisor (A)
-    pub gm: f64,       // Transconductancia d(Ic)/d(Vge) (S)
-    pub go: f64,       // Conductancia de salida d(Ic)/d(Vce) (S)
-    pub cge: f64,      // Capacidad dinámica Cge (F)
-    pub cgc: f64,      // Capacidad dinámica Cgc (Miller) (F)
-    pub cce: f64,      // Capacidad dinámica Cce (F)
-    pub q_b: f64,      // Carga almacenada de portadores minoritarios en base de deriva (C)
+    pub ic: f64,  // Corriente total de colector (A)
+    pub ie: f64,  // Corriente de emisor (A)
+    pub gm: f64,  // Transconductancia d(Ic)/d(Vge) (S)
+    pub go: f64,  // Conductancia de salida d(Ic)/d(Vce) (S)
+    pub cge: f64, // Capacidad dinámica Cge (F)
+    pub cgc: f64, // Capacidad dinámica Cgc (Miller) (F)
+    pub cce: f64, // Capacidad dinámica Cce (F)
+    pub q_b: f64, // Carga almacenada de portadores minoritarios en base de deriva (C)
 }
 
 /// Evalúa el modelo de Hefner para el IGBT en un punto de operación (Vge, Vce, T, q_b_prev)
@@ -99,7 +99,9 @@ pub fn evaluate_igbt(
     let vds_mos = (vce - v_eb).max(0.0);
 
     // 2. Modulación de base de deriva W_B(Vce)
-    let base_mod = (1.0 - (vce / params.bv_ces).clamp(0.0, 0.95)).sqrt().max(0.05);
+    let base_mod = (1.0 - (vce / params.bv_ces).clamp(0.0, 0.95))
+        .sqrt()
+        .max(0.05);
     let alpha_eff = (params.alpha_pnp / base_mod.max(0.2)).clamp(0.1, 0.85);
 
     // 3. Corriente de la sección MOSFET (Imos) y sus derivadas

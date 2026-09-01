@@ -478,7 +478,14 @@ async fn run_circuit_optimization(
 #[tauri::command]
 fn inject_live_mutation(
     state: tauri::State<'_, SimulationControlState>,
-    mut mutation: ComponentMutation,
+    mutation: ComponentMutation,
+) -> Result<(), SimulationError> {
+    enqueue_live_mutation(&state, mutation)
+}
+
+fn enqueue_live_mutation(
+    state: &SimulationControlState,
+    mutation: ComponentMutation,
 ) -> Result<(), SimulationError> {
     if mutation.component_id.trim().is_empty() || mutation.component_id.len() > 128 {
         return Err(SimulationError::from(
@@ -502,7 +509,6 @@ fn inject_live_mutation(
             "La mutacion interactiva requiere un campo y valor valido.".to_string(),
         ));
     }
-    mutation.run_id = state.active_run_id.load(Ordering::SeqCst);
     if mutation.run_id == 0 || !state.is_running.load(Ordering::SeqCst) {
         return Err(SimulationError::from(
             "No hay una corrida transitoria activa para aplicar la mutación.".to_string(),
@@ -512,6 +518,15 @@ fn inject_live_mutation(
         .hot_mutations
         .lock()
         .map_err(|e| SimulationError::from(e.to_string()))?;
+    // Conservar la identidad enviada por el productor: una petición tardía
+    // nunca debe convertirse en una mutación de la corrida que la reemplazó.
+    if mutation.run_id != state.active_run_id.load(Ordering::SeqCst)
+        || !state.is_running.load(Ordering::SeqCst)
+    {
+        return Err(SimulationError::from(
+            "La mutación pertenece a una corrida transitoria que ya no está activa.".to_string(),
+        ));
+    }
     if queue.len() >= 10_000 {
         return Err(SimulationError::from(
             "La cola de mutaciones interactivas excede el limite de 10 000 elementos.".to_string(),
@@ -1072,6 +1087,76 @@ mod persistence_tests {
 mod interactive_transient_tests {
     use super::SimulationFrame;
     use std::collections::HashMap;
+
+    fn active_mutation_state() -> super::SimulationControlState {
+        use super::*;
+        SimulationControlState {
+            is_running: Arc::new(AtomicBool::new(true)),
+            is_paused: Arc::new(AtomicBool::new(false)),
+            step_requested: Arc::new(AtomicU32::new(0)),
+            active_run_id: Arc::new(AtomicU64::new(11)),
+            hot_mutations: Arc::new(Mutex::new(Vec::new())),
+            approved_circuit_paths: Arc::new(Mutex::new(HashSet::new())),
+            speed_multiplier: Arc::new(Mutex::new(1.0)),
+        }
+    }
+
+    #[test]
+    fn rejects_live_mutations_from_a_different_or_missing_run() {
+        let state = active_mutation_state();
+        for run_id in [0, 10, 12] {
+            let result = super::enqueue_live_mutation(
+                &state,
+                super::ComponentMutation {
+                    component_id: "R1".to_string(),
+                    field: "value".to_string(),
+                    value: 2000.0,
+                    run_id,
+                },
+            );
+            assert!(
+                result.is_err(),
+                "run {run_id} must not be relabelled as run 11"
+            );
+            assert!(state.hot_mutations.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn queues_live_mutations_without_changing_their_run_identity() {
+        let state = active_mutation_state();
+        super::enqueue_live_mutation(
+            &state,
+            super::ComponentMutation {
+                component_id: "R1".to_string(),
+                field: "value".to_string(),
+                value: 2000.0,
+                run_id: 11,
+            },
+        )
+        .expect("active run mutation");
+        let queue = state.hot_mutations.lock().unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].run_id, 11);
+        assert_eq!(queue[0].value, 2000.0);
+    }
+
+    #[test]
+    fn rejects_live_mutations_after_stop() {
+        let state = active_mutation_state();
+        state.is_running.store(false, super::Ordering::SeqCst);
+        assert!(super::enqueue_live_mutation(
+            &state,
+            super::ComponentMutation {
+                component_id: "R1".to_string(),
+                field: "value".to_string(),
+                value: 2000.0,
+                run_id: 11,
+            }
+        )
+        .is_err());
+        assert!(state.hot_mutations.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn validates_transient_stream_frame_batching() {

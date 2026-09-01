@@ -6,7 +6,7 @@ import {
   stepEsp32,
 } from "./esp32_runtime";
 
-describe("esp32_runtime (ESP32 C++/Arduino Execution Engine)", () => {
+describe("esp32_runtime (intérprete Arduino restringido)", () => {
   it("compila y ejecuta sketch de parpadeo (Blink) en GPIO 2", () => {
     const sketch = `
       int led = 2;
@@ -90,5 +90,70 @@ describe("esp32_runtime (ESP32 C++/Arduino Execution Engine)", () => {
     stepEsp32(esp32, 0.01);
 
     expect(esp32.serialTxBuffer.join("")).toContain("TEST_OK\n");
+  });
+
+  it("rechaza APIs y objetos globales que no estén en la lista permitida", () => {
+    const sketch = `
+      void setup() {
+        globalThis.pwned(1);
+      }
+      void loop() {}
+    `;
+    const esp32 = createEsp32Runtime();
+
+    expect(compileEsp32Sketch(esp32, sketch)).toBe(false);
+    expect(esp32.isRunning).toBe(false);
+    expect(esp32.errorMessage).toContain("API no soportada: globalThis.pwned");
+  });
+
+  it("rechaza bloques de control que el subconjunto no implementa", () => {
+    const sketch = `
+      void setup() {}
+      void loop() {
+        for (int i = 0; i < 10; i++) {
+          digitalWrite(2, HIGH);
+        }
+      }
+    `;
+    const esp32 = createEsp32Runtime();
+
+    expect(compileEsp32Sketch(esp32, sketch)).toBe(false);
+    expect(esp32.errorMessage).toContain("if, for, while");
+  });
+
+  it("interpreta aritmética, cast y funciones matemáticas sin ejecutar JavaScript del usuario", () => {
+    const sketch = `
+      int step = 90;
+      void setup() {}
+      void loop() {
+        int dacVal = (int)(127.5 + 127.5 * sin(step * PI / 180));
+        dacWrite(25, dacVal);
+      }
+    `;
+    const esp32 = createEsp32Runtime(sketch);
+
+    stepEsp32(esp32, 0.001);
+
+    expect(esp32.errorMessage).toBeNull();
+    expect(esp32.dacOutputs[25]).toBe(255);
+  });
+
+  it("detiene el runtime después de un error de ejecución", () => {
+    const sketch = `
+      void setup() {
+        int invalid = 1 / 0;
+      }
+      void loop() {
+        digitalWrite(2, HIGH);
+      }
+    `;
+    const esp32 = createEsp32Runtime(sketch);
+
+    stepEsp32(esp32, 0.001);
+
+    expect(esp32.isRunning).toBe(false);
+    expect(esp32.hasSetupRun).toBe(false);
+    expect(esp32.digitalOutputs[2]).toBeUndefined();
+    expect(esp32.errorMessage).toContain("División entre cero");
   });
 });

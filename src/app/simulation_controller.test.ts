@@ -5,6 +5,11 @@ import type { CircuitNetlist } from "../simulation/netlist_extractor";
 import type { OscilloscopePanel } from "../ui/oscilloscope_panel";
 import type { SimulationSettings } from "../ui/settings_modal";
 import { createSimulationController } from "./simulation_controller";
+import bsimCharacterization from "../../validation/reports/bsim-characterization.json";
+
+const invoke = vi.hoisted(() => vi.fn());
+vi.mock("../simulation/tauri_commands", () => ({ invokeTyped: invoke }));
+vi.mock("../simulation/tauri_mock", () => ({ isTauriEnvironment: () => true }));
 
 function createHarness(overrides: {
   orchestrator?: Partial<CanvasOrchestrator>;
@@ -55,6 +60,7 @@ function createHarness(overrides: {
     updateCanvasRendering: vi.fn(),
     updateOscilloscopeRendering: vi.fn(),
     setIpcStatus: vi.fn(),
+    onSolverResult: vi.fn(),
     addLog: vi.fn(),
   };
 
@@ -67,6 +73,64 @@ function createHarness(overrides: {
 }
 
 describe("SimulationController", () => {
+  it.each(["bsim3nmos", "bsim3pmos", "bsim4nmos", "bsim4pmos"] as const)("acota la advertencia de %s al reporte experimental NMOS BSIM3", async (type) => {
+    const netlist: CircuitNetlist = {
+      components: [{ id: "M1", type, value: 0.4, pins: ["1", "2", "0", "0"] }],
+      wires: [],
+    };
+    const { controller, deps } = createHarness({
+      netlist,
+      orchestrator: {
+        components: [{ id: "M1", type, value: "0.4", x: 0, y: 0, rotation: 0 }],
+      },
+    });
+    deps.getSimulationSettings().enableExperimentalPhysics = true;
+
+    await controller.runSimulation("DC");
+
+    expect(bsimCharacterization.passed).toBe(true);
+    expect(bsimCharacterization.cases).toHaveLength(1);
+    const observations = bsimCharacterization.cases[0].observations;
+    expect(observations).toHaveLength(5);
+    const relativeErrors = observations.map(observation => observation.relativeError * 100);
+    const warning = deps.addLog.mock.calls.find(([message]) => message.startsWith("BSIM EXPERIMENTAL:"));
+    expect(warning?.[1]).toBe("error");
+    expect(warning?.[0]).toContain("5/5 puntos DC de NMOS BSIM3");
+    expect(warning?.[0]).toContain(`${Math.min(...relativeErrors).toFixed(2)} % a ${Math.max(...relativeErrors).toFixed(2)} %`);
+    expect(warning?.[0]).toContain("VGS=0.8–1.6 V, VDS=1 V, W=10 µm, L=0.18 µm, 27 °C");
+    expect(warning?.[0]).toContain("tolerancia relativa del 25 %");
+    expect(warning?.[0]).toContain("no certifica BSIM completo ni BSIM4");
+    expect(warning?.[0]).toContain("validation/reports/bsim-characterization.md");
+  });
+
+  it("notifica inicio y resultado del DC automático aunque no se pulse el botón de ejecutar", async () => {
+    const netlist: CircuitNetlist = {
+      components: [
+        { id: "V1", type: "vsource", value: 5, pins: ["1", "0"] },
+        { id: "R1", type: "resistor", value: 1000, pins: ["1", "0"] },
+        { id: "GND1", type: "ground", value: 0, pins: ["0"] },
+      ], wires: [],
+    };
+    const { controller, deps } = createHarness({
+      netlist,
+      orchestrator: {
+        components: [
+          { id: "V1", type: "vsource", value: "5", x: 0, y: 0, rotation: 0 },
+          { id: "R1", type: "resistor", value: "1k", x: 80, y: 0, rotation: 0 },
+          { id: "GND1", type: "ground", value: "0", x: 0, y: 80, rotation: 0 },
+        ],
+        getComponentPins: vi.fn(() => [{ x: 0, y: 0, pinIndex: 0 }]),
+      },
+    });
+    invoke.mockImplementationOnce(async () => {
+      expect(deps.setSimulationRunning).toHaveBeenLastCalledWith(true);
+      return { nodeVoltages: { "0": 0, "1": 5 }, branchCurrents: {}, converged: true };
+    });
+    await controller.runSimulation("DC");
+    expect(deps.setSimulationRunning.mock.calls).toEqual([[true], [false]]);
+    expect(deps.onSolverResult).toHaveBeenCalledExactlyOnceWith("rust");
+  });
+
   it("rechaza la simulacion si el lienzo esta vacio", async () => {
     const { controller, deps } = createHarness();
 

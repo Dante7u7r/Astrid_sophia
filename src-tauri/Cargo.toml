@@ -21,12 +21,12 @@ name = "biaani_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2.11.5", features = [] }
 tauri-plugin-opener = "2"
-tauri-plugin-wdio = { version = "1.2.0", optional = true }
+tauri-plugin-wdio = { version = "1.3.0", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 jsonschema = { version = "0.49.2", default-features = false }
@@ -43,9 +43,16 @@ faer = { version = "0.20", features = ["rayon"] }
 [dev-dependencies]
 sha2 = "0.10"
 
+# Los kernels genéricos de faer se instancian en este paquete. Sin optimizarlo,
+# la demo 01 tarda ~5 s de pared por 0.1 s físico en debug. Mantener los checks
+# de depuración y overflow; no cambiar ecuaciones, tolerancias ni dependencias.
+[profile.dev.package.biaani]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
-

@@ -21,9 +21,7 @@ test.describe('Deterministic Transient Simulation (disablePacing)', () => {
     // 3. Activar disablePacing en la configuración de la sesión
     await page.evaluate(() => {
       const w = window as any;
-      if (w.qaBridge?.setDisablePacing) {
-        w.qaBridge.setDisablePacing(true);
-      }
+      w.__ASTRYD_E2E__?.setDisablePacing(true);
     });
 
     const runBtn = page.locator('#run-sim-btn');
